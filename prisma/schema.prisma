@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  member
+  admin
+}
+
+enum ReleaseStatus {
+  draft
+  checking
+  ready
+  blocked
+  unknown
+  released
+}
+
+model User {
+  id             String        @id @default(cuid())
+  email          String        @unique
+  passwordHash   String
+  displayName    String
+  jiraUsername   String?
+  role           Role          @default(member)
+  pushSubscription Json?
+
+  // Per-user integration credentials (AES-256-GCM encrypted blobs).
+  // When set, the app calls Jira/Bitbucket as *this* user.
+  jiraUserEnc       String?
+  jiraTokenEnc      String?
+  jiraAuth          String?
+  bitbucketUserEnc  String?
+  bitbucketTokenEnc String?
+  jiraVerifiedAt    DateTime?
+  bitbucketVerifiedAt DateTime?
+
+  // Preferred project keys to show on this user's board.
+  // Empty => show nothing on the board until they pick some.
+  boardProjects String[]
+
+  // True once the user has completed first-run onboarding (picked projects
+  // after linking Jira). Gated by the (app) layout to force that step once.
+  onboarded     Boolean  @default(false)
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  watches        Watch[]
+  notifications  Notification[]
+}
+
+model IssueCache {
+  jiraKey        String        @id
+  projectKey     String        @default("")
+  summary        String        @default("")
+  description    String        @default("")
+  status         String        @default("")
+  statusCategory String        @default("unknown")
+  statusChangedAt DateTime?
+  assigneeJira   String?
+  labels         String[]
+  fixVersionIds  String[]
+  fixVersionNames String[]
+  priority       String        @default("")
+  points         Int?
+  storyField     String?
+  type           String        @default("")
+  createdAt      DateTime?
+  updatedAt      DateTime?
+  lastSyncedAt   DateTime      @default(now())
+  deletedAt      DateTime?
+  raw            Json?
+  comments       CommentCache[]
+  aiScore        AiScore?
+  releaseTasks   ReleaseTask[]
+  staleSnapshots StaleSnapshot[]
+
+  @@index([status])
+  @@index([projectKey])
+  @@index([statusCategory])
+  @@index([assigneeJira])
+  @@index([lastSyncedAt])
+}
+
+model CommentCache {
+  id         String     @id @default(cuid())
+  jiraCommentId String? @unique
+  jiraKey    String
+  author     String
+  body       String
+  createdAt  DateTime?
+  updatedAt  DateTime?
+  syncedAt   DateTime   @default(now())
+  issue      IssueCache @relation(fields: [jiraKey], references: [jiraKey], onDelete: Cascade)
+
+  @@index([jiraKey])
+}
+
+model IntegrationCursor {
+  id            String    @id @default(cuid())
+  integration   String
+  scope         String
+  cursor        String?
+  lastStartedAt DateTime?
+  lastSuccessAt DateTime?
+  lastErrorAt   DateTime?
+  lastError     String?
+  stats         Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([integration, scope])
+  @@index([integration, lastSuccessAt])
+}
+
+model Watch {
+  id          String     @id @default(cuid())
+  userId      String
+  jiraKey     String
+  watchedAt   DateTime   @default(now())
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jiraKey])
+  @@index([jiraKey])
+}
+
+model Release {
+  id            String        @id @default(cuid())
+  version       String
+  // Legacy label-based identity (CUR-09 fix in M3-01). Kept for backward
+  // compatibility; no longer unique. New releases are identified by the
+  // Jira Fix Version instead (projectKey + jiraVersionId).
+  targetLabel   String        @default("")
+  projectKey    String        @default("")
+  jiraVersionId String?
+  description   String        @default("")
+  releaseDate   DateTime?
+  createdById   String?
+  releasedAt    DateTime?
+  status        ReleaseStatus @default(draft)
+  notes         String        @default("")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  tasks         ReleaseTask[]
+
+  @@unique([projectKey, jiraVersionId])
+  @@index([projectKey])
+}
+
+model ReleaseTask {
+  id         String    @id @default(cuid())
+  releaseId  String
+  jiraKey    String
+  release    Release   @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  issue      IssueCache @relation(fields: [jiraKey], references: [jiraKey], onDelete: Cascade)
+
+  @@unique([releaseId, jiraKey])
+  @@index([jiraKey])
+}
+
+model ReleaseCheck {
+  id          String   @id @default(cuid())
+  releaseId   String
+  triggeredBy String?
+  status      String
+  summary     String   @default("")
+  blockers    Json?
+  sourceTimes Json?
+  createdAt   DateTime @default(now())
+}
+
+model AiScore {
+  id         String   @id @default(cuid())
+  jiraKey    String   @unique
+  points     Int
+  reasoning  String   @default("")
+  risks      String[]
+  model      String
+  scoredAt   DateTime @default(now())
+  issue      IssueCache @relation(fields: [jiraKey], references: [jiraKey], onDelete: Cascade)
+}
+
+model BranchInfo {
+  id                  String    @id @default(cuid())
+  repo                String
+  branch              String
+  lastCommitAt        DateTime?
+  prId                Int?
+  prState             String?
+  prDestinationBranch String?
+  merged              Boolean   @default(false)
+  checkedAt           DateTime  @default(now())
+
+  @@unique([repo, branch])
+  @@index([repo])
+  @@index([merged])
+}
+
+enum ImportState {
+  pending
+  created
+  failed
+  ignored
+}
+
+model SentryIssueImported {
+  id            String      @id @default(cuid())
+  sentryIssueId String
+  sentryProject String
+  jiraKey       String?
+  state         ImportState @default(pending)
+  attemptCount  Int         @default(0)
+  lastError     String?
+  lastAttemptAt DateTime?
+  importedAt    DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([sentryProject, sentryIssueId])
+  @@index([state, lastAttemptAt])
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String
+  type       String
+  title      String
+  body       String   @default("")
+  link       String?
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+}
+
+model StaleSnapshot {
+  id          String     @id @default(cuid())
+  jiraKey     String
+  assignee    String?
+  ageDays     Int
+  detectedAt  DateTime   @default(now())
+  issue       IssueCache @relation(fields: [jiraKey], references: [jiraKey], onDelete: Cascade)
+
+  @@index([jiraKey])
+  @@index([assignee])
+}
