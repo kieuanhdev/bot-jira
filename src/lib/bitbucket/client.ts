@@ -7,6 +7,18 @@ export type BbBranch = {
   latestCommitDate?: string;
 };
 
+export type BbBranchCreateRequest = {
+  name: string;
+  /** Base branch to branch off from (e.g. "main"). */
+  base: string;
+};
+
+export type BbBranchCreateResult = {
+  branch: { name: string; id?: number };
+  displayId?: string;
+  message?: string;
+};
+
 export type BbPullRequest = {
   id: number;
   title?: string;
@@ -24,7 +36,12 @@ export type BbCreds = { user: string; token: string } | null;
 /** Only these states count as a PR that has been merged. */
 const MERGED_STATES = new Set(["MERGED"]);
 
-async function request<T>(repo: string, path: string, creds?: BbCreds): Promise<T> {
+async function request<T>(
+  repo: string,
+  path: string,
+  init: { method?: string; body?: string } = {},
+  creds?: BbCreds
+): Promise<T> {
   const base = env.bitbucketBaseUrl.replace(/\/$/, "");
   const user = creds?.user ?? env.bitbucketUser;
   const token = creds?.token ?? env.bitbucketToken;
@@ -33,15 +50,19 @@ async function request<T>(repo: string, path: string, creds?: BbCreds): Promise<
     repo.split("/")[0] ?? repo
   )}/repos/${encodeURIComponent(repo.split("/")[1] ?? repo)}/${path}`;
   const res = await fetch(url, {
+    method: init.method ?? "GET",
     headers: {
       Accept: "application/json",
+      "Content-Type": "application/json",
       Authorization: `Basic ${basic}`,
     },
+    ...(init.body !== undefined ? { body: init.body } : {}),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`Bitbucket ${path} -> ${res.status}: ${text.slice(0, 300)}`);
   }
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -61,6 +82,7 @@ async function fetchPaged<T>(repo: string, basePath: string, creds?: BbCreds): P
     const res = await request<Paged<T>>(
       repo,
       `${basePath}&start=${start}&limit=${pageSize}`,
+      {},
       creds
     );
     out.push(...res.values);
@@ -73,6 +95,49 @@ async function fetchPaged<T>(repo: string, basePath: string, creds?: BbCreds): P
 export const bitbucket = {
   async listBranches(repo: string, creds?: BbCreds): Promise<BbBranch[]> {
     return fetchPaged<BbBranch>(repo, "branches", creds);
+  },
+
+  /**
+   * Check whether a single branch exists in the repo. Returns null when the
+   * branch does not exist (404). Used by the bulk branch-creation action to
+   * make create idempotent: we skip branches that are already there.
+   */
+  async getBranch(repo: string, branchName: string, creds?: BbCreds): Promise<BbBranch | null> {
+    try {
+      const res = await request<BbBranch>(
+        repo,
+        `branches/${encodeURIComponent(branchName)}`,
+        {},
+        creds
+      );
+      return res;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Bitbucket DC returns 404 when the branch does not exist.
+      if (msg.includes("404")) return null;
+      throw e;
+    }
+  },
+
+  /**
+   * Create a new branch from the given base branch. Returns the created
+   * branch. Throws when the branch already exists (409) — callers should check
+   * with getBranch first to make this idempotent.
+   */
+  async createBranch(
+    repo: string,
+    data: BbBranchCreateRequest,
+    creds?: BbCreds
+  ): Promise<BbBranchCreateResult> {
+    return request<BbBranchCreateResult>(
+      repo,
+      "branches",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+      creds
+    );
   },
 
   async listPullRequests(repo: string, creds?: BbCreds): Promise<BbPullRequest[]> {

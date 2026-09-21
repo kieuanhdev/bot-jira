@@ -208,6 +208,7 @@ model BranchInfo {
   id                  String    @id @default(cuid())
   repo                String
   branch              String
+  jiraKey             String?
   lastCommitAt        DateTime?
   prId                Int?
   prState             String?
@@ -218,6 +219,7 @@ model BranchInfo {
   @@unique([repo, branch])
   @@index([repo])
   @@index([merged])
+  @@index([jiraKey])
 }
 
 enum ImportState {
@@ -270,3 +272,53 @@ model StaleSnapshot {
   @@index([jiraKey])
   @@index([assignee])
 }
+
+// M4 — Bulk operations. A user requests a bulk change (preview), confirms it,
+// and the worker processes items one-by-one with concurrency limits + retry.
+enum OperationState {
+  preview
+  queued
+  running
+  completed
+  partially_failed
+  failed
+  cancelled
+}
+
+model BulkOperation {
+  id          String         @id @default(cuid())
+  type        String
+  requestedBy String
+  // Action + parameters + the list of targeted Jira keys.
+  payload     Json
+  state       OperationState @default(preview)
+  total       Int            @default(0)
+  succeeded   Int            @default(0)
+  failed      Int            @default(0)
+  createdAt   DateTime       @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  items       BulkOperationItem[]
+
+  @@index([state, createdAt])
+  @@index([requestedBy, createdAt])
+}
+
+model BulkOperationItem {
+  id           String   @id @default(cuid())
+  operationId  String
+  jiraKey      String
+  before       Json?
+  requested    Json
+  after        Json?
+  status       String // "pending" | "running" | "succeeded" | "failed" | "skipped"
+  error        String?
+  retryable    Boolean  @default(true)
+  attemptCount Int      @default(0)
+  operation    BulkOperation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  @@unique([operationId, jiraKey])
+  @@index([operationId, status])
+}
+
+

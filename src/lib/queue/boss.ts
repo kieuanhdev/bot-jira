@@ -6,11 +6,12 @@ import { runAiScore } from "./workers/ai-score";
 import { runSentryImport } from "./workers/sentry-import";
 import { runStaleDetect } from "./workers/stale-detect";
 import { runPollJira, type PollJiraJobData } from "./workers/poll-jira";
+import { runBulkOperation } from "./workers/bulk-op";
 import type { WorkerLog } from "./guard";
 
 const globalForBoss = globalThis as unknown as { boss?: PgBoss; bossStart?: Promise<PgBoss> };
 
-export const JOB_NAMES = ["poll-jira", "check-branches", "ai-score", "sentry-import", "stale-detect"] as const;
+export const JOB_NAMES = ["poll-jira", "check-branches", "ai-score", "sentry-import", "stale-detect", "bulk-op"] as const;
 
 export function getBoss(): PgBoss {
   if (!globalForBoss.boss) globalForBoss.boss = new PgBoss(env.databaseUrl);
@@ -75,6 +76,18 @@ export async function enqueueJiraSync(data: PollJiraJobData): Promise<string | n
   });
 }
 
+/** Enqueue a confirmed bulk operation for background execution. */
+export async function enqueueBulkOperation(operationId: string): Promise<string | null> {
+  const boss = await startBoss();
+  return boss.send("bulk-op", { operationId }, {
+    // One in-flight job per operation so a re-queued op doesn't double-run.
+    singletonKey: `bulk-op:${operationId}`,
+    singletonSeconds: 3600,
+    retryLimit: 1,
+    retryDelay: 60,
+  });
+}
+
 /** Register schedules and consumers. Called only by the standalone worker. */
 export async function registerJobs(): Promise<PgBoss> {
   const boss = await startBoss();
@@ -94,6 +107,18 @@ export async function registerJobs(): Promise<PgBoss> {
   await boss.work("ai-score", async () => recordRun("ai-score", runAiScore));
   await boss.work("sentry-import", async () => recordRun("sentry-import", runSentryImport));
   await boss.work("stale-detect", async () => recordRun("stale-detect", runStaleDetect));
+  // M4 — bulk operations are one-off jobs (not scheduled). We wrap them in a
+  // minimal log so failures are visible, but the operation's own state
+  // (completed / partially_failed / failed) is the source of truth.
+  await boss.work<{ operationId: string }>("bulk-op", async (jobs) => {
+    const data = jobs[0]?.data ?? { operationId: "" };
+    try {
+      await runBulkOperation(data.operationId);
+      return { ok: true, stats: { operationId: data.operationId } };
+    } catch (error) {
+      return { ok: false, errors: [(error as Error).message] };
+    }
+  });
   return boss;
 }
 

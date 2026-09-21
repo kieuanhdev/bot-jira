@@ -93,6 +93,11 @@ export const env = {
   // Polling
   pollIntervalMs: int("POLL_INTERVAL_MS", 60000),
 
+  // M4 — bulk operations. Max concurrent Jira/Bitbucket calls per operation.
+  bulkConcurrency: int("BULK_CONCURRENCY", 4),
+  // M4 — default branch name template for bulk branch creation.
+  bulkBranchTemplate: str("BULK_BRANCH_TEMPLATE", "{project}-{number}"),
+
   // Web Push (VAPID)
   vapidPublicKey: str("VAPID_PUBLIC_KEY"),
   vapidPrivateKey: str("VAPID_PRIVATE_KEY"),

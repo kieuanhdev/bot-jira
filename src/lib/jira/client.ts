@@ -225,6 +225,22 @@ export function jiraWith(auth: JiraAuth | null) {
         transitions.transitions.find((t) => t.to?.name?.toLowerCase() === target) ?? null
       );
     },
+    /**
+     * Resolve a version name to a Fix Version id for a project. Returns null if
+     * the version does not exist. Used by bulk fix-version actions to add or
+     * remove a version by name.
+     */
+    resolveVersionId: async (projectKey: string, name: string): Promise<string | null> => {
+      const versions = await request<JiraVersion[]>(
+        `/rest/api/2/project/${encodeURIComponent(projectKey)}/versions`,
+        {},
+        auth
+      );
+      const match = versions.find(
+        (v) => v.name.toLowerCase() === name.toLowerCase()
+      );
+      return match?.id ?? null;
+    },
     updateIssue: (
       key: string,
       patch: {
@@ -234,6 +250,7 @@ export function jiraWith(auth: JiraAuth | null) {
         labels?: string[];
         priority?: string;
         points?: number | null;
+        fixVersions?: string[];
       }
     ) => {
       const fields: Record<string, unknown> = {};
@@ -246,6 +263,8 @@ export function jiraWith(auth: JiraAuth | null) {
       if (patch.points !== undefined && env.jiraPointsFieldId) {
         fields[env.jiraPointsFieldId] = patch.points;
       }
+      if (patch.fixVersions !== undefined)
+        fields.fixVersions = patch.fixVersions.map((id) => ({ id }));
       if (Object.keys(fields).length === 0) return undefined as unknown as void;
       return request(`/rest/api/2/issue/${encodeURIComponent(key)}`, {
         method: "PUT",
