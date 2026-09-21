@@ -8,6 +8,7 @@ import type {
   JiraUser,
   JiraProjectStatus,
   JiraCommentPage,
+  JiraVersion,
 } from "./types";
 
 const BASE_ISSUE_FIELDS = [
@@ -294,6 +295,41 @@ export function jiraWith(auth: JiraAuth | null) {
         { method: "POST", body: JSON.stringify({ body }) },
         auth
       ),
+    /** List the Fix Versions (release versions) of a project. */
+    getVersions: (projectKey: string) =>
+      request<JiraVersion[]>(
+        `/rest/api/2/project/${encodeURIComponent(projectKey)}/versions`,
+        {},
+        auth
+      ),
+    /** Create a new Fix Version on a project. */
+    createVersion: (projectKey: string, name: string, description?: string) =>
+      request<JiraVersion>(
+        "/rest/api/2/version",
+        {
+          method: "POST",
+          body: JSON.stringify({ name, description, project: projectKey }),
+        },
+        auth
+      ),
+    /** Update an existing Fix Version (name/description/release date). */
+    updateVersion: (
+      versionId: string,
+      data: { name?: string; description?: string; releaseDate?: string | null }
+    ) =>
+      request<JiraVersion>(`/rest/api/2/version/${encodeURIComponent(versionId)}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }, auth),
+    /** Mark a Fix Version as released with a release date. */
+    releaseVersion: (versionId: string) =>
+      request<JiraVersion>(`/rest/api/2/version/${encodeURIComponent(versionId)}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          released: true,
+          releaseDate: new Date().toISOString().slice(0, 10),
+        }),
+      }, auth),
   };
 }
 

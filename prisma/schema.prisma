@@ -129,14 +129,26 @@ model Watch {
 }
 
 model Release {
-  id           String        @id @default(cuid())
-  version      String
-  targetLabel  String        @unique
-  status       ReleaseStatus @default(draft)
-  notes        String        @default("")
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  tasks        ReleaseTask[]
+  id            String        @id @default(cuid())
+  version       String
+  // Legacy label-based identity (CUR-09 fix in M3-01). Kept for backward
+  // compatibility; no longer unique. New releases are identified by the
+  // Jira Fix Version instead (projectKey + jiraVersionId).
+  targetLabel   String        @default("")
+  projectKey    String        @default("")
+  jiraVersionId String?
+  description   String        @default("")
+  releaseDate   DateTime?
+  createdById   String?
+  releasedAt    DateTime?
+  status        ReleaseStatus @default(draft)
+  notes         String        @default("")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  tasks         ReleaseTask[]
+
+  @@unique([projectKey, jiraVersionId])
+  @@index([projectKey])
 }
 
 model ReleaseTask {

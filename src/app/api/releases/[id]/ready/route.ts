@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import { aiProvider } from "@/lib/ai";
 import { notifyAll } from "@/lib/notify";
 import { env, releaseDoneCategories, releaseBlockingPriorities } from "@/lib/env";
+import { tasksForFixVersion, fixVersionWhere } from "@/lib/releases/version";
 
 type TaskInfo = {
   jiraKey: string;
@@ -150,15 +151,38 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   });
   if (!release) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const tasks: TaskInfo[] = release.tasks.map((t) => ({
-    jiraKey: t.jiraKey,
-    summary: t.issue.summary,
-    description: t.issue.description,
-    priority: t.issue.priority,
-    status: t.issue.status,
-    statusCategory: t.issue.statusCategory,
-    lastSyncedAt: t.issue.lastSyncedAt,
-  }));
+  // M3-01: when the release is identified by a Jira Fix Version, derive its
+  // tasks from the live IssueCache (Jira is the source of truth for which
+  // issues carry the version) instead of a frozen ReleaseTask snapshot.
+  let tasks: TaskInfo[];
+  if (release.jiraVersionId) {
+    const issues = await prisma.issueCache.findMany({
+      where: fixVersionWhere(release.jiraVersionId),
+      select: {
+        jiraKey: true,
+        summary: true,
+        description: true,
+        priority: true,
+        status: true,
+        statusCategory: true,
+        lastSyncedAt: true,
+        fixVersionIds: true,
+        deletedAt: true,
+      },
+    });
+    tasks = tasksForFixVersion(issues, release.jiraVersionId);
+  } else {
+    // Legacy label-based release: keep the ReleaseTask snapshot behavior.
+    tasks = release.tasks.map((t) => ({
+      jiraKey: t.jiraKey,
+      summary: t.issue.summary,
+      description: t.issue.description,
+      priority: t.issue.priority,
+      status: t.issue.status,
+      statusCategory: t.issue.statusCategory,
+      lastSyncedAt: t.issue.lastSyncedAt,
+    }));
+  }
 
   const gates: GateResult[] = [];
 

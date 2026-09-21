@@ -75,6 +75,20 @@ export type JiraProject = {
   id?: string;
 };
 
+/** A Jira Fix Version (release version) for a project. */
+export type JiraVersion = {
+  id: string;
+  name: string;
+  description?: string;
+  released?: boolean;
+  /** ISO date string, e.g. "2024-01-01". */
+  releaseDate?: string;
+  archived?: boolean;
+  projectId?: string;
+  project?: string;
+  self?: string;
+};
+
 export type JiraStatus = {
   id: string;
   name: string;

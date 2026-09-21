@@ -19,41 +19,63 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { timeAgo } from "@/lib/utils";
-import { Rocket, ShieldCheck, ShieldAlert, Plus, PackageOpen } from "lucide-react";
+import { Rocket, ShieldCheck, ShieldAlert, Plus, PackageOpen, Tag } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Task = {
   jiraKey: string;
-  issue: { status: string; summary: string; points: number | null; priority: string };
+  issue: {
+    status: string;
+    statusCategory: string;
+    summary: string;
+    points: number | null;
+    priority: string;
+  };
 };
+type JiraVersion = { id: string; name: string; released?: boolean };
 type Release = {
   id: string;
   version: string;
+  projectKey: string;
+  jiraVersionId?: string | null;
   targetLabel: string;
-  status: "draft" | "ready" | "blocked" | "released";
+  status: "draft" | "checking" | "ready" | "blocked" | "unknown" | "released";
   notes: string;
   createdAt: string;
   tasks: Task[];
 };
 
-const DONE_STATUSES = ["Done", "Closed", "Resolved", "Done/In Review"];
+const DONE_CATEGORIES = ["done"];
 
 function StatusBadge({ status }: { status: Release["status"] }) {
-  const map = {
-    draft: "secondary" as const,
-    ready: "success" as const,
-    blocked: "danger" as const,
-    released: "info" as const,
+  const map: Record<Release["status"], "secondary" | "success" | "danger" | "info" | "warning"> = {
+    draft: "secondary",
+    checking: "secondary",
+    ready: "success",
+    blocked: "danger",
+    unknown: "warning",
+    released: "info",
   };
-  return <Badge variant={map[status]}>{status}</Badge>;
+  return <Badge variant={map[status] ?? "secondary"}>{status}</Badge>;
 }
 
 export function ReleaseClient() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [version, setVersion] = useState("");
-  const [label, setLabel] = useState("");
+  const [projectKey, setProjectKey] = useState("");
+  const [linkVersionId, setLinkVersionId] = useState<string>("");
+  const [description, setDescription] = useState("");
+  const [versions, setVersions] = useState<JiraVersion[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
   const [checkingId, setCheckingId] = useState<string | null>(null);
-  const [lastCheck, setLastCheck] = useState<Record<string, { ready: boolean; blockers: { jiraKey: string; reason: string }[]; unfinishedCount: number }>>({});
+  const [lastCheck, setLastCheck] = useState<Record<string, { ready: boolean; blockers: { jiraKey?: string; reason: string }[] }>>({});
 
   const { data } = useQuery({
     queryKey: ["releases"],
@@ -62,11 +84,46 @@ export function ReleaseClient() {
     retry: 1,
   });
 
+  // Load the available Jira Fix Versions for the selected project so the user
+  // can link an existing version (or create a new one by leaving the link
+  // empty). The versions proxy is per-release, so we fetch it from the first
+  // existing release in that project.
+  async function loadVersions(key: string) {
+    if (!key) {
+      setVersions([]);
+      return;
+    }
+    setVersionsLoading(true);
+    setVersions([]);
+    try {
+      const r = await api<{ items: Release[] }>(`/api/releases?projectKey=${encodeURIComponent(key)}`);
+      const first = r.items?.find((rel) => rel.projectKey === key);
+      if (first) {
+        const v = await api<{ items: JiraVersion[] }>(`/api/releases/${first.id}/versions`);
+        setVersions(v.items ?? []);
+      }
+    } catch {
+      // No release yet for this project (or Jira unavailable) — the user can
+      // still create a brand-new Fix Version by leaving the link empty.
+      setVersions([]);
+    } finally {
+      setVersionsLoading(false);
+    }
+  }
+
   async function createRelease() {
-    if (!version || !label) return;
-    await api("/api/releases", { method: "POST", body: { version, targetLabel: label } });
+    if (!version.trim()) return;
+    const body: Record<string, string> = { version: version.trim() };
+    if (projectKey.trim()) {
+      body.projectKey = projectKey.trim().toUpperCase();
+      if (description.trim()) body.description = description.trim();
+      if (linkVersionId) body.jiraVersionId = linkVersionId;
+    }
+    await api("/api/releases", { method: "POST", body });
     setVersion("");
-    setLabel("");
+    setProjectKey("");
+    setLinkVersionId("");
+    setDescription("");
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["releases"] });
   }
@@ -74,7 +131,7 @@ export function ReleaseClient() {
   async function checkReady(id: string) {
     setCheckingId(id);
     try {
-      const r = await api<{ ready: boolean; blockers: { jiraKey: string; reason: string }[]; unfinishedCount: number }>(
+      const r = await api<{ ready: boolean; blockers: { jiraKey?: string; reason: string }[] }>(
         `/api/releases/${id}/ready`,
         { method: "POST", body: {} }
       );
@@ -104,7 +161,9 @@ export function ReleaseClient() {
             <DialogHeader>
               <DialogTitle>New release</DialogTitle>
               <DialogDescription>
-                A release is tied to a Jira label. Tasks carrying that label are included.
+                A release is tied to a Jira Fix Version. Tasks whose issues carry
+                that Fix Version are included. Leave “Link version” empty to create
+                a new Fix Version in Jira.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-4">
@@ -113,12 +172,64 @@ export function ReleaseClient() {
                 <Input id="version" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.4.2" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="label">Target label</Label>
-                <Input id="label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="release-1.4.2" />
+                <Label htmlFor="projectKey">Jira project</Label>
+                <Input
+                  id="projectKey"
+                  value={projectKey}
+                  onChange={(e) => {
+                    const next = e.target.value.toUpperCase();
+                    setProjectKey(next);
+                    setLinkVersionId("");
+                    loadVersions(next.trim());
+                  }}
+                  placeholder="EPM"
+                />
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="linkVersion">Link Fix Version</Label>
+                {projectKey.trim() ? (
+                  versions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      {versionsLoading ? "Loading…" : "No existing Fix Versions — a new one will be created."}
+                    </p>
+                  ) : (
+                    <Select
+                      value={linkVersionId}
+                      onValueChange={setLinkVersionId}
+                    >
+                      <SelectTrigger id="linkVersion">
+                        <SelectValue placeholder="Create a new Fix Version" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {versions.map((v) => (
+                          <SelectItem key={v.id} value={v.id}>
+                            {v.name}
+                            {v.released ? " (released)" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )
+                ) : (
+                  <p className="text-xs text-muted-foreground">Pick a project to link an existing Fix Version.</p>
+                )}
+              </div>
+              {projectKey.trim() && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="description">Description</Label>
+                  <Input
+                    id="description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Optional description for the Fix Version"
+                  />
+                </div>
+              )}
             </div>
             <DialogFooter>
-              <Button onClick={createRelease}>Create</Button>
+              <Button onClick={createRelease} disabled={!version.trim() || versionsLoading}>
+                Create
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -132,14 +243,14 @@ export function ReleaseClient() {
             </div>
             <p className="text-sm font-medium">No releases yet</p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              Create a release to group tasks by a Jira label and run a ready-check.
+              Create a release tied to a Jira Fix Version, then run a ready-check.
             </p>
           </CardContent>
         </Card>
       )}
 
       {releases.map((rel) => {
-        const done = rel.tasks.filter((t) => DONE_STATUSES.includes(t.issue.status)).length;
+        const done = rel.tasks.filter((t) => DONE_CATEGORIES.includes(t.issue.statusCategory)).length;
         const check = lastCheck[rel.id];
         return (
           <Card key={rel.id}>
@@ -161,8 +272,25 @@ export function ReleaseClient() {
                   {checkingId === rel.id ? "Checking…" : "Run ready-check"}
                 </Button>
               </div>
-              <CardDescription>
-                label <code className="rounded bg-muted px-1 text-xs">{rel.targetLabel}</code> · {done}/{rel.tasks.length} done · {timeAgo(rel.createdAt)}
+              <CardDescription className="flex items-center gap-1.5">
+                {rel.projectKey ? (
+                  <span className="inline-flex items-center gap-1">
+                    <Tag className="h-3.5 w-3.5" />
+                    <code className="rounded bg-muted px-1 text-xs">{rel.projectKey}</code>
+                    {rel.jiraVersionId ? (
+                      <span className="text-xs text-muted-foreground">fix version</span>
+                    ) : null}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1">
+                    <Tag className="h-3.5 w-3.5" />
+                    <code className="rounded bg-muted px-1 text-xs">{rel.targetLabel}</code>
+                  </span>
+                )}
+                <span>·</span>
+                <span>{done}/{rel.tasks.length} done</span>
+                <span>·</span>
+                <span>{timeAgo(rel.createdAt)}</span>
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
@@ -170,11 +298,9 @@ export function ReleaseClient() {
                 <div className="rounded-md border border-red-300/40 bg-red-500/10 p-3 text-sm">
                   <p className="font-medium text-red-700 dark:text-red-400">Not ready to release</p>
                   <ul className="mt-1 list-inside list-disc text-red-700/90 dark:text-red-400/90">
-                    {check.unfinishedCount > 0 && (
-                      <li>{check.unfinishedCount} task(s) not in Done/In Review</li>
-                    )}
+                    {check.blockers.length === 0 && <li>{rel.status}</li>}
                     {check.blockers.map((b, i) => (
-                      <li key={i}>{b.jiraKey}: {b.reason}</li>
+                      <li key={i}>{b.jiraKey ? `${b.jiraKey}: ${b.reason}` : b.reason}</li>
                     ))}
                   </ul>
                 </div>
@@ -198,7 +324,7 @@ export function ReleaseClient() {
                     <tr key={t.jiraKey} className="border-b last:border-0">
                       <td className="py-1.5"><Link href={`/issue/${t.jiraKey}`} className="font-mono text-xs hover:underline">{t.jiraKey}</Link></td>
                       <td className="line-clamp-1">{t.issue.summary}</td>
-                      <td><Badge variant={DONE_STATUSES.includes(t.issue.status) ? "success" : "secondary"}>{t.issue.status}</Badge></td>
+                      <td><Badge variant={DONE_CATEGORIES.includes(t.issue.statusCategory) ? "success" : "secondary"}>{t.issue.status}</Badge></td>
                       <td>{t.issue.points ?? "—"}</td>
                     </tr>
                   ))}
