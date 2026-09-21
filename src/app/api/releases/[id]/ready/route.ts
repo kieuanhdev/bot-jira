@@ -9,6 +9,7 @@ import {
   runGates,
   aggregateGates,
   collectBlockers,
+  selectReleaseBranches,
   type ReleaseContext,
   type TaskInfo,
   type BranchInfoRow,
@@ -113,8 +114,13 @@ async function buildContext(releaseId: string, version: string): Promise<Release
     lastSyncedAt: i.lastSyncedAt,
   }));
 
+  // Scope branches to this release. BranchInfo is populated globally from
+  // Bitbucket (no per-release link), so we keep only branches whose name maps
+  // to one of the release's issue keys. Unmappable releases yield an empty set,
+  // which makes the branch/PR gates report `unknown` (fail-safe) instead of
+  // passing on unrelated branches.
   const branchRows = await prisma.branchInfo.findMany();
-  const branchInfos: BranchInfoRow[] = branchRows.map((b) => ({
+  const allBranchInfos: BranchInfoRow[] = branchRows.map((b) => ({
     repo: b.repo,
     branch: b.branch,
     prState: b.prState,
@@ -122,6 +128,10 @@ async function buildContext(releaseId: string, version: string): Promise<Release
     merged: b.merged,
     checkedAt: b.checkedAt,
   }));
+  const branchInfos = selectReleaseBranches(
+    allBranchInfos,
+    tasks.map((t) => t.jiraKey)
+  );
 
   let sentryIssues: SentryIssueInfo[] | null = null;
   let sentryCheckedAt: Date | null = null;

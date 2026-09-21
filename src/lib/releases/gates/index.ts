@@ -1,4 +1,4 @@
-import type { Blocker, GateResult, ReleaseContext } from "./types";
+import type { Blocker, BranchInfoRow, GateResult, ReleaseContext } from "./types";
 import { taskStatusGate } from "./task-status";
 import { criticalBugsGate } from "./critical-bugs";
 import { sentryGate } from "./sentry";
@@ -24,6 +24,37 @@ export { branchesGate } from "./branches";
 export { pullRequestsGate } from "./pull-requests";
 export { dataFreshnessGate } from "./data-freshness";
 export { aiAdvisoryGate } from "./ai-advisory";
+
+/**
+ * Select the branches relevant to a release.
+ *
+ * `BranchInfo` has no direct link to an issue or release (it is populated from
+ * Bitbucket across all repos), so the only signal we can use without a schema
+ * change is the branch name. A branch is considered part of the release when
+ * its name contains one of the release's issue keys (a common convention, e.g.
+ * `PROJ-123-fix` for `PROJ-123`). Matching is case-insensitive and uses word
+ * boundaries so `PROJ-1` does not match `PROJ-10`.
+ *
+ * Fail-safe: if the release has tasks but none of its branches can be mapped,
+ * the result is empty, which makes the branch/PR gates report `unknown`
+ * (cannot verify) rather than passing on unrelated branches. This is strictly
+ * safer than evaluating every branch in the database.
+ */
+export function selectReleaseBranches(
+  branchInfos: BranchInfoRow[],
+  jiraKeys: string[]
+): BranchInfoRow[] {
+  if (branchInfos.length === 0) return [];
+  if (jiraKeys.length === 0) return branchInfos;
+  const patterns = jiraKeys
+    .map((k) => k.trim())
+    .filter(Boolean)
+    .map((k) => new RegExp(`(^|[^A-Za-z0-9])${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^0-9]|$)`, "i"));
+  if (patterns.length === 0) return branchInfos;
+  return branchInfos.filter((b) =>
+    patterns.some((re) => re.test(b.branch))
+  );
+}
 
 /** Gates that determine release readiness. `ai_advisory` is never mandatory. */
 const GATE_AI_ADVISORY = "ai_advisory";

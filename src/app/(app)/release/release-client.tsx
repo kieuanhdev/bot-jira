@@ -39,6 +39,15 @@ type Task = {
   };
 };
 type JiraVersion = { id: string; name: string; released?: boolean };
+type GateBlocker = { jiraKey?: string; source?: string; reason: string; url?: string };
+type GateResult = {
+  gate: string;
+  state: "passed" | "failed" | "unknown" | "overridden";
+  summary: string;
+  blockers: GateBlocker[];
+  sourceTime?: string;
+  details?: Record<string, unknown>;
+};
 type Release = {
   id: string;
   version: string;
@@ -52,6 +61,37 @@ type Release = {
 };
 
 const DONE_CATEGORIES = ["done"];
+
+const GATE_LABELS: Record<string, string> = {
+  non_empty_release: "Non-empty release",
+  task_status: "Task status",
+  critical_bugs: "Critical bugs",
+  sentry: "Sentry",
+  branches: "Branches",
+  pull_requests: "Pull requests",
+  data_freshness: "Data freshness",
+  ci: "CI",
+  manual_approval: "Manual approval",
+  ai_advisory: "AI advisory",
+};
+
+function gateVariant(state: GateResult["state"]): "success" | "danger" | "warning" | "secondary" {
+  switch (state) {
+    case "passed":
+    case "overridden":
+      return "success";
+    case "failed":
+      return "danger";
+    case "unknown":
+      return "warning";
+    default:
+      return "secondary";
+  }
+}
+
+function gateLabel(gate: string): string {
+  return GATE_LABELS[gate] ?? gate;
+}
 
 function StatusBadge({ status }: { status: Release["status"] }) {
   const map: Record<Release["status"], "secondary" | "success" | "danger" | "info" | "warning"> = {
@@ -75,7 +115,9 @@ export function ReleaseClient() {
   const [versions, setVersions] = useState<JiraVersion[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [checkingId, setCheckingId] = useState<string | null>(null);
-  const [lastCheck, setLastCheck] = useState<Record<string, { ready: boolean; blockers: { jiraKey?: string; reason: string }[] }>>({});
+  const [lastCheck, setLastCheck] = useState<
+    Record<string, { ready: boolean; status: string; blockers: GateBlocker[]; gates: GateResult[] }>
+  >({});
 
   const { data } = useQuery({
     queryKey: ["releases"],
@@ -131,11 +173,16 @@ export function ReleaseClient() {
   async function checkReady(id: string) {
     setCheckingId(id);
     try {
-      const r = await api<{ ready: boolean; blockers: { jiraKey?: string; reason: string }[] }>(
-        `/api/releases/${id}/ready`,
-        { method: "POST", body: {} }
-      );
-      setLastCheck((prev) => ({ ...prev, [id]: r }));
+      const r = await api<{
+        ready: boolean;
+        status: string;
+        blockers: GateBlocker[];
+        gates: GateResult[];
+      }>(`/api/releases/${id}/ready`, { method: "POST", body: {} });
+      setLastCheck((prev) => ({
+        ...prev,
+        [id]: { ready: r.ready, status: r.status, blockers: r.blockers ?? [], gates: r.gates ?? [] },
+      }));
     } finally {
       setCheckingId(null);
     }
@@ -294,20 +341,54 @@ export function ReleaseClient() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              {check && !check.ready && (
-                <div className="rounded-md border border-red-300/40 bg-red-500/10 p-3 text-sm">
-                  <p className="font-medium text-red-700 dark:text-red-400">Not ready to release</p>
-                  <ul className="mt-1 list-inside list-disc text-red-700/90 dark:text-red-400/90">
-                    {check.blockers.length === 0 && <li>{rel.status}</li>}
-                    {check.blockers.map((b, i) => (
-                      <li key={i}>{b.jiraKey ? `${b.jiraKey}: ${b.reason}` : b.reason}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {check && check.ready && (
-                <div className="rounded-md border border-emerald-300/40 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-400">
-                  All tasks done and no blocking bugs detected. Release looks good.
+              {check && (
+                <div
+                  className={
+                    "rounded-md border p-3 text-sm " +
+                    (check.ready
+                      ? "border-emerald-300/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                      : "border-red-300/40 bg-red-500/10")
+                  }
+                >
+                  <p className="font-medium">
+                    {check.ready ? "Ready to release" : `Not ready (${check.status})`}
+                  </p>
+                  {check.gates.length > 0 && (
+                    <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                      {check.gates.map((g, i) => (
+                        <div
+                          key={`${g.gate}-${i}`}
+                          className="flex items-start gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
+                        >
+                          <Badge variant={gateVariant(g.state)} className="mt-0.5 shrink-0">
+                            {g.state}
+                          </Badge>
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-medium text-foreground">
+                              {gateLabel(g.gate)}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground" title={g.summary}>
+                              {g.summary}
+                            </p>
+                            {g.blockers.length > 0 && (
+                              <ul className="mt-0.5 list-inside list-disc text-xs text-muted-foreground">
+                                {g.blockers.slice(0, 3).map((b, j) => (
+                                  <li key={j} className="truncate" title={b.reason}>
+                                    {b.jiraKey ? `${b.jiraKey}: ${b.reason}` : b.reason}
+                                  </li>
+                                ))}
+                                {g.blockers.length > 3 && (
+                                  <li className="text-muted-foreground/70">
+                                    +{g.blockers.length - 3} more
+                                  </li>
+                                )}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               <table className="w-full text-sm">
