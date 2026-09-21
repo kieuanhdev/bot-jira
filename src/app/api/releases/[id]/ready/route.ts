@@ -3,135 +3,47 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { aiProvider } from "@/lib/ai";
 import { notifyAll } from "@/lib/notify";
-import { env, releaseDoneCategories, releaseBlockingPriorities } from "@/lib/env";
-import { tasksForFixVersion, fixVersionWhere } from "@/lib/releases/version";
+import { hasSentryConfig } from "@/lib/env";
+import { sentry } from "@/lib/sentry/client";
+import {
+  runGates,
+  aggregateGates,
+  collectBlockers,
+  type ReleaseContext,
+  type TaskInfo,
+  type BranchInfoRow,
+  type SentryIssueInfo,
+} from "@/lib/releases/gates";
 
-type TaskInfo = {
+type IssueRow = {
   jiraKey: string;
   summary: string;
   description: string;
   priority: string;
   status: string;
   statusCategory: string;
+  type: string;
   lastSyncedAt: Date;
+  fixVersionIds: string[];
+  deletedAt: Date | null;
 };
-
-type GateResult = {
-  gate: string;
-  state: "passed" | "failed" | "unknown";
-  summary: string;
-  blockers: { jiraKey?: string; reason: string }[];
-};
-
-function checkNonEmpty(tasks: TaskInfo[]): GateResult {
-  if (tasks.length === 0) {
-    return {
-      gate: "non_empty_release",
-      state: "failed",
-      summary: "Release has no tasks (EMPTY_RELEASE)",
-      blockers: [{ reason: "EMPTY_RELEASE" }],
-    };
-  }
-  return { gate: "non_empty_release", state: "passed", summary: `${tasks.length} task(s) in release`, blockers: [] };
-}
-
-function checkTaskStatus(tasks: TaskInfo[]): GateResult {
-  const doneCats = new Set(releaseDoneCategories);
-  const notDone = tasks.filter((t) => !doneCats.has(t.statusCategory));
-  if (notDone.length > 0) {
-    return {
-      gate: "task_status",
-      state: "failed",
-      summary: `${notDone.length} task(s) not in done category`,
-      blockers: notDone.map((t) => ({ jiraKey: t.jiraKey, reason: `status=${t.status} (${t.statusCategory})` })),
-    };
-  }
-  return { gate: "task_status", state: "passed", summary: "All tasks are done", blockers: [] };
-}
-
-function checkCriticalBugs(tasks: TaskInfo[]): GateResult {
-  const doneCats = new Set(releaseDoneCategories);
-  const blockingPrios = new Set(releaseBlockingPriorities.map((p) => p.toLowerCase()));
-  const openBugs = tasks.filter(
-    (t) =>
-      t.statusCategory !== "done" &&
-      (t.statusCategory === "unknown" || !doneCats.has(t.statusCategory)) &&
-      blockingPrios.has(t.priority.toLowerCase())
-  );
-  if (openBugs.length > 0) {
-    return {
-      gate: "critical_bugs",
-      state: "failed",
-      summary: `${openBugs.length} open Blocker/Critical bug(s)`,
-      blockers: openBugs.map((t) => ({ jiraKey: t.jiraKey, reason: `priority=${t.priority}, status=${t.status}` })),
-    };
-  }
-  return { gate: "critical_bugs", state: "passed", summary: "No open Blocker/Critical bugs", blockers: [] };
-}
-
-function checkDataFreshness(tasks: TaskInfo[]): GateResult {
-  const maxAge = env.releaseDataFreshnessMinutes;
-  const now = Date.now();
-  const stale = tasks.filter((t) => {
-    const age = now - t.lastSyncedAt.getTime();
-    return age > maxAge * 60_000;
-  });
-  if (stale.length > 0) {
-    return {
-      gate: "data_freshness",
-      state: "unknown",
-      summary: `${stale.length} task(s) data older than ${maxAge} min`,
-      blockers: stale.map((t) => ({ jiraKey: t.jiraKey, reason: `lastSyncedAt=${t.lastSyncedAt.toISOString()}` })),
-    };
-  }
-  return { gate: "data_freshness", state: "passed", summary: "All data is fresh", blockers: [] };
-}
-
-function checkAiAdvisory(
-  tasks: TaskInfo[],
-  aiBlockers: { jiraKey: string; reason: string }[],
-  aiAvailable: boolean
-): GateResult {
-  if (!aiAvailable) {
-    return {
-      gate: "ai_advisory",
-      state: "unknown",
-      summary: "AI unavailable — advisory only, does not affect mandatory gates",
-      blockers: [],
-    };
-  }
-  if (aiBlockers.length > 0) {
-    return {
-      gate: "ai_advisory",
-      state: "passed",
-      summary: `AI flagged ${aiBlockers.length} advisory blocker(s)`,
-      blockers: aiBlockers,
-    };
-  }
-  return { gate: "ai_advisory", state: "passed", summary: "AI found no blockers", blockers: [] };
-}
-
-function aggregateStatus(gates: GateResult[]): "ready" | "blocked" | "unknown" {
-  const mandatory = gates.filter((g) => g.gate !== "ai_advisory");
-  if (mandatory.some((g) => g.state === "failed")) return "blocked";
-  if (mandatory.some((g) => g.state === "unknown")) return "unknown";
-  return "ready";
-}
 
 /**
- * Run the release ready-check with fail-safe semantics:
- * - Empty release is always blocked (EMPTY_RELEASE)
- * - Unknown/stale data yields "unknown", never "ready"
- * - AI failure is advisory only, never makes a release ready
- * - Results are persisted to ReleaseCheck
+ * Build the ReleaseContext for the gate engine from the release row.
+ *
+ * - Jira tasks: when the release is identified by a Jira Fix Version
+ *   (M3-01), tasks are derived from the live IssueCache via `fixVersionIds`
+ *   (Jira is the source of truth for which issues carry the version). Legacy
+ *   label-based releases fall back to the frozen ReleaseTask snapshot.
+ * - Bitbucket branch info is read from the BranchInfo read model.
+ * - Sentry unresolved issues are fetched live; on failure we record null so the
+ *   sentry gate reports `unknown` (fail-safe) rather than crashing.
  */
-export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const { id } = await ctx.params;
+async function buildContext(releaseId: string, version: string): Promise<ReleaseContext> {
+  const checkedAt = new Date();
 
   const release = await prisma.release.findUnique({
-    where: { id },
+    where: { id: releaseId },
     include: {
       tasks: {
         include: {
@@ -142,6 +54,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
               priority: true,
               status: true,
               statusCategory: true,
+              type: true,
               lastSyncedAt: true,
             },
           },
@@ -149,15 +62,16 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
       },
     },
   });
-  if (!release) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (!release) return null as unknown as ReleaseContext;
 
-  // M3-01: when the release is identified by a Jira Fix Version, derive its
-  // tasks from the live IssueCache (Jira is the source of truth for which
-  // issues carry the version) instead of a frozen ReleaseTask snapshot.
-  let tasks: TaskInfo[];
+  // M3-01: prefer the live Fix Version scope over the ReleaseTask snapshot.
+  let issueRows: IssueRow[];
   if (release.jiraVersionId) {
     const issues = await prisma.issueCache.findMany({
-      where: fixVersionWhere(release.jiraVersionId),
+      where: {
+        deletedAt: null,
+        fixVersionIds: { has: release.jiraVersionId },
+      },
       select: {
         jiraKey: true,
         summary: true,
@@ -165,68 +79,118 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
         priority: true,
         status: true,
         statusCategory: true,
+        type: true,
         lastSyncedAt: true,
         fixVersionIds: true,
         deletedAt: true,
       },
     });
-    tasks = tasksForFixVersion(issues, release.jiraVersionId);
+    issueRows = issues.filter((i) => !i.deletedAt);
   } else {
     // Legacy label-based release: keep the ReleaseTask snapshot behavior.
-    tasks = release.tasks.map((t) => ({
+    issueRows = release.tasks.map((t) => ({
       jiraKey: t.jiraKey,
       summary: t.issue.summary,
       description: t.issue.description,
       priority: t.issue.priority,
       status: t.issue.status,
       statusCategory: t.issue.statusCategory,
+      type: t.issue.type,
       lastSyncedAt: t.issue.lastSyncedAt,
+      fixVersionIds: [] as string[],
+      deletedAt: null,
     }));
   }
 
-  const gates: GateResult[] = [];
+  const tasks: TaskInfo[] = issueRows.map((i) => ({
+    jiraKey: i.jiraKey,
+    summary: i.summary,
+    description: i.description,
+    priority: i.priority,
+    status: i.status,
+    statusCategory: i.statusCategory,
+    issueType: i.type,
+    lastSyncedAt: i.lastSyncedAt,
+  }));
 
-  gates.push(checkNonEmpty(tasks));
+  const branchRows = await prisma.branchInfo.findMany();
+  const branchInfos: BranchInfoRow[] = branchRows.map((b) => ({
+    repo: b.repo,
+    branch: b.branch,
+    prState: b.prState,
+    prDestinationBranch: b.prDestinationBranch,
+    merged: b.merged,
+    checkedAt: b.checkedAt,
+  }));
 
-  if (tasks.length > 0) {
-    gates.push(checkTaskStatus(tasks));
-    gates.push(checkCriticalBugs(tasks));
-    gates.push(checkDataFreshness(tasks));
-
-    let aiBlockers: { jiraKey: string; reason: string }[] = [];
-    let aiAvailable = false;
+  let sentryIssues: SentryIssueInfo[] | null = null;
+  let sentryCheckedAt: Date | null = null;
+  if (hasSentryConfig()) {
     try {
-      const ai = await aiProvider.releaseCheck(
-        { version: release.version },
-        tasks.map((t) => ({
-          jiraKey: t.jiraKey,
-          summary: t.summary,
-          description: t.description,
-          priority: t.priority,
-          status: t.status,
-        }))
-      );
-      aiBlockers = ai.blockers;
-      aiAvailable = true;
+      const issues = await sentry.listUnresolvedIssues(50);
+      sentryIssues = issues.map((i) => ({
+        id: String(i.id),
+        shortId: i.shortId,
+        title: i.title,
+        level: i.level ?? "",
+        status: i.status ?? "unresolved",
+        permalinkUrl: i.permalinkUrl,
+      }));
+      sentryCheckedAt = new Date();
     } catch {
-      aiAvailable = false;
+      sentryIssues = null;
+      sentryCheckedAt = null;
     }
-    gates.push(checkAiAdvisory(tasks, aiBlockers, aiAvailable));
   }
 
-  const status = aggregateStatus(gates);
-  const allBlockers = gates.flatMap((g) => g.blockers);
+  return {
+    releaseId,
+    version,
+    projectKey: release.projectKey ?? "",
+    tasks,
+    branchInfos,
+    sentryIssues,
+    sentryCheckedAt,
+    checkedAt,
+  };
+}
+
+/**
+ * Run the release ready-check through the M3-03 gate engine.
+ *
+ * Fail-safe semantics preserved from M2-02:
+ * - Empty release is always blocked (EMPTY_RELEASE).
+ * - Unknown/stale data yields `unknown`, never `ready`.
+ * - AI failure is advisory only and never makes a release ready.
+ *
+ * Results are persisted to `ReleaseCheck` plus one `ReleaseGateResult` row per
+ * gate (M3-02), the release status is updated, and a notification is sent when
+ * the outcome is blocked or unknown.
+ */
+export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const { id } = await ctx.params;
+
+  const release = await prisma.release.findUnique({
+    where: { id },
+    select: { id: true, version: true },
+  });
+  if (!release) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  const releaseCtx = await buildContext(id, release.version);
+  const gates = await runGates(releaseCtx, aiProvider.releaseCheck.bind(aiProvider));
+  const status = aggregateGates(gates);
+  const allBlockers = collectBlockers(gates);
 
   await prisma.release.update({
     where: { id },
     data: { status: status as "ready" | "blocked" | "unknown" },
   });
 
-  const summary = gates
-    .map((g) => `${g.gate}=${g.state}`)
-    .join(", ");
+  const summary = gates.map((g) => `${g.gate}=${g.state}`).join(", ");
 
-  await prisma.releaseCheck.create({
+  const check = await prisma.releaseCheck.create({
     data: {
       releaseId: id,
       triggeredBy: session.user?.email ?? null,
@@ -234,10 +198,23 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
       summary,
       blockers: JSON.parse(JSON.stringify(allBlockers)) as object,
       sourceTimes: JSON.parse(JSON.stringify({
-        checkedAt: new Date().toISOString(),
-        taskLastSynced: tasks.map((t) => ({ key: t.jiraKey, at: t.lastSyncedAt.toISOString() })),
+        checkedAt: releaseCtx.checkedAt.toISOString(),
+        taskLastSynced: releaseCtx.tasks.map((t) => ({ key: t.jiraKey, at: t.lastSyncedAt.toISOString() })),
+        sentryCheckedAt: releaseCtx.sentryCheckedAt?.toISOString() ?? null,
       })) as object,
+      gates: {
+        create: gates.map((g) => ({
+          gate: g.gate,
+          state: g.state,
+          summary: g.summary,
+          details: g.details
+            ? (JSON.parse(JSON.stringify(g.details)) as object)
+            : undefined,
+          sourceTime: g.sourceTime ?? null,
+        })),
+      },
     },
+    include: { gates: true },
   });
 
   if (status === "blocked" || status === "unknown") {
@@ -257,5 +234,6 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     ready: status === "ready",
     gates,
     blockers: allBlockers,
+    checkId: check.id,
   });
 }

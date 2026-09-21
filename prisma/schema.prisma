@@ -146,6 +146,7 @@ model Release {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   tasks         ReleaseTask[]
+  releaseChecks ReleaseCheck[]
 
   @@unique([projectKey, jiraVersionId])
   @@index([projectKey])
@@ -171,6 +172,25 @@ model ReleaseCheck {
   blockers    Json?
   sourceTimes Json?
   createdAt   DateTime @default(now())
+  release     Release  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  gates       ReleaseGateResult[]
+
+  @@index([releaseId])
+}
+
+model ReleaseGateResult {
+  id         String   @id @default(cuid())
+  checkId    String
+  gate       String
+  state      String // "passed" | "failed" | "unknown" | "overridden"
+  summary    String   @default("")
+  details    Json?
+  sourceTime DateTime?
+  createdAt  DateTime @default(now())
+  check      ReleaseCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
+
+  @@index([checkId])
+  @@index([gate])
 }
 
 model AiScore {
