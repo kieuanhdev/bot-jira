@@ -1,26 +1,140 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: oklch(0.985 0.001 200);
+  --foreground: oklch(0.244 0.006 264.4);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.244 0.006 264.4);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.244 0.006 264.4);
+  --primary: oklch(0.6 0.108 184.7);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.967 0.01 184.7);
+  --secondary-foreground: oklch(0.38 0.06 184.7);
+  --muted: oklch(0.955 0.005 200);
+  --muted-foreground: oklch(0.52 0.01 257.7);
+  --accent: oklch(0.95 0.01 184.7);
+  --accent-foreground: oklch(0.3 0.05 184.7);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.92 0.005 200);
+  --input: oklch(0.92 0.005 200);
+  --ring: oklch(0.6 0.108 184.7);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.975 0.005 200);
+}
+
+.dark {
+  --background: oklch(0.209 0.017 263.9);
+  --foreground: oklch(0.97 0.002 247.9);
+  --card: oklch(0.238 0.019 263.9);
+  --card-foreground: oklch(0.97 0.002 247.9);
+  --popover: oklch(0.238 0.019 263.9);
+  --popover-foreground: oklch(0.97 0.002 247.9);
+  --primary: oklch(0.6 0.108 184.7);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.29 0.02 263.9);
+  --secondary-foreground: oklch(0.97 0.002 247.9);
+  --muted: oklch(0.29 0.02 263.9);
+  --muted-foreground: oklch(0.705 0.01 247.9);
+  --accent: oklch(0.29 0.03 263.9);
+  --accent-foreground: oklch(0.97 0.002 247.9);
+  --destructive: oklch(0.637 0.203 25.3);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.37 0.019 263.9);
+  --input: oklch(0.37 0.019 263.9);
+  --ring: oklch(0.6 0.108 184.7);
+  --sidebar: oklch(0.238 0.019 263.9);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  button:not(:disabled),
+  [role="button"]:not([disabled]) {
+    cursor: pointer;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
+
+/* Rendered Jira wiki markup (descriptions, comments). */
+.wiki-content {
+  line-height: 1.6;
+}
+.wiki-content > * + * {
+  margin-top: 0.6rem;
+}
+.wiki-content h1 { font-size: 1.4rem; font-weight: 700; margin-top: 1rem; }
+.wiki-content h2 { font-size: 1.2rem; font-weight: 700; margin-top: 1rem; }
+.wiki-content h3 { font-size: 1.05rem; font-weight: 600; margin-top: 0.8rem; }
+.wiki-content h4,
+.wiki-content h5,
+.wiki-content h6 { font-size: 0.95rem; font-weight: 600; margin-top: 0.7rem; }
+.wiki-content ul { list-style: disc; padding-left: 1.4rem; }
+.wiki-content ol { list-style: decimal; padding-left: 1.4rem; }
+.wiki-content li { margin-top: 0.2rem; }
+.wiki-content hr { border: 0; border-top: 1px solid var(--border); margin: 0.9rem 0; }
+.wiki-content code {
+  background: var(--muted);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.85em;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.wiki-content pre {
+  background: var(--muted);
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  overflow-x: auto;
+}
+.wiki-content pre code {
+  background: transparent;
+  padding: 0;
+}
+.wiki-content a { color: var(--primary); text-decoration: underline; }
+.wiki-content strong { font-weight: 600; }

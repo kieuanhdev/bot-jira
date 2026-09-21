@@ -1,0 +1,184 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/session";
+import { aiProvider } from "@/lib/ai";
+import { notifyAll } from "@/lib/notify";
+import { hasSentryConfig } from "@/lib/env";
+import { sentry } from "@/lib/sentry/client";
+import {
+  runGates,
+  aggregateGates,
+  collectBlockers,
+  type ReleaseContext,
+  type TaskInfo,
+  type BranchInfoRow,
+  type SentryIssueInfo,
+} from "@/lib/releases/gates";
+
+/**
+ * Build the ReleaseContext for the gate engine from the release row.
+ *
+ * - Jira tasks come from the release's ReleaseTask → IssueCache join.
+ * - Bitbucket branch info is read from the BranchInfo read model.
+ * - Sentry unresolved issues are fetched live; on failure we record null so the
+ *   sentry gate reports `unknown` (fail-safe) rather than crashing.
+ */
+async function buildContext(releaseId: string, version: string): Promise<ReleaseContext> {
+  const checkedAt = new Date();
+
+  const release = await prisma.release.findUnique({
+    where: { id: releaseId },
+    include: {
+      tasks: {
+        include: {
+          issue: {
+            select: {
+              summary: true,
+              description: true,
+              priority: true,
+              status: true,
+              statusCategory: true,
+              type: true,
+              lastSyncedAt: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const tasks: TaskInfo[] = (release?.tasks ?? []).map((t) => ({
+    jiraKey: t.jiraKey,
+    summary: t.issue.summary,
+    description: t.issue.description,
+    priority: t.issue.priority,
+    status: t.issue.status,
+    statusCategory: t.issue.statusCategory,
+    issueType: t.issue.type,
+    lastSyncedAt: t.issue.lastSyncedAt,
+  }));
+
+  const branchRows = await prisma.branchInfo.findMany();
+  const branchInfos: BranchInfoRow[] = branchRows.map((b) => ({
+    repo: b.repo,
+    branch: b.branch,
+    prState: b.prState,
+    prDestinationBranch: b.prDestinationBranch,
+    merged: b.merged,
+    checkedAt: b.checkedAt,
+  }));
+
+  let sentryIssues: SentryIssueInfo[] | null = null;
+  let sentryCheckedAt: Date | null = null;
+  if (hasSentryConfig()) {
+    try {
+      const issues = await sentry.listUnresolvedIssues(50);
+      sentryIssues = issues.map((i) => ({
+        id: String(i.id),
+        shortId: i.shortId,
+        title: i.title,
+        level: i.level ?? "",
+        status: i.status ?? "unresolved",
+        permalinkUrl: i.permalinkUrl,
+      }));
+      sentryCheckedAt = new Date();
+    } catch {
+      sentryIssues = null;
+      sentryCheckedAt = null;
+    }
+  }
+
+  return {
+    releaseId,
+    version,
+    projectKey: "",
+    tasks,
+    branchInfos,
+    sentryIssues,
+    sentryCheckedAt,
+    checkedAt,
+  };
+}
+
+/**
+ * Run the release ready-check through the M3-03 gate engine.
+ *
+ * Fail-safe semantics preserved from M2-02:
+ * - Empty release is always blocked (EMPTY_RELEASE).
+ * - Unknown/stale data yields `unknown`, never `ready`.
+ * - AI failure is advisory only and never makes a release ready.
+ *
+ * Results are persisted to `ReleaseCheck` plus one `ReleaseGateResult` row per
+ * gate (M3-02), the release status is updated, and a notification is sent when
+ * the outcome is blocked or unknown.
+ */
+export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const { id } = await ctx.params;
+
+  const release = await prisma.release.findUnique({
+    where: { id },
+    select: { id: true, version: true },
+  });
+  if (!release) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  const releaseCtx = await buildContext(id, release.version);
+  const gates = await runGates(releaseCtx, aiProvider.releaseCheck.bind(aiProvider));
+  const status = aggregateGates(gates);
+  const allBlockers = collectBlockers(gates);
+
+  await prisma.release.update({
+    where: { id },
+    data: { status: status as "ready" | "blocked" | "unknown" },
+  });
+
+  const summary = gates.map((g) => `${g.gate}=${g.state}`).join(", ");
+
+  const check = await prisma.releaseCheck.create({
+    data: {
+      releaseId: id,
+      triggeredBy: session.user?.email ?? null,
+      status,
+      summary,
+      blockers: JSON.parse(JSON.stringify(allBlockers)) as object,
+      sourceTimes: JSON.parse(JSON.stringify({
+        checkedAt: releaseCtx.checkedAt.toISOString(),
+        taskLastSynced: releaseCtx.tasks.map((t) => ({ key: t.jiraKey, at: t.lastSyncedAt.toISOString() })),
+        sentryCheckedAt: releaseCtx.sentryCheckedAt?.toISOString() ?? null,
+      })) as object,
+      gates: {
+        create: gates.map((g) => ({
+          gate: g.gate,
+          state: g.state,
+          summary: g.summary,
+          details: g.details
+            ? (JSON.parse(JSON.stringify(g.details)) as object)
+            : undefined,
+          sourceTime: g.sourceTime ?? null,
+        })),
+      },
+    },
+    include: { gates: true },
+  });
+
+  if (status === "blocked" || status === "unknown") {
+    const reasons = allBlockers
+      .slice(0, 10)
+      .map((b) => (b.jiraKey ? `${b.jiraKey}: ${b.reason}` : b.reason));
+    await notifyAll({
+      type: "release",
+      title: `Release ${release.version} ${status}`,
+      body: reasons.join("; ") || summary,
+      link: "/release",
+    }).catch(() => null);
+  }
+
+  return NextResponse.json({
+    status,
+    ready: status === "ready",
+    gates,
+    blockers: allBlockers,
+    checkId: check.id,
+  });
+}
