@@ -23,7 +23,8 @@ web cung cấp board, automation, release gate và notification.
 | 7 | **Check nhánh chưa merge** (Bitbucket DC) | ⚠️ MVP, cần sửa mapping trạng thái PR |
 | 8 | **Stale / task ngâm** + xếp hạng ai ngâm nhiều nhất | ✅ Đọc read model chung |
 | 9 | **Notification** in-app + Web Push + **Inbox lệnh chuyển trạng thái** | ✅ |
-| 10 | **Watch** task quan tâm + notify comment mới | ⚠️ Chưa nhận comment tạo trực tiếp trên Jira |
+ | 10 | **Watch** task quan tâm + notify comment mới | ⚠️ Chưa nhận comment tạo trực tiếp trên Jira |
+ | 11 | **Chat (Discord)** — nhận cảnh báo + chạy command an toàn | ✅ M6: `ChatProvider` vendor-neutral, adapter Discord, outbound alert + command có confirm/audit |
 
 ## Công nghệ
 
@@ -156,8 +157,14 @@ xác nhận các mục sau và cập nhật `.env`:
 5. **Quy ước label release** — release gắn theo một Jira label (ví dụ `release-1.4.2`). Đổi theo team.
 6. **Web Push** — cần **HTTPS** (hoặc localhost). Môi trường nội bộ dùng self-signed cert + trust.
    Tạo key VAPID: `npx web-push generate-vapid-keys` → điền `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`.
-7. **Phân quyền** — `member` / `admin` (cấp thủ công trong Settings). Admin: settings, user roles.
-   (SSO/LDAP để phase 2.)
+ 7. **Phân quyền** — `member` / `admin` (cấp thủ công trong Settings). Admin: settings, user roles.
+    (SSO/LDAP để phase 2.)
+ 8. **Chat (Discord)** — optional. Tạo Discord bot → lấy token, set
+    `DISCORD_BOT_TOKEN`, `DISCORD_CHANNEL_ID`, `DISCORD_WEBHOOK_SECRET` (HMAC cho
+    webhook) và chỉ định webhook cho channel. User link tài khoản của mình tại
+    **Settings → Chat** (dán Discord user id). Command trong channel: `/task`,
+    `/move`, `/assign`, `/watch`, `/unwatch`, `/release <v> check`, `/stale`,
+    `/confirm`. Command chạy bằng quyền Jira của user đã link; bulk cần `/confirm`.
 
 ### Lưu ý kỹ thuật
 

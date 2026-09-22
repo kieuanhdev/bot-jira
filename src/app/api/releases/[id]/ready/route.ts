@@ -3,167 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { aiProvider } from "@/lib/ai";
 import { notifyAll } from "@/lib/notify";
-import { hasSentryConfig } from "@/lib/env";
-import { sentry } from "@/lib/sentry/client";
 import {
   runGates,
   aggregateGates,
   collectBlockers,
-  selectReleaseBranches,
-  type ReleaseContext,
-  type TaskInfo,
-  type BranchInfoRow,
-  type SentryIssueInfo,
 } from "@/lib/releases/gates";
-
-type IssueRow = {
-  jiraKey: string;
-  summary: string;
-  description: string;
-  priority: string;
-  status: string;
-  statusCategory: string;
-  type: string;
-  lastSyncedAt: Date;
-  fixVersionIds: string[];
-  deletedAt: Date | null;
-};
-
-/**
- * Build the ReleaseContext for the gate engine from the release row.
- *
- * - Jira tasks: when the release is identified by a Jira Fix Version
- *   (M3-01), tasks are derived from the live IssueCache via `fixVersionIds`
- *   (Jira is the source of truth for which issues carry the version). Legacy
- *   label-based releases fall back to the frozen ReleaseTask snapshot.
- * - Bitbucket branch info is read from the BranchInfo read model.
- * - Sentry unresolved issues are fetched live; on failure we record null so the
- *   sentry gate reports `unknown` (fail-safe) rather than crashing.
- */
-async function buildContext(releaseId: string, version: string): Promise<ReleaseContext> {
-  const checkedAt = new Date();
-
-  const release = await prisma.release.findUnique({
-    where: { id: releaseId },
-    include: {
-      tasks: {
-        include: {
-          issue: {
-            select: {
-              summary: true,
-              description: true,
-              priority: true,
-              status: true,
-              statusCategory: true,
-              type: true,
-              lastSyncedAt: true,
-            },
-          },
-        },
-      },
-    },
-  });
-  if (!release) return null as unknown as ReleaseContext;
-
-  // M3-01: prefer the live Fix Version scope over the ReleaseTask snapshot.
-  let issueRows: IssueRow[];
-  if (release.jiraVersionId) {
-    const issues = await prisma.issueCache.findMany({
-      where: {
-        deletedAt: null,
-        fixVersionIds: { has: release.jiraVersionId },
-      },
-      select: {
-        jiraKey: true,
-        summary: true,
-        description: true,
-        priority: true,
-        status: true,
-        statusCategory: true,
-        type: true,
-        lastSyncedAt: true,
-        fixVersionIds: true,
-        deletedAt: true,
-      },
-    });
-    issueRows = issues.filter((i) => !i.deletedAt);
-  } else {
-    // Legacy label-based release: keep the ReleaseTask snapshot behavior.
-    issueRows = release.tasks.map((t) => ({
-      jiraKey: t.jiraKey,
-      summary: t.issue.summary,
-      description: t.issue.description,
-      priority: t.issue.priority,
-      status: t.issue.status,
-      statusCategory: t.issue.statusCategory,
-      type: t.issue.type,
-      lastSyncedAt: t.issue.lastSyncedAt,
-      fixVersionIds: [] as string[],
-      deletedAt: null,
-    }));
-  }
-
-  const tasks: TaskInfo[] = issueRows.map((i) => ({
-    jiraKey: i.jiraKey,
-    summary: i.summary,
-    description: i.description,
-    priority: i.priority,
-    status: i.status,
-    statusCategory: i.statusCategory,
-    issueType: i.type,
-    lastSyncedAt: i.lastSyncedAt,
-  }));
-
-  // Scope branches to this release. BranchInfo is populated globally from
-  // Bitbucket (no per-release link), so we keep only branches whose name maps
-  // to one of the release's issue keys. Unmappable releases yield an empty set,
-  // which makes the branch/PR gates report `unknown` (fail-safe) instead of
-  // passing on unrelated branches.
-  const branchRows = await prisma.branchInfo.findMany();
-  const allBranchInfos: BranchInfoRow[] = branchRows.map((b) => ({
-    repo: b.repo,
-    branch: b.branch,
-    prState: b.prState,
-    prDestinationBranch: b.prDestinationBranch,
-    merged: b.merged,
-    checkedAt: b.checkedAt,
-  }));
-  const branchInfos = selectReleaseBranches(
-    allBranchInfos,
-    tasks.map((t) => t.jiraKey)
-  );
-
-  let sentryIssues: SentryIssueInfo[] | null = null;
-  let sentryCheckedAt: Date | null = null;
-  if (hasSentryConfig()) {
-    try {
-      const issues = await sentry.listUnresolvedIssues(50);
-      sentryIssues = issues.map((i) => ({
-        id: String(i.id),
-        shortId: i.shortId,
-        title: i.title,
-        level: i.level ?? "",
-        status: i.status ?? "unresolved",
-        permalinkUrl: i.permalinkUrl,
-      }));
-      sentryCheckedAt = new Date();
-    } catch {
-      sentryIssues = null;
-      sentryCheckedAt = null;
-    }
-  }
-
-  return {
-    releaseId,
-    version,
-    projectKey: release.projectKey ?? "",
-    tasks,
-    branchInfos,
-    sentryIssues,
-    sentryCheckedAt,
-    checkedAt,
-  };
-}
+import { buildReleaseContext } from "@/lib/releases/release-context";
 
 /**
  * Run the release ready-check through the M3-03 gate engine.
@@ -188,7 +33,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   });
   if (!release) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const releaseCtx = await buildContext(id, release.version);
+  const releaseCtx = await buildReleaseContext(id, release.version);
+  if (!releaseCtx) return NextResponse.json({ error: "could not build release context" }, { status: 500 });
   const gates = await runGates(releaseCtx, aiProvider.releaseCheck.bind(aiProvider));
   const status = aggregateGates(gates);
   const allBlockers = collectBlockers(gates);

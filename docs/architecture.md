@@ -348,7 +348,7 @@ exist and are tracked in `docs/IMPLEMENTATION_PLAN.md`:
 | Jira sync | Incremental cursor sync with overlap | Webhook-first + polling reconciliation | M1-03 complete; webhook in M5 |
 | Worker lifecycle | Separate pg-boss process/container | Separate worker process | Completed in M1-05 |
 | Release identity | Jira label | Jira Fix Version | M3-01 |
-| Chat | Web inbox only | Discord first through `ChatProvider` | M6 |
+| Chat | Web inbox + Discord through `ChatProvider` | Discord first through `ChatProvider` | M6 complete (Discord adapter, commands, outbound, audit); a second adapter (Slack/Teams) still adds via the same interface |
 | Comment events | Web-created comments | Jira webhook + polling repair | M2-04/M5 |
 
 Milestone 1 is implemented; its runtime acceptance checks still need staging

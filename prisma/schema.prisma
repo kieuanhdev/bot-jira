@@ -53,6 +53,9 @@ model User {
   updatedAt      DateTime      @updatedAt
   watches        Watch[]
   notifications  Notification[]
+  chatIdentities ChatIdentity[]
+  chatCommands   ChatMessage[]
+  chatConfirmations ChatMessageConfirmation[]
 }
 
 model IssueCache {
@@ -293,10 +296,28 @@ model IntegrationEvent {
   @@index([source, receivedAt])
 }
 
-// M5 — Notification preferences. One row per user; defaults allow everything.
-// `disabledTypes` is a list of event types that should not be delivered.
-// `deliveryMode` is "instant" or "digest" (digest delivered at most once a day).
-model NotificationPreference {
+  // M6 — Chat identity. One row per linked chat account. A user explicitly
+  // links their chat account (e.g. Discord) to their Team Task Web profile;
+  // chat commands then run with that user's role and Jira credential. The chat
+  // token is never a Jira identity (ADR-005).
+  model ChatIdentity {
+    id        String  @id @default(cuid())
+    provider  String  @default("discord")
+    externalId String @unique
+    displayName String?
+    linkedById String?
+    linkedAt  DateTime @default(now())
+    user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+    userId    String
+
+    @@unique([provider, userId])
+    @@index([userId])
+  }
+
+  // M5 — Notification preferences. One row per user; defaults allow everything.
+  // `disabledTypes` is a list of event types that should not be delivered.
+  // `deliveryMode` is "instant" or "digest" (digest delivered at most once a day).
+  model NotificationPreference {
   id            String  @id @default(cuid())
   userId        String  @unique
   user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -386,6 +407,45 @@ model BulkOperationItem {
 
   @@unique([operationId, jiraKey])
   @@index([operationId, status])
+}
+
+// M6 — Chat command + result transcript. Every chat command and its outcome are
+// stored with a stable correlation id so they can be audited and traced.
+// `status` is one of: ok, preview, confirmed, rejected, error, blocked,
+// unrecognized, linked, unlinked, help.
+model ChatMessage {
+  id            String   @id @default(cuid())
+  provider      String   @default("discord")
+  externalMsgId String?  // the chat platform's message id (for reply/correlate)
+  externalAuthorId String
+  authorUserId  String?  // linked Team Task Web user; null when unlinked
+  command       String?  // normalized command verb (e.g. "move")
+  raw           String
+  status        String   @default("received")
+  result        Json?
+  correlationId String?
+  createdAt     DateTime @default(now())
+  user          User?    @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  @@index([authorUserId, createdAt])
+  @@index([provider, externalAuthorId])
+}
+
+// M6 — Pending bulk/mutating command confirmations. A preview creates a row;
+// the user must confirm (or it expires) before any Jira mutation runs.
+model ChatMessageConfirmation {
+  id            String   @id @default(cuid())
+  provider      String   @default("discord")
+  externalAuthorId String
+  userId        String
+  kind          String
+  payload       Json
+  status        String   @default("pending") // pending | confirmed | expired
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
 }
 
 

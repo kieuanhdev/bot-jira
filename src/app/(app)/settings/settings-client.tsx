@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { timeAgo } from "@/lib/utils";
 import { MyIntegrations } from "./my-integrations";
 import { NotificationPreferences } from "./notification-preferences";
+import { ChatLinking } from "./chat-linking";
 
 type User = {
   id: string;
@@ -57,6 +58,7 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <MyIntegrations />
       <NotificationPreferences />
+      <ChatLinking />
       {isAdmin && (
         <Card>
           <CardHeader>

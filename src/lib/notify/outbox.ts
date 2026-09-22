@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
+import { deliverToChat } from "./chat-delivery";
 import type { NotifyType } from "./index";
 
 /**
@@ -92,6 +93,16 @@ export async function deliverNotification(
         scheduledAt: data.scheduledAt ?? null,
       },
     });
+    // M6-02 — also deliver to the team chat channel, deduped per logical event.
+    // Best-effort: a chat failure must not fail the in-app/push delivery.
+    void deliverToChat({
+      userId,
+      type: data.type,
+      title: data.title,
+      body: data.body ?? "",
+      link: data.link ?? null,
+      eventId: data.eventId,
+    }).catch(() => null);
     return { delivered: true, notificationId: notification.id, outboxId: outbox.id };
   } catch (e) {
     if (e instanceof Error && e.message.includes("P2002")) {

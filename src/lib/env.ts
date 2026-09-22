@@ -117,6 +117,20 @@ export const env = {
   notifyMaxAttempts: int("NOTIFY_MAX_ATTEMPTS", 5),
   notifyBackoffBaseMs: int("NOTIFY_BACKOFF_BASE_MS", 60_000),
 
+  // M6 — Chat integration. The first adapter is Discord (ADR-005); the
+  // vendor-neutral ChatProvider contract lets Slack/Teams be added later.
+  // CHAT_PROVIDER selects the adapter ("discord" only for now).
+  chatProvider: str("CHAT_PROVIDER", "discord"),
+  // Discord bot token (used to post messages + build embeds).
+  discordBotToken: str("DISCORD_BOT_TOKEN"),
+  // Discord shared secret for webhook signature verification (HMAC-SHA256 of
+  // the raw body, sent by Discord in the `X-Discord-Signature` header).
+  discordWebhookSecret: str("DISCORD_WEBHOOK_SECRET"),
+  // The channel id Team Task Web posts alerts/commands to. Empty => disabled.
+  discordChannelId: str("DISCORD_CHANNEL_ID"),
+  // Base URL of the public deployment (used to build web deep-links in chat).
+  publicBaseUrl: str("PUBLIC_BASE_URL", "http://localhost:3000"),
+
   // Admin bootstrap (used by seed script)
   adminEmail: str("ADMIN_EMAIL", "admin@team.local"),
   adminPassword: str("ADMIN_PASSWORD", "admin123"),

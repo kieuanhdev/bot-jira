@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { sendPush } from "@/lib/notify/push";
 import { backoffMs } from "@/lib/notify/outbox";
+import { sendChatOutbox } from "@/lib/notify/chat-delivery";
 import { env } from "../guard";
 import type { WorkerLog } from "../guard";
 
@@ -24,7 +25,7 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
     },
     orderBy: { createdAt: "asc" },
     take: BATCH_SIZE,
-    select: { id: true, userId: true, title: true, body: true, link: true, attemptCount: true },
+    select: { id: true, userId: true, channel: true, title: true, body: true, link: true, attemptCount: true },
   });
 
   let sent = 0;
@@ -33,6 +34,36 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
   const errors: string[] = [];
 
   for (const row of due) {
+    // M6-02 — chat channel: post to the shared team channel via ChatProvider.
+    // Chat delivery has no per-user subscription, so it short-circuits the
+    // push-only logic below.
+    if (row.channel === "chat") {
+      try {
+        await sendChatOutbox({ title: row.title, body: row.body, link: row.link });
+        await prisma.notificationOutbox.update({
+          where: { id: row.id },
+          data: { state: "sent", deliveredAt: now, lastError: null },
+        });
+        sent++;
+      } catch (chatError) {
+        const message = (chatError instanceof Error ? chatError.message : String(chatError)).slice(0, 500);
+        const attempts = row.attemptCount + 1;
+        const exhausted = attempts >= env.notifyMaxAttempts;
+        await prisma.notificationOutbox.update({
+          where: { id: row.id },
+          data: {
+            state: exhausted ? "failed" : "pending",
+            attemptCount: attempts,
+            lastError: message,
+            scheduledAt: exhausted ? null : new Date(Date.now() + backoffMs(attempts)),
+          },
+        });
+        if (exhausted) failed++;
+        errors.push(`${row.id}: ${message}`);
+      }
+      continue;
+    }
+
     try {
       const user = await prisma.user.findUnique({
         where: { id: row.userId },

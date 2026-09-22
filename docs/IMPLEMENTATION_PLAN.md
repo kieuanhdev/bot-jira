@@ -792,17 +792,18 @@ production build đều pass.
 
 ### M6-01 — Chọn adapter đầu tiên
 
-- [ ] Chọn Discord, Slack hoặc Teams dựa trên kênh team đang dùng.
-- [ ] Tạo interface `ChatProvider` để không khóa vào một vendor.
-- [ ] Map chat account với User/Jira account.
+- [x] Chọn Discord làm adapter đầu tiên (ADR-005); giữ interface vendor-neutral.
+- [x] Tạo interface `ChatProvider` (`src/lib/chat/index.ts`) để không khóa vào một vendor.
+- [x] Adapter Discord tách riêng (`src/lib/chat/discord.ts`) — REST bot token + verify HMAC webhook.
+- [x] Map chat account với User/Jira account qua bảng `ChatIdentity` (explicit linking).
 
 ### M6-02 — Outbound message
 
-- [ ] Release blocked/ready.
-- [ ] Sentry Critical/Blocker.
-- [ ] PR/branch quá hạn.
-- [ ] Task được watch có comment mới.
-- [ ] Bulk operation hoàn tất.
+- [x] Release blocked/ready (fan-out qua `notifyAll` → outbox channel `chat`).
+- [x] Sentry Critical/Blocker (từ webhook handler, qua cùng đường fan-out).
+- [x] Task được watch có comment mới (từ `notifyUser`/watch, qua cùng đường fan-out).
+- [x] Bulk operation hoàn tất (từ bulk worker, qua cùng đường fan-out).
+- [ ] PR/branch quá hạn (tái sử dụng gate/stale; chưa thêm event riêng trong đợt này).
 
 ### M6-03 — Commands
 
@@ -812,26 +813,47 @@ Command tối thiểu:
 /task PROJ-123
 /move PROJ-123 "In Progress"
 /assign PROJ-123 me
-/watch PROJ-123
+/watch PROJ-123   /unwatch PROJ-123
 /release 1.4.2 check
-/stale team
+/stale
+/confirm
 ```
 
 **Luật an toàn**
 
-- [ ] Rule-based parser xử lý action cuối cùng.
-- [ ] AI chỉ chuyển ngôn ngữ tự nhiên thành preview cấu trúc.
-- [ ] Mutation phải kiểm tra RBAC và quyền Jira.
-- [ ] Bulk command phải confirm.
-- [ ] Command và kết quả được ghi audit.
-- [ ] Token chat không được dùng như Jira identity.
+- [x] Rule-based parser xử lý action cuối cùng (`src/lib/chat/commands.ts`).
+- [x] Lệnh mơ hồ không tự thực thi — trả `unknown` + `/help` (không có AI auto-execute).
+- [x] Mutation phải kiểm tra RBAC và quyền Jira (role check + chạy bằng token Jira của user).
+- [x] Bulk command phải confirm (multi-key move/assign tạo `ChatMessageConfirmation`, cần `/confirm`).
+- [x] Command và kết quả được ghi audit (bảng `ChatMessage` + correlation id).
+- [x] Token chat không được dùng như Jira identity (luôn map qua `ChatIdentity` → user Jira credential).
 
 **Definition of Done Milestone 6**
 
-- [ ] Người không có quyền không thể transition qua bot.
-- [ ] Lệnh mơ hồ không tự thực thi.
-- [ ] Có xác nhận trước bulk mutation.
-- [ ] Mọi command có correlation ID và audit record.
+- [x] Người không có quyền không thể transition qua bot (403 từ Jira → `blocked`).
+- [x] Lệnh mơ hồ không tự thực thi.
+- [x] Có xác nhận trước bulk mutation.
+- [x] Mọi command có correlation ID và audit record.
+
+**Trạng thái implementation:** Hoàn thành ngày 2026-09-22. Migration
+`20260922090000_m6_chat_integration` thêm `ChatIdentity`, `ChatMessage` và
+`ChatMessageConfirmation`. `ChatProvider` là contract vendor-neutral
+(`src/lib/chat/index.ts`); adapter Discord ở `src/lib/chat/discord.ts` (REST bot
+token, verify HMAC `X-Discord-Signature`, normalize inbound). Parser
+`src/lib/chat/commands.ts` xử lý rule-based và không bao giờ tự thực thi lệnh
+mơ hồ. Executor `src/lib/chat/execute.ts` enforce RBAC (release check chỉ cho
+`release_manager`/`admin`), chạy mutation bằng Jira credential của user (403 →
+`blocked`), yêu cầu confirm cho bulk, và ghi mọi command + correlation id vào
+`ChatMessage`. Inbound qua `/api/webhooks/chat` (verify signature, map
+`ChatIdentity`). Outbound fan-out gộp vào `notify/outbox.ts` (channel `chat`)
+và worker `deliver-notifications` đã có xử lý channel `chat`; dedupe theo
+`chat:<type>:<eventId>`. Link/unlink qua web (`/api/chat/identity*` + UI trong
+Settings → Chat). Unit test (48 test mới), lint source, typecheck (chỉ còn lỗi
+`LayoutProps` có sẵn từ trước) và production build đều pass.
+
+**Phạm vi còn lại (không block pilot):** outbound riêng cho PR/branch quá hạn;
+digest scheduler cho chế độ digest (đã ghi nhận từ M5); adapter chat thứ hai
+(Slack/Teams) qua cùng `ChatProvider`.
 
 ---
 
