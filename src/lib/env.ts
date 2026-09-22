@@ -81,8 +81,19 @@ export const env = {
   // When true, the ai-score cron auto-scores new unscored issues.
   aiAutoScore: bool("AI_AUTO_SCORE", false),
 
-  // Stale detection
+  // Stale detection — legacy global threshold (kept for backward compat).
   staleDays: int("STALE_DAYS", 7),
+
+  // M8 — per-status SLA thresholds (release-policy.md §11.2).
+  staleBacklogDays: int("STALE_BACKLOG_DAYS", 30),
+  staleTodoDays: int("STALE_TODO_DAYS", 14),
+  staleInProgressDays: int("STALE_IN_PROGRESS_DAYS", 5),
+  staleReviewDays: int("STALE_REVIEW_DAYS", 2),
+  staleQaDays: int("STALE_QA_DAYS", 2),
+  staleBlockedDays: int("STALE_BLOCKED_DAYS", 3),
+  staleUnknownDays: int("STALE_UNKNOWN_DAYS", 7),
+  // Re-notify after this many days if the task is still stale and unchanged.
+  staleReminderDays: int("STALE_REMINDER_DAYS", 7),
 
   // Release policy (M2-02)
   releaseDoneCategories: str("RELEASE_DONE_CATEGORIES", "done"),

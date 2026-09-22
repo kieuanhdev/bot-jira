@@ -302,11 +302,26 @@ model StaleSnapshot {
   jiraKey     String
   assignee    String?
   ageDays     Int
+  // M8 — per-status age metrics + classification.
+  totalAgeDays   Int      @default(0)
+  stateAgeDays   Int      @default(0)
+  inactiveDays   Int      @default(0)
+  blockedDays    Int      @default(0)
+  stateAgeLowConfidence Boolean @default(false)
+  staleReason    String   @default("unknown")
+  severity       String   @default("warning")
+  status         String   @default("")
+  statusCategory String   @default("unknown")
+  slaDays        Int      @default(7)
   detectedAt  DateTime   @default(now())
   issue       IssueCache @relation(fields: [jiraKey], references: [jiraKey], onDelete: Cascade)
 
   @@index([jiraKey])
   @@index([assignee])
+  @@index([staleReason])
+  @@index([severity])
+  @@index([status])
+  @@index([detectedAt])
 }
 
 // M5 — Minimal integration event store. Every inbound webhook is stored with

@@ -53,7 +53,14 @@ type IssueDetail = {
   aiDecision: { decision: string; finalPoints: number | null; decidedAt: string } | null;
   comments: { id: string; author: string; body: string; createdAt: string | null }[];
   releaseTasks: { release: { version: string; status: string } }[];
-  staleSnapshots: { ageDays: number; detectedAt: string }[];
+  staleSnapshots: {
+    ageDays: number;
+    detectedAt: string;
+    staleReason: string;
+    severity: string;
+    stateAgeDays: number;
+    blockedDays: number;
+  }[];
 };
 
 type Transition = { id: string; name: string; to?: { name?: string } | string };
@@ -195,7 +202,11 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
             <span className="font-mono text-sm text-muted-foreground">{issue.jiraKey}</span>
             <Badge>{issue.status}</Badge>
             {issue.points != null && <Badge variant="secondary">{issue.points}pt</Badge>}
-            {stale && <Badge variant="warning">stale {stale.ageDays}d</Badge>}
+            {stale && (
+              <Badge variant={stale.severity === "high" ? "danger" : stale.severity === "info" ? "info" : "warning"}>
+                {stale.staleReason.replace(/_/g, " ")} · {stale.stateAgeDays}d
+              </Badge>
+            )}
           </div>
           <h1 className="mt-1 text-2xl font-semibold">{issue.summary}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
