@@ -59,6 +59,8 @@ export type BoardFilters = {
   q?: string;
   includeDone?: boolean;
   limit?: number;
+  /** Skip the first N rows (stable order: updatedAt desc, jiraKey asc). */
+  offset?: number;
 };
 
 export function useIssues(
@@ -79,4 +81,25 @@ export function useIssues(
     retry: 1,
     enabled: opts.enabled ?? true,
   });
+}
+
+/**
+ * Fetch the next page of issues beyond `offset` using the same filters. Used by
+ * the board's "Load more" so projects with more than the first page's limit
+ * don't silently truncate. The result is appended to the existing list.
+ */
+export async function fetchIssuesPage(
+  filters: BoardFilters,
+  offset: number,
+  limit = 1000
+): Promise<IssueResponse> {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => {
+    if (v === undefined || v === "") return;
+    params.set(k, v === true ? "1" : v === false ? "0" : String(v));
+  });
+  params.set("offset", String(offset));
+  params.set("limit", String(limit));
+  const qs = params.toString();
+  return api<IssueResponse>(`/api/issues?${qs}`);
 }

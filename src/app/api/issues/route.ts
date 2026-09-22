@@ -10,6 +10,11 @@ function positiveLimit(raw: string | null): number {
   return Number.isFinite(parsed) ? Math.max(1, Math.min(parsed, 1000)) : 300;
 }
 
+function nonNegativeOffset(raw: string | null): number {
+  const parsed = Number.parseInt(raw ?? "0", 10);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
 export async function GET(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -45,6 +50,7 @@ export async function GET(req: Request) {
   const releaseLabel = (url.searchParams.get("releaseLabel") ?? "").trim();
   const fixVersion = (url.searchParams.get("fixVersion") ?? "").trim();
   const limit = positiveLimit(url.searchParams.get("limit"));
+  const offset = nonNegativeOffset(url.searchParams.get("offset"));
 
   const where: Prisma.IssueCacheWhereInput = {
     deletedAt: null,
@@ -73,6 +79,7 @@ export async function GET(req: Request) {
     prisma.issueCache.findMany({
       where,
       orderBy: [{ updatedAt: "desc" }, { jiraKey: "asc" }],
+      skip: offset,
       take: limit,
       include: { aiScore: { include: { decisions: { orderBy: { decidedAt: "desc" }, take: 1 } } } },
     }),

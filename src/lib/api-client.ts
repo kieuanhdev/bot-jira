@@ -1,4 +1,19 @@
 // Tiny typed fetch helper for client components.
+/**
+ * Error thrown when a request is not OK. Carries the HTTP `status` so callers
+ * can distinguish e.g. a 403 (permission denied) from a 502 (upstream/Jira
+ * failure) instead of only reading an opaque message.
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number | null
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 export async function api<T = unknown>(
   path: string,
   options: {
@@ -27,7 +42,7 @@ export async function api<T = unknown>(
     } catch {
       /* ignore */
     }
-    throw new Error(message);
+    throw new ApiError(message, res.status);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;

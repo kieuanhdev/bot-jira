@@ -27,7 +27,25 @@ export async function POST(
   try {
     await client.transition(key, transitionId);
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
+    const err = e as { status?: number };
+    const status = typeof err?.status === "number" ? err.status : null;
+    if (status === 401 || status === 403) {
+      // The user's Jira token was rejected or lacks permission for this
+      // transition. Surface it distinctly so the UI can say "no permission"
+      // rather than a generic upstream error.
+      return NextResponse.json(
+        { error: "You do not have permission to perform this transition.", code: "permission" },
+        { status: 403 }
+      );
+    }
+    if (status === 400 || status === 409) {
+      // The workflow does not allow this transition from the current state.
+      return NextResponse.json(
+        { error: "This transition is not available from the current state.", code: "workflow" },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json({ error: `Jira transition failed (${status ?? "unknown"})`, code: "upstream" }, { status: 502 });
   }
 
   const cacheSynced = await refreshJiraIssueCache(client, key);

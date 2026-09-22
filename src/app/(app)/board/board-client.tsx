@@ -14,8 +14,8 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { api } from "@/lib/api-client";
-import { useIssues, type IssueItem } from "@/hooks/use-issues";
+import { api, ApiError } from "@/lib/api-client";
+import { useIssues, fetchIssuesPage, type IssueItem } from "@/hooks/use-issues";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -38,7 +38,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { STATUS_GROUPS, STATUS_GROUP_STYLE, statusGroup, type BoardWidth } from "@/lib/status-groups";
+import { type BoardWidth } from "@/lib/status-groups";
 import {
   Search,
   Bot,
@@ -79,11 +79,36 @@ function priorityAccent(priority: string): string {
   return "border-l-transparent";
 }
 
-function groupDone(group: string): boolean {
-  return group === "Done";
-}
-function groupInProgress(group: string): boolean {
-  return group === "In Progress";
+/** Dot + header color per Jira status category key (stable across instances). */
+const CATEGORY_STYLE: Record<string, { dot: string; text: string }> = {
+  new: { dot: "bg-sky-500", text: "text-sky-600 dark:text-sky-400" },
+  indeterminate: { dot: "bg-primary", text: "text-primary" },
+  done: { dot: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400" },
+};
+const FALLBACK_CATEGORY_STYLE = CATEGORY_STYLE.new;
+
+/** Column order matches Jira's to-do → in-progress → done. */
+const CATEGORY_ORDER = ["new", "indeterminate", "done"] as const;
+
+/**
+ * Route an issue to a board column.
+ * 1. Exact status-name match against the project's real columns (preferred —
+ *    this is what makes "Backlog" vs "Selected for Development" split into
+ *    separate columns like the Jira board).
+ * 2. Fallback: the issue's status category (from the cache, or the workflow
+ *    status → category map), which picks the first column of that category.
+ */
+function columnKeyForIssue(
+  issue: IssueItem,
+  columnKeyByStatus: Map<string, string>,
+  statusCategoryMap: Record<string, string>,
+  columns: { key: string; category: string }[]
+): string {
+  const byName = columnKeyByStatus.get(issue.status);
+  if (byName) return byName;
+  const cat = issue.statusCategory || statusCategoryMap[issue.status] || "new";
+  const col = columns.find((c) => c.category === cat) ?? columns[0];
+  return col ? col.key : "To Do";
 }
 
 function CardContent({ issue, done, dragging }: { issue: IssueItem; done: boolean; dragging?: boolean }) {
@@ -218,7 +243,7 @@ function DraggableCard({
 function BoardColumn({
   id,
   label,
-  group,
+  category,
   isDone,
   items,
   colIndex,
@@ -229,7 +254,7 @@ function BoardColumn({
 }: {
   id: string;
   label: string;
-  group: string;
+  category: string;
   isDone: boolean;
   items: IssueItem[];
   colIndex: number;
@@ -239,7 +264,7 @@ function BoardColumn({
   dndDisabled: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
-  const style = STATUS_GROUP_STYLE[group as keyof typeof STATUS_GROUP_STYLE] ?? STATUS_GROUP_STYLE["To Do"];
+  const style = CATEGORY_STYLE[category] ?? FALLBACK_CATEGORY_STYLE;
 
   return (
     <div className="flex min-w-0 flex-1 basis-64 flex-col">
@@ -459,23 +484,54 @@ export function BoardClient() {
   const effectiveView: ViewMode = width === "narrow" ? "list" : view;
 
   const enabled = effectivePreferred.length > 0;
-  const issuesQuery: Partial<import("@/hooks/use-issues").BoardFilters> = selectedProject
-    ? { project: selectedProject }
-    : {};
-  const { data, isLoading, isFetching } = useIssues(
-    {
-      ...issuesQuery,
-      q: q || undefined,
-      label: label || undefined,
-      priority: priority || undefined,
-      assignee,
-      includeDone: true,
-      limit: 1000,
-    },
-    { enabled }
-  );
+  const boardFilters: import("@/hooks/use-issues").BoardFilters = {
+    ...(selectedProject ? { project: selectedProject } : {}),
+    q: q || undefined,
+    label: label || undefined,
+    priority: priority || undefined,
+    assignee,
+    includeDone: true,
+    limit: 1000,
+  };
+  const { data, isLoading, isFetching } = useIssues(boardFilters, { enabled });
 
-  const issues = useMemo(() => data?.items ?? [], [data?.items]);
+  // Extra pages loaded on demand for projects larger than the first page. The
+  // filter signature is the key that resets them: when it changes, the loaded
+  // pages no longer match, so we only render the first page until reloaded.
+  const filterSig = JSON.stringify({ p: selectedProject, q, label, priority, assignee });
+  const [extraPages, setExtraPages] = useState<{ sig: string; items: IssueItem[] }>({ sig: "", items: [] });
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadedTotal = data?.total ?? 0;
+
+  const extraIssues = useMemo(
+    () => (extraPages.sig === filterSig ? extraPages.items : []),
+    [extraPages, filterSig]
+  );
+  const firstPageCount = data?.items.length ?? 0;
+  const hasMore = firstPageCount + extraIssues.length < loadedTotal;
+
+  async function loadMore() {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    const sig = filterSig;
+    try {
+      const offset = firstPageCount + extraIssues.length;
+      const page = await fetchIssuesPage(boardFilters, offset, 1000);
+      setExtraPages((prev) => {
+        const base = prev.sig === sig ? prev.items : [];
+        return { sig, items: [...base, ...page.items] };
+      });
+    } catch (e) {
+      setToast(`Couldn't load more tasks: ${(e as Error).message.slice(0, 80)}`);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  const issues = useMemo(
+    () => (data?.items ?? []).concat(extraIssues),
+    [data?.items, extraIssues]
+  );
   const [syncQueued, setSyncQueued] = useState(false);
 
   async function syncJira() {
@@ -510,40 +566,99 @@ export function BoardClient() {
   const assignees = optData?.assignees ?? [];
   const labelOptions = optData?.labels ?? [];
 
-  const columns = useMemo(
-    () => STATUS_GROUPS.map((g) => ({ name: g, group: g, isDone: g === "Done" })),
-    []
+  // Dynamic columns from the project's real Jira workflow (grouped by status
+  // category). Falls back to the 3 default category columns if the endpoint is
+  // empty (Jira not configured / error). Column identity = category key, so an
+  // issue routes by its category, not by a fragile status-name match.
+  const { data: statusesData } = useQuery({
+    queryKey: ["board", "statuses", selectedProject],
+    enabled: effectivePreferred.length > 0 && Boolean(selectedProject),
+    queryFn: () =>
+      api<{
+        items: { name: string; category: string }[];
+        statusCategoryMap: Record<string, string>;
+      }>(`/api/board/statuses?project=${selectedProject}`),
+    staleTime: 5 * 60_000,
+    retry: 0,
+  });
+  const statusCategoryMap = useMemo<Record<string, string>>(
+    () => statusesData?.statusCategoryMap ?? {},
+    [statusesData?.statusCategoryMap]
   );
+
+  type Column = { key: string; label: string; category: string; isDone: boolean };
+  const columns = useMemo<Column[]>(() => {
+    const items = statusesData?.items ?? [];
+    if (items.length === 0) {
+      return [
+        { key: "To Do", label: "To Do", category: "new", isDone: false },
+        { key: "In Progress", label: "In Progress", category: "indeterminate", isDone: false },
+        { key: "Done", label: "Done", category: "done", isDone: true },
+      ];
+    }
+    // One column per workflow status (the project's real workflow / manual
+    // columns), in the order Jira reports them. Column identity = the status
+    // name; its category (new/indeterminate/done) drives color + the done
+    // accent, and is what an issue routes to when its own statusCategory is
+    // unknown.
+    const seen = new Set<string>();
+    const cols: Column[] = [];
+    for (const s of items) {
+      const label = (s.name || "").trim();
+      if (!label || seen.has(label)) continue;
+      seen.add(label);
+      const cat =
+        typeof s.category === "string" && CATEGORY_ORDER.includes(s.category as (typeof CATEGORY_ORDER)[number])
+          ? s.category
+          : "new";
+      cols.push({ key: label, label, category: cat, isDone: cat === "done" });
+    }
+    return cols.length > 0
+      ? cols
+      : [
+          { key: "To Do", label: "To Do", category: "new", isDone: false },
+          { key: "In Progress", label: "In Progress", category: "indeterminate", isDone: false },
+          { key: "Done", label: "Done", category: "done", isDone: true },
+        ];
+  }, [statusesData?.items]);
+
+  // Map an issue to the column that carries its status name.
+  const columnKeyByStatus = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of columns) m.set(c.label, c.key);
+    return m;
+  }, [columns]);
 
   const byColumn = useMemo(() => {
     const m = new Map<string, IssueItem[]>();
-    for (const c of columns) m.set(c.name, []);
+    for (const c of columns) m.set(c.key, []);
     for (const issue of issues) {
-      const col = statusGroup(issue.status || "");
-      m.get(col)!.push(issue);
+      const col = columnKeyForIssue(issue, columnKeyByStatus, statusCategoryMap, columns);
+      const bucket = m.get(col);
+      if (bucket) bucket.push(issue);
     }
     return m;
-  }, [issues, columns]);
+  }, [issues, columns, columnKeyByStatus, statusCategoryMap]);
 
   const summary = useMemo(() => {
     let inProgress = 0;
     let done = 0;
     let stale = 0;
     for (const c of columns) {
-      const items = byColumn.get(c.name) ?? [];
-      if (groupInProgress(c.group)) inProgress += items.length;
-      if (groupDone(c.group)) done += items.length;
-      if (!groupDone(c.group)) stale += items.filter((i) => daysSince(i.updatedAt) >= 7).length;
+      const items = byColumn.get(c.key) ?? [];
+      if (c.category === "indeterminate") inProgress += items.length;
+      if (c.category === "done") done += items.length;
+      if (c.category !== "done") stale += items.filter((i) => daysSince(i.updatedAt) >= 7).length;
     }
     return { inProgress, stale, done, open: issues.length - done };
   }, [columns, byColumn, issues]);
 
   const activeProject = projectList.find((p) => p.key === selectedProject) ?? null;
 
-  const columnNames = useMemo(() => columns.map((c) => c.name as string), [columns]);
+  const columnKeys = useMemo(() => columns.map((c) => c.key), [columns]);
 
-  function findColumnForIssue(issue: IssueItem): string | undefined {
-    return statusGroup(issue.status || "") as string;
+  function findColumnForIssue(issue: IssueItem): string {
+    return columnKeyForIssue(issue, columnKeyByStatus, statusCategoryMap, columns);
   }
 
   const transitionCache = useRef(new Map<string, Transition[]>());
@@ -566,41 +681,50 @@ export function BoardClient() {
   }
 
   /**
-   * Match a transition's target status against a desired status name.
-   * 1. Exact (case-insensitive) match — always wins.
-   * 2. Fallback: only when the desired name is a known column/category word,
-   *    match a transition whose target *contains* it as a whole word. This is
-   *    intentionally narrow to avoid e.g. "To Do" matching "Opened by ...".
+   * Find a transition that lands in the target column. A column is a specific
+   * workflow status, so the primary match is an exact status-name match. The
+   * fallback accepts any transition whose target status shares the column's
+   * category (covers the 3-column fallback layout, where a column is a category
+   * like "To Do"/"In Progress"/"Done" rather than a single status).
    */
-  const CATEGORY_WORDS: Record<string, RegExp> = {
-    done: /\b(done|closed|resolved|complete|released|deploy(ed|ing)?|finish(?:ed)?)\b/i,
-    "in review": /\b(review|qa|test|verification|testing)\b/i,
-    "in progress": /\b(in progress|progress|doing|working|active)\b/i,
-    "to do": /\b(todo|to do|new|open|pending|queued|ready)\b/i,
-    backlog: /\b(backlog|parked|someday|later)\b/i,
-  };
-
-  function findTransition(
-    all: Transition[],
-    targetStatus: string
-  ): Transition | null {
-    const tl = targetStatus.toLowerCase().trim();
-    const exact = all.find((tr) => toName(tr).toLowerCase().trim() === tl);
+  function findTransition(all: Transition[], targetLabel: string): Transition | null {
+    const exact = all.find((tr) => {
+      const n = toName(tr).toLowerCase().trim();
+      return n === targetLabel.toLowerCase().trim();
+    });
     if (exact) return exact;
-    for (const [cat, re] of Object.entries(CATEGORY_WORDS)) {
-      if (tl === cat.toLowerCase() || tl.includes(cat.toLowerCase())) {
-        const m = all.find((tr) => re.test(toName(tr)));
-        if (m) return m;
-      }
+    const targetCat = columns.find((c) => c.key === targetLabel)?.category;
+    if (targetCat) {
+      const byCat = all.find((tr) => {
+        const target = toName(tr);
+        const cat = statusCategoryMap[target] ?? statusCategoryMap[target.toLowerCase()];
+        return cat === targetCat;
+      });
+      if (byCat) return byCat;
     }
     return null;
   }
 
   async function doTransition(key: string, transitionId: string) {
-    await api(`/api/issues/${key}/transition`, {
-      method: "POST",
-      body: { transitionId },
-    });
+    try {
+      await api(`/api/issues/${key}/transition`, {
+        method: "POST",
+        body: { transitionId },
+      });
+    } catch (e) {
+      const status = (e as ApiError)?.status ?? null;
+      if (status === 403 || status === 401) {
+        setToast(`${key}: You don't have permission to make this transition.`);
+        return;
+      }
+      if (status === 409) {
+        setToast(`${key}: This transition isn't available from the current state. Move it via Jira.`);
+        return;
+      }
+      // 502/other: Jira upstream failure or network.
+      setToast(`${key}: Couldn't update Jira. Try again, or make the change in Jira.`);
+      return;
+    }
     invalidateTransitionCache(key);
     await qc.invalidateQueries({ queryKey: ["issues"] });
   }
@@ -610,29 +734,38 @@ export function BoardClient() {
     setToast(null);
     setPendingChoice(null);
     try {
-      let targetStatus: string;
+      // `target` is a column KEY (or a prev/next marker). Resolve it to the
+      // column's label (a real workflow status name) for the transition lookup.
+      let targetKey: string;
       if (target === "__prev__" || target === "__next__") {
         const issue = issues.find((i) => i.jiraKey === key);
         if (!issue) return;
         const currentCol = findColumnForIssue(issue);
-        if (!currentCol) return;
-        const idx = columnNames.indexOf(currentCol);
+        const idx = columnKeys.indexOf(currentCol);
         const nextIdx = target === "__next__" ? idx + 1 : idx - 1;
-        if (nextIdx < 0 || nextIdx >= columnNames.length) return;
-        targetStatus = columnNames[nextIdx];
+        if (nextIdx < 0 || nextIdx >= columnKeys.length) return;
+        targetKey = columnKeys[nextIdx];
       } else {
-        targetStatus = target;
+        targetKey = target;
+      }
+      const targetLabel = columns.find((c) => c.key === targetKey)?.label ?? targetKey;
+
+      // No-op if the issue is already in the target column.
+      const issue = issues.find((i) => i.jiraKey === key);
+      if (issue && findColumnForIssue(issue) === targetKey) {
+        setTransitionBusy(false);
+        return;
       }
 
       const all = await fetchTransitions(key);
-      const found = findTransition(all, targetStatus);
+      const found = findTransition(all, targetLabel);
 
       if (!found) {
         const available = [...new Set(all.map(toName).filter(Boolean))];
         if (available.length > 0) {
-          setPendingChoice({ key, target: targetStatus, options: available });
+          setPendingChoice({ key, target: targetLabel, options: available });
         } else {
-          setToast(`${key}: no transitions available from current state`);
+          setToast(`${key}: no transitions available from the current state.`);
         }
         return;
       }
@@ -652,9 +785,9 @@ export function BoardClient() {
     setTransitionBusy(true);
     try {
       const all = await fetchTransitions(key);
-      const found = findTransition(all, status);
+      const found = findTransition(all, status) ?? all.find((tr) => toName(tr).toLowerCase() === status.toLowerCase());
       if (!found) {
-        setToast(`${key}: no transition found for "${status}"`);
+        setToast(`${key}: no transition found for "${status}". Move it via Jira.`);
         return;
       }
       await doTransition(key, found.id);
@@ -682,13 +815,13 @@ export function BoardClient() {
   const boardColumnsRender = useMemo(
     () =>
       columns.map((c, i) => ({
-        id: c.name,
-        label: c.name,
-        group: c.group,
+        id: c.key,
+        label: c.label,
+        category: c.category,
         isDone: c.isDone,
         colIndex: i,
         columnCount: columns.length,
-        items: byColumn.get(c.name) ?? [],
+        items: byColumn.get(c.key) ?? [],
       })),
     [columns, byColumn]
   );
@@ -980,7 +1113,7 @@ export function BoardClient() {
                 key={col.id}
                 id={col.id}
                 label={col.label}
-                group={col.group}
+                category={col.category}
                 isDone={col.isDone}
                 items={col.items}
                 colIndex={col.colIndex}
@@ -998,10 +1131,10 @@ export function BoardClient() {
       ) : (
         <div className="flex flex-1 flex-col gap-2 overflow-x-auto pb-2">
           {columns.map((c, i) => {
-            const items = byColumn.get(c.name) ?? [];
+            const items = byColumn.get(c.key) ?? [];
             if (items.length === 0) return null;
-            const style = STATUS_GROUP_STYLE[c.group as keyof typeof STATUS_GROUP_STYLE] ?? STATUS_GROUP_STYLE["To Do"];
-            const done = groupDone(c.group);
+            const style = CATEGORY_STYLE[c.category] ?? FALLBACK_CATEGORY_STYLE;
+            const done = c.category === "done";
             const sorted = [...items].sort((a, b) => {
               const ra = PRIORITY_RANK[a.priority] ?? 9;
               const rb = PRIORITY_RANK[b.priority] ?? 9;
@@ -1009,10 +1142,10 @@ export function BoardClient() {
               return daysSince(b.updatedAt) - daysSince(a.updatedAt);
             });
             return (
-              <div key={c.name}>
+              <div key={c.key}>
                 <div className="mb-1.5 flex items-center gap-1.5 px-1">
                   <span className={cn("h-2 w-2 rounded-full", style.dot)} />
-                  <span className={cn("text-sm font-semibold", style.text)}>{c.name}</span>
+                  <span className={cn("text-sm font-semibold", style.text)}>{c.label}</span>
                   <span className="text-xs tabular-nums text-muted-foreground">{items.length}</span>
                 </div>
                 <div className="flex flex-col gap-2">
@@ -1033,6 +1166,20 @@ export function BoardClient() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {hasMore && (
+        <div className="flex justify-center pb-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="gap-1.5"
+          >
+            {loadingMore ? "Loading…" : `Load more (${loadedTotal - issues.length} remaining)`}
+          </Button>
         </div>
       )}
     </div>

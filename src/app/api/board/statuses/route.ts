@@ -4,10 +4,18 @@ import { getSession } from "@/lib/session";
 import { isKnownProject, jiraProjectList, hasJiraConfig, projectColumns } from "@/lib/env";
 import { jira } from "@/lib/jira/client";
 
+/**
+ * Stable Jira status category key. Jira's canonical keys are `new` (to-do),
+ * `indeterminate` (in progress) and `done`. Unlike the numeric `statusCategory.id`
+ * (which is not canonical and can differ between custom workflow schemes /
+ * instances), the key is stable across instances, so routing and styling key off it.
+ */
+export type CategoryKey = "new" | "indeterminate" | "done";
+
 export type BoardStatus = {
   name: string;
-  /** Jira statusCategory id: 2 = to do, 4 = in progress, 3 = done (on this DC). */
-  categoryId: number;
+  /** Stable Jira status category key (see CategoryKey). */
+  category: CategoryKey;
 };
 
 /**
@@ -36,7 +44,7 @@ export async function GET(req: Request) {
     select: { boardProjects: true },
   });
   if (!hasJiraConfig()) {
-    return NextResponse.json({ items: [] as BoardStatus[] });
+    return NextResponse.json({ items: [] as BoardStatus[], statusCategoryMap: {} as Record<string, string> });
   }
 
   const url = new URL(req.url);
@@ -55,12 +63,22 @@ export async function GET(req: Request) {
     const selected = (user?.boardProjects ?? []).filter(isKnownProject);
     keys = selected.length > 0 ? selected : jiraProjectList.filter(isKnownProject);
   }
-  if (keys.length === 0) return NextResponse.json({ items: [] as BoardStatus[] });
+  if (keys.length === 0) {
+    return NextResponse.json({ items: [] as BoardStatus[], statusCategoryMap: {} as Record<string, string> });
+  }
 
   const client = jira;
 
-  type FlowStatus = { name: string; statusCategory: { id: number } };
+  type FlowStatus = { name: string; statusCategory: { key?: string } };
   type FlowType = { subtask: boolean; statuses: FlowStatus[] };
+
+  /** Normalize Jira's category key to a canonical key; falls back to "new". */
+  function normalizeCategory(key?: string): CategoryKey {
+    const k = (key ?? "").toLowerCase();
+    if (k === "done") return "done";
+    if (k === "indeterminate") return "indeterminate";
+    return "new";
+  }
 
   /** Pick the primary issue type's statuses (first non-subtask, else first). */
   function primaryWorkflow(types: FlowType[]): FlowStatus[] {
@@ -69,18 +87,16 @@ export async function GET(req: Request) {
   }
 
   /**
-   * Guess a column's status category from its label when the label isn't a
-   * real workflow status name (e.g. a column labelled "Done" that groups the
-   * project's done-family states). Returns a category id or 0 if unknown.
-   * On this instance: 2 = to do, 4 = in progress, 3 = done.
+   * Guess a column's category from its label when the label isn't a real
+   * workflow status name (e.g. a column labelled "Done" that groups the
+   * project's done-family states). Keyed on stable keywords, not instance ids.
    */
-  function categoryFromLabel(label: string): number {
+  function categoryFromLabel(label: string): CategoryKey {
     const l = label.toLowerCase();
-    if (/(^|\s)(done|closed|resolved|complete|released|deploy|finish|finishe?d)(\s|$)/.test(l) || l === "done")
-      return 3;
-    if (/(progress|in progress|doing|working|active)/.test(l)) return 4;
-    if (/(todo|to do|backlog|new|open|pending|waiting|queued|review|test|selected)/.test(l)) return 2;
-    return 0;
+    if (/(^|\s)(done|closed|resolved|complete|completed|released|deploy(?:ed)?|finish(?:ed)?)\b/.test(l) || l === "done")
+      return "done";
+    if (/(progress|doing|working|active)/.test(l)) return "indeterminate";
+    return "new";
   }
 
   /**
@@ -94,20 +110,18 @@ export async function GET(req: Request) {
     let doneAdded = false;
     for (const s of states) {
       if (!s?.name) continue;
-      const cat = s.statusCategory?.id ?? 0;
-      if (isDoneCat(cat)) {
+      const category = normalizeCategory(s.statusCategory?.key);
+      if (category === "done") {
         if (!doneAdded) {
-          out.push({ name: s.name, categoryId: cat });
+          out.push({ name: s.name, category });
           doneAdded = true;
         }
       } else {
-        out.push({ name: s.name, categoryId: cat });
+        out.push({ name: s.name, category });
       }
     }
     return out;
   }
-
-  const isDoneCat = (cat: number) => cat === 3 || cat === 5;
 
   // Single-project case: use the project's columns (manual if configured, else
   // auto-derived), in order.
@@ -116,13 +130,14 @@ export async function GET(req: Request) {
     try {
       const types = await client.getProjectStatuses(key);
       const states = primaryWorkflow(types);
-      // raw status name -> category id (for client-side column routing).
-      const rawCategory = new Map<string, number>();
-      const catByName = new Map<string, number>();
+      // raw status name -> category key (for client-side column routing).
+      const rawCategory = new Map<string, CategoryKey>();
+      const catByName = new Map<string, CategoryKey>();
       for (const s of states) {
         if (s?.name) {
-          rawCategory.set(s.name, s.statusCategory?.id ?? 0);
-          catByName.set(s.name, s.statusCategory?.id ?? 0);
+          const cat = normalizeCategory(s.statusCategory?.key);
+          rawCategory.set(s.name, cat);
+          catByName.set(s.name, cat);
         }
       }
       const manual = projectColumns[key];
@@ -134,37 +149,38 @@ export async function GET(req: Request) {
         // done-family issues route into it.
         items = manual.map((name) => ({
           name,
-          categoryId: catByName.get(name) ?? categoryFromLabel(name),
+          category: catByName.get(name) ?? categoryFromLabel(name),
         }));
       } else {
         items = autoColumns(states);
       }
-      const statusCategoryMap: Record<string, number> = Object.fromEntries(rawCategory);
+      const statusCategoryMap: Record<string, string> = Object.fromEntries(rawCategory);
       return NextResponse.json({ items, statusCategoryMap });
     } catch {
-      return NextResponse.json({ items: [] as BoardStatus[], statusCategoryMap: {} });
+      return NextResponse.json({ items: [] as BoardStatus[], statusCategoryMap: {} as Record<string, string> });
     }
   }
 
   // "All" (multiple projects): union of each project's columns (manual or
   // auto), de-duplicated by name, first-seen order.
   const ordered = new Map<string, BoardStatus>();
-  const rawCategory = new Map<string, number>();
+  const rawCategory = new Map<string, CategoryKey>();
   await Promise.all(
     keys.map(async (key) => {
       try {
         const types = await client.getProjectStatuses(key);
         const states = primaryWorkflow(types);
-        const catByName = new Map<string, number>();
+        const catByName = new Map<string, CategoryKey>();
         for (const s of states) {
           if (s?.name) {
-            rawCategory.set(s.name, s.statusCategory?.id ?? 0);
-            catByName.set(s.name, s.statusCategory?.id ?? 0);
+            const cat = normalizeCategory(s.statusCategory?.key);
+            rawCategory.set(s.name, cat);
+            catByName.set(s.name, cat);
           }
         }
         const manual = projectColumns[key];
         const cols: BoardStatus[] = manual
-          ? manual.map((name) => ({ name, categoryId: catByName.get(name) ?? categoryFromLabel(name) }))
+          ? manual.map((name) => ({ name, category: catByName.get(name) ?? categoryFromLabel(name) }))
           : autoColumns(states);
         for (const col of cols) {
           if (!ordered.has(col.name)) ordered.set(col.name, col);
@@ -176,6 +192,6 @@ export async function GET(req: Request) {
   );
 
   const items: BoardStatus[] = [...ordered.values()];
-  const statusCategoryMap: Record<string, number> = Object.fromEntries(rawCategory);
+  const statusCategoryMap: Record<string, string> = Object.fromEntries(rawCategory);
   return NextResponse.json({ items, statusCategoryMap });
 }
