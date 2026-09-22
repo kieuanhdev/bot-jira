@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { timeAgo } from "@/lib/utils";
 import { MyIntegrations } from "./my-integrations";
+import { NotificationPreferences } from "./notification-preferences";
 
 type User = {
   id: string;
@@ -55,6 +56,7 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <MyIntegrations />
+      <NotificationPreferences />
       {isAdmin && (
         <Card>
           <CardHeader>

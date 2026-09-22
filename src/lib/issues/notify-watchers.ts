@@ -53,6 +53,11 @@ export async function notifyWatchersOfComment(
     select: { userId: true },
   });
 
+  // The Jira comment id is the stable logical-event id used to dedupe push
+  // delivery: the same comment arriving via webhook and via poll (or being
+  // redelivered by Jira) can never produce two pushes for the same watcher.
+  const eventId = commentId ?? `${jiraKey}:${authorName}:${body.slice(0, 64)}`;
+
   let notified = 0;
   for (const w of watchers) {
     if (w.userId === authorUserId) continue;
@@ -62,6 +67,7 @@ export async function notifyWatchersOfComment(
         title: `New comment on ${jiraKey}`,
         body: `${authorName}: ${body.slice(0, 160)}`,
         link: `/issue/${jiraKey}`,
+        eventId,
       });
       notified++;
     } catch {
