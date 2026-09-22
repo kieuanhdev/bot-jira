@@ -39,6 +39,8 @@ model User {
   jiraVerifiedAt    DateTime?
   bitbucketVerifiedAt DateTime?
 
+  preferences NotificationPreference?
+
   // Preferred project keys to show on this user's board.
   // Empty => show nothing on the board until they pick some.
   boardProjects String[]
@@ -271,6 +273,71 @@ model StaleSnapshot {
 
   @@index([jiraKey])
   @@index([assignee])
+}
+
+// M5 — Minimal integration event store. Every inbound webhook is stored with
+// its external event ID so duplicates are detected before processing. The
+// raw payload is capped to keep the table small (see MAX_EVENT_PAYLOAD_BYTES).
+model IntegrationEvent {
+  id              String    @id @default(cuid())
+  source          String
+  externalId      String
+  type            String
+  subject         String?
+  payload         Json
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+  processingError String?
+
+  @@unique([source, externalId])
+  @@index([source, receivedAt])
+}
+
+// M5 — Notification preferences. One row per user; defaults allow everything.
+// `disabledTypes` is a list of event types that should not be delivered.
+// `deliveryMode` is "instant" or "digest" (digest delivered at most once a day).
+model NotificationPreference {
+  id            String  @id @default(cuid())
+  userId        String  @unique
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  disabledTypes String[] @default([])
+  deliveryMode  String  @default("instant") // "instant" | "digest"
+  digestHour    Int     @default(8) // local hour for the daily digest
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// M5 — Outbox for reliable notification delivery. Each Notification row is
+// mirrored here; the delivery worker claims, retries with backoff, and marks
+// the delivery outcome. `dedupeKey` prevents the same logical notification
+// from being delivered twice (e.g. the same external event arriving twice).
+enum DeliveryState {
+  pending
+  sent
+  failed
+  skipped
+}
+
+model NotificationOutbox {
+  id            String         @id @default(cuid())
+  notificationId String?
+  userId        String
+  channel       String         @default("in_app") // in_app | push
+  title         String
+  body          String         @default("")
+  link          String?
+  dedupeKey     String?
+  state         DeliveryState  @default(pending)
+  attemptCount  Int            @default(0)
+  lastError     String?
+  scheduledAt   DateTime? // set for digest-mode deliveries
+  deliveredAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([dedupeKey, channel])
+  @@index([state, scheduledAt])
+  @@index([userId])
 }
 
 // M4 — Bulk operations. A user requests a bulk change (preview), confirms it,

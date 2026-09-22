@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendPush } from "./push";
+import { deliverNotification } from "./outbox";
 
 export type NotifyType =
   | "comment"
@@ -7,8 +8,18 @@ export type NotifyType =
   | "transition"
   | "stale"
   | "ai"
+  | "sentry"
+  | "ci"
   | "system";
 
+/**
+ * Create an in-app notification and enqueue push delivery through the outbox.
+ *
+ * When `eventId` is provided the push is deduplicated by (user, type,
+ * eventId) so the same logical event can never be pushed twice. When it is
+ * omitted (legacy callers) the notification is created and pushed
+ * best-effort as before, with no dedupe key.
+ */
 export async function notifyUser(
   userId: string,
   data: {
@@ -16,8 +27,24 @@ export async function notifyUser(
     title: string;
     body?: string;
     link?: string;
+    /** Stable id of the logical event, used to dedupe push delivery. */
+    eventId?: string;
   }
 ) {
+  if (data.eventId) {
+    const result = await deliverNotification(userId, {
+      type: data.type,
+      title: data.title,
+      body: data.body,
+      link: data.link,
+      eventId: data.eventId,
+    });
+    if (result.notificationId) {
+      const n = await prisma.notification.findUnique({ where: { id: result.notificationId } });
+      if (n) return n;
+    }
+    return null;
+  }
   const n = await prisma.notification.create({
     data: {
       userId,

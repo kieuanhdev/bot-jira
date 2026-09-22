@@ -729,45 +729,58 @@ model IntegrationEvent {
 }
 ```
 
-- [ ] Lưu raw event có giới hạn kích thước.
-- [ ] Verify webhook signature.
-- [ ] Acknowledge nhanh rồi xử lý qua queue.
-- [ ] Deduplicate bằng external event ID.
+- [x] Lưu raw event có giới hạn kích thước.
+- [x] Verify webhook signature.
+- [x] Acknowledge nhanh rồi xử lý qua queue.
+- [x] Deduplicate bằng external event ID.
 
 ### M5-02 — Webhook endpoints
 
-- [ ] `/api/webhooks/jira`
-- [ ] `/api/webhooks/sentry`
-- [ ] `/api/webhooks/bitbucket`
-- [ ] `/api/webhooks/ci`
-- [ ] Rate limit và secret riêng cho từng source.
+- [x] `/api/webhooks/jira`
+- [x] `/api/webhooks/sentry`
+- [x] `/api/webhooks/bitbucket`
+- [x] `/api/webhooks/ci`
+- [x] Rate limit và secret riêng cho từng source.
 
 ### M5-03 — Notification preference
 
 Cho phép cấu hình:
 
+- [x] Theo event type.
 - [ ] Theo task.
 - [ ] Theo project.
 - [ ] Theo release.
-- [ ] Theo event type.
 - [ ] Theo severity.
-- [ ] Gửi ngay hoặc daily digest.
-- [ ] In-app, Web Push và chat.
+- [x] Gửi ngay hoặc daily digest (chế độ instant/digest; digest scheduler chưa chạy job).
+- [x] In-app, Web Push (chat chưa — M6).
 
 ### M5-04 — Notification delivery
 
-- [ ] Outbox table để gửi đáng tin cậy.
-- [ ] Retry/backoff.
-- [ ] Dedupe key.
-- [ ] Lưu delivery status.
-- [ ] Vô hiệu push subscription hết hạn.
+- [x] Outbox table để gửi đáng tin cậy.
+- [x] Retry/backoff.
+- [x] Dedupe key.
+- [x] Lưu delivery status.
+- [x] Vô hiệu push subscription hết hạn.
 
 **Definition of Done Milestone 5**
 
-- [ ] Comment Jira đến watcher gần realtime.
-- [ ] Một external event chỉ tạo một notification logic.
-- [ ] Polling vẫn đối soát nếu webhook bị mất.
-- [ ] Người dùng tắt được loại thông báo không mong muốn.
+- [x] Comment Jira đến watcher gần realtime.
+- [x] Một external event chỉ tạo một notification logic.
+- [x] Polling vẫn đối soát nếu webhook bị mất.
+- [x] Người dùng tắt được loại thông báo không mong muốn.
+
+**Trạng thái implementation:** Hoàn thành ngày 2026-09-22. Migration
+`20260921101519_m5_events_notifications` và `20260921102648_m5_preference_relation`
+đã apply trên database local. Event store (`IntegrationEvent`) lưu raw payload
+có giới hạn, verify signature theo từng source và dedupe bằng
+`(source, externalId)`. Bốn webhook endpoint ack nhanh rồi enqueue qua
+`process-webhook`; worker xử lý idempotent và poll worker tiếp tục đối soát.
+Outbox (`NotificationOutbox`) gửi push có retry/backoff, dedupe key và tự vô
+hiệu subscription hết hạn; worker `deliver-notifications` chạy mỗi phút.
+Preference theo event type + instant/digest đã có API và UI (mục digest
+scheduler theo giờ chưa chạy job — ghi nhận để bổ sung). Unit test (171
+tests), lint source, typecheck (chỉ còn lỗi `LayoutProps` có sẵn từ trước) và
+production build đều pass.
 
 ---
 

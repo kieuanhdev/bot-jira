@@ -104,6 +104,19 @@ export const env = {
   // The "from" address for push notifications.
   vapidSubject: str("VAPID_SUBJECT", "mailto:admin@team.local"),
 
+  // M5 — Webhook verification. Each source has its own shared secret; the
+  // endpoint returns 401 when the signature check fails (or when no secret is
+  // configured and the source mandates verification).
+  jiraWebhookSecret: str("JIRA_WEBHOOK_SECRET"),
+  sentryWebhookSecret: str("SENTRY_WEBHOOK_SECRET"),
+  bitbucketWebhookSecret: str("BITBUCKET_WEBHOOK_SECRET"),
+  ciWebhookSecret: str("CI_WEBHOOK_SECRET"),
+  // Cap on the raw payload stored in IntegrationEvent (bytes).
+  webhookMaxPayloadBytes: int("WEBHOOK_MAX_PAYLOAD_BYTES", 64 * 1024),
+  // M5 — notification delivery retry policy.
+  notifyMaxAttempts: int("NOTIFY_MAX_ATTEMPTS", 5),
+  notifyBackoffBaseMs: int("NOTIFY_BACKOFF_BASE_MS", 60_000),
+
   // Admin bootstrap (used by seed script)
   adminEmail: str("ADMIN_EMAIL", "admin@team.local"),
   adminPassword: str("ADMIN_PASSWORD", "admin123"),

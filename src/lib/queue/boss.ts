@@ -7,11 +7,22 @@ import { runSentryImport } from "./workers/sentry-import";
 import { runStaleDetect } from "./workers/stale-detect";
 import { runPollJira, type PollJiraJobData } from "./workers/poll-jira";
 import { runBulkOperation } from "./workers/bulk-op";
+import { runProcessWebhook, type ProcessWebhookJobData } from "./workers/process-webhook";
+import { runDeliverNotifications } from "./workers/deliver-notifications";
 import type { WorkerLog } from "./guard";
 
 const globalForBoss = globalThis as unknown as { boss?: PgBoss; bossStart?: Promise<PgBoss> };
 
-export const JOB_NAMES = ["poll-jira", "check-branches", "ai-score", "sentry-import", "stale-detect", "bulk-op"] as const;
+export const JOB_NAMES = [
+  "poll-jira",
+  "check-branches",
+  "ai-score",
+  "sentry-import",
+  "stale-detect",
+  "bulk-op",
+  "process-webhook",
+  "deliver-notifications",
+] as const;
 
 export function getBoss(): PgBoss {
   if (!globalForBoss.boss) globalForBoss.boss = new PgBoss(env.databaseUrl);
@@ -76,6 +87,19 @@ export async function enqueueJiraSync(data: PollJiraJobData): Promise<string | n
   });
 }
 
+/** Enqueue an inbound webhook event for background processing (M5-01). */
+export async function enqueueWebhookEvent(data: ProcessWebhookJobData): Promise<string | null> {
+  const boss = await startBoss();
+  return boss.send("process-webhook", data, {
+    // One in-flight job per event; redeliveries are deduped by the event row.
+    singletonKey: `process-webhook:${data.eventId}`,
+    singletonSeconds: 60,
+    retryLimit: 2,
+    retryDelay: 30,
+    retryBackoff: true,
+  });
+}
+
 /** Enqueue a confirmed bulk operation for background execution. */
 export async function enqueueBulkOperation(operationId: string): Promise<string | null> {
   const boss = await startBoss();
@@ -101,12 +125,25 @@ export async function registerJobs(): Promise<PgBoss> {
   await boss.schedule("ai-score", "*/10 * * * *", null, { singletonSeconds: 540, retryLimit: 2, retryDelay: 30 });
   await boss.schedule("sentry-import", "*/5 * * * *", null, { singletonSeconds: 240, retryLimit: 3, retryDelay: 30, retryBackoff: true });
   await boss.schedule("stale-detect", "*/30 * * * *", null, { singletonSeconds: 1740, retryLimit: 2, retryDelay: 30 });
+  await boss.schedule("deliver-notifications", "* * * * *", null, { singletonSeconds: 55, retryLimit: 3, retryDelay: 15, retryBackoff: true });
 
   await boss.work<PollJiraJobData>("poll-jira", async (jobs) => recordRun("poll-jira", () => runPollJira(jobs[0]?.data ?? {})));
   await boss.work("check-branches", async () => recordRun("check-branches", runCheckBranches));
   await boss.work("ai-score", async () => recordRun("ai-score", runAiScore));
   await boss.work("sentry-import", async () => recordRun("sentry-import", runSentryImport));
   await boss.work("stale-detect", async () => recordRun("stale-detect", runStaleDetect));
+  // M5 — webhook processing: one-off jobs enqueued by the webhook endpoints.
+  await boss.work<ProcessWebhookJobData>("process-webhook", async (jobs) => {
+    const data = jobs[0]?.data ?? { source: "jira", eventId: "" };
+    try {
+      const result = await runProcessWebhook(data);
+      return { ok: result.ok, stats: result.stats, errors: result.errors };
+    } catch (error) {
+      return { ok: false, errors: [(error as Error).message] };
+    }
+  });
+  // M5 — outbox delivery: send due pushes with retry/backoff.
+  await boss.work("deliver-notifications", async () => recordRun("deliver-notifications", runDeliverNotifications));
   // M4 — bulk operations are one-off jobs (not scheduled). We wrap them in a
   // minimal log so failures are visible, but the operation's own state
   // (completed / partially_failed / failed) is the source of truth.
