@@ -2,7 +2,7 @@
 
 > Phiên bản kế hoạch: 1.0  
 > Ngày lập: 2026-09-19  
-> Trạng thái: In progress — M0 architecture and policy decisions completed  
+> Trạng thái: In progress — M1–M7 completed (M7: AI estimation + human review + metrics, 2026-09-22)  
 > Phạm vi: Jira Data Center, Bitbucket Data Center, Sentry, LLM API, Web Push và một kênh chat ở giai đoạn đầu
 
 ## 1. Mục tiêu
@@ -867,13 +867,13 @@ digest scheduler cho chế độ digest (đã ghi nhận từ M5); adapter chat 
 
 Đầu vào:
 
-- Summary và description.
-- Issue type và component.
-- Acceptance criteria.
-- Dependency.
-- Backend/frontend/mobile impact.
-- Migration và test requirement.
-- Các task lịch sử tương tự nếu có.
+- [x] Summary và description.
+- [x] Issue type và component.
+- [x] Acceptance criteria.
+- [x] Dependency.
+- [x] Backend/frontend/mobile impact.
+- [x] Migration và test requirement.
+- [x] Các task lịch sử tương tự nếu có.
 
 ### M7-02 — Output schema
 
@@ -890,24 +890,39 @@ digest scheduler cho chế độ digest (đã ghi nhận từ M5); adapter chat 
 
 ### M7-03 — Human review
 
-- [ ] `Accept`, `Edit` hoặc `Reject` suggestion.
-- [ ] Chỉ ghi Jira sau khi xác nhận.
-- [ ] Lưu AI point và final point riêng.
-- [ ] Lưu model, prompt version và thời điểm.
-- [ ] AI lỗi trả `unavailable`, không giả lập estimate hợp lệ.
+- [x] `Accept`, `Edit` hoặc `Reject` suggestion.
+- [x] Chỉ ghi Jira sau khi xác nhận.
+- [x] Lưu AI point và final point riêng.
+- [x] Lưu model, prompt version và thời điểm.
+- [x] AI lỗi trả `unavailable`, không giả lập estimate hợp lệ.
 
 ### M7-04 — Metrics
 
-- [ ] Tỷ lệ suggestion được accept.
-- [ ] Sai lệch giữa AI và final point.
-- [ ] Confidence theo issue type.
-- [ ] Không dùng nội dung task nhạy cảm cho training ngoài chính sách công ty.
+- [x] Tỷ lệ suggestion được accept.
+- [x] Sai lệch giữa AI và final point.
+- [x] Confidence theo issue type.
+- [x] Không dùng nội dung task nhạy cảm cho training ngoài chính sách công ty.
 
 **Definition of Done Milestone 7**
 
-- [ ] Không có AI fallback bị ghi vào Jira như kết quả thật.
-- [ ] Người dùng thấy confidence và thông tin còn thiếu.
-- [ ] Có feedback data để cải thiện rubric/prompt.
+- [x] Không có AI fallback bị ghi vào Jira như kết quả thật.
+- [x] Người dùng thấy confidence và thông tin còn thiếu.
+- [x] Có feedback data để cải thiện rubric/prompt.
+
+**Trạng thái implementation:** Hoàn thành ngày 2026-09-22. Migration
+`20260922015326_m7_ai_estimation` thêm `confidence`, `missingInformation`,
+`similarTasks`, `promptVersion` vào `AiScore` và model `AiEstimateDecision`
+(lưu quyết định + final points riêng). Input chuẩn hóa ở
+`src/lib/ai/estimation-input.ts` (derive impact flags, acceptance criteria,
+dependencies, similar tasks theo similarity). Output mới ở `src/lib/ai/prompts.ts`
+(với `AI_PROMPT_VERSION`); provider giờ throw `AiUnavailableError` thay vì
+fabricate estimate, nên API trả `503 unavailable` và worker không ghi fake vào
+cache/Jira. Human review qua `POST /api/issues/[key]/ai-score/decision`
+(accept/edit ghi Jira, reject không ghi) + UI tab AI (confidence badge, missing
+info, similar tasks, Accept/Edit/Reject). Metrics: `GET /api/ai/estimation/metrics`
+(accept rate, mean absolute deviation AI-vs-final, accuracy, avg confidence,
+confidence theo issue type). Unit test (22 test mới), lint source, typecheck
+(chỉ còn lỗi `LayoutProps` pre-existing ở `src/app/layout.tsx`).
 
 ---
 
