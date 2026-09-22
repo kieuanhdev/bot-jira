@@ -55,7 +55,14 @@ export type IssueView = {
   /** M7 — latest human review of the AI estimate, if any. */
   aiDecision: { decision: string; finalPoints: number | null; decidedAt: string } | null;
   releaseTasks: { release: { version: string; status: string } }[];
-  staleSnapshots: { ageDays: number; detectedAt: string }[];
+  staleSnapshots: {
+    ageDays: number;
+    detectedAt: string;
+    staleReason: string;
+    severity: string;
+    stateAgeDays: number;
+    blockedDays: number;
+  }[];
 };
 
 /**
@@ -225,6 +232,13 @@ function toReleaseTasks(
   return (r ?? []).map((t) => ({ release: { version: t.release.version, status: t.release.status } }));
 }
 
-function toStale(s: { ageDays: number; detectedAt: Date }[] | undefined) {
-  return (s ?? []).map((x) => ({ ageDays: x.ageDays, detectedAt: x.detectedAt.toISOString() }));
+function toStale(s: { ageDays: number; detectedAt: Date; staleReason: string; severity: string; stateAgeDays: number; blockedDays: number }[] | undefined) {
+  return (s ?? []).map((x) => ({
+    ageDays: x.ageDays,
+    detectedAt: x.detectedAt.toISOString(),
+    staleReason: x.staleReason,
+    severity: x.severity,
+    stateAgeDays: x.stateAgeDays,
+    blockedDays: x.blockedDays,
+  }));
 }
