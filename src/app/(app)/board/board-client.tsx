@@ -107,9 +107,14 @@ function CardContent({ issue, done, dragging }: { issue: IssueItem; done: boolea
       <p className="mt-1 line-clamp-2 text-sm font-medium leading-snug">{issue.summary}</p>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {issue.aiScore && (
-          <Badge variant="info" className="gap-1">
+          <Badge
+            variant={issue.aiDecision ? (issue.aiDecision.decision === "rejected" ? "danger" : "success") : "info"}
+            className="gap-1"
+            title={issue.aiDecision ? `AI estimate ${issue.aiDecision.decision}` : "AI estimate (pending review)"}
+          >
             <Bot className="h-3 w-3" />
             AI {issue.aiScore.points}pt
+            {issue.aiScore.confidence != null ? ` (${(issue.aiScore.confidence * 100).toFixed(0)}%)` : ""}
           </Badge>
         )}
         {stale && (

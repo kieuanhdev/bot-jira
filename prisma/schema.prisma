@@ -198,15 +198,46 @@ model ReleaseGateResult {
   @@index([gate])
 }
 
+// M7 — AI estimation. One row per issue; `scoredAt` marks the latest estimate.
+// `confidence` (0..1), `missingInformation` and `similarTasks` make the
+// suggestion explainable. `promptVersion` + `model` allow tracking which
+// prompt produced the estimate. The estimate itself is NEVER written to Jira
+// until a human accepts it (see AiEstimateDecision).
 model AiScore {
-  id         String   @id @default(cuid())
-  jiraKey    String   @unique
-  points     Int
-  reasoning  String   @default("")
-  risks      String[]
-  model      String
-  scoredAt   DateTime @default(now())
-  issue      IssueCache @relation(fields: [jiraKey], references: [jiraKey], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  jiraKey           String   @unique
+  points            Int
+  confidence        Float?
+  reasoning         String   @default("")
+  risks             String[]
+  missingInformation String[] @default([])
+  similarTasks      String[] @default([])
+  model             String
+  promptVersion     String?
+  scoredAt          DateTime @default(now())
+  issue             IssueCache @relation(fields: [jiraKey], references: [jiraKey], onDelete: Cascade)
+  decisions         AiEstimateDecision[]
+
+  @@index([scoredAt])
+}
+
+// M7-03 — Human review of an AI estimate. Records the decision (accept /
+// edit / reject), the final points actually written to Jira (null for
+// reject), and who/when. Kept separate from AiScore so the AI value and the
+// final human value stay distinct for metrics (M7-04).
+model AiEstimateDecision {
+  id            String   @id @default(cuid())
+  jiraKey       String
+  scoreId       String
+  decision      String // "accepted" | "edited" | "rejected"
+  finalPoints   Int?
+  decidedById   String
+  decidedAt     DateTime @default(now())
+  score         AiScore  @relation(fields: [scoreId], references: [id], onDelete: Cascade)
+
+  @@index([jiraKey, decidedAt])
+  @@index([decision])
+  @@index([decidedById])
 }
 
 model BranchInfo {

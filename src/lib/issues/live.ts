@@ -41,7 +41,19 @@ export type IssueView = {
   updatedAt: string | null;
   lastSyncedAt: string;
   comments: LiveComment[];
-  aiScore: { points: number; reasoning: string; risks: string[]; model: string; scoredAt: string } | null;
+  aiScore: {
+    points: number;
+    confidence: number | null;
+    reasoning: string;
+    risks: string[];
+    missingInformation: string[];
+    similarTasks: string[];
+    model: string;
+    promptVersion: string | null;
+    scoredAt: string;
+  } | null;
+  /** M7 — latest human review of the AI estimate, if any. */
+  aiDecision: { decision: string; finalPoints: number | null; decidedAt: string } | null;
   releaseTasks: { release: { version: string; status: string } }[];
   staleSnapshots: { ageDays: number; detectedAt: string }[];
 };
@@ -102,7 +114,7 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
     where: { jiraKey: key },
     include: {
       comments: { orderBy: { createdAt: "asc" } },
-      aiScore: true,
+      aiScore: { include: { decisions: { orderBy: { decidedAt: "desc" }, take: 1 } } },
       releaseTasks: { include: { release: true } },
       staleSnapshots: { orderBy: { detectedAt: "desc" }, take: 1 },
     },
@@ -135,6 +147,7 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
       lastSyncedAt: new Date().toISOString(),
       comments: live.comments,
       aiScore: toAiScore(cached?.aiScore),
+      aiDecision: toAiDecision(cached?.aiScore?.decisions),
       releaseTasks: toReleaseTasks(cached?.releaseTasks),
       staleSnapshots: toStale(cached?.staleSnapshots),
     };
@@ -161,16 +174,49 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
       createdAt: c.createdAt?.toISOString() ?? null,
     })),
     aiScore: toAiScore(cached.aiScore),
+    aiDecision: toAiDecision(cached.aiScore?.decisions),
     releaseTasks: toReleaseTasks(cached.releaseTasks),
     staleSnapshots: toStale(cached.staleSnapshots),
   };
 }
 
 function toAiScore(
-  a: { points: number; reasoning: string; risks: string[]; model: string; scoredAt: Date } | null | undefined
+  a: {
+    points: number;
+    confidence: number | null;
+    reasoning: string;
+    risks: string[];
+    missingInformation: string[];
+    similarTasks: string[];
+    model: string;
+    promptVersion: string | null;
+    scoredAt: Date;
+  } | null | undefined
 ) {
   if (!a) return null;
-  return { points: a.points, reasoning: a.reasoning, risks: a.risks, model: a.model, scoredAt: a.scoredAt.toISOString() };
+  return {
+    points: a.points,
+    confidence: a.confidence,
+    reasoning: a.reasoning,
+    risks: a.risks,
+    missingInformation: a.missingInformation,
+    similarTasks: a.similarTasks,
+    model: a.model,
+    promptVersion: a.promptVersion,
+    scoredAt: a.scoredAt.toISOString(),
+  };
+}
+
+function toAiDecision(
+  d: { decision: string; finalPoints: number | null; decidedAt: Date }[] | undefined
+) {
+  const latest = d?.[0];
+  if (!latest) return null;
+  return {
+    decision: latest.decision,
+    finalPoints: latest.finalPoints,
+    decidedAt: latest.decidedAt.toISOString(),
+  };
 }
 
 function toReleaseTasks(

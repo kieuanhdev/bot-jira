@@ -21,7 +21,18 @@ export type IssueItem = {
   createdAt: string | null;
   updatedAt: string | null;
   lastSyncedAt: string;
-  aiScore: { points: number; reasoning: string; model: string; scoredAt: string } | null;
+  aiScore: {
+    points: number;
+    confidence: number | null;
+    reasoning: string;
+    risks: string[];
+    missingInformation: string[];
+    similarTasks: string[];
+    model: string;
+    promptVersion: string | null;
+    scoredAt: string;
+  } | null;
+  aiDecision: { decision: string; finalPoints: number | null; decidedAt: string } | null;
 };
 
 export type IssueResponse = {

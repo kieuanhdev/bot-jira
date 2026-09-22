@@ -74,7 +74,7 @@ export async function GET(req: Request) {
       where,
       orderBy: [{ updatedAt: "desc" }, { jiraKey: "asc" }],
       take: limit,
-      include: { aiScore: true },
+      include: { aiScore: { include: { decisions: { orderBy: { decidedAt: "desc" }, take: 1 } } } },
     }),
     prisma.issueCache.count({ where }),
     prisma.integrationCursor.findMany({
@@ -110,6 +110,13 @@ export async function GET(req: Request) {
       updatedAt: item.updatedAt,
       lastSyncedAt: item.lastSyncedAt,
       aiScore: item.aiScore,
+      aiDecision: item.aiScore?.decisions?.[0]
+        ? {
+            decision: item.aiScore.decisions[0].decision,
+            finalPoints: item.aiScore.decisions[0].finalPoints,
+            decidedAt: item.aiScore.decisions[0].decidedAt,
+          }
+        : null,
     })),
     total,
     sync: {

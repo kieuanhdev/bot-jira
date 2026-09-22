@@ -17,7 +17,7 @@ web cung cấp board, automation, release gate và notification.
 | 1 | Đồng bộ Jira (poll issue + comment vào cache) | ✅ Incremental sync + cursor + reconciliation |
 | 2 | Kanban board (thay Jira), search, filter | ✅ |
 | 3 | Sửa metadata task + **bulk sửa nhiều task** | ✅ |
-| 4 | **AI chấm task point** (Ollama) | ✅ |
+| 4 | **AI chấm task point** (Ollama) | ✅ M7: estimate giải thích được (confidence, missing info, similar tasks) + human review Accept/Edit/Reject, chỉ ghi Jira sau khi xác nhận + metrics |
 | 5 | **Release management** + ready-check (rule + AI) + cảnh báo | ⚠️ MVP, chưa dùng cho production gate |
 | 6 | **Tự tạo task Jira từ Sentry** (cron) | ⚠️ MVP, cần hoàn thiện idempotency |
 | 7 | **Check nhánh chưa merge** (Bitbucket DC) | ⚠️ MVP, cần sửa mapping trạng thái PR |

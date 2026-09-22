@@ -6,14 +6,14 @@ import {
   parseAiScore,
   parseReleaseCheck,
   withJsonRetry,
-  fallbackScore,
+  AiUnavailableError,
   type AiScoreInput,
 } from "./provider";
 
 /**
  * Ollama-backed LLMProvider. Calls /api/generate in non-stream mode.
  *
- * score() resolves to a fallback on failure so the UI never breaks.
+ * estimate() throws AiUnavailableError on failure (M7): no fake estimates.
  * releaseCheck() throws on failure so callers can mark the gate `unknown`.
  */
 export class OllamaProvider implements LLMProvider {
@@ -40,15 +40,17 @@ export class OllamaProvider implements LLMProvider {
     return data.response;
   }
 
-  async score(input: AiScoreInput) {
+  async estimate(input: AiScoreInput) {
     try {
       return await withJsonRetry(
         () => this.generate(buildScorePrompt(input)),
         parseAiScore,
         3
       );
-    } catch {
-      return fallbackScore(input);
+    } catch (e) {
+      throw new AiUnavailableError(
+        e instanceof Error ? e.message : "AI estimate failed"
+      );
     }
   }
 

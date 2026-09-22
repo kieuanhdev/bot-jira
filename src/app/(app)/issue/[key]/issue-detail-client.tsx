@@ -21,9 +21,10 @@ import {
 } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { formatDateTime, timeAgo } from "@/lib/utils";
 import { wikiToHtml } from "@/lib/wiki";
-import { Bot, Check, Eye, EyeOff, RefreshCw, GitBranch, Send } from "lucide-react";
+import { Bot, Check, Eye, EyeOff, RefreshCw, GitBranch, Send, X, Pencil, AlertTriangle, Info } from "lucide-react";
 
 type IssueDetail = {
   jiraKey: string;
@@ -38,7 +39,18 @@ type IssueDetail = {
   createdAt: string | null;
   updatedAt: string | null;
   lastSyncedAt: string;
-  aiScore: { points: number; reasoning: string; risks: string[]; model: string; scoredAt: string } | null;
+  aiScore: {
+    points: number;
+    confidence: number | null;
+    reasoning: string;
+    risks: string[];
+    missingInformation: string[];
+    similarTasks: string[];
+    model: string;
+    promptVersion: string | null;
+    scoredAt: string;
+  } | null;
+  aiDecision: { decision: string; finalPoints: number | null; decidedAt: string } | null;
   comments: { id: string; author: string; body: string; createdAt: string | null }[];
   releaseTasks: { release: { version: string; status: string } }[];
   staleSnapshots: { ageDays: number; detectedAt: string }[];
@@ -58,6 +70,8 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [commenting, setCommenting] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editPoints, setEditPoints] = useState("");
 
   const { data: transitions } = useQuery({
     queryKey: ["transitions", issue.jiraKey],
@@ -122,16 +136,32 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
     }
   }
 
-  async function onAcceptAi() {
+  async function onAiDecision(decision: "accepted" | "edited" | "rejected", points?: number) {
     if (!issue.aiScore) return;
+    const done =
+      decision === "accepted"
+        ? `Accepted AI points (${issue.aiScore.points}) → Jira`
+        : decision === "edited"
+          ? `Set points to ${points} → Jira`
+          : "Rejected AI estimate (Jira unchanged)";
     await doAction(
       () =>
-        api(`/api/issues/${issue.jiraKey}`, {
-          method: "PATCH",
-          body: { points: issue.aiScore!.points },
+        api(`/api/issues/${issue.jiraKey}/ai-score/decision`, {
+          method: "POST",
+          body: { decision, points },
         }),
-      `Accepted AI points (${issue.aiScore!.points})`
+      done
     );
+    if (decision !== "rejected") {
+      setEditMode(false);
+      setEditPoints("");
+    }
+  }
+
+  function startEdit() {
+    if (!issue.aiScore) return;
+    setEditPoints(String(issue.points ?? issue.aiScore.points ?? ""));
+    setEditMode(true);
   }
 
   async function onAddComment() {
@@ -318,13 +348,30 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
                 </div>
               ) : (
                 <>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <div className="rounded-lg bg-primary/10 px-4 py-2 text-2xl font-bold text-primary">
                       {issue.aiScore.points} pt
                     </div>
+                    {issue.aiScore.confidence != null && (
+                      <Badge variant={issue.aiScore.confidence >= 0.7 ? "success" : issue.aiScore.confidence >= 0.4 ? "warning" : "danger"}>
+                        {(issue.aiScore.confidence * 100).toFixed(0)}% confidence
+                      </Badge>
+                    )}
                     <div className="text-xs text-muted-foreground">{issue.aiScore.model}</div>
                   </div>
                   <p className="text-sm">{issue.aiScore.reasoning}</p>
+
+                  {issue.aiScore.missingInformation?.length > 0 && (
+                    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+                      <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                        <AlertTriangle className="h-3.5 w-3.5" /> Missing information
+                      </p>
+                      <ul className="list-inside list-disc text-sm">
+                        {issue.aiScore.missingInformation.map((r, i) => <li key={i}>{r}</li>)}
+                      </ul>
+                    </div>
+                  )}
+
                   {issue.aiScore.risks?.length > 0 && (
                     <div>
                       <p className="mb-1 text-xs font-medium text-muted-foreground">Risks</p>
@@ -333,14 +380,58 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
                       </ul>
                     </div>
                   )}
-                  <div className="flex gap-2">
-                    <Button onClick={onAiScore} disabled={busy}>
-                      <RefreshCw className="h-4 w-4" /> Re-score
-                    </Button>
-                    <Button variant="outline" onClick={onAcceptAi} disabled={busy}>
-                      <Check className="h-4 w-4" /> Accept {issue.aiScore.points}pt → Jira
-                    </Button>
-                  </div>
+
+                  {issue.aiScore.similarTasks?.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs font-medium text-muted-foreground">Similar tasks:</span>
+                      {issue.aiScore.similarTasks.map((k, i) => (
+                        <Badge key={i} variant="outline">{k}</Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  {issue.aiDecision && (
+                    <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-sm">
+                      <Info className="h-4 w-4 text-muted-foreground" />
+                      {issue.aiDecision.decision === "accepted" && "AI estimate accepted."}
+                      {issue.aiDecision.decision === "edited" && `Edited to ${issue.aiDecision.finalPoints}pt and applied.`}
+                      {issue.aiDecision.decision === "rejected" && "AI estimate rejected (Jira unchanged)."}
+                    </div>
+                  )}
+
+                  {editMode ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="text-sm text-muted-foreground">Points</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={editPoints}
+                        onChange={(e) => setEditPoints(e.target.value)}
+                        className="w-24"
+                      />
+                      <Button size="sm" disabled={busy} onClick={() => onAiDecision("edited", Number(editPoints))}>
+                        <Check className="h-4 w-4" /> Apply {editPoints || "?"}pt → Jira
+                      </Button>
+                      <Button size="sm" variant="ghost" disabled={busy} onClick={() => setEditMode(false)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      <Button onClick={onAiScore} disabled={busy}>
+                        <RefreshCw className="h-4 w-4" /> Re-score
+                      </Button>
+                      <Button variant="outline" onClick={() => onAiDecision("accepted")} disabled={busy}>
+                        <Check className="h-4 w-4" /> Accept {issue.aiScore.points}pt → Jira
+                      </Button>
+                      <Button variant="outline" onClick={startEdit} disabled={busy}>
+                        <Pencil className="h-4 w-4" /> Edit points
+                      </Button>
+                      <Button variant="outline" onClick={() => onAiDecision("rejected")} disabled={busy}>
+                        <X className="h-4 w-4" /> Reject
+                      </Button>
+                    </div>
+                  )}
                 </>
               )}
             </CardContent>
