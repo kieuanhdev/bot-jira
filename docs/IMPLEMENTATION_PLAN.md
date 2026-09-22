@@ -915,38 +915,84 @@ digest scheduler cho chế độ digest (đã ghi nhận từ M5); adapter chat 
 
 **Thời gian:** 2–3 ngày  
 **Phụ thuộc:** Milestone 1  
-**Kết quả:** Dashboard phản ánh bottleneck thay vì chỉ xếp hạng cá nhân.
+**Kết quả:** Dashboard phản ánh bottleneck thay vì chỉ xếp hạng cá nhân.  
+**Trạng thái:** ✅ Done (2026-09-22)
 
 ### M8-01 — Định nghĩa tuổi task
 
-- [ ] `totalAgeDays`: từ lúc tạo.
-- [ ] `stateAgeDays`: thời gian trong trạng thái hiện tại.
-- [ ] `inactiveDays`: thời gian không có cập nhật đáng kể.
-- [ ] `blockedDays`: thời gian bị blocked.
+- [x] `totalAgeDays`: từ lúc tạo.
+- [x] `stateAgeDays`: thời gian trong trạng thái hiện tại.
+- [x] `inactiveDays`: thời gian không có cập nhật đáng kể.
+- [x] `blockedDays`: thời gian bị blocked.
+
+**File:** `src/lib/stale/age.ts` — `computeAges()` trả về 4 metric.
+`stateAgeDays` dùng `statusChangedAt`, fallback `updatedAt` (đánh dấu `stateAgeLowConfidence`).
 
 ### M8-02 — Phân loại stale
 
-- [ ] Chờ thực hiện.
-- [ ] Đang làm nhưng không cập nhật.
-- [ ] Chờ review.
-- [ ] Chờ QA.
-- [ ] Chờ team khác.
-- [ ] Không có assignee.
+- [x] Chờ thực hiện.
+- [x] Đang làm nhưng không cập nhật.
+- [x] Chờ review.
+- [x] Chờ QA.
+- [x] Chờ team khác.
+- [x] Không có assignee.
+
+**File:** `src/lib/stale/classify.ts` — `classifyStale()` trả về 8 lý do:
+`no_assignee`, `waiting_to_start`, `in_progress_no_update`, `waiting_review`,
+`waiting_qa`, `waiting_other_team`, `blocked`, `unknown`.
 
 ### M8-03 — Dashboard
 
-- [ ] Task vượt SLA.
-- [ ] Bottleneck theo status.
-- [ ] Người cần hỗ trợ.
-- [ ] Task blocked lâu nhất.
-- [ ] Xu hướng theo tuần.
-- [ ] Filter project/team/assignee/status.
+- [x] Task vượt SLA.
+- [x] Bottleneck theo status.
+- [x] Người cần hỗ trợ.
+- [x] Task blocked lâu nhất.
+- [x] Xu hướng theo tuần.
+- [x] Filter project/team/assignee/status.
+
+**SLA per-status** (`src/lib/stale/sla.ts`):
+
+| Nhóm | Ngưỡng | Severity |
+|---|---:|---|
+| Backlog | `STALE_BACKLOG_DAYS` (30d) | info |
+| To Do | `STALE_TODO_DAYS` (14d) | warning |
+| In Progress | `STALE_IN_PROGRESS_DAYS` (5d) | warning |
+| In Review | `STALE_REVIEW_DAYS` (2d) | warning |
+| QA/Test | `STALE_QA_DAYS` (2d) | warning |
+| Blocked | `STALE_BLOCKED_DAYS` (3d) | high |
+| Unknown | `STALE_UNKNOWN_DAYS` (7d) | warning |
+
+**Dashboard** (`/stale`):
+- Summary tiles: total over SLA, blocked, no-assignee, worst over-by.
+- Bottleneck by status (bar chart).
+- Weekly trend (8-week bar chart).
+- People with stuck tasks — grouped by waiting reason, không phải leaderboard.
+- Longest blocked tasks.
+- Full task table với state age, SLA, over-by, severity badge.
+- Filters: assignee, status, reason, severity.
+
+**Notification cadence** (`src/lib/queue/workers/stale-detect.ts`):
+- Chỉ notify khi task lần đầu vượt SLA, severity tăng, hoặc sau
+  `STALE_REMINDER_DAYS` (7d) nếu chưa thay đổi.
+- `eventId` dedup: `stale:<jiraKey>:<severity>:<overBy>`.
+- Không notify "no_assignee" cho assignee (không có assignee).
+
+**Schema** (`prisma/schema.prisma` + migration `20260922100000_m8_stale_analytics`):
+- `StaleSnapshot` thêm: `totalAgeDays`, `stateAgeDays`, `inactiveDays`,
+  `blockedDays`, `stateAgeLowConfidence`, `staleReason`, `severity`,
+  `status`, `statusCategory`, `slaDays` + 4 index mới.
+
+**Env** (`.env.example` + `src/lib/env.ts`):
+- `STALE_BACKLOG_DAYS=30`, `STALE_TODO_DAYS=14`, `STALE_IN_PROGRESS_DAYS=5`,
+  `STALE_REVIEW_DAYS=2`, `STALE_QA_DAYS=2`, `STALE_BLOCKED_DAYS=3`,
+  `STALE_UNKNOWN_DAYS=7`, `STALE_REMINDER_DAYS=7`.
+- `STALE_DAYS` (legacy) giữ cho chat command `/stale`.
 
 **Nguyên tắc**
 
-- Không dùng leaderboard đơn giản để đánh giá hiệu suất cá nhân.
-- Hiển thị nguyên nhân chờ nếu có.
-- Notification chỉ gửi khi vượt threshold hoặc severity tăng.
+- [x] Không dùng leaderboard đơn giản để đánh giá hiệu suất cá nhân.
+- [x] Hiển thị nguyên nhân chờ nếu có.
+- [x] Notification chỉ gửi khi vượt threshold hoặc severity tăng.
 
 ---
 

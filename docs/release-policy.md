@@ -479,7 +479,7 @@ Policy đã được chốt nhưng code hiện tại chưa enforce đầy đủ:
 | Chưa có `release_manager` role | M3-04/M9-01 |
 | Chưa có Sentry release scope | M2-01/M3-03 |
 | Chưa có CI integration | M3-03/M5 |
-| Stale chỉ dùng một ngưỡng global | M8 |
+| Stale chỉ dùng một ngưỡng global | M8 completed |
 
 Cho tới khi các gap P0 được xử lý, release ready-check hiện tại chỉ mang tính
 tham khảo và không phải quyền phê duyệt production release.
