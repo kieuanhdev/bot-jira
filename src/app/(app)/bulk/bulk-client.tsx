@@ -169,8 +169,36 @@ function fieldRow(label: string, before: Record<string, unknown> | null, after: 
 
 export function BulkClient() {
   const qc = useQueryClient();
-  const { data, isLoading } = useIssues({ includeDone: true });
+  // Load the full cache (done included) so hand-picking and filter selection both
+  // see every issue on the first page. Large projects use the filter path for the
+  // rest.
+  const { data, isLoading } = useIssues({ includeDone: true, limit: 1000 });
   const issues: IssueItem[] = data?.items ?? [];
+  const totalInCache = data?.total ?? issues.length;
+
+  // Distinct assignees (for autocomplete) and project keys (for filter select).
+  const { data: filterOpts } = useQuery({
+    queryKey: ["issues", "filters", "bulk"],
+    queryFn: () =>
+      api<{ assignees: string[]; labels: string[]; priorities: string[] }>("/api/issues/filters"),
+    staleTime: 5 * 60_000,
+    retry: 0,
+  });
+  const assigneeOptions = filterOpts?.assignees ?? [];
+
+  const { data: projectsData } = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => api<{ items: { key: string; openCount: number }[] }>("/api/projects"),
+    staleTime: 5 * 60_000,
+    retry: 0,
+  });
+  const projectOptions = projectsData?.items ?? [];
+
+  // Selection mode: hand-pick specific tasks, or select everything matching a
+  // project + status filter (for large runs).
+  const [selectionMode, setSelectionMode] = useState<"pick" | "filter">("pick");
+  const [filterProject, setFilterProject] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [kind, setKind] = useState<string>("assign");
@@ -204,6 +232,20 @@ export function BulkClient() {
   useEffect(loadOps, []);
 
   const allSelected = issues.length > 0 && issues.every((i) => selected.has(i.jiraKey));
+
+  // The set of issue keys the action will target, depending on selection mode.
+  // "pick" uses the manually-checked set. "filter" derives keys from the loaded
+  // cache matching the chosen project + status (bounded by the first page); the
+  // preview endpoint re-validates against the cache and reports the true count.
+  const effectiveKeys: string[] =
+    selectionMode === "filter"
+      ? issues
+          .filter((i) => (filterProject ? i.projectKey === filterProject : true))
+          .filter((i) => (filterStatus ? i.status === filterStatus : true))
+          .map((i) => i.jiraKey)
+      : Array.from(selected);
+
+  const effectiveCount = effectiveKeys.length;
 
   function toggle(key: string) {
     setSelected((prev) => {
@@ -273,7 +315,7 @@ export function BulkClient() {
     try {
       const r = await api<Preview>("/api/issues/bulk", {
         method: "POST",
-        body: { keys: Array.from(selected), action },
+        body: { keys: effectiveKeys, action },
       });
       setPreview(r);
     } catch (e) {
@@ -299,6 +341,7 @@ export function BulkClient() {
           operationId: preview.operationId,
         },
       });
+      if (selectionMode === "pick") setSelected(new Set());
       setPreview(null);
       setActiveOp(r.operationId);
       qc.invalidateQueries({ queryKey: ["issues"] });
@@ -343,14 +386,73 @@ export function BulkClient() {
       {/* Step 1 — selection */}
       <Card>
         <CardContent className="p-0">
-          <div className="flex items-center justify-between border-b p-3">
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
-              Select all
-            </label>
-            <span className="text-xs text-muted-foreground">{selected.size} selected</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectionMode("pick")}
+                className={cn(
+                  "cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                  selectionMode === "pick"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground hover:bg-accent/50"
+                )}
+              >
+                Pick tasks
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectionMode("filter")}
+                className={cn(
+                  "cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                  selectionMode === "filter"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground hover:bg-accent/50"
+                )}
+              >
+                Select by filter
+              </button>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {effectiveCount} task{effectiveCount === 1 ? "" : "s"} selected
+            </span>
           </div>
-          <div className="max-h-72 overflow-y-auto">
+
+          {selectionMode === "filter" && (
+            <div className="grid grid-cols-1 gap-2 border-b p-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-muted-foreground">Project</span>
+                <Select value={filterProject || "ALL"} onValueChange={(v) => setFilterProject(v === "ALL" ? "" : v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All projects</SelectItem>
+                    {projectOptions.map((p) => (
+                      <SelectItem key={p.key} value={p.key}>{p.key}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-muted-foreground">Status</span>
+                <Input value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} placeholder="e.g. In Progress (blank = any)" />
+              </div>
+              <p className="text-[11px] text-muted-foreground sm:col-span-2">
+                Applies to {effectiveCount} of {totalInCache} cached issue{totalInCache === 1 ? "" : "s"}
+                {totalInCache > issues.length ? " (showing first page only — use a project to narrow)" : ""}.
+              </p>
+            </div>
+          )}
+
+          {selectionMode === "pick" && (
+            <div className="flex items-center justify-between border-b px-3 py-2">
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
+                Select all
+              </label>
+              <span className="text-xs text-muted-foreground">{selected.size} selected</span>
+            </div>
+          )}
+          <div className={cn("max-h-72 overflow-y-auto", selectionMode === "filter" && "hidden")}>
             {isLoading && (
               <div className="flex flex-col gap-2 p-4">
                 {[0, 1, 2, 3, 4].map((i) => (
@@ -395,7 +497,7 @@ export function BulkClient() {
             </span>
           </CardTitle>
           <CardDescription>
-            Choose one action and its value, then preview what will change on {selected.size} task(s).
+            Choose one action and its value, then preview what will change on {effectiveCount} task(s).
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -425,7 +527,7 @@ export function BulkClient() {
             {kind === "assign" && (
               <div className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium text-muted-foreground">Assignee (Jira username)</span>
-                <Input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="jira username" />
+                <AssigneeInput value={assignee} onChange={setAssignee} options={assigneeOptions} />
               </div>
             )}
             {(kind === "add-labels" || kind === "remove-labels") && (
@@ -508,7 +610,7 @@ export function BulkClient() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Button onClick={doPreview} disabled={previewing || selected.size === 0 || !buildAction()}>
+            <Button onClick={doPreview} disabled={previewing || effectiveCount === 0 || !buildAction()}>
               {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
               Preview changes
             </Button>
@@ -622,6 +724,83 @@ export function BulkClient() {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * Autocomplete text input for a Jira assignee username. Free-typed values are
+ * allowed (the cache may not contain every user), but known assignees from the
+ * project scope are offered as suggestions to avoid typos.
+ */
+function AssigneeInput({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const q = value.trim().toLowerCase();
+  const matches = (q ? options.filter((o) => o.toLowerCase().includes(q)) : options).slice(0, 8);
+
+  function pick(opt: string) {
+    onChange(opt);
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative">
+      <Input
+        value={value}
+        placeholder="jira username"
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+          setHighlight(0);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => {
+          if (!open || matches.length === 0) return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setHighlight((h) => (h + 1) % matches.length);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setHighlight((h) => (h - 1 + matches.length) % matches.length);
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            pick(matches[highlight]);
+          } else if (e.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+      />
+      {open && matches.length > 0 && (
+        <ul className="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded-md border bg-popover shadow-md">
+          {matches.map((opt, i) => (
+            <li key={opt}>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  pick(opt);
+                }}
+                className={cn(
+                  "w-full cursor-pointer px-3 py-1.5 text-left text-sm",
+                  i === highlight ? "bg-accent text-accent-foreground" : "hover:bg-accent/60"
+                )}
+              >
+                {opt}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

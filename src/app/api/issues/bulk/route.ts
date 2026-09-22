@@ -9,6 +9,7 @@ import {
   type BulkAction,
 } from "@/lib/bulk/ops";
 import { enqueueBulkOperation } from "@/lib/queue/boss";
+import { probeJiraAuth } from "@/lib/jira/client";
 
 /**
  * M4-02 — Preview + confirm a bulk operation.
@@ -56,6 +57,16 @@ export async function POST(req: Request) {
     }
     if (existing.state !== "preview") {
       return NextResponse.json({ error: "operation already confirmed" }, { status: 409 });
+    }
+    // Fail fast if the Jira credentials the operation would use no longer
+    // authenticate — otherwise every item would fail inside the worker after a
+    // long delay. The probe resolves to the same effective credential the worker
+    // will use (the user's token, or the shared team token when none is set).
+    if (!(await probeJiraAuth(userJiraAuth(user)))) {
+      return NextResponse.json(
+        { error: "Your Jira credentials are no longer valid. Update them in Settings and retry." },
+        { status: 400 }
+      );
     }
     try {
       const res = await confirmBulk(body.operationId, session.user.id);

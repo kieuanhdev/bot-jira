@@ -575,6 +575,15 @@ export async function executeBulkOperation(operationId: string): Promise<void> {
   if (!op) return;
   if (isTerminal(op.state)) return;
 
+  // Atomically claim the operation. Only the winner of a queued→running
+  // transition proceeds; concurrent invocations (double-enqueue, retry racing a
+  // still-running job) lose the race and exit without re-processing items.
+  const claim = await prisma.bulkOperation.updateMany({
+    where: { id: op.id, state: "queued" },
+    data: { state: "running", startedAt: op.startedAt ?? new Date() },
+  });
+  if (claim.count === 0) return;
+
   const requested = await prisma.user.findUnique({
     where: { id: op.requestedBy },
     select: {
@@ -592,11 +601,6 @@ export async function executeBulkOperation(operationId: string): Promise<void> {
   };
 
   const concurrency = Math.max(1, Math.min(8, env.bulkConcurrency));
-
-  await prisma.bulkOperation.update({
-    where: { id: op.id },
-    data: { state: "running", startedAt: op.startedAt ?? new Date() },
-  });
 
   const pending = await prisma.bulkOperationItem.findMany({
     where: { operationId, status: "pending" },

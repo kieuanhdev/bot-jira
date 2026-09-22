@@ -107,6 +107,28 @@ export async function detectJiraAuth(
   return null;
 }
 
+/**
+ * Check whether a Jira credential actually authenticates. Pass the user's own
+ * auth (or null when they have none) — this resolves to the effective credential
+ * exactly the way the rest of the app does (user token, else the shared team
+ * token) and probes /myself with it. Returns true when /myself accepts it, false
+ * on any auth/network failure. Used to validate credentials before enqueuing a
+ * bulk operation so a dead token doesn't silently fail every item in the worker.
+ */
+export async function probeJiraAuth(userAuth: JiraAuth | null): Promise<boolean> {
+  const a = resolveAuth(userAuth);
+  try {
+    const base = env.jiraBaseUrl.replace(/\/$/, "");
+    const res = await fetch(`${base}/rest/api/2/myself`, {
+      headers: { Accept: "application/json", Authorization: authHeader(a) },
+      signal: AbortSignal.timeout(env.jiraRequestTimeoutMs),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function request<T>(
   path: string,
   init: RequestInit = {},
