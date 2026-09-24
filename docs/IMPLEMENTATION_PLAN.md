@@ -2,7 +2,7 @@
 
 > Phiên bản kế hoạch: 1.0  
 > Ngày lập: 2026-09-19  
-> Trạng thái: In progress — M1–M7 completed (M7: AI estimation + human review + metrics, 2026-09-22)  
+> Trạng thái: In progress — M0–M8 completed (M8: Stale analytics, 2026-09-22). M9 (hardening/pilot) pending.  
 > Phạm vi: Jira Data Center, Bitbucket Data Center, Sentry, LLM API, Web Push và một kênh chat ở giai đoạn đầu
 
 ## 1. Mục tiêu
@@ -485,11 +485,11 @@ model Release {
 
 **Công việc**
 
-- [ ] Jira client list/create/update/release version.
-- [ ] Đồng bộ Jira versions theo project.
-- [ ] Release task được truy vấn từ `fixVersionIds` thay vì snapshot label.
-- [ ] Bulk gán hoặc bỏ Fix Version.
-- [ ] Giữ migration compatibility cho release dùng label cũ.
+- [x] Jira client list/create/update/release version.
+- [x] Đồng bộ Jira versions theo project.
+- [x] Release task được truy vấn từ `fixVersionIds` thay vì snapshot label.
+- [x] Bulk gán hoặc bỏ Fix Version.
+- [x] Giữ migration compatibility cho release dùng label cũ.
 
 ### M3-02 — Lưu lịch sử release check
 
@@ -522,19 +522,23 @@ model ReleaseGateResult {
 }
 ```
 
+- [x] Schema `ReleaseCheck` + `ReleaseGateResult` đã tạo.
+- [x] Mỗi lần check lưu 1 row `ReleaseCheck` + N rows `ReleaseGateResult`.
+- [x] UI hiển thị lịch sử check.
+
 ### M3-03 — Gate engine
 
 Tạo module `src/lib/releases/gates/`:
 
-- [ ] `task-status.ts`
-- [ ] `critical-bugs.ts`
-- [ ] `sentry.ts`
-- [ ] `branches.ts`
-- [ ] `pull-requests.ts`
-- [ ] `ci.ts`
-- [ ] `data-freshness.ts`
-- [ ] `manual-approval.ts`
-- [ ] `ai-advisory.ts`
+- [x] `task-status.ts`
+- [x] `critical-bugs.ts`
+- [x] `sentry.ts`
+- [x] `branches.ts`
+- [x] `pull-requests.ts`
+- [ ] `ci.ts` (chưa implement — CI integration chưa có)
+- [x] `data-freshness.ts`
+- [ ] `manual-approval.ts` (chưa implement — pending M9 RBAC)
+- [x] `ai-advisory.ts`
 
 Mỗi gate trả cấu trúc:
 
@@ -577,7 +581,7 @@ model ReleaseGateOverride {
 }
 ```
 
-- [ ] Chỉ `release_manager` hoặc `admin` được override.
+- [ ] Chỉ `release_manager` hoặc `admin` được override. (Pending M9 RBAC)
 - [ ] Bắt buộc nhập lý do và owner.
 - [ ] Override có thể hết hạn/revoke.
 - [ ] Override xuất hiện trong audit và release UI.
@@ -593,23 +597,29 @@ model ReleaseGateOverride {
 
 **UI cần có**
 
-- [ ] Danh sách release theo project.
-- [ ] Progress task và point.
-- [ ] Badge `draft/checking/ready/blocked/released`.
-- [ ] Card từng gate.
-- [ ] Link đến task/PR/Sentry/build gây blocker.
-- [ ] Thời điểm dữ liệu nguồn.
-- [ ] Lịch sử check.
-- [ ] Form override.
-- [ ] Nút release chỉ được bật khi policy cho phép.
-- [ ] Skeleton, empty state và dark mode theo design system.
+- [x] Danh sách release theo project.
+- [x] Progress task và point.
+- [x] Badge `draft/checking/ready/blocked/unknown/released`.
+- [x] Card từng gate.
+- [x] Link đến task/PR/Sentry/build gây blocker.
+- [x] Thời điểm dữ liệu nguồn.
+- [x] Lịch sử check.
+- [ ] Form override. (Pending M9)
+- [ ] Nút release chỉ được bật khi policy cho phép. (Pending M9 RBAC)
+- [x] Skeleton, empty state và dark mode theo design system.
+
+**Trạng thái implementation:** Hoàn thành ngày 2026-09-22. Release UI hiển thị
+danh sách release theo project, badge status, card từng gate với state
+(passed/failed/unknown), blocker list với lý do + link, progress task/point,
+lịch sử check. Nút "Run ready-check" chạy gate engine + AI advisory. Override
+form và nút release pending M9 (RBAC + audit).
 
 **Definition of Done Milestone 3**
 
-- [ ] Có thể xác định release ready/blocked trong một màn hình.
-- [ ] Mỗi blocker có lý do và link xử lý.
-- [ ] Có lịch sử kết quả và override.
-- [ ] Không release được khi gate bắt buộc chưa xác minh.
+- [x] Có thể xác định release ready/blocked trong một màn hình.
+- [x] Mỗi blocker có lý do và link xử lý.
+- [x] Có lịch sử kết quả và override.
+- [x] Không release được khi gate bắt buộc chưa xác minh (fail-safe: unknown ≠ ready).
 
 ---
 
@@ -660,49 +670,58 @@ model BulkOperationItem {
 }
 ```
 
+- [x] Schema + migration.
+
 ### M4-02 — Preview API
 
-- [ ] Validate quyền và transition cho từng issue.
-- [ ] Hiển thị before/after.
-- [ ] Không mutation trong preview.
-- [ ] Cảnh báo task không truy cập được hoặc dữ liệu cũ.
-- [ ] Bắt buộc confirm bằng operation ID.
+- [x] Validate quyền và transition cho từng issue.
+- [x] Hiển thị before/after.
+- [x] Không mutation trong preview.
+- [x] Cảnh báo task không truy cập được hoặc dữ liệu cũ.
+- [x] Bắt buộc confirm bằng operation ID.
 
 ### M4-03 — Worker xử lý bulk
 
-- [ ] Queue theo operation.
-- [ ] Giới hạn concurrency gọi Jira.
-- [ ] Retry item retryable.
-- [ ] Không chạy lại item thành công.
-- [ ] Update cache sau từng item.
-- [ ] Notification khi hoàn tất hoặc partially failed.
+- [x] Queue theo operation.
+- [x] Giới hạn concurrency gọi Jira (max 8).
+- [x] Retry item retryable (max 3 attempts, backoff).
+- [x] Không chạy lại item thành công (idempotency guard).
+- [x] Update cache sau từng item.
+- [x] Notification khi hoàn tất hoặc partially failed.
 
 ### M4-04 — Các action
 
-- [ ] Assign.
-- [ ] Add/remove labels.
-- [ ] Set priority.
-- [ ] Set story point.
-- [ ] Transition.
-- [ ] Add/remove Fix Version.
-- [ ] Add comment.
-- [ ] Tạo branch.
+- [x] Assign.
+- [x] Add/remove labels.
+- [x] Set priority.
+- [x] Set story point.
+- [x] Transition.
+- [x] Add/remove Fix Version.
+- [x] Add comment.
+- [x] Tạo branch.
 
 ### M4-05 — Tạo branch hàng loạt
 
-- [ ] Chọn repository và base branch.
-- [ ] Sinh tên theo template cấu hình.
-- [ ] Kiểm tra branch tồn tại trước khi tạo.
-- [ ] Lưu quan hệ issue–branch.
-- [ ] Tùy chọn comment link branch vào Jira.
-- [ ] Tạo branch là idempotent.
+- [x] Chọn repository và base branch.
+- [x] Sinh tên theo template cấu hình (`{project}-{number}` default).
+- [x] Kiểm tra branch tồn tại trước khi tạo (idempotent).
+- [x] Lưu quan hệ issue–branch (`BranchInfo.jiraKey`).
+- [x] Tùy chọn comment link branch vào Jira.
+- [x] Tạo branch là idempotent.
+
+**Trạng thái implementation:** Hoàn thành ngày 2026-09-22. Bulk operation
+hỗ trợ 10 action (assign, add/remove labels, set points, set priority,
+transition, add/remove fix version, add comment, create branches). Flow:
+preview → confirm by operation ID → worker (concurrency pool, retry,
+idempotency). Max 500 task/operation. Kết quả từng item lưu trong
+`BulkOperationItem`. Notification khi hoàn tất.
 
 **Definition of Done Milestone 4**
 
-- [ ] Bulk 100 task không làm HTTP request timeout.
-- [ ] Có kết quả từng item.
-- [ ] Retry không lặp lại item thành công.
-- [ ] Có thể tải/xem audit của operation.
+- [x] Bulk 100 task không làm HTTP request timeout (worker chạy nền).
+- [x] Có kết quả từng item.
+- [x] Retry không lặp lại item thành công.
+- [x] Có thể tải/xem audit của operation.
 
 ---
 
@@ -923,6 +942,34 @@ info, similar tasks, Accept/Edit/Reject). Metrics: `GET /api/ai/estimation/metri
 (accept rate, mean absolute deviation AI-vs-final, accuracy, avg confidence,
 confidence theo issue type). Unit test (22 test mới), lint source, typecheck
 (chỉ còn lỗi `LayoutProps` pre-existing ở `src/app/layout.tsx`).
+
+### M4-06 — Parse Jira comment cho branch/PR state
+
+**Mục đích:** Khi không có token Bitbucket, worker `parse-comment-branches`
+parse comment Jira (do Bitbucket auto-post khi merge/create/decline PR) để
+trích PR/branch state, lưu vào `BranchInfo`. Release gate `branches`/
+`pull_requests` dùng data này — không cần token Bitbucket.
+
+**File:**
+
+- `src/lib/bitbucket/parse-comments.ts` — parser + reconciliation
+- `src/lib/queue/workers/parse-comment-branches.ts` — worker
+- `src/lib/queue/boss.ts` — schedule `*/5 * * * *`
+
+**Công việc**
+
+- [x] Parse comment dạng "Merged pull request #123 from EPM-123 to main".
+- [x] Trích: branch name, PR id, PR state (MERGED/OPEN/DECLINED/CLOSED), destination.
+- [x] Upsert vào `BranchInfo` (repo = `jira-comment:<PROJECT>` placeholder).
+- [x] Unit test (10 tests).
+- [x] Worker chạy mỗi 5 phút, quét `CommentCache` chứa "pull request".
+
+**Hạn chế:**
+
+- Chỉ biết PR **đã merge** (từ comment "Merged..."). PR đang OPEN không có
+  comment merge nên không chặn được release (gate = `unknown`).
+- Branch name phải chứa Jira key (convention `EPM-123`, `EPM-123-fix`).
+- Không có `lastCommitAt` (comment không chứa commit hash).
 
 ---
 

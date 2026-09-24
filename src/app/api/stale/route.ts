@@ -6,6 +6,8 @@ import { statusGroup } from "@/lib/status-groups";
 import { computeAges } from "@/lib/stale/age";
 import { classifyStale, STALE_REASON_LABELS, type StaleReason } from "@/lib/stale/classify";
 import { slaForStatus, slaExceeded, isBlockedStatus } from "@/lib/stale/sla";
+import { compareWithBaseline, type PointAlertLevel } from "@/lib/stale/baseline";
+import { overdueBusinessDays } from "@/lib/stale/business-days";
 
 interface StaleTask {
   jiraKey: string;
@@ -16,6 +18,10 @@ interface StaleTask {
   assigneeJira: string | null;
   type: string;
   priority: string;
+  points: number | null;
+  fixVersionNames: string[];
+  dueDate: string | null;
+  timeSpent: number | null;
   createdAt: Date | null;
   updatedAt: Date | null;
   statusChangedAt: Date | null;
@@ -28,6 +34,10 @@ interface StaleTask {
   severity: string;
   slaDays: number;
   overByDays: number;
+  baselineLevel: PointAlertLevel;
+  expectedCycleMax: number | null;
+  alertThreshold: number | null;
+  overdueDays: number;
   labels: string[];
 }
 
@@ -61,30 +71,73 @@ interface TrendPoint {
   count: number;
 }
 
+interface WipEntry {
+  assignee: string;
+  taskCount: number;
+  statuses: string[];
+}
+
+interface Summary {
+  totalActive: number;
+  totalStale: number;
+  totalHigh: number;
+  totalBlocked: number;
+  totalNoAssignee: number;
+  worstOverBy: number;
+  totalOverdue: number;
+  totalBaselineAlert: number;
+  wipCount: number;
+}
+
+import { jiraUsernameAliases } from "@/lib/user-creds";
+
 export async function GET(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { boardProjects: true },
+    select: { boardProjects: true, jiraUsername: true },
   });
+
+  const myUsername = user?.jiraUsername || session.user.jiraUsername || null;
+  const myAliases = jiraUsernameAliases(myUsername);
 
   const url = new URL(req.url);
   const project = (url.searchParams.get("project") ?? "").trim().toUpperCase();
   const projectList = (url.searchParams.get("projectList") ?? "")
     .split(",").map((s) => s.trim().toUpperCase()).filter(isKnownProject);
+  const allowedProjects = (user?.boardProjects ?? []).filter(isKnownProject).length > 0
+    ? (user?.boardProjects ?? []).filter(isKnownProject)
+    : jiraProjectList;
   const projects = project && isKnownProject(project)
     ? [project]
     : projectList.length > 0 ? projectList
-    : (user?.boardProjects ?? []).filter(isKnownProject).length > 0
-      ? (user?.boardProjects ?? []).filter(isKnownProject)
-      : jiraProjectList;
+    : allowedProjects;
 
-  const assignee = (url.searchParams.get("assignee") ?? "").trim();
-  const status = (url.searchParams.get("status") ?? "").trim();
-  const reason = (url.searchParams.get("reason") ?? "").trim() as StaleReason | "";
-  const severity = (url.searchParams.get("severity") ?? "").trim();
+  // `all` is the UI sentinel. Treat it as no filter as a defensive API
+  // measure so copied URLs and older clients cannot accidentally hide data.
+  const normalizedFilter = (value: string | null) => {
+    const normalized = (value ?? "").trim();
+    return normalized.toLowerCase() === "all" ? "" : normalized;
+  };
+  const assignee = normalizedFilter(url.searchParams.get("assignee"));
+  const status = normalizedFilter(url.searchParams.get("status"));
+  const reason = normalizedFilter(url.searchParams.get("reason")) as StaleReason | "";
+  const severity = normalizedFilter(url.searchParams.get("severity"));
+
+  const isMatchAssignee = (issueAssignee: string | null) => {
+    if (!assignee) return true;
+    if (assignee.toLowerCase() === "me") {
+      if (!myUsername) return true;
+      const lower = (issueAssignee ?? "").toLowerCase();
+      return myAliases.some((a) => a.toLowerCase() === lower);
+    }
+    if (assignee.toLowerCase() === "unassigned") {
+      return !issueAssignee;
+    }
+    return issueAssignee === assignee;
+  };
 
   const now = new Date();
 
@@ -93,8 +146,6 @@ export async function GET(req: Request) {
     deletedAt: null as null,
     projectKey: { in: projects },
     statusCategory: { not: "done" },
-    ...(assignee ? { assigneeJira: assignee } : {}),
-    ...(status ? { status } : {}),
   };
 
   const issues = await prisma.issueCache.findMany({
@@ -102,6 +153,38 @@ export async function GET(req: Request) {
     orderBy: { updatedAt: "desc" },
     take: 2000,
   });
+
+  // Assignee and status are applied in memory so filter options remain stable
+  // while a facet is selected. This also gives summary denominators a clear,
+  // consistent scope.
+  const scopedIssues = issues.filter((issue) =>
+    isMatchAssignee(issue.assigneeJira) &&
+    (!status || issue.status === status)
+  );
+
+  // WIP: all issues currently in In Progress / In Review in the selected
+  // project/assignee/status scope. Reason and severity only apply to stale work.
+  const wipStatuses = new Set<string>();
+  for (const issue of scopedIssues) {
+    const g = statusGroup(issue.status);
+    if (g === "In Progress" || g === "In Review") wipStatuses.add(issue.jiraKey);
+  }
+  const wipCount = wipStatuses.size;
+
+  // Per-assignee WIP breakdown.
+  const wipMap = new Map<string, { assignee: string; count: number; statuses: Set<string> }>();
+  for (const issue of scopedIssues) {
+    const g = statusGroup(issue.status);
+    if (g !== "In Progress" && g !== "In Review") continue;
+    const key = issue.assigneeJira ?? "(unassigned)";
+    const entry = wipMap.get(key) ?? { assignee: key, count: 0, statuses: new Set<string>() };
+    entry.count++;
+    entry.statuses.add(issue.status);
+    wipMap.set(key, entry);
+  }
+  const wip: WipEntry[] = [...wipMap.values()]
+    .map((e) => ({ assignee: e.assignee, taskCount: e.count, statuses: [...e.statuses].sort() }))
+    .sort((a, b) => b.taskCount - a.taskCount);
 
   // Compute age metrics + classification for each issue.
   const allTasks: StaleTask[] = [];
@@ -127,6 +210,9 @@ export async function GET(req: Request) {
       ages,
     });
 
+    const baseline = compareWithBaseline(issue.points, ages.stateAgeDays);
+    const overdue = overdueBusinessDays(issue.dueDate, now);
+
     allTasks.push({
       jiraKey: issue.jiraKey,
       projectKey: issue.projectKey,
@@ -136,6 +222,10 @@ export async function GET(req: Request) {
       assigneeJira: issue.assigneeJira,
       type: issue.type,
       priority: issue.priority,
+      points: issue.points,
+      fixVersionNames: issue.fixVersionNames,
+      dueDate: issue.dueDate ? issue.dueDate.toISOString().slice(0, 10) : null,
+      timeSpent: issue.timeSpent,
       createdAt: issue.createdAt,
       updatedAt: issue.updatedAt,
       statusChangedAt: issue.statusChangedAt,
@@ -148,16 +238,22 @@ export async function GET(req: Request) {
       severity: sla.severity,
       slaDays: sla.days,
       overByDays: overBy,
+      baselineLevel: baseline.level,
+      expectedCycleMax: baseline.baseline?.expectedMax ?? null,
+      alertThreshold: baseline.baseline?.alertAbove ?? null,
+      overdueDays: overdue,
       labels: issue.labels,
     });
   }
 
   // Apply secondary filters (reason, severity) after classification.
   let filtered = allTasks;
+  if (assignee) filtered = filtered.filter((t) => isMatchAssignee(t.assigneeJira));
+  if (status) filtered = filtered.filter((t) => t.status === status);
   if (reason) filtered = filtered.filter((t) => t.staleReason === reason);
   if (severity) filtered = filtered.filter((t) => t.severity === severity);
 
-  // M8-03: bottleneck by status.
+  // Bottleneck by status.
   const bottleneckMap = new Map<string, { status: string; group: string; count: number; sumAge: number; totalOverBy: number }>();
   for (const t of filtered) {
     const entry = bottleneckMap.get(t.status) ?? { status: t.status, group: t.statusGroup, count: 0, sumAge: 0, totalOverBy: 0 };
@@ -170,7 +266,7 @@ export async function GET(req: Request) {
     .map((e) => ({ ...e, avgStateAge: Math.round(e.sumAge / e.count) }))
     .sort((a, b) => b.count - a.count || b.totalOverBy - a.totalOverBy);
 
-  // M8-03: people needing support (not a leaderboard — grouped by reason).
+  // People needing support (not a leaderboard — grouped by reason).
   const supportMap = new Map<string, { assignee: string; tasks: StaleTask[] }>();
   for (const t of filtered) {
     const key = t.assigneeJira ?? "(unassigned)";
@@ -195,7 +291,7 @@ export async function GET(req: Request) {
     })
     .sort((a, b) => b.taskCount - a.taskCount || b.avgStateAge - a.avgStateAge);
 
-  // M8-03: longest-blocked tasks.
+  // Longest-blocked tasks.
   const blockedTasks: BlockedTask[] = filtered
     .filter((t) => isBlockedStatus(t.status) && t.blockedDays > 0)
     .sort((a, b) => b.blockedDays - a.blockedDays)
@@ -210,10 +306,7 @@ export async function GET(req: Request) {
       reasonLabel: t.staleReasonLabel,
     }));
 
-  // M8-03: weekly trend — count of tasks that first exceeded SLA per ISO week
-  // over the last 8 weeks. Derived from statusChangedAt (when the task entered
-  // its current state) rather than snapshot rows, so the trend reflects the
-  // actual pipeline, not detection frequency.
+  // Weekly trend — count of tasks that entered their current state per ISO week.
   const weekStart = (d: Date): string => {
     const date = new Date(d);
     date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
@@ -236,15 +329,45 @@ export async function GET(req: Request) {
     .map(([week, count]) => ({ week, count }))
     .sort((a, b) => a.week.localeCompare(b.week));
 
-  // M8-03: filter options for the dropdowns.
+  // Filter options for the dropdowns (include all active assignees in scope)
   const assigneeSet = new Set<string>();
   const statusSet = new Set<string>();
   const reasonSet = new Set<StaleReason>();
+  for (const issue of issues) {
+    if (issue.assigneeJira) assigneeSet.add(issue.assigneeJira);
+    statusSet.add(issue.status);
+  }
   for (const t of allTasks) {
-    if (t.assigneeJira) assigneeSet.add(t.assigneeJira);
-    statusSet.add(t.status);
     reasonSet.add(t.staleReason);
   }
+
+  // Personal work perspective
+  const myIssues = issues.filter((i) => {
+    if (!myUsername) return false;
+    const lower = (i.assigneeJira ?? "").toLowerCase();
+    return myAliases.some((a) => a.toLowerCase() === lower);
+  });
+  const myStaleTasks = allTasks.filter((t) => {
+    if (!myUsername) return false;
+    const lower = (t.assigneeJira ?? "").toLowerCase();
+    return myAliases.some((a) => a.toLowerCase() === lower);
+  });
+  const myWipTasks = myIssues.filter((i) => {
+    const g = statusGroup(i.status);
+    return g === "In Progress" || g === "In Review";
+  });
+
+  const summary: Summary = {
+    totalActive: scopedIssues.length,
+    totalStale: filtered.length,
+    totalHigh: filtered.filter((t) => t.severity === "high").length,
+    totalBlocked: filtered.filter((t) => isBlockedStatus(t.status)).length,
+    totalNoAssignee: filtered.filter((t) => t.staleReason === "no_assignee").length,
+    worstOverBy: filtered.reduce((m, t) => Math.max(m, t.overByDays), 0),
+    totalOverdue: filtered.filter((t) => t.overdueDays > 0).length,
+    totalBaselineAlert: filtered.filter((t) => t.expectedCycleMax != null && t.baselineLevel !== "within").length,
+    wipCount,
+  };
 
   return NextResponse.json({
     tasks: filtered,
@@ -252,17 +375,27 @@ export async function GET(req: Request) {
     support,
     blocked: blockedTasks,
     trend,
+    wip,
     filters: {
+      projects: allowedProjects,
       assignees: [...assigneeSet].sort(),
       statuses: [...statusSet].sort(),
       reasons: [...reasonSet].sort(),
       reasonLabels: STALE_REASON_LABELS,
     },
-    summary: {
-      totalStale: filtered.length,
-      totalBlocked: filtered.filter((t) => isBlockedStatus(t.status)).length,
-      totalNoAssignee: filtered.filter((t) => t.staleReason === "no_assignee").length,
-      worstOverBy: filtered.reduce((m, t) => Math.max(m, t.overByDays), 0),
+    myWork: {
+      username: myUsername,
+      totalActive: myIssues.length,
+      totalStale: myStaleTasks.length,
+      wipCount: myWipTasks.length,
+      tasks: myIssues.map((i) => ({
+        jiraKey: i.jiraKey,
+        summary: i.summary,
+        status: i.status,
+        points: i.points,
+        updatedAt: i.updatedAt,
+      })),
     },
+    summary,
   });
 }

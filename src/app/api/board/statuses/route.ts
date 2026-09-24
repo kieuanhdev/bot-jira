@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { isKnownProject, jiraProjectList, hasJiraConfig, projectColumns } from "@/lib/env";
-import { jira } from "@/lib/jira/client";
+import { isKnownProject, jiraProjectList, projectColumns } from "@/lib/env";
+import { jiraWith } from "@/lib/jira/client";
+import { userJiraAuth } from "@/lib/user-creds";
 
 /**
  * Stable Jira status category key. Jira's canonical keys are `new` (to-do),
@@ -41,10 +42,19 @@ export async function GET(req: Request) {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { boardProjects: true },
+    select: {
+      boardProjects: true,
+      jiraUserEnc: true,
+      jiraTokenEnc: true,
+      jiraAuth: true,
+    },
   });
-  if (!hasJiraConfig()) {
-    return NextResponse.json({ items: [] as BoardStatus[], statusCategoryMap: {} as Record<string, string> });
+  const auth = userJiraAuth(user);
+  if (!auth) {
+    return NextResponse.json(
+      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
+      { status: 428 }
+    );
   }
 
   const url = new URL(req.url);
@@ -67,7 +77,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ items: [] as BoardStatus[], statusCategoryMap: {} as Record<string, string> });
   }
 
-  const client = jira;
+  const client = jiraWith(auth);
 
   type FlowStatus = { name: string; statusCategory: { key?: string } };
   type FlowType = { subtask: boolean; statuses: FlowStatus[] };

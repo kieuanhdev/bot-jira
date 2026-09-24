@@ -15,7 +15,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { hasSentryConfig } from "@/lib/env";
+import { hasSentryConfig, releaseRequiredApprovals, env } from "@/lib/env";
 import { sentry } from "@/lib/sentry/client";
 import {
   selectReleaseBranches,
@@ -118,6 +118,22 @@ export async function buildReleaseContext(releaseId: string, version: string): P
   }));
   const branchInfos = selectReleaseBranches(allBranchInfos, tasks.map((t) => t.jiraKey));
 
+  // REL-03 — load non-revoked approvals so the manual_approval gate reflects
+  // the current sign-off state. The set of *required* types is policy-driven
+  // via RELEASE_REQUIRED_APPROVALS; an empty list keeps the gate vacuous so
+  // existing no-approval deployments are unchanged.
+  let approvalsPresent: { type: string; present: boolean }[] = [];
+  if (releaseRequiredApprovals.length > 0) {
+    const approvals = await prisma.releaseApproval.findMany({
+      where: { releaseId, revokedAt: null },
+      select: { type: true },
+    });
+    approvalsPresent = releaseRequiredApprovals.map((type) => ({
+      type,
+      present: approvals.some((a) => a.type === type),
+    }));
+  }
+
   let sentryIssues: SentryIssueInfo[] | null = null;
   let sentryCheckedAt: Date | null = null;
   if (hasSentryConfig()) {
@@ -138,6 +154,29 @@ export async function buildReleaseContext(releaseId: string, version: string): P
     }
   }
 
+  // REL-04 — load the latest CI build states for the release scope. The expected
+  // commit per build is its own commitSha when we have no better signal (the PR
+  // merge commit resolution is a follow-on; treating the recorded commit as
+  // expected keeps the fail-safe "build on a different commit => unknown" rule
+  // intact for the pilot).
+  let ciBuilds: import("./gates").CiBuildState[] = [];
+  if (env.ciGateEnabled) {
+    const ciRows = await prisma.ciBuildStatus.findMany({
+      where: { repo: { in: branchRows.map((b) => b.repo) } },
+      orderBy: { receivedAt: "desc" },
+      take: 50,
+    });
+    ciBuilds = ciRows.map((c) => ({
+      provider: c.provider,
+      commitSha: c.commitSha,
+      status: c.status,
+      testStatus: c.testStatus,
+      url: c.url,
+      completedAt: c.completedAt,
+      expectedCommitSha: c.commitSha,
+    }));
+  }
+
   return {
     releaseId,
     version,
@@ -146,6 +185,10 @@ export async function buildReleaseContext(releaseId: string, version: string): P
     branchInfos,
     sentryIssues,
     sentryCheckedAt,
+    requiredApprovals: releaseRequiredApprovals,
+    approvalsPresent,
+    ciBuilds,
+    ciGateEnabled: env.ciGateEnabled,
     checkedAt,
   };
 }

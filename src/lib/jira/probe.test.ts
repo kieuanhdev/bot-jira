@@ -44,12 +44,10 @@ describe("probeJiraAuth", () => {
     await expect(probeJiraAuth(auth)).resolves.toBe(false);
   });
 
-  it("falls back to the shared team token when the user has none", async () => {
+  it("rejects missing user auth without falling back to the system token", async () => {
     const fetchMock = vi.fn(async () => okRes);
     vi.stubGlobal("fetch", fetchMock);
-    await expect(probeJiraAuth(null)).resolves.toBe(true);
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("https://jira.example.com/rest/api/2/myself");
-    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer team-token");
+    await expect(probeJiraAuth(null)).resolves.toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

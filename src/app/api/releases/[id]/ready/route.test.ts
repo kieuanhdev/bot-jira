@@ -18,6 +18,12 @@ const { prismaMock, releaseCheckMock, notifyAllMock, sentryListMock, sessionMock
       branchInfo: {
         findMany: vi.fn(),
       },
+      releaseApproval: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      releaseGateOverride: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
       releaseCheck: {
         create: vi.fn(),
       },
@@ -33,16 +39,25 @@ const { prismaMock, releaseCheckMock, notifyAllMock, sentryListMock, sessionMock
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/session", () => ({ getSession: sessionMock }));
+// The ready route enforces release.check (REL-01); a release_manager session
+// passes, a member would be 403.
+vi.mock("@/lib/permissions", () => ({
+  can: (session: { user?: { role?: string } }) =>
+    ["release_manager", "admin"].includes(session?.user?.role ?? ""),
+}));
 vi.mock("@/lib/notify", () => ({ notifyAll: notifyAllMock }));
 vi.mock("@/lib/sentry/client", () => ({
   sentry: { listUnresolvedIssues: sentryListMock },
 }));
 vi.mock("@/lib/ai", () => ({ aiProvider: { releaseCheck: releaseCheckMock } }));
 // hasSentryConfig() must be false so the route skips the live Sentry fetch.
+// releaseRequiredApprovals is empty so the manual_approval gate is vacuous and
+// the existing gate-state assertions still hold.
 vi.mock("@/lib/env", () => ({
-  env: { releaseDataFreshnessMinutes: 5 },
+  env: { releaseDataFreshnessMinutes: 5, jiraFreshnessMinutes: 5 },
   releaseDoneCategories: ["done"],
   releaseBlockingPriorities: ["Blocker", "Critical"],
+  releaseRequiredApprovals: [],
   hasSentryConfig: () => false,
 }));
 
@@ -82,7 +97,7 @@ function mockRelease(row: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  sessionMock.mockResolvedValue({ user: { email: "a@b.c", id: "u1" } });
+  sessionMock.mockResolvedValue({ user: { email: "a@b.c", id: "u1", role: "release_manager" } });
   // Default: no branches, AI returns no blockers.
   prismaMock.branchInfo.findMany.mockResolvedValue([]);
   releaseCheckMock.mockResolvedValue({ ready: true, blockers: [] });

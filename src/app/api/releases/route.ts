@@ -87,13 +87,18 @@ export async function POST(req: Request) {
   let releaseDate: Date | null = null;
 
   if (projectKey) {
-    // Act as the current user when they've linked their own Jira token
-    // (mutations use the personal token per ADR-002), else the shared token.
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true },
     });
-    const client = jiraWith(userJiraAuth(user));
+    const auth = userJiraAuth(user);
+    if (!auth) {
+      return NextResponse.json(
+        { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
+        { status: 428 }
+      );
+    }
+    const client = jiraWith(auth);
 
     try {
       if (body.jiraVersionId) {

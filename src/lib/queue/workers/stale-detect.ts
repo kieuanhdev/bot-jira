@@ -119,10 +119,11 @@ export async function runStaleDetect(): Promise<WorkerLog> {
           try {
             await notifyUser(u.id, {
               type: "stale",
-              title: `Task ${issue.jiraKey} exceeds SLA (+${overBy}d)`,
-              body: `"${issue.summary}" — ${reasonLabel}, ${ages.stateAgeDays}d in "${issue.status}" (SLA ${sla.days}d).`,
+              title: `Task ${issue.jiraKey} vượt quá SLA (+${overBy} ngày)`,
+              body: `"${issue.summary}" — ${reasonLabel}, ${ages.stateAgeDays} ngày ở "${issue.status}" (SLA ${sla.days} ngày).`,
               link: `/issue/${issue.jiraKey}`,
-              eventId,
+              severity: severity === "high" ? "danger" : "warning",
+              eventKey: eventId,
             });
             notified++;
           } catch {

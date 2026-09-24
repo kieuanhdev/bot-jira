@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { encrypt } from "@/lib/crypto";
 import { jiraWith } from "@/lib/jira/client";
-import { env, hasJiraConfig } from "@/lib/env";
+import { env } from "@/lib/env";
 import { bitbucket as bb } from "@/lib/bitbucket/client";
 
 /** Strip HTML/JSON noise from an upstream error so the UI shows one clean line. */
@@ -12,7 +12,7 @@ function cleanError(msg: string): string {
     return "Authentication failed (401) — check the token / auth type";
   }
   const m = msg.match(/->\s*(\d{3})/);
-  if (m) return `Jira returned ${m[1]} — check token or permissions`;
+  if (m) return `Dịch vụ trả về ${m[1]} — hãy kiểm tra token và quyền truy cập`;
   return msg.slice(0, 160);
 }
 
@@ -47,11 +47,56 @@ export async function PUT(req: Request) {
   }
   const body = (await req.json()) as Body;
 
+  const jiraToken = (body.jiraToken ?? "").trim();
+  const jiraUser = (body.jiraUser ?? "").trim();
+  const bbToken = (body.bitbucketToken ?? "").trim();
+  const bbUser = (body.bitbucketUser ?? "").trim();
+  const firstRepo = (await import("@/lib/env")).bitbucketRepoList[0];
+
+  // Validate new credentials before persisting them. A failed attempt must not
+  // replace a previously working personal credential.
+  let verifiedJira: import("@/lib/jira/auth-service").JiraVerificationSuccess | null = null;
+  if (jiraToken && !body.disconnectJira) {
+    const { verifyJiraCredential } = await import("@/lib/jira/auth-service");
+    const res = await verifyJiraCredential({ token: jiraToken, username: jiraUser });
+    if (!res.ok) {
+      return NextResponse.json(
+        { ok: false, error: res.message },
+        { status: 422 }
+      );
+    }
+    verifiedJira = res;
+  }
+
+  if (bbToken && !body.disconnectBitbucket) {
+    if (!bbUser) {
+      return NextResponse.json(
+        { ok: false, error: "Username Bitbucket là bắt buộc khi lưu token." },
+        { status: 400 }
+      );
+    }
+    if (!env.bitbucketBaseUrl || !firstRepo) {
+      return NextResponse.json(
+        { ok: false, error: "Máy chủ chưa cấu hình Bitbucket URL hoặc repository để xác minh token." },
+        { status: 503 }
+      );
+    }
+    try {
+      await bb.listBranches(firstRepo, { user: bbUser, token: bbToken });
+    } catch (e) {
+      return NextResponse.json(
+        { ok: false, error: `Không thể xác minh token Bitbucket: ${cleanError((e as Error).message)}` },
+        { status: 422 }
+      );
+    }
+  }
+
   const data: {
     jiraUserEnc?: string | null;
     jiraTokenEnc?: string | null;
     jiraAuth?: string | null;
     jiraVerifiedAt?: Date | null;
+    jiraIdentityKey?: string | null;
     bitbucketUserEnc?: string | null;
     bitbucketTokenEnc?: string | null;
     bitbucketVerifiedAt?: Date | null;
@@ -60,8 +105,6 @@ export async function PUT(req: Request) {
 
   // Jira — auto-detect the auth mode this server actually accepts (Bearer vs
   // Basic) so the user doesn't have to guess. Store the working mode.
-  const jiraToken = (body.jiraToken ?? "").trim();
-  const jiraUser = (body.jiraUser ?? "").trim();
   if (body.disconnectJira) {
     // Explicit disconnect — always clears the stored Jira token.
     data.jiraUserEnc = null;
@@ -69,13 +112,16 @@ export async function PUT(req: Request) {
     data.jiraAuth = null;
     data.jiraVerifiedAt = null;
     data.jiraUsername = null;
-  } else if (jiraToken) {
-    data.jiraUserEnc = jiraUser ? encrypt(jiraUser) : null;
+  } else if (jiraToken && verifiedJira) {
+    const { cleanString } = await import("@/lib/jira/auth-service");
+    const cleanInputUser = cleanString(jiraUser);
+    const resolvedUser = cleanString(verifiedJira.name) || cleanInputUser || "";
+    data.jiraUserEnc = resolvedUser ? encrypt(resolvedUser) : null;
     data.jiraTokenEnc = encrypt(jiraToken);
-    const { detectJiraAuth } = await import("@/lib/jira/client");
-    const detected = await detectJiraAuth(jiraToken, jiraUser);
-    data.jiraAuth = detected?.mode ?? (body.jiraAuth ?? "Bearer");
-    data.jiraUsername = detected?.name ?? jiraUser ?? null;
+    data.jiraAuth = verifiedJira.mode;
+    data.jiraUsername = cleanString(verifiedJira.name) ?? cleanInputUser ?? null;
+    data.jiraIdentityKey = verifiedJira.identityKey;
+    data.jiraVerifiedAt = new Date();
   } else {
     // No token provided and no disconnect: keep whatever is already stored
     // (the "leave blank to keep current" behavior).
@@ -85,16 +131,14 @@ export async function PUT(req: Request) {
   }
 
   // Bitbucket
-  const bbToken = (body.bitbucketToken ?? "").trim();
   if (body.disconnectBitbucket) {
     data.bitbucketUserEnc = null;
     data.bitbucketTokenEnc = null;
     data.bitbucketVerifiedAt = null;
   } else if (bbToken) {
-    data.bitbucketUserEnc = (body.bitbucketUser ?? "").trim()
-      ? encrypt(body.bitbucketUser!.trim())
-      : null;
+    data.bitbucketUserEnc = encrypt(bbUser);
     data.bitbucketTokenEnc = encrypt(bbToken);
+    data.bitbucketVerifiedAt = new Date();
   } else {
     data.bitbucketUserEnc = undefined;
     data.bitbucketTokenEnc = undefined;
@@ -143,7 +187,7 @@ export async function verifyCreds(user: {
 
   const jiraResult: { ok: boolean; detail?: string } = { ok: false };
   const jiraAuth = userJiraAuth(user);
-  if (jiraAuth && hasJiraConfig()) {
+  if (jiraAuth && env.jiraBaseUrl) {
     try {
       const me = await jiraWith(jiraAuth).me();
       jiraResult.ok = true;

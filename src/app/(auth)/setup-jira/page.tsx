@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { jiraProjectList } from "@/lib/env";
 import { SetupJiraClient } from "./setup-jira-client";
 
-export const metadata: Metadata = { title: "Set up Jira" };
+export const metadata: Metadata = { title: "Thiết lập dự án & Jira" };
 export const dynamic = "force-dynamic";
 
 export default async function SetupJiraPage() {
@@ -16,25 +16,32 @@ export default async function SetupJiraPage() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true, onboarded: true, boardProjects: true },
+    select: {
+      jiraUserEnc: true,
+      jiraTokenEnc: true,
+      jiraAuth: true,
+      jiraVerifiedAt: true,
+      onboarded: true,
+      boardProjects: true,
+    },
   });
 
-  // Already fully set up? Go to the board.
-  if (userJiraAuth(user) && user?.onboarded) redirect("/board");
+  const jiraReady = Boolean(userJiraAuth(user) && user?.jiraVerifiedAt);
+  if (jiraReady && user?.onboarded) redirect("/board");
 
-  const step = userJiraAuth(user) ? "projects" : "token";
+  const step = !jiraReady ? "jira" : "projects";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-xl">
-            {step === "projects" ? "Choose your projects" : "Connect your Jira"}
+            {step === "projects" ? "Chọn các dự án của bạn" : "Kết nối Jira của bạn"}
           </CardTitle>
           <CardDescription>
             {step === "projects"
-              ? "Pick which Jira projects to show on your board. Leave none selected to show nothing."
-              : "You must link your own Jira account to use this app. Your board will show the tasks assigned to you. Tokens are encrypted and stored only on your account."}
+              ? "Chọn các dự án Jira muốn hiển thị trên bảng công việc của bạn."
+              : "Mọi cập nhật task sẽ dùng đúng tài khoản Jira của bạn. Dữ liệu task được đồng bộ và chia sẻ cho cả đội."}
           </CardDescription>
         </CardHeader>
         <CardContent>

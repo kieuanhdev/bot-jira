@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 
 type Props = {
-  step: "token" | "projects";
+  step: "jira" | "projects";
   availableProjects: string[];
   initialProjects: string[];
 };
@@ -23,7 +23,7 @@ type Props = {
 export function SetupJiraClient({ step, availableProjects, initialProjects }: Props) {
   const router = useRouter();
 
-  // Step: token
+  // Integration credentials
   const [username, setUsername] = useState("");
   const [token, setToken] = useState("");
   const [auth, setAuth] = useState<"Bearer" | "basic">("Bearer");
@@ -37,7 +37,7 @@ export function SetupJiraClient({ step, availableProjects, initialProjects }: Pr
   async function connect(e: React.FormEvent) {
     e.preventDefault();
     if (!token.trim()) {
-      setError("Please paste your Jira API token.");
+      setError("Vui lòng dán Jira API token của bạn.");
       return;
     }
     setBusy(true);
@@ -46,22 +46,26 @@ export function SetupJiraClient({ step, availableProjects, initialProjects }: Pr
       const res = await fetch("/api/me/credentials", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jiraUser: username.trim() || null, jiraToken: token, jiraAuth: auth }),
+        body: JSON.stringify({
+          jiraUser: username.trim() || null,
+          jiraToken: token,
+          jiraAuth: auth,
+        }),
       });
       const result = (await res.json()) as {
         ok?: boolean;
         error?: string;
         verify?: { jira: { ok: boolean; detail?: string } };
       };
-      if (!res.ok || !result.ok) {
-        setError(result.error ?? "Failed to save");
+      if (!res.ok || !result.ok || !result.verify?.jira.ok) {
+        setError(result.error ?? result.verify?.jira.detail ?? "Token Jira không hợp lệ");
         setBusy(false);
         return;
       }
-      // Success — go to the project selection step (server re-renders this page).
+      setBusy(false);
       router.refresh();
     } catch {
-      setError("Network error");
+      setError("Lỗi kết nối mạng");
       setBusy(false);
     }
   }
@@ -88,16 +92,16 @@ export function SetupJiraClient({ step, availableProjects, initialProjects }: Pr
       await fetch("/api/me/onboard", { method: "POST", body: JSON.stringify({}) });
       router.replace("/board");
     } catch {
-      setError("Could not save your projects");
+      setError("Không thể lưu danh sách dự án của bạn");
       setSavingProjects(false);
     }
   }
 
-  if (step === "token") {
+  if (step === "jira") {
     return (
       <form onSubmit={connect} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Jira username (optional)</Label>
+          <Label className="text-xs text-muted-foreground">Username Jira (tuỳ chọn)</Label>
           <Input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -106,18 +110,18 @@ export function SetupJiraClient({ step, availableProjects, initialProjects }: Pr
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Auth type</Label>
+          <Label className="text-xs text-muted-foreground">Loại xác thực</Label>
           <Select value={auth} onValueChange={(v) => setAuth(v as "Bearer" | "basic")}>
             <SelectTrigger className="h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Bearer">Bearer (this Jira DC)</SelectItem>
+              <SelectItem value="Bearer">Bearer (Jira DC này)</SelectItem>
               <SelectItem value="basic">Basic (user + token)</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Not sure? Choose <strong>Bearer</strong> — the app auto-detects the working mode when you save.
+            Chưa rõ? Chọn <strong>Bearer</strong> — hệ thống sẽ tự động phát hiện khi lưu.
           </p>
         </div>
         <div className="flex flex-col gap-1.5">
@@ -126,14 +130,14 @@ export function SetupJiraClient({ step, availableProjects, initialProjects }: Pr
             type="password"
             value={token}
             onChange={(e) => setToken(e.target.value)}
-            placeholder="Paste your Jira API token"
+            placeholder="Dán Jira API token của bạn"
             autoComplete="off"
           />
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" disabled={busy}>
-          {busy ? "Connecting…" : "Connect Jira"}
+        <Button type="submit" disabled={busy} className="cursor-pointer">
+          {busy ? "Đang kết nối…" : "Kết nối Jira"}
         </Button>
       </form>
     );
@@ -143,13 +147,13 @@ export function SetupJiraClient({ step, availableProjects, initialProjects }: Pr
   return (
     <div className="flex flex-col gap-4">
       {availableProjects.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No projects are configured on the server.</p>
+        <p className="text-sm text-muted-foreground">Không có dự án nào được cấu hình trên máy chủ.</p>
       ) : (
         <div className="flex flex-col gap-1">
           {availableProjects.map((p) => (
             <label
               key={p}
-              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
+              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors hover:bg-accent"
             >
               <Checkbox checked={selected.has(p)} onCheckedChange={() => toggle(p)} />
               <span>{p}</span>
@@ -159,12 +163,12 @@ export function SetupJiraClient({ step, availableProjects, initialProjects }: Pr
       )}
       <p className="text-xs text-muted-foreground">
         {selected.size === 0
-          ? "No projects selected — your board will stay empty until you pick some."
-          : `${selected.size} project(s) selected.`}
+          ? "Chưa chọn dự án nào — bảng công việc sẽ trống cho đến khi bạn chọn."
+          : `Đã chọn ${selected.size} dự án.`}
       </p>
       {error && <p className="text-sm text-destructive">{error}</p>}
-      <Button onClick={saveProjects} disabled={savingProjects}>
-        {savingProjects ? "Saving…" : "Continue to board"}
+      <Button onClick={saveProjects} disabled={savingProjects} className="cursor-pointer">
+        {savingProjects ? "Đang lưu…" : "Tiếp tục đến bảng công việc"}
       </Button>
     </div>
   );

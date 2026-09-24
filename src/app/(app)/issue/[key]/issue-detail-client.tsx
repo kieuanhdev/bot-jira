@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -68,7 +69,21 @@ type Transition = { id: string; name: string; to?: { name?: string } | string };
 function transitionTo(t: Transition): string {
   return typeof t.to === "string" ? t.to : t.to?.name ?? t.name ?? "";
 }
-type BranchRow = { repo: string; branch: string; merged: boolean; lastCommitAt: string | null };
+type BranchRow = {
+  id?: string;
+  repo: string;
+  branch: string;
+  merged: boolean;
+  lastCommitAt: string | null;
+  prId?: number | null;
+  prTitle?: string | null;
+  prUrl?: string | null;
+  prState?: string | null;
+  prDestinationBranch?: string | null;
+  linkSource?: string | null;
+  linkConfidence?: number | null;
+  checkedAt?: string;
+};
 
 export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
   const [issue, setIssue] = useState<IssueDetail>(initial);
@@ -86,12 +101,45 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
     retry: 1,
   });
 
+  const queryClient = useQueryClient();
   const { data: branches } = useQuery({
     queryKey: ["branches-for", issue.jiraKey],
     queryFn: () =>
-      api<{ items: BranchRow[] }>(`/api/issues/${issue.jiraKey}/branches`),
+      api<{ items: BranchRow[]; suggestedItems?: (BranchRow & { id: string })[] }>(
+        `/api/issues/${issue.jiraKey}/branches`
+      ),
     retry: 1,
   });
+
+  async function handleConfirmBranch(branchId: string) {
+    try {
+      const res = await fetch(`/api/branches/${branchId}/link`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "confirm" }),
+      });
+      if (!res.ok) throw new Error("Không thể xác nhận");
+      await queryClient.invalidateQueries({ queryKey: ["branches-for", issue.jiraKey] });
+      setMsg("Đã xác nhận liên kết nhánh");
+    } catch (e) {
+      setMsg(`Lỗi: ${(e as Error).message}`);
+    }
+  }
+
+  async function handleRejectBranch(branchId: string) {
+    try {
+      const res = await fetch(`/api/branches/${branchId}/link`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reject" }),
+      });
+      if (!res.ok) throw new Error("Không thể từ chối");
+      await queryClient.invalidateQueries({ queryKey: ["branches-for", issue.jiraKey] });
+      setMsg("Đã từ chối gợi ý liên kết");
+    } catch (e) {
+      setMsg(`Lỗi: ${(e as Error).message}`);
+    }
+  }
 
   async function doAction(fn: () => Promise<unknown>, message: string) {
     setBusy(true);
@@ -116,28 +164,28 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
           method: "POST",
           body: { transitionId: t.id },
         }),
-      `Transitioned to ${transitionTo(t)}`
+      `Đã chuyển sang ${transitionTo(t)}`
     );
   }
 
   async function onToggleWatch() {
     await doAction(
       () => api(`/api/issues/${issue.jiraKey}/watch`, { method: "POST", body: {} }),
-      watched ? "Unwatched" : "Watching"
+      watched ? "Đã bỏ theo dõi" : "Đang theo dõi"
     );
     setWatched((w) => !w);
   }
 
   async function onAiScore() {
     setBusy(true);
-    setMsg("AI scoring…");
+    setMsg("Đang chấm điểm AI…");
     try {
       await api(`/api/issues/${issue.jiraKey}/ai-score`, { method: "POST", body: {} });
       const fresh = await api<{ issue: IssueDetail }>(`/api/issues/${issue.jiraKey}`);
       setIssue(fresh.issue);
-      setMsg("AI score ready");
+      setMsg("Điểm AI đã sẵn sàng");
     } catch (e) {
-      setMsg(`Error: ${(e as Error).message}`);
+      setMsg(`Lỗi: ${(e as Error).message}`);
     } finally {
       setBusy(false);
     }
@@ -147,10 +195,10 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
     if (!issue.aiScore) return;
     const done =
       decision === "accepted"
-        ? `Accepted AI points (${issue.aiScore.points}) → Jira`
+        ? `Đã chấp nhận điểm AI (${issue.aiScore.points}) → Jira`
         : decision === "edited"
-          ? `Set points to ${points} → Jira`
-          : "Rejected AI estimate (Jira unchanged)";
+          ? `Đã đặt điểm thành ${points} → Jira`
+          : "Đã từ chối ước tính AI (Jira không thay đổi)";
     await doAction(
       () =>
         api(`/api/issues/${issue.jiraKey}/ai-score/decision`, {
@@ -182,11 +230,11 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
         body: { body: text },
       });
       setCommentDraft("");
-      setMsg("Comment posted to Jira");
+      setMsg("Đã gửi bình luận lên Jira");
       const fresh = await api<{ issue: IssueDetail }>(`/api/issues/${issue.jiraKey}`);
       setIssue(fresh.issue);
     } catch (e) {
-      setMsg(`Error: ${(e as Error).message}`);
+      setMsg(`Lỗi: ${(e as Error).message}`);
     } finally {
       setCommenting(false);
     }
@@ -201,10 +249,10 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
           <div className="flex items-center gap-2">
             <span className="font-mono text-sm text-muted-foreground">{issue.jiraKey}</span>
             <Badge>{issue.status}</Badge>
-            {issue.points != null && <Badge variant="secondary">{issue.points}pt</Badge>}
+            {issue.points != null && <Badge variant="secondary">{issue.points} điểm</Badge>}
             {stale && (
               <Badge variant={stale.severity === "high" ? "danger" : stale.severity === "info" ? "info" : "warning"}>
-                {stale.staleReason.replace(/_/g, " ")} · {stale.stateAgeDays}d
+                {stale.staleReason.replace(/_/g, " ")} · {stale.stateAgeDays} ngày
               </Badge>
             )}
           </div>
@@ -213,7 +261,7 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
             <span>{issue.type}</span>
             {issue.priority && <span>· {issue.priority}</span>}
             {issue.assigneeJira && <span>· {issue.assigneeJira}</span>}
-            <span>· updated {timeAgo(issue.updatedAt)}</span>
+            <span>· cập nhật {timeAgo(issue.updatedAt)}</span>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -225,17 +273,17 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
             className="gap-1.5"
           >
             {watched ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            {watched ? "Watching" : "Watch"}
+            {watched ? "Đang theo dõi" : "Theo dõi"}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="default" size="sm" disabled={busy || !transitions?.transitions?.length}>
                 <RefreshCw className={busy ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-                Move to…
+                Chuyển sang…
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
-              <DropdownMenuLabel>Transition</DropdownMenuLabel>
+              <DropdownMenuLabel>Chuyển trạng thái</DropdownMenuLabel>
               {transitions?.transitions?.map((t) => (
                 <DropdownMenuItem key={t.id} disabled={busy} onClick={() => onTransition(t)}>
                   {transitionTo(t)}
@@ -250,7 +298,7 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
         <div className="flex flex-wrap gap-2">
           {issue.releaseTasks.map((rt, i) => (
             <Badge key={i} variant="info">
-              release {rt.release.version} ({rt.release.status})
+              bản phát hành {rt.release.version} ({rt.release.status})
             </Badge>
           ))}
         </div>
@@ -270,15 +318,15 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
 
       <Tabs defaultValue="detail">
         <TabsList>
-          <TabsTrigger value="detail">Detail</TabsTrigger>
-          <TabsTrigger value="comments">Comments ({issue.comments.length})</TabsTrigger>
+          <TabsTrigger value="detail">Chi tiết</TabsTrigger>
+          <TabsTrigger value="comments">Bình luận ({issue.comments.length})</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
-          <TabsTrigger value="branches">Branches</TabsTrigger>
+          <TabsTrigger value="branches">Nhánh</TabsTrigger>
         </TabsList>
 
         <TabsContent value="detail">
           <Card>
-            <CardHeader><CardTitle>Description</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Mô tả</CardTitle></CardHeader>
             <CardContent>
               {issue.description ? (
                 <div
@@ -290,9 +338,9 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
               )}
               <Separator className="my-4" />
               <div className="flex flex-wrap gap-6 text-xs text-muted-foreground">
-                <div><span className="font-medium">Created:</span> {formatDateTime(issue.createdAt)}</div>
-                <div><span className="font-medium">Updated:</span> {formatDateTime(issue.updatedAt)}</div>
-                <div><span className="font-medium">Last synced:</span> {timeAgo(issue.lastSyncedAt)}</div>
+                <div><span className="font-medium">Đã tạo:</span> {formatDateTime(issue.createdAt)}</div>
+                <div><span className="font-medium">Cập nhật:</span> {formatDateTime(issue.updatedAt)}</div>
+                <div><span className="font-medium">Đồng bộ lần cuối:</span> {timeAgo(issue.lastSyncedAt)}</div>
               </div>
             </CardContent>
           </Card>
@@ -305,7 +353,7 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
                 <Textarea
                   value={commentDraft}
                   onChange={(e) => setCommentDraft(e.target.value)}
-                  placeholder="Add a comment to Jira…"
+                  placeholder="Thêm bình luận lên Jira…"
                   rows={3}
                   className="resize-y"
                 />
@@ -317,13 +365,13 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
                     className="gap-1.5"
                   >
                     <Send className="h-3.5 w-3.5" />
-                    {commenting ? "Posting…" : "Comment"}
+                    {commenting ? "Đang gửi…" : "Bình luận"}
                   </Button>
                 </div>
               </CardContent>
             </Card>
             {issue.comments.length === 0 && (
-              <Card><CardContent className="text-sm text-muted-foreground">No comments yet.</CardContent></Card>
+              <Card><CardContent className="text-sm text-muted-foreground">Chưa có bình luận nào.</CardContent></Card>
             )}
             {issue.comments.map((c) => (
               <Card key={c.id}>
@@ -346,26 +394,26 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Bot className="h-4 w-4" /> AI task point
+                <Bot className="h-4 w-4" /> Chấm điểm task bằng AI
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               {!issue.aiScore ? (
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">No AI score yet.</p>
+                  <p className="text-sm text-muted-foreground">Chưa có điểm AI.</p>
                   <Button onClick={onAiScore} disabled={busy}>
-                    <Bot className="h-4 w-4" /> Score this task
+                    <Bot className="h-4 w-4" /> Chấm điểm task này
                   </Button>
                 </div>
               ) : (
                 <>
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="rounded-lg bg-primary/10 px-4 py-2 text-2xl font-bold text-primary">
-                      {issue.aiScore.points} pt
+                      {issue.aiScore.points} điểm
                     </div>
                     {issue.aiScore.confidence != null && (
                       <Badge variant={issue.aiScore.confidence >= 0.7 ? "success" : issue.aiScore.confidence >= 0.4 ? "warning" : "danger"}>
-                        {(issue.aiScore.confidence * 100).toFixed(0)}% confidence
+                        {(issue.aiScore.confidence * 100).toFixed(0)}% độ tin cậy
                       </Badge>
                     )}
                     <div className="text-xs text-muted-foreground">{issue.aiScore.model}</div>
@@ -375,7 +423,7 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
                   {issue.aiScore.missingInformation?.length > 0 && (
                     <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
                       <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
-                        <AlertTriangle className="h-3.5 w-3.5" /> Missing information
+                        <AlertTriangle className="h-3.5 w-3.5" /> Thông tin còn thiếu
                       </p>
                       <ul className="list-inside list-disc text-sm">
                         {issue.aiScore.missingInformation.map((r, i) => <li key={i}>{r}</li>)}
@@ -385,7 +433,7 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
 
                   {issue.aiScore.risks?.length > 0 && (
                     <div>
-                      <p className="mb-1 text-xs font-medium text-muted-foreground">Risks</p>
+                      <p className="mb-1 text-xs font-medium text-muted-foreground">Rủi ro tiềm ẩn</p>
                       <ul className="list-inside list-disc text-sm">
                         {issue.aiScore.risks.map((r, i) => <li key={i}>{r}</li>)}
                       </ul>
@@ -394,7 +442,7 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
 
                   {issue.aiScore.similarTasks?.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs font-medium text-muted-foreground">Similar tasks:</span>
+                      <span className="text-xs font-medium text-muted-foreground">Các task tương tự:</span>
                       {issue.aiScore.similarTasks.map((k, i) => (
                         <Badge key={i} variant="outline">{k}</Badge>
                       ))}
@@ -404,15 +452,15 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
                   {issue.aiDecision && (
                     <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-sm">
                       <Info className="h-4 w-4 text-muted-foreground" />
-                      {issue.aiDecision.decision === "accepted" && "AI estimate accepted."}
-                      {issue.aiDecision.decision === "edited" && `Edited to ${issue.aiDecision.finalPoints}pt and applied.`}
-                      {issue.aiDecision.decision === "rejected" && "AI estimate rejected (Jira unchanged)."}
+                      {issue.aiDecision.decision === "accepted" && "Đã chấp nhận ước tính điểm AI."}
+                      {issue.aiDecision.decision === "edited" && `Đã chỉnh sửa thành ${issue.aiDecision.finalPoints} điểm và áp dụng.`}
+                      {issue.aiDecision.decision === "rejected" && "Đã từ chối ước tính AI (Jira không thay đổi)."}
                     </div>
                   )}
 
                   {editMode ? (
                     <div className="flex flex-wrap items-center gap-2">
-                      <label className="text-sm text-muted-foreground">Points</label>
+                      <label className="text-sm text-muted-foreground">Điểm</label>
                       <Input
                         type="number"
                         min={1}
@@ -421,25 +469,25 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
                         className="w-24"
                       />
                       <Button size="sm" disabled={busy} onClick={() => onAiDecision("edited", Number(editPoints))}>
-                        <Check className="h-4 w-4" /> Apply {editPoints || "?"}pt → Jira
+                        <Check className="h-4 w-4" /> Áp dụng {editPoints || "?"} điểm → Jira
                       </Button>
                       <Button size="sm" variant="ghost" disabled={busy} onClick={() => setEditMode(false)}>
-                        Cancel
+                        Huỷ
                       </Button>
                     </div>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       <Button onClick={onAiScore} disabled={busy}>
-                        <RefreshCw className="h-4 w-4" /> Re-score
+                        <RefreshCw className="h-4 w-4" /> Chấm điểm lại
                       </Button>
                       <Button variant="outline" onClick={() => onAiDecision("accepted")} disabled={busy}>
-                        <Check className="h-4 w-4" /> Accept {issue.aiScore.points}pt → Jira
+                        <Check className="h-4 w-4" /> Chấp nhận {issue.aiScore.points} điểm → Jira
                       </Button>
                       <Button variant="outline" onClick={startEdit} disabled={busy}>
-                        <Pencil className="h-4 w-4" /> Edit points
+                        <Pencil className="h-4 w-4" /> Sửa điểm
                       </Button>
                       <Button variant="outline" onClick={() => onAiDecision("rejected")} disabled={busy}>
-                        <X className="h-4 w-4" /> Reject
+                        <X className="h-4 w-4" /> Từ chối
                       </Button>
                     </div>
                   )}
@@ -451,33 +499,144 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
 
         <TabsContent value="branches">
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><GitBranch className="h-4 w-4" /> Related branches</CardTitle></CardHeader>
-            <CardContent>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <GitBranch className="h-4 w-4" /> Các nhánh liên quan
+              </CardTitle>
+              <Button asChild variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-foreground">
+                <Link href={`/branches?q=${encodeURIComponent(issue.jiraKey)}`}>
+                  Xem trong không gian làm việc Nhánh →
+                </Link>
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-6">
               {branches?.items?.length ? (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-xs text-muted-foreground">
-                      <th className="py-1.5">Branch</th>
-                      <th>Repo</th>
-                      <th>Merged</th>
-                      <th>Last commit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {branches.items.map((b, i) => (
-                      <tr key={i} className="border-b last:border-0">
-                        <td className="py-1.5 font-mono text-xs">{b.branch}</td>
-                        <td className="text-xs">{b.repo}</td>
-                        <td>{b.merged ? <Badge variant="success">merged</Badge> : <Badge variant="danger">open</Badge>}</td>
-                        <td className="text-xs text-muted-foreground">{timeAgo(b.lastCommitAt)}</td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-xs text-muted-foreground">
+                        <th className="py-2 pl-1">Nhánh</th>
+                        <th>Repository</th>
+                        <th>Pull Request</th>
+                        <th>Trạng thái</th>
+                        <th>Hoạt động</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {branches.items.map((b, i) => (
+                        <tr key={i} className="last:border-0 hover:bg-muted/30">
+                          <td className="py-2 pl-1 font-mono text-xs font-semibold text-foreground">
+                            {b.branch}
+                          </td>
+                          <td className="text-xs text-muted-foreground">{b.repo}</td>
+                          <td className="text-xs">
+                            {b.prState ? (
+                              <div className="flex items-center gap-1.5">
+                                {b.prUrl ? (
+                                  <a
+                                    href={b.prUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="font-medium text-primary hover:underline"
+                                  >
+                                    #{b.prId}
+                                  </a>
+                                ) : (
+                                  <span>#{b.prId}</span>
+                                )}
+                                <Badge
+                                  variant={
+                                    b.prState === "OPEN"
+                                      ? "info"
+                                      : b.prState === "MERGED"
+                                      ? "success"
+                                      : b.prState === "DECLINED"
+                                      ? "danger"
+                                      : "outline"
+                                  }
+                                  className="h-4 px-1 text-[10px]"
+                                >
+                                  {b.prState}
+                                </Badge>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">Chưa có PR</span>
+                            )}
+                          </td>
+                          <td>
+                            {b.merged ? (
+                              <Badge variant="success">đã merge</Badge>
+                            ) : (
+                              <Badge variant="outline">đang hoạt động</Badge>
+                            )}
+                          </td>
+                          <td className="text-xs text-muted-foreground">
+                            {timeAgo(b.lastCommitAt ?? b.checkedAt ?? null)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  No branches linked. Add a <code className="rounded bg-muted px-1 text-xs">branch:&lt;name&gt;</code> label to link a branch.
-                </p>
+                <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                    <GitBranch className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-medium text-foreground">Chưa có nhánh nào được liên kết</p>
+                  <p className="max-w-sm text-xs text-muted-foreground">
+                    Các nhánh Bitbucket chứa mã issue này sẽ tự động được liên kết vào lần đồng bộ tiếp theo.
+                  </p>
+                </div>
+              )}
+
+              {/* Suggested Branches Section if any */}
+              {branches?.suggestedItems && branches.suggestedItems.length > 0 && (
+                <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                      Nhánh gợi ý ({branches.suggestedItems.length})
+                    </span>
+                    <Button asChild variant="outline" size="sm" className="h-6 text-xs border-amber-500/30 text-amber-600 dark:text-amber-400">
+                      <Link href={`/branches?link=suggested&q=${encodeURIComponent(issue.jiraKey)}`}>
+                        Xem xét trong mục Nhánh →
+                      </Link>
+                    </Button>
+                  </div>
+                  <div className="divide-y divide-amber-500/20 text-xs">
+                    {branches.suggestedItems.map((sb, idx) => (
+                      <div key={idx} className="flex items-center justify-between py-2 gap-2">
+                        <div className="flex flex-col gap-0.5 font-mono">
+                          <span className="font-semibold text-foreground">{sb.branch}</span>
+                          <span className="text-[11px] text-muted-foreground">{sb.repo}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="warning">Chờ xác nhận</Badge>
+                          {sb.id && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleConfirmBranch(sb.id)}
+                                className="h-6 px-2 text-[11px] bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 border-teal-500/30 cursor-pointer"
+                              >
+                                Xác nhận
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleRejectBranch(sb.id)}
+                                className="h-6 px-2 text-[11px] text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer"
+                              >
+                                Từ chối
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>

@@ -60,16 +60,16 @@ export function ChatLinking() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Chat (Discord)</CardTitle>
+        <CardTitle>Kênh chat (Discord)</CardTitle>
         <CardDescription>
-          Link your Discord account so you can receive alerts and run commands in
-          the team channel. Commands run with your Jira permissions.
+          Liên kết tài khoản Discord để nhận cảnh báo và chạy lệnh trong
+          kênh nhóm. Lệnh được thực thi với quyền hạn Jira của bạn.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {isLoading && !data ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            <Loader2 className="h-4 w-4 animate-spin" /> Đang tải…
           </div>
         ) : (
           <>
@@ -77,8 +77,8 @@ export function ChatLinking() {
               <div className="flex items-center justify-between rounded-md border p-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">Discord linked</span>
-                    <Badge variant="success">active</Badge>
+                    <span className="font-medium">Đã liên kết Discord</span>
+                    <Badge variant="success">hoạt động</Badge>
                   </div>
                   <div className="mt-0.5 font-mono text-xs text-muted-foreground">{linked.externalId}</div>
                 </div>
@@ -88,14 +88,14 @@ export function ChatLinking() {
                   onClick={submitUnlink}
                   disabled={busy === "unlink"}
                 >
-                  {busy === "unlink" ? "Unlinking…" : "Unlink"}
+                  {busy === "unlink" ? "Đang huỷ liên kết…" : "Huỷ liên kết"}
                 </Button>
               </div>
             ) : (
               <form onSubmit={submitLink} className="flex flex-col gap-3">
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div className="flex flex-col gap-1">
-                    <Label htmlFor="discord-id">Discord user id</Label>
+                    <Label htmlFor="discord-id">Discord User ID</Label>
                     <Input
                       id="discord-id"
                       placeholder="123456789012345678"
@@ -104,15 +104,15 @@ export function ChatLinking() {
                       required
                     />
                     <span className="text-xs text-muted-foreground">
-                      In Discord: Settings → Advanced → Enable Developer Mode, then
-                      right-click your profile → Copy ID.
+                      Trong Discord: Cài đặt → Nâng cao → Bật Chế độ nhà phát triển, sau đó
+                      nhấp chuột phải vào hồ sơ → Sao chép ID người dùng.
                     </span>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <Label htmlFor="discord-name">Display name (optional)</Label>
+                    <Label htmlFor="discord-name">Tên hiển thị (tuỳ chọn)</Label>
                     <Input
                       id="discord-name"
-                      placeholder="Your name"
+                      placeholder="Tên của bạn"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                     />
@@ -120,7 +120,7 @@ export function ChatLinking() {
                 </div>
                 <div className="flex items-center gap-3">
                   <Button type="submit" disabled={busy === "link" || !discordId.trim()}>
-                    {busy === "link" ? "Linking…" : "Link account"}
+                    {busy === "link" ? "Đang liên kết…" : "Liên kết tài khoản"}
                   </Button>
                   {linkMutation.isError && (
                     <p className="text-xs text-red-600 dark:text-red-400">{String(linkMutation.error)}</p>
@@ -129,9 +129,9 @@ export function ChatLinking() {
               </form>
             )}
             <p className="text-xs text-muted-foreground">
-              In the team channel, use: <code className="font-mono">/task PROJ-123</code>,{" "}
+              Trong kênh chat nhóm, bạn có thể gõ: <code className="font-mono">/task PROJ-123</code>,{" "}
               <code className="font-mono">/move PROJ-123 &quot;In Progress&quot;</code>,{" "}
-              <code className="font-mono">/release 1.4.2 check</code>, or{" "}
+              <code className="font-mono">/release 1.4.2 check</code>, hoặc{" "}
               <code className="font-mono">/help</code>.
             </p>
           </>

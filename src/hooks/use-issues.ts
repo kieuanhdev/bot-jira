@@ -33,6 +33,7 @@ export type IssueItem = {
     scoredAt: string;
   } | null;
   aiDecision: { decision: string; finalPoints: number | null; decidedAt: string } | null;
+  delivery?: { branchCount: number; prOpen: boolean; prMerged: boolean } | null;
 };
 
 export type IssueResponse = {

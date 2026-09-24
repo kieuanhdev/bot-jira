@@ -32,19 +32,20 @@ export function RegisterClient() {
       });
       const data = (await res.json()) as RegResult & { error?: string };
       if (!res.ok) {
-        setError(data.error ?? "Could not create account");
+        setError(data.error ?? "Không thể tạo tài khoản");
         return;
       }
       // Auto sign-in.
       const auth = await signIn("credentials", { email, password, redirect: false });
-      if (auth?.error) {
-        router.push("/login");
+      if (!auth || auth.error) {
+        setError("Tài khoản đã được tạo nhưng không thể tự đăng nhập. Hãy đăng nhập lại.");
+        router.replace("/login");
         return;
       }
-      router.push("/settings");
+      router.replace("/setup-jira");
       router.refresh();
     } catch {
-      setError("Network error");
+      setError("Lỗi kết nối mạng");
     } finally {
       setLoading(false);
     }
@@ -58,27 +59,27 @@ export function RegisterClient() {
       {session?.user ? (
         <Card className="border-primary/30 bg-primary/5">
           <CardHeader>
-            <CardTitle className="text-base">You&apos;re in 🎉</CardTitle>
+          <CardTitle className="text-base">Chào mừng bạn</CardTitle>
             <CardDescription>
-              Your account is ready. Next, link your own Jira (and Bitbucket) account so
-              your tasks &amp; branches show up as *you*.
+              Tài khoản đã sẵn sàng. Tiếp theo, hãy liên kết tài khoản Jira (và Bitbucket) để
+              các task &amp; nhánh hiển thị chính xác dưới tên bạn.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => router.push("/settings")} className="w-full">
-              Go to Settings → link Jira
+            <Button onClick={() => router.push("/setup-jira")} className="w-full">
+              Liên kết Jira và Bitbucket
             </Button>
           </CardContent>
         </Card>
       ) : (
         <form onSubmit={onRegister} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Full name</Label>
+            <Label htmlFor="name">Họ và tên</Label>
             <Input
               id="name"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Your name"
+              placeholder="Tên của bạn"
               required
             />
           </div>
@@ -95,26 +96,26 @@ export function RegisterClient() {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="reg-password">Password</Label>
+            <Label htmlFor="reg-password">Mật khẩu</Label>
             <Input
               id="reg-password"
               type="password"
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
+              placeholder="Ít nhất 6 ký tự"
               required
               minLength={6}
             />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Creating…" : "Create account"}
+            {loading ? "Đang tạo…" : "Tạo tài khoản"}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
+            Đã có tài khoản?{" "}
             <Link href="/login" className="font-medium underline underline-offset-4">
-              Sign in
+              Đăng nhập
             </Link>
           </p>
         </form>

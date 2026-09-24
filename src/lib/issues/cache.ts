@@ -36,6 +36,8 @@ export function issueCacheData(issue: JiraIssue) {
     priority: f.priority?.name ?? "",
     points,
     type: f.issuetype?.name ?? "",
+    dueDate: parseJiraDate(f.duedate as string | undefined) ?? null,
+    timeSpent: typeof f.timespent === "number" ? f.timespent : null,
     createdAt: parseJiraDate(f.created) ?? null,
     updatedAt: parseJiraDate(f.updated) ?? null,
     lastSyncedAt: new Date(),

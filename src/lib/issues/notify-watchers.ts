@@ -13,30 +13,6 @@ export async function notifyWatchersOfComment(
   body: string,
   commentId: string | null = null
 ): Promise<number> {
-  if (commentId) {
-    const already = await prisma.notification.findFirst({
-      where: {
-        type: "comment",
-        title: `New comment on ${jiraKey}`,
-        body: { startsWith: authorName },
-      },
-      orderBy: { createdAt: "desc" },
-      select: { id: true },
-    });
-    if (already) {
-      const existing = await prisma.notification.findMany({
-        where: {
-          type: "comment",
-          title: `New comment on ${jiraKey}`,
-        },
-        select: { body: true },
-      });
-      if (existing.some((n) => n.body === `${authorName}: ${body.slice(0, 160)}`)) {
-        return 0;
-      }
-    }
-  }
-
   let authorUserId: string | null = null;
   try {
     const authorUser = await prisma.user.findFirst({
@@ -53,23 +29,21 @@ export async function notifyWatchersOfComment(
     select: { userId: true },
   });
 
-  // The Jira comment id is the stable logical-event id used to dedupe push
-  // delivery: the same comment arriving via webhook and via poll (or being
-  // redelivered by Jira) can never produce two pushes for the same watcher.
-  const eventId = commentId ?? `${jiraKey}:${authorName}:${body.slice(0, 64)}`;
+  const eventKey = `jira-comment:${commentId ?? `${jiraKey}:${authorName}:${body.slice(0, 64)}`}`;
 
   let notified = 0;
   for (const w of watchers) {
     if (w.userId === authorUserId) continue;
     try {
-      await notifyUser(w.userId, {
+      const res = await notifyUser(w.userId, {
         type: "comment",
-        title: `New comment on ${jiraKey}`,
+        title: `Bình luận mới trên ${jiraKey}`,
         body: `${authorName}: ${body.slice(0, 160)}`,
         link: `/issue/${jiraKey}`,
-        eventId,
+        severity: "info",
+        eventKey,
       });
-      notified++;
+      if (res) notified++;
     } catch {
       /* ignore per-user notification errors */
     }

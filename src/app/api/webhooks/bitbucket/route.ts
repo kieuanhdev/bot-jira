@@ -21,15 +21,37 @@ function bbExternalId(json: unknown): string {
     data?: {
       repository?: { slug?: string; project?: { key?: string } };
       pullRequest?: { id?: number; state?: string };
+      comment?: { id?: number };
       branches?: Array<{ name?: string }>;
     };
+    repository?: { slug?: string; project?: { key?: string } };
+    pullRequest?: {
+      id?: number;
+      state?: string;
+      toRef?: { repository?: { slug?: string; project?: { key?: string } } };
+    };
+    comment?: { id?: number };
   };
-  const repo = j.data?.repository
-    ? `${j.data.repository.project?.key ?? "?"}/${j.data.repository.slug ?? "?"}`
+  const repoObj =
+    j.data?.repository ??
+    j.pullRequest?.toRef?.repository ??
+    j.repository;
+  const repo = repoObj
+    ? `${repoObj.project?.key ?? "?"}/${repoObj.slug ?? "?"}`
     : "unknown";
-  const pr = j.data?.pullRequest;
+  const pr = j.pullRequest ?? j.data?.pullRequest;
+  const comment = j.comment ?? j.data?.comment;
   const branch = j.data?.branches?.[0]?.name;
-  const subject = pr ? `pr-${pr.id}-${pr.state ?? ""}` : branch ? `branch-${branch}` : "event";
+
+  let subject = "event";
+  if (comment?.id && pr?.id) {
+    subject = `pr-${pr.id}-comment-${comment.id}`;
+  } else if (pr) {
+    subject = `pr-${pr.id}-${pr.state ?? ""}`;
+  } else if (branch) {
+    subject = `branch-${branch}`;
+  }
+
   return `${j.eventKey ?? "event"}:${repo}:${subject}`;
 }
 
@@ -51,14 +73,23 @@ export async function POST(req: Request) {
       repository?: { slug?: string; project?: { key?: string } };
       pullRequest?: { id?: number };
     };
+    repository?: { slug?: string; project?: { key?: string } };
+    pullRequest?: {
+      id?: number;
+      toRef?: { repository?: { slug?: string; project?: { key?: string } } };
+    };
   };
+  const repoObj =
+    j.data?.repository ??
+    j.pullRequest?.toRef?.repository ??
+    j.repository;
   const externalId = bbExternalId(parsed.json);
   const result = await ingestEvent({
     source,
     externalId,
     type: j.eventKey ?? "bitbucket-event",
-    subject: j.data?.repository
-      ? `${j.data.repository.project?.key ?? "?"}/${j.data.repository.slug ?? "?"}`
+    subject: repoObj
+      ? `${repoObj.project?.key ?? "?"}/${repoObj.slug ?? "?"}`
       : null,
     payload: parsed.json,
   });

@@ -45,7 +45,7 @@ export type CommandResult = {
 
 export type ExecContext = {
   userId: string;
-  jiraAuth: JiraAuth | null;
+  jiraAuth: JiraAuth;
   jiraUsername: string | null;
   role: string;
   provider: string;

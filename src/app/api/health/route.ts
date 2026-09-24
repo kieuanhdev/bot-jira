@@ -5,6 +5,7 @@ import { jira } from "@/lib/jira/client";
 import { bitbucket } from "@/lib/bitbucket/client";
 import { sentry } from "@/lib/sentry/client";
 import { env, hasJiraConfig, hasBitbucketConfig, hasSentryConfig, hasOllamaConfig, hasOpenAiConfig } from "@/lib/env";
+import { getWorkerHealth, isJiraFresh } from "@/lib/health/worker-health";
 
 async function ping(name: string, fn: () => Promise<unknown>): Promise<{ ok: boolean; ms: number; error?: string }> {
   const started = Date.now();
@@ -25,18 +26,7 @@ export async function GET() {
   }
 
   const db = await ping("db", async () => prisma.$queryRaw`SELECT 1`);
-  const workerStates = await prisma.integrationCursor.findMany({
-    where: { integration: "worker" },
-    orderBy: { scope: "asc" },
-    select: {
-      scope: true,
-      lastStartedAt: true,
-      lastSuccessAt: true,
-      lastErrorAt: true,
-      lastError: true,
-      stats: true,
-    },
-  }).catch(() => []);
+  const workerHealth = await getWorkerHealth();
 
   const jiraHealth = hasJiraConfig()
     ? await ping("jira", () => jira.me())
@@ -77,6 +67,13 @@ export async function GET() {
       ollamaConfigured: hasOllamaConfig(),
     },
     services: { db, jira: jiraHealth, bitbucket: bitbucketHealth, sentry: sentryHealth, openai: openaiHealth, ollama: ollamaHealth },
-    workers: workerStates,
+    worker: {
+      status: workerHealth.status,
+      jiraFresh: isJiraFresh(workerHealth),
+      workerAgeMs: workerHealth.workerAgeMs,
+      jiraSyncAgeMs: workerHealth.jiraSyncAgeMs,
+      hasErrors: workerHealth.hasErrors,
+    },
+    workers: workerHealth.jobs,
   });
 }

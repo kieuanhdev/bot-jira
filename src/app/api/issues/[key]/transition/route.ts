@@ -16,13 +16,18 @@ export async function POST(
   const { transitionId } = (await req.json()) as { transitionId: string };
   if (!transitionId) return NextResponse.json({ error: "transitionId required" }, { status: 400 });
 
-  // Act as the current user when they've linked their own Jira token;
-  // otherwise fall back to the shared team token.
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true },
   });
-  const client = jiraWith(userJiraAuth(user));
+  const auth = userJiraAuth(user);
+  if (!auth) {
+    return NextResponse.json(
+      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
+      { status: 428 }
+    );
+  }
+  const client = jiraWith(auth);
 
   try {
     await client.transition(key, transitionId);
@@ -61,12 +66,15 @@ export async function POST(
       include: { user: true },
     });
     const targetStatus = issue?.status ?? "updated";
+    const eventKey = `jira-transition:${key}:${targetStatus}:${transitionId}`;
     for (const w of watcherRows) {
       await notifyUser(w.userId, {
         type: "transition",
-        title: `${key} moved`,
-        body: `Status is now: ${targetStatus}`,
+        title: `Trạng thái ${key} đã thay đổi`,
+        body: `Trạng thái hiện tại: ${targetStatus}`,
         link: `/issue/${key}`,
+        severity: "info",
+        eventKey,
       }).catch(() => null);
     }
   } catch {

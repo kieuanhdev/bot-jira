@@ -49,6 +49,9 @@ export async function recordEstimateDecision(opts: {
 
   let jiraWritten = false;
   if (decision !== "rejected") {
+    if (!auth) {
+      return { ok: false, error: "Jira credentials required", status: 428 };
+    }
     const client = jiraWith(auth);
     try {
       await client.updateIssue(key, { points: pointsToWrite });

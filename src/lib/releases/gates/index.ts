@@ -6,6 +6,8 @@ import { branchesGate } from "./branches";
 import { pullRequestsGate } from "./pull-requests";
 import { dataFreshnessGate } from "./data-freshness";
 import { aiAdvisoryGate } from "./ai-advisory";
+import { manualApprovalGate } from "./manual-approval";
+import { ciGate } from "./ci";
 
 export type {
   GateState,
@@ -24,6 +26,9 @@ export { branchesGate } from "./branches";
 export { pullRequestsGate } from "./pull-requests";
 export { dataFreshnessGate } from "./data-freshness";
 export { aiAdvisoryGate } from "./ai-advisory";
+export { manualApprovalGate } from "./manual-approval";
+export { ciGate } from "./ci";
+export type { CiBuildState } from "./ci";
 
 /**
  * Select the branches relevant to a release.
@@ -59,6 +64,14 @@ export function selectReleaseBranches(
 /** Gates that determine release readiness. `ai_advisory` is never mandatory. */
 const GATE_AI_ADVISORY = "ai_advisory";
 const GATE_NON_EMPTY = "non_empty_release";
+const GATE_CI = "ci";
+
+/**
+ * Gates that may NOT be overridden (REL-03). `non_empty_release` must always be
+ * evaluated from data; `ci` is a mandatory source-of-truth gate that an override
+ * would let us ship a broken build.
+ */
+const NON_OVERRIDABLE = new Set<string>([GATE_NON_EMPTY, GATE_CI]);
 
 function nonEmptyGate(ctx: ReleaseContext): GateResult {
   if (ctx.tasks.length === 0) {
@@ -96,21 +109,67 @@ export type ReleaseCheckFn = (
  * release short-circuits the data-dependent gates (they all pass vacuously)
  * but `non_empty_release` still fails, so the aggregate is always `blocked`.
  */
+/**
+ * A valid gate override: not revoked, not expired, and for a gate that is
+ * overridable (non_empty_release and ci can never be overridden).
+ */
+export type GateOverrideRow = {
+  gate: string;
+  revokedAt: Date | null;
+  expiresAt: Date | null;
+  createdAt: Date;
+  reason?: string;
+  createdById?: string;
+};
+
+export function overrideIsActive(o: GateOverrideRow, now: Date): boolean {
+  if (NON_OVERRIDABLE.has(o.gate)) return false;
+  if (o.revokedAt) return false;
+  if (o.expiresAt && o.expiresAt.getTime() <= now.getTime()) return false;
+  return true;
+}
+
 export async function runGates(
   ctx: ReleaseContext,
-  releaseCheck: ReleaseCheckFn
+  releaseCheck: ReleaseCheckFn,
+  opts: { overrides?: GateOverrideRow[]; now?: Date } = {}
 ): Promise<GateResult[]> {
   const gates: GateResult[] = [];
   gates.push(nonEmptyGate(ctx));
+  const now = opts.now ?? new Date();
+  const overrides = opts.overrides ?? [];
+
+  // Pre-compute which gates have an active override so the aggregation treats
+  // them as "overridden" (not failed/unknown) while the data still shows the
+  // underlying state in the summary.
+  const overridden = new Set(
+    overrides.filter((o) => overrideIsActive(o, now)).map((o) => o.gate)
+  );
+
+  const applyOverride = (g: GateResult): GateResult => {
+    if (!overridden.has(g.gate) || g.state === "passed") return g;
+    return { ...g, state: "overridden", summary: `${g.summary} (overridden)` };
+  };
 
   if (ctx.tasks.length > 0) {
-    gates.push(taskStatusGate(ctx.tasks));
-    gates.push(criticalBugsGate(ctx.tasks));
-    gates.push(sentryGate(ctx.sentryIssues));
-    gates.push(branchesGate(ctx.branchInfos));
-    gates.push(pullRequestsGate(ctx.branchInfos));
-    gates.push(dataFreshnessGate(ctx));
-    gates.push(await aiAdvisoryGate(ctx, releaseCheck));
+    gates.push(applyOverride(taskStatusGate(ctx.tasks)));
+    gates.push(applyOverride(criticalBugsGate(ctx.tasks)));
+    gates.push(applyOverride(sentryGate(ctx.sentryIssues)));
+    gates.push(applyOverride(branchesGate(ctx.branchInfos)));
+    gates.push(applyOverride(pullRequestsGate(ctx.branchInfos)));
+    gates.push(applyOverride(dataFreshnessGate(ctx)));
+    gates.push(applyOverride(await aiAdvisoryGate(ctx, releaseCheck)));
+    // REL-03 — manual approval (mandatory when approvals are required).
+    gates.push(
+      applyOverride(
+        manualApprovalGate(ctx.requiredApprovals ?? [], ctx.approvalsPresent ?? [])
+      )
+    );
+    // REL-04 — CI gate (mandatory + non-overridable when enabled). applyOverride
+    // is a no-op here because `ci` is in NON_OVERRIDABLE.
+    if (ctx.ciGateEnabled) {
+      gates.push(applyOverride(ciGate(ctx.ciBuilds ?? [])));
+    }
   }
 
   return gates;

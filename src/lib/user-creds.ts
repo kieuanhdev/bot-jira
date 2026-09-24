@@ -28,10 +28,7 @@ export function jiraUsernameAliases(value: string | null | undefined): string[] 
   return [...new Set([username, base, `${base}_mb`].flatMap((item) => [item, item.toLowerCase()]))];
 }
 
-/**
- * Build the Jira auth to use for a given user: their own token if they set one,
- * otherwise null (caller falls back to the shared team token).
- */
+/** Build Jira auth only from the credential stored on this user's account. */
 export function userJiraAuth(user: UserWithCreds | null | undefined): JiraAuth | null {
   if (!user) return null;
   const token = safeDecrypt(user.jiraTokenEnc);
@@ -44,12 +41,13 @@ export function userJiraAuth(user: UserWithCreds | null | undefined): JiraAuth |
 
 export type BitbucketCreds = { user: string; token: string };
 
-/** Build Bitbucket Basic creds for a user, or null to use the shared env token. */
+/** Build Bitbucket Basic creds only from this user's stored credential. */
 export function userBitbucketCreds(
   user: UserWithCreds | null | undefined
 ): BitbucketCreds | null {
   if (!user) return null;
   const token = safeDecrypt(user.bitbucketTokenEnc);
-  if (!token) return null;
-  return { user: safeDecrypt(user.bitbucketUserEnc) ?? "", token };
+  const username = safeDecrypt(user.bitbucketUserEnc);
+  if (!token || !username) return null;
+  return { user: username, token };
 }

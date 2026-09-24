@@ -7,6 +7,7 @@ import { refreshJiraIssueCache } from "@/lib/issues/cache";
 import type { JiraIssue } from "@/lib/jira/types";
 import { userJiraAuth, userBitbucketCreds } from "@/lib/user-creds";
 import { renderBranchName } from "./branch-name";
+import { recordExplicitBranchLink } from "@/lib/bitbucket/link-service";
 
 /**
  * M4 — Bulk operations.
@@ -51,7 +52,7 @@ export type BranchParams = {
 };
 
 const DEFAULT_BRANCH_TEMPLATE = env.bulkBranchTemplate || "{project}-{number}";
-const MAX_KEYS = 500;
+export const MAX_KEYS = 500;
 
 type IssueRow = {
   jiraKey: string;
@@ -101,33 +102,271 @@ export function actionParams(action: BulkAction): ActionParams {
   }
 }
 
+// ---------------------------------------------------------------------------
+// BULK-004 — server-side validation of actions and key selections.
+//
+// The API used to cast the raw JSON body to `BulkAction` and rely on the client
+// to send well-formed data. These checks run on the server so a custom client
+// can't trigger a worker failure or persist an unrunnable payload. They are
+// pure and shared by the API and the tests (no Prisma/env/HTTP imports).
+// ---------------------------------------------------------------------------
+
+const KNOWN_ACTION_KINDS = [
+  "assign",
+  "add-labels",
+  "remove-labels",
+  "set-points",
+  "set-priority",
+  "transition",
+  "add-fix-version",
+  "remove-fix-version",
+  "add-comment",
+  "create-branches",
+] as const;
+
+const MAX_LABELS_PER_ACTION = 50;
+const MAX_LABEL_LENGTH = 100;
+const MAX_COMMENT_LENGTH = 4000;
+const MAX_STRING_FIELD = 200;
+const MAX_BRANCH_TEMPLATE_LENGTH = 100;
+
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === "string" && v.trim().length > 0;
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+export type ValidationResult = { ok: true; keys: string[]; action: BulkAction } | { ok: false; errors: string[] };
+
+/**
+ * Validate a bulk request body. Returns normalized keys (trimmed, uppercased,
+ * deduplicated) and a validated action, or a list of field errors. Empty keys
+ * after normalization are rejected rather than silently producing nothing, and
+ * the list must not exceed MAX_KEYS.
+ */
+export function validateBulkRequest(body: unknown): ValidationResult {
+  if (!isPlainObject(body)) return { ok: false, errors: ["request body must be an object"] };
+
+  const rawKeys = body.keys;
+  const rawAction = body.action;
+
+  if (!Array.isArray(rawKeys)) return { ok: false, errors: ["keys must be an array"] };
+
+  const errors: string[] = [];
+
+  const keys = rawKeys
+    .filter((k): k is string => typeof k === "string")
+    .map(normalizeKey)
+    .filter(Boolean);
+  const uniqueKeys = Array.from(new Set(keys));
+  if (uniqueKeys.length === 0) errors.push("keys must contain at least one non-empty key");
+  if (uniqueKeys.length > MAX_KEYS)
+    errors.push(`too many keys: ${uniqueKeys.length} (max ${MAX_KEYS})`);
+
+  let action: BulkAction | null = null;
+  if (!isPlainObject(rawAction)) {
+    errors.push("action must be an object");
+  } else {
+    const kind = rawAction.kind;
+    if (typeof kind !== "string" || !(KNOWN_ACTION_KINDS as readonly string[]).includes(kind)) {
+      errors.push(`unknown action kind: ${String(kind)}`);
+    } else {
+      switch (kind) {
+        case "assign":
+          if (rawAction.value == null || isNonEmptyString(rawAction.value)) {
+            const v = rawAction.value as string | null;
+            if (v != null && v.length > MAX_STRING_FIELD)
+              errors.push("assign.value too long");
+            action = { kind, value: v };
+          } else {
+            errors.push("assign.value must be a string or null");
+          }
+          break;
+        case "add-labels":
+        case "remove-labels":
+          if (!Array.isArray(rawAction.value)) {
+            errors.push(`${kind}.value must be an array of strings`);
+          } else {
+            const labels = Array.from(
+              new Set(
+                rawAction.value
+                  .filter((l): l is string => typeof l === "string")
+                  .map((l) => l.trim())
+                  .filter(Boolean)
+              )
+            ).slice(0, MAX_LABELS_PER_ACTION);
+            if (labels.length === 0) errors.push(`${kind}.value must contain at least one label`);
+            if (labels.some((l) => l.length > MAX_LABEL_LENGTH)) errors.push("label too long");
+            action = { kind, value: labels } as BulkAction;
+          }
+          break;
+        case "set-points": {
+          const v = rawAction.value;
+          if (v == null || (typeof v === "number" && Number.isInteger(v) && v >= 0)) {
+            action = { kind, value: (v ?? null) as number | null };
+          } else {
+            errors.push("set-points.value must be a non-negative integer or null");
+          }
+          break;
+        }
+        case "set-priority":
+        case "transition":
+        case "add-fix-version":
+        case "remove-fix-version":
+        case "add-comment": {
+          const v = rawAction.value;
+          if (isNonEmptyString(v)) {
+            const max = kind === "add-comment" ? MAX_COMMENT_LENGTH : MAX_STRING_FIELD;
+            if (v.length > max) errors.push(`${kind}.value too long`);
+            else action = { kind, value: v } as BulkAction;
+          } else {
+            errors.push(`${kind}.value must be a non-empty string`);
+          }
+          break;
+        }
+        case "create-branches": {
+          const v = rawAction.value;
+          if (!isPlainObject(v)) {
+            errors.push("create-branches.value must be an object");
+            break;
+          }
+          const bp: BranchParams = {};
+          if (v.repo !== undefined) {
+            if (isNonEmptyString(v.repo) && v.repo.length <= MAX_STRING_FIELD) bp.repo = v.repo.trim();
+            else errors.push("create-branches.value.repo must be a non-empty string");
+          }
+          if (v.base !== undefined) {
+            if (isNonEmptyString(v.base) && v.base.length <= MAX_STRING_FIELD) bp.base = v.base.trim();
+            else errors.push("create-branches.value.base must be a non-empty string");
+          }
+          if (v.nameTemplate !== undefined) {
+            if (isNonEmptyString(v.nameTemplate) && v.nameTemplate.length <= MAX_BRANCH_TEMPLATE_LENGTH)
+              bp.nameTemplate = v.nameTemplate.trim();
+            else errors.push("create-branches.value.nameTemplate must be a non-empty string");
+          }
+          if (v.comment !== undefined) {
+            if (typeof v.comment === "boolean") bp.comment = v.comment;
+            else errors.push("create-branches.value.comment must be a boolean");
+          }
+          action = { kind, value: bp };
+          break;
+        }
+        default:
+          // unreachable — kind already validated
+          break;
+      }
+    }
+  }
+
+  if (errors.length > 0 || action == null) return { ok: false, errors };
+  return { ok: true, keys: uniqueKeys, action };
+}
+
+// BULK-009 — reasons a transition could not be resolved. Only `no_transition`
+// means "no path to this status"; the rest are upstream problems with distinct
+// retryability (auth is not retryable, rate/unavailable are).
+export type TransitionErrorKind =
+  | "no_transition"
+  | "auth_error"
+  | "rate_limited"
+  | "upstream_unavailable"
+  | "unverified";
+
 type PreviewItem = {
   jiraKey: string;
   before: Record<string, unknown>;
   after: Record<string, unknown>;
   warning: string | null;
   transitionName: string | null;
+  transitionError: TransitionErrorKind | null;
   branchName: string | null;
   exists: boolean; // for create-branches: branch already present
 };
+
+export function isTransitionError(e: unknown): TransitionErrorKind | null {
+  if (e instanceof JiraRequestError) {
+    if (e.status === 401 || e.status === 403) return "auth_error";
+    if (e.status === 429) return "rate_limited";
+    if (e.status != null && e.status >= 500) return "upstream_unavailable";
+  }
+  return null;
+}
+
+/** Whether a transition lookup failure is worth retrying later. */
+export function isTransitionRetryable(kind: TransitionErrorKind | null): boolean {
+  return kind === "rate_limited" || kind === "upstream_unavailable";
+}
 
 export type PreviewResult = {
   operationId: string;
   type: string;
   total: number;
   items: PreviewItem[];
-  /** Count of items that will actually be acted on (excludes existing branches). */
+  /** Count of items that will actually be acted on. */
   actionable: number;
+  /** Count of items that will be left untouched (no-op, blocked, unknown). */
+  skipped: number;
 };
 
-function normalizeKey(k: string): string {
+export function normalizeKey(k: string): string {
   return k.trim().toUpperCase();
 }
 
-function isStale(lastSyncedAt: Date, updatedAt: Date | null, now: Date): boolean {
-  if (now.getTime() - lastSyncedAt.getTime() > env.jiraFreshnessMinutes * 60_000) return true;
-  if (updatedAt && now.getTime() - updatedAt.getTime() > 24 * 60 * 60 * 1000) return true;
-  return false;
+/**
+ * BULK-007 — freshness is about the age of the *cache snapshot*, not the age of
+ * the issue. `lastSyncedAt` is when we last read the row from Jira; `updatedAt`
+ * is when Jira last mutated the issue (an old value is normal and means nothing
+ * about staleness). Only the cache age is a staleness signal.
+ */
+export function isStale(lastSyncedAt: Date, now: Date): boolean {
+  return now.getTime() - lastSyncedAt.getTime() > env.jiraFreshnessMinutes * 60_000;
+}
+
+/**
+ * BULK-005 — classify whether an action actually changes this issue's state.
+ * `will_change` means the mutation differs from the current (cached) value;
+ * `no_change` is a no-op that would only burn rate limits and clutter the audit
+ * trail; `blocked` means it cannot be applied (e.g. no matching transition);
+ * `unverified` means we could not confirm the current state, so we refuse to
+ * guess (e.g. branch existence unknown).
+ */
+export type PreviewClassification = "will_change" | "no_change" | "blocked" | "unverified";
+
+export function classifyAction(
+  action: BulkAction,
+  issue: IssueRow,
+  ctx: { transitionName?: string | null; branchName?: string | null; branchExists?: boolean }
+): PreviewClassification {
+  const p = actionParams(action);
+  switch (action.kind) {
+    case "assign":
+      return (p.assignee ?? null) === issue.assigneeJira ? "no_change" : "will_change";
+    case "add-labels":
+      return (p.labels ?? []).some((l) => !issue.labels.includes(l)) ? "will_change" : "no_change";
+    case "remove-labels":
+      return (p.labels ?? []).some((l) => issue.labels.includes(l)) ? "will_change" : "no_change";
+    case "set-points":
+      return (p.points ?? null) === issue.points ? "no_change" : "will_change";
+    case "set-priority":
+      return p.priority === issue.priority ? "no_change" : "will_change";
+    case "transition":
+      if (ctx.transitionName == null) return "blocked";
+      return p.status?.toLowerCase() === issue.status.toLowerCase() ? "no_change" : "will_change";
+    case "add-fix-version":
+      if (!p.fixVersion || issue.fixVersionNames.includes(p.fixVersion)) return "no_change";
+      return "will_change";
+    case "remove-fix-version":
+      if (!p.fixVersion || !issue.fixVersionNames.includes(p.fixVersion)) return "no_change";
+      return "will_change";
+    case "add-comment":
+      return "will_change";
+    case "create-branches":
+      if (ctx.branchExists === true) return "no_change";
+      if (ctx.branchExists === false) return "will_change";
+      return "unverified";
+  }
 }
 
 /**
@@ -139,7 +378,12 @@ export function computePreview(
   action: BulkAction,
   issue: IssueRow,
   ctx: { transitionName?: string | null; branchName?: string | null; branchExists?: boolean }
-): { before: Record<string, unknown>; after: Record<string, unknown>; warning: string | null } {
+): {
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+  warning: string | null;
+  classification: PreviewClassification;
+} {
   const before: Record<string, unknown> = {
     status: issue.status,
     assignee: issue.assigneeJira,
@@ -149,9 +393,8 @@ export function computePreview(
     fixVersions: issue.fixVersionNames,
   };
   const after: Record<string, unknown> = { ...before };
-  let warning: string | null = isStale(issue.lastSyncedAt, issue.updatedAt, new Date())
-    ? "stale_data"
-    : null;
+  const warning = isStale(issue.lastSyncedAt, new Date()) ? "stale_data" : null;
+  const classification = classifyAction(action, issue, ctx);
 
   const p = actionParams(action);
   switch (action.kind) {
@@ -174,7 +417,6 @@ export function computePreview(
       break;
     case "transition":
       after.status = p.status;
-      if (ctx.transitionName == null) warning = "no_transition";
       break;
     case "add-fix-version":
       if (p.fixVersion && !issue.fixVersionNames.includes(p.fixVersion)) {
@@ -192,10 +434,9 @@ export function computePreview(
       break;
     case "create-branches":
       after.branch = ctx.branchName ?? null;
-      if (ctx.branchExists) warning = "branch_exists";
       break;
   }
-  return { before, after, warning };
+  return { before, after, warning, classification };
 }
 
 /**
@@ -211,7 +452,8 @@ export async function previewBulk(
   action: BulkAction,
   keys: string[],
   requestedBy: string,
-  jira: TransitionGetter
+  jira: TransitionGetter,
+  bitbucketCreds: BbCreds | null = null
 ): Promise<PreviewResult> {
   const unique = Array.from(new Set(keys.map(normalizeKey))).slice(0, MAX_KEYS);
   if (unique.length === 0) throw new Error("no_keys");
@@ -221,25 +463,31 @@ export async function previewBulk(
   });
   const byKey = new Map(issues.map((i) => [i.jiraKey, i]));
 
-  const items: PreviewItem[] = [];
+  const items: (PreviewItem & { skipReason: string | null })[] = [];
   let actionable = 0;
+  let skipped = 0;
 
   for (const key of unique) {
     const issue = byKey.get(key);
     if (!issue) {
+      // BULK-002 — mark as skipped at preview time; the worker never runs it.
+      skipped++;
       items.push({
         jiraKey: key,
         before: {},
         after: {},
         warning: "not_in_cache",
         transitionName: null,
+        transitionError: null,
         branchName: null,
         exists: false,
+        skipReason: "not_in_cache",
       });
       continue;
     }
 
     let transitionName: string | null = null;
+    let transitionError: TransitionErrorKind | null = null;
     let branchName: string | null = null;
     let branchExists: boolean | undefined;
 
@@ -249,24 +497,27 @@ export async function previewBulk(
         const target = action.value.toLowerCase();
         const match = transitions.find((t) => t.to?.name?.toLowerCase() === target);
         transitionName = match?.to?.name ?? null;
-      } catch {
+      } catch (e) {
+        // BULK-009 — distinguish upstream failures from a genuine missing path.
+        transitionError = isTransitionError(e) ?? "unverified";
         transitionName = null;
       }
     }
 
     if (action.kind === "create-branches") {
+      if (!bitbucketCreds) throw new Error("bitbucket_credentials_required");
       const repo = action.value.repo ?? bitbucketRepoList[0] ?? "";
       const template = action.value.nameTemplate ?? DEFAULT_BRANCH_TEMPLATE;
       branchName = renderBranchName(template, key, issue.status);
       try {
-        const existing = await bitbucket.getBranch(repo, branchName);
+        const existing = await bitbucket.getBranch(repo, branchName, bitbucketCreds);
         branchExists = existing != null;
       } catch {
         // Could not check (no bitbucket config / network). Leave unknown.
       }
     }
 
-    const preview = computePreview(action, {
+    const issueRow: IssueRow = {
       jiraKey: key,
       projectKey: issue.projectKey,
       status: issue.status,
@@ -278,17 +529,19 @@ export async function previewBulk(
       points: issue.points,
       updatedAt: issue.updatedAt,
       lastSyncedAt: issue.lastSyncedAt,
-    }, {
-      transitionName,
-      branchName,
-      branchExists,
-    });
+    };
+    const ctx = { transitionName, branchName, branchExists };
+    const preview = computePreview(action, issueRow, ctx);
 
-    const willAct =
-      action.kind === "create-branches"
-        ? branchExists === false
-        : !(preview.warning === "no_transition" || preview.warning === "not_in_cache");
-    if (willAct) actionable++;
+    // BULK-005/009 — no-op and blocked/unverified items are skipped, not run.
+    let skipReason: string | null = null;
+    if (preview.classification === "no_change") skipReason = "no_change";
+    else if (preview.classification === "blocked")
+      skipReason = transitionError ?? "no_transition";
+    else if (preview.classification === "unverified") skipReason = "unverified";
+
+    if (skipReason) skipped++;
+    else actionable++;
 
     items.push({
       jiraKey: key,
@@ -296,8 +549,10 @@ export async function previewBulk(
       after: preview.after,
       warning: preview.warning,
       transitionName,
+      transitionError,
       branchName,
       exists: branchExists === true,
+      skipReason,
     });
   }
 
@@ -319,10 +574,15 @@ export async function previewBulk(
       after: item.after as Prisma.InputJsonValue,
       requested: {
         transitionName: item.transitionName,
+        transitionError: item.transitionError,
         branchName: item.branchName,
         warning: item.warning,
+        skipReason: item.skipReason,
       } as Prisma.InputJsonValue,
-      status: "pending",
+      // BULK-002 — skipped items are persisted as `skipped` so the worker never
+      // picks them up; only actionable items are created as `pending`.
+      status: item.skipReason ? "skipped" : "pending",
+      error: item.skipReason ?? null,
     })),
   });
 
@@ -332,6 +592,7 @@ export async function previewBulk(
     total: unique.length,
     items,
     actionable,
+    skipped,
   };
 }
 
@@ -343,7 +604,7 @@ export async function previewBulk(
 export async function confirmBulk(
   operationId: string,
   requestedBy: string
-): Promise<{ operationId: string; total: number; actionable: number }> {
+): Promise<{ operationId: string; total: number; actionable: number; skipped: number }> {
   const op = await prisma.bulkOperation.findUnique({
     where: { id: operationId },
     include: { items: true },
@@ -355,19 +616,17 @@ export async function confirmBulk(
     throw new Error("already_confirmed");
   }
 
-  const actionable = op.items.filter((i) => {
-    const w = (i.requested as { warning?: string | null }).warning;
-    if (w === "not_in_cache" || w === "no_transition") return false;
-    if (w === "branch_exists") return false;
-    return true;
-  }).length;
+  // BULK-002 — counts are derived from the persisted item statuses, not
+  // re-derived from warning strings, so preview and execution stay in sync.
+  const skipped = op.items.filter((i) => i.status === "skipped").length;
+  const actionable = op.total - skipped;
 
   await prisma.bulkOperation.update({
     where: { id: op.id },
     data: { state: "queued", startedAt: new Date() },
   });
 
-  return { operationId: op.id, total: op.total, actionable };
+  return { operationId: op.id, total: op.total, actionable, skipped };
 }
 
 /** Mark a preview as cancelled without executing it. */
@@ -415,6 +674,9 @@ async function getIssue(client: ReturnType<typeof jiraWith>, key: string): Promi
 async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
   const action = ctx.op.payload as { action: BulkAction };
   const { action: a } = action;
+  if (!ctx.auth.jira) {
+    return { status: "failed", error: "Jira credentials required", retryable: false };
+  }
   const jira = jiraWith(ctx.auth.jira);
   const bb = ctx.auth.bitbucket;
 
@@ -484,6 +746,9 @@ async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
         break;
       }
       case "create-branches": {
+        if (!bb) {
+          return { status: "failed", error: "Bitbucket credentials required", retryable: false };
+        }
         const result = await createBranchForIssue(jira, key, a.value, bb);
         if (result.error) {
           return { status: "failed", error: result.error, retryable: result.retryable ?? true };
@@ -509,7 +774,7 @@ async function createBranchForIssue(
   jira: ReturnType<typeof jiraWith>,
   key: string,
   params: BranchParams,
-  creds: BbCreds | null
+  creds: BbCreds
 ): Promise<{ error?: string; retryable?: boolean; branch?: string; repo?: string }> {
   const repo = params.repo ?? bitbucketRepoList[0];
   if (!repo) return { error: "No Bitbucket repository configured", retryable: false };
@@ -543,21 +808,13 @@ async function createBranchForIssue(
   return { branch: branchName, repo };
 }
 
-/** Record the issue↔branch relationship (BranchInfo.jiraKey). */
+/** Record the issue↔branch relationship (BranchInfo.jiraKey) explicitly. */
 async function linkBranch(
   jiraKey: string,
   repo: string,
   branch: string
 ): Promise<void> {
-  try {
-    await prisma.branchInfo.upsert({
-      where: { repo_branch: { repo, branch } },
-      create: { repo, branch, jiraKey },
-      update: { jiraKey },
-    });
-  } catch {
-    /* relationship is best-effort; branch creation itself already succeeded */
-  }
+  await recordExplicitBranchLink(repo, branch, jiraKey);
 }
 
 function isTerminal(state: string): boolean {
@@ -602,12 +859,12 @@ export async function executeBulkOperation(operationId: string): Promise<void> {
 
   const concurrency = Math.max(1, Math.min(8, env.bulkConcurrency));
 
+  // BULK-002 — only `pending` (actionable) items are run. Items already marked
+  // `skipped` at preview time are never touched here.
   const pending = await prisma.bulkOperationItem.findMany({
     where: { operationId, status: "pending" },
     orderBy: { jiraKey: "asc" },
   });
-
-  const results: Record<string, ItemResult> = {};
 
   // Simple bounded pool: `concurrency` workers drain the pending list.
   const queue = [...pending];
@@ -617,15 +874,29 @@ export async function executeBulkOperation(operationId: string): Promise<void> {
       while (queue.length > 0) {
         const item = queue.shift();
         if (!item) break;
-        results[item.jiraKey] = await processWithRetry(operationId, item.id, item.jiraKey, auth, concurrency);
+        await processWithRetry(operationId, item.id, item.jiraKey, auth, concurrency);
       }
     }
   );
   await Promise.all(runners);
 
-  const succeeded = Object.values(results).filter((r) => r.status === "succeeded" || r.status === "skipped").length;
-  const failed = Object.values(results).filter((r) => r.status === "failed").length;
-  const state = failed === 0 ? "completed" : succeeded > 0 ? "partially_failed" : "failed";
+  // BULK-003 — aggregate counters from the database, not from the in-process
+  // results. This stays correct across retries (items that succeeded in an
+  // earlier pass are counted) and matches what the DB actually holds.
+  const counts = await prisma.bulkOperationItem.groupBy({
+    by: ["status"],
+    where: { operationId },
+    _count: { _all: true },
+  });
+  const byStatus = Object.fromEntries(counts.map((c) => [c.status, c._count._all]));
+  const succeeded = byStatus.succeeded ?? 0;
+  const failed = byStatus.failed ?? 0;
+  const skipped = byStatus.skipped ?? 0;
+  const stillPending = (byStatus.pending ?? 0) + (byStatus.running ?? 0);
+  const terminal = stillPending === 0;
+
+  // Only flip to a terminal state once every item has a final status.
+  const state = !terminal ? op.state : failed === 0 ? "completed" : "partially_failed";
 
   await prisma.bulkOperation.update({
     where: { id: op.id },
@@ -633,11 +904,11 @@ export async function executeBulkOperation(operationId: string): Promise<void> {
       state,
       succeeded,
       failed,
-      completedAt: new Date(),
+      completedAt: terminal ? new Date() : undefined,
     },
   });
 
-  await notifyResult(op, state, succeeded, failed);
+  if (terminal) await notifyResult(op, state, succeeded, failed, skipped);
 }
 
 const MAX_ATTEMPTS = 3;
@@ -672,7 +943,10 @@ async function processWithRetry(
   });
 
   let result: ItemResult = { status: "failed", error: "not attempted", retryable: true };
+  let attempts = 0;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    // BULK-012 — count every real attempt, not just the final pass.
+    attempts++;
     result = await applyItem(ctx, key);
     if (result.status === "succeeded" || result.status === "skipped") break;
     if (!result.retryable) break;
@@ -704,7 +978,7 @@ async function processWithRetry(
       status: finalStatus,
       error: result.error ?? null,
       retryable: result.retryable ?? false,
-      attemptCount: { increment: 1 },
+      attemptCount: { increment: attempts },
       after: (after ?? undefined) as Prisma.InputJsonValue,
     },
   });
@@ -716,21 +990,25 @@ async function notifyResult(
   op: { requestedBy: string; type: string; id: string },
   state: string,
   succeeded: number,
-  failed: number
+  failed: number,
+  skipped: number
 ): Promise<void> {
   try {
     const { notifyUser } = await import("@/lib/notify");
-    const title =
+    const statusText =
       state === "completed"
-        ? `Bulk ${op.type} completed`
+        ? "hoàn tất"
         : state === "partially_failed"
-          ? `Bulk ${op.type} partially failed`
-          : `Bulk ${op.type} failed`;
+          ? "thất bại một phần"
+          : "thất bại";
+    const severity = state === "completed" ? "info" : state === "partially_failed" ? "warning" : "danger";
     await notifyUser(op.requestedBy, {
       type: "system",
-      title,
-      body: `${succeeded} succeeded, ${failed} failed.`,
+      title: `Thao tác hàng loạt ${op.type} ${statusText}`,
+      body: `${succeeded} thành công, ${failed} thất bại, ${skipped} bỏ qua.`,
       link: `/bulk?operation=${op.id}`,
+      severity,
+      eventKey: `bulk:${op.id}:${state}`,
     });
   } catch {
     /* ignore notification errors */

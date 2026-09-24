@@ -79,13 +79,12 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
       }
       if (!user.pushSubscription) {
         // No push subscription: the in-app row was already created. Mark the
-        // push as sent (delivered to the in-app channel) so we don't retry
-        // forever.
+        // push as skipped so we reflect true push delivery metrics.
         await prisma.notificationOutbox.update({
           where: { id: row.id },
-          data: { state: "sent", deliveredAt: now, lastError: "no push subscription" },
+          data: { state: "skipped", deliveredAt: now, lastError: "no push subscription" },
         });
-        sent++;
+        skipped++;
         continue;
       }
 

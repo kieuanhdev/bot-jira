@@ -24,6 +24,8 @@ const BASE_ISSUE_FIELDS = [
   "issuetype",
   "created",
   "updated",
+  "duedate",
+  "timespent",
 ];
 
 export function jiraIssueFields(): string {
@@ -50,10 +52,7 @@ export function parseJiraDate(s?: string | null): Date | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
-/**
- * Auth material for a single Jira call. Either the team-wide shared token
- * (from env) or a per-user token (decrypted from the User row).
- */
+/** Auth material for a single Jira caller. */
 export type JiraAuth = {
   user: string;
   token: string;
@@ -61,15 +60,11 @@ export type JiraAuth = {
   authMode: "Bearer" | "basic";
 };
 
-function resolveAuth(override?: JiraAuth | null): JiraAuth {
-  return (
-    override ?? {
-      user: env.jiraUser,
-      token: env.jiraToken,
-      authMode: (env.jiraAuth || "Bearer").toLowerCase() === "basic" ? "basic" : "Bearer",
-    }
-  );
-}
+const systemAuth: JiraAuth = {
+  user: env.jiraUser,
+  token: env.jiraToken,
+  authMode: (env.jiraAuth || "Bearer").toLowerCase() === "basic" ? "basic" : "Bearer",
+};
 
 function authHeader(a: JiraAuth): string {
   return a.authMode === "basic"
@@ -85,7 +80,16 @@ function authHeader(a: JiraAuth): string {
 export async function detectJiraAuth(
   token: string,
   username: string
-): Promise<{ mode: "Bearer" | "basic"; name?: string } | null> {
+): Promise<{
+  mode: "Bearer" | "basic";
+  name?: string;
+  key?: string;
+  displayName?: string;
+  emailAddress?: string;
+  active?: boolean;
+  jiraIdentityKey?: string;
+} | null> {
+  const { computeJiraIdentityKey } = await import("./auth-service");
   const base = env.jiraBaseUrl.replace(/\/$/, "");
   const candidates: JiraAuth[] = [
     { user: username, token, authMode: "Bearer" },
@@ -98,7 +102,16 @@ export async function detectJiraAuth(
       });
       if (res.ok) {
         const me = (await res.json()) as JiraUser;
-        return { mode: a.authMode, name: me.name || me.displayName };
+        const identityKey = computeJiraIdentityKey(me);
+        return {
+          mode: a.authMode,
+          name: me.name || me.displayName,
+          key: me.key,
+          displayName: me.displayName,
+          emailAddress: me.emailAddress,
+          active: me.active,
+          jiraIdentityKey: identityKey ?? undefined,
+        };
       }
     } catch {
       /* try next */
@@ -108,19 +121,15 @@ export async function detectJiraAuth(
 }
 
 /**
- * Check whether a Jira credential actually authenticates. Pass the user's own
- * auth (or null when they have none) — this resolves to the effective credential
- * exactly the way the rest of the app does (user token, else the shared team
- * token) and probes /myself with it. Returns true when /myself accepts it, false
- * on any auth/network failure. Used to validate credentials before enqueuing a
- * bulk operation so a dead token doesn't silently fail every item in the worker.
+ * Check whether a user's Jira credential actually authenticates. Missing auth
+ * is always rejected; user-initiated work must never fall back to system auth.
  */
 export async function probeJiraAuth(userAuth: JiraAuth | null): Promise<boolean> {
-  const a = resolveAuth(userAuth);
+  if (!userAuth) return false;
   try {
     const base = env.jiraBaseUrl.replace(/\/$/, "");
     const res = await fetch(`${base}/rest/api/2/myself`, {
-      headers: { Accept: "application/json", Authorization: authHeader(a) },
+      headers: { Accept: "application/json", Authorization: authHeader(userAuth) },
       signal: AbortSignal.timeout(env.jiraRequestTimeoutMs),
     });
     return res.ok;
@@ -132,10 +141,9 @@ export async function probeJiraAuth(userAuth: JiraAuth | null): Promise<boolean>
 async function request<T>(
   path: string,
   init: RequestInit = {},
-  auth?: JiraAuth | null
+  auth: JiraAuth
 ): Promise<T> {
   const url = env.jiraBaseUrl.replace(/\/$/, "") + path;
-  const a = resolveAuth(auth);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), env.jiraRequestTimeoutMs);
   const abortFromCaller = () => controller.abort();
@@ -147,7 +155,7 @@ async function request<T>(
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
-        Authorization: authHeader(a),
+        Authorization: authHeader(auth),
         ...(init.headers ?? {}),
       },
     });
@@ -178,10 +186,11 @@ async function request<T>(
 }
 
 /**
- * Build a scoped Jira client that always uses the given auth. Returns the same
- * API surface as `jira`. Pass `null` to fall back to the shared team token.
+ * Build a scoped Jira client that always uses the explicitly supplied auth.
+ * User-facing code must pass the current user's credential. The exported
+ * `jira` singleton below is reserved for background synchronization/system work.
  */
-export function jiraWith(auth: JiraAuth | null) {
+export function jiraWith(auth: JiraAuth) {
   return {
     me: () => request<JiraUser>("/rest/api/2/myself", {}, auth),
     search: (jql: string, maxResults = 50, startAt = 0) => {
@@ -374,5 +383,6 @@ export function jiraWith(auth: JiraAuth | null) {
   };
 }
 
-// Default export that uses the shared team token (from env).
-export const jira = jiraWith(null);
+// System-only client for workers, webhooks and health checks that maintain the
+// shared read model. Never use this client for an end-user initiated action.
+export const jira = jiraWith(systemAuth);

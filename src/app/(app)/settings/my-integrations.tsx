@@ -19,8 +19,7 @@ type Status = { ok: boolean; detail?: string };
 type Integrations = {
   jira: { linked: boolean; status: Status; verifiedAt: string | null };
   bitbucket: { linked: boolean; status: Status; verifiedAt: string | null };
-  sharedJira: boolean;
-  sharedBitbucket: boolean;
+  syncAvailable: { jira: boolean; bitbucket: boolean };
   bitbucketRepo: string | null;
 };
 
@@ -39,7 +38,7 @@ export function MyIntegrations() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Form state — empty means "use the shared team token" / "unlinked".
+  // Empty token fields keep the user's currently stored credentials unchanged.
   const [jiraUser, setJiraUser] = useState("");
   const [jiraToken, setJiraToken] = useState("");
   const [jiraAuth, setJiraAuth] = useState<"Bearer" | "basic">("Bearer");
@@ -49,7 +48,7 @@ export function MyIntegrations() {
   const [disconnecting, setDisconnecting] = useState<"jira" | "bitbucket" | null>(null);
 
   async function disconnect(service: "jira" | "bitbucket") {
-    if (!confirm(`Disconnect ${service === "jira" ? "Jira" : "Bitbucket"}?`)) return;
+    if (!confirm(`Ngắt kết nối ${service === "jira" ? "Jira" : "Bitbucket"}?`)) return;
     setDisconnecting(service);
     setSaveMsg(null);
     try {
@@ -59,7 +58,7 @@ export function MyIntegrations() {
         body: JSON.stringify(service === "jira" ? { disconnectJira: true } : { disconnectBitbucket: true }),
       });
       await load();
-      setSaveMsg({ ok: true, text: `${service === "jira" ? "Jira" : "Bitbucket"} disconnected.` });
+      setSaveMsg({ ok: true, text: `Đã ngắt kết nối ${service === "jira" ? "Jira" : "Bitbucket"}.` });
     } finally {
       setDisconnecting(null);
     }
@@ -80,6 +79,10 @@ export function MyIntegrations() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (bbToken && !bbUser.trim()) {
+      setError("Username Bitbucket là bắt buộc khi cập nhật token.");
+      return;
+    }
     setError(null);
     setSaveMsg(null);
     setSaving(true);
@@ -97,13 +100,13 @@ export function MyIntegrations() {
       });
       const result = (await res.json()) as SaveResult & { error?: string };
       if (!res.ok || !result.ok) {
-        setError(result.error ?? "Failed to save");
+        setError(result.error ?? "Lưu thất bại");
         return;
       }
       const j = result.verify.jira;
       const b = result.verify.bitbucket;
       const parts: string[] = [];
-      parts.push(j.ok ? `Jira ✓ (${j.detail})` : `Jira ✗ ${j.detail ?? "not linked"}`);
+      parts.push(j.ok ? `Jira ✓ (${j.detail})` : `Jira ✗ ${j.detail ?? "chưa liên kết"}`);
       if (b.detail) parts.push(b.ok ? `Bitbucket ✓` : `Bitbucket ✗ ${b.detail}`);
       setSaveMsg({
         ok: j.ok && (!result.bitbucketLinked || b.ok),
@@ -114,7 +117,7 @@ export function MyIntegrations() {
       setBbToken("");
       await load();
     } catch {
-      setError("Network error");
+      setError("Lỗi kết nối mạng");
     } finally {
       setSaving(false);
     }
@@ -123,11 +126,10 @@ export function MyIntegrations() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>My integrations</CardTitle>
+        <CardTitle>Tích hợp cá nhân</CardTitle>
         <CardDescription>
-          Your <strong>Jira token is required</strong> — the app acts as <em>you</em> and shows the
-          tasks assigned to you. You can disconnect it to use a different account. Tokens are
-          encrypted and stored on your account only.
+          <strong>Jira là bắt buộc</strong> để xem và thao tác trên bảng công việc. <strong>Bitbucket là tùy chọn</strong> khi
+          bạn cần tạo hoặc liên kết nhánh/Pull Request. Token được mã hóa phía máy chủ (AES-256-GCM) và không chia sẻ với người khác.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
@@ -141,9 +143,9 @@ export function MyIntegrations() {
               >
                 {data?.jira.linked
                   ? data.jira.status.ok
-                    ? `linked · ${data.jira.status.detail}`
-                    : "linked (unverified)"
-                  : "not connected"}
+                    ? `đã liên kết · ${data.jira.status.detail}`
+                    : "đã liên kết (chưa xác minh)"
+                  : "chưa kết nối"}
               </Badge>
               {data?.jira.linked && (
                 <Button
@@ -154,14 +156,14 @@ export function MyIntegrations() {
                   disabled={disconnecting === "jira"}
                 >
                   <Unplug className="h-3.5 w-3.5" />
-                  {disconnecting === "jira" ? "Disconnecting…" : "Disconnect"}
+                  {disconnecting === "jira" ? "Đang ngắt kết nối…" : "Ngắt kết nối"}
                 </Button>
               )}
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr]">
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground">Jira username (optional)</Label>
+              <Label className="text-xs text-muted-foreground">Username Jira (tuỳ chọn)</Label>
               <Input
                 value={jiraUser}
                 onChange={(e) => setJiraUser(e.target.value)}
@@ -170,13 +172,13 @@ export function MyIntegrations() {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground">Auth type</Label>
+              <Label className="text-xs text-muted-foreground">Loại xác thực</Label>
               <Select value={jiraAuth} onValueChange={(v) => setJiraAuth(v as "Bearer" | "basic")}>
                 <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Bearer">Bearer (this Jira DC)</SelectItem>
+                  <SelectItem value="Bearer">Bearer (Jira DC này)</SelectItem>
                   <SelectItem value="basic">Basic (user + token)</SelectItem>
                 </SelectContent>
               </Select>
@@ -184,13 +186,13 @@ export function MyIntegrations() {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs text-muted-foreground">
-              Jira API token {jiraToken ? "(leave blank to keep)" : ""}
+              Jira API token {jiraToken ? "(để trống để giữ nguyên)" : ""}
             </Label>
             <Input
               type="password"
               value={jiraToken}
               onChange={(e) => setJiraToken(e.target.value)}
-              placeholder={jiraToken ? "•••• (keep current)" : "Paste your Jira API token"}
+              placeholder={jiraToken ? "•••• (giữ nguyên hiện tại)" : "Dán Jira API token của bạn"}
               autoComplete="off"
             />
           </div>
@@ -204,9 +206,9 @@ export function MyIntegrations() {
               <Badge variant={data?.bitbucket.linked ? "success" : "secondary"}>
                 {data?.bitbucket.linked
                   ? data.bitbucket.status.ok
-                    ? `linked · ${data.bitbucket.status.detail}`
-                    : "linked (unverified)"
-                  : "not connected"}
+                    ? `đã liên kết · ${data.bitbucket.status.detail}`
+                    : "đã liên kết (chưa xác minh)"
+                  : "chưa kết nối"}
               </Badge>
               {data?.bitbucket.linked && (
                 <Button
@@ -217,14 +219,14 @@ export function MyIntegrations() {
                   disabled={disconnecting === "bitbucket"}
                 >
                   <Unplug className="h-3.5 w-3.5" />
-                  {disconnecting === "bitbucket" ? "Disconnecting…" : "Disconnect"}
+                  {disconnecting === "bitbucket" ? "Đang ngắt kết nối…" : "Ngắt kết nối"}
                 </Button>
               )}
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr]">
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground">Bitbucket username</Label>
+              <Label className="text-xs text-muted-foreground">Username Bitbucket (bắt buộc)</Label>
               <Input
                 value={bbUser}
                 onChange={(e) => setBbUser(e.target.value)}
@@ -240,15 +242,15 @@ export function MyIntegrations() {
                 type="password"
                 value={bbToken}
                 onChange={(e) => setBbToken(e.target.value)}
-                placeholder={bbToken ? "•••• (keep current)" : "Paste your Bitbucket token"}
+                placeholder={bbToken ? "•••• (giữ nguyên hiện tại)" : "Dán Bitbucket token của bạn"}
                 autoComplete="off"
               />
             </div>
           </div>
           {!data?.bitbucketRepo && (
             <p className="text-xs text-muted-foreground">
-              Bitbucket is not configured on the server yet — your token will be saved but
-              can&apos;t be verified until an admin sets <code>BITBUCKET_BASE_URL</code> and repos.
+              Bitbucket chưa được cấu hình trên máy chủ — token của bạn sẽ được lưu nhưng
+              chưa thể xác minh cho đến khi quản trị viên cấu hình <code>BITBUCKET_BASE_URL</code> và kho lưu trữ.
             </p>
           )}
         </div>
@@ -263,7 +265,7 @@ export function MyIntegrations() {
         )}
 
         <Button type="submit" onClick={save} disabled={saving} className="w-fit">
-          {saving ? "Saving & verifying…" : "Save & verify"}
+          {saving ? "Đang lưu & xác minh…" : "Lưu & xác minh"}
         </Button>
       </CardContent>
     </Card>

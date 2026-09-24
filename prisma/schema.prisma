@@ -8,6 +8,7 @@ datasource db {
 
 enum Role {
   member
+  release_manager
   admin
 }
 
@@ -22,10 +23,11 @@ enum ReleaseStatus {
 
 model User {
   id             String        @id @default(cuid())
-  email          String        @unique
-  passwordHash   String
+  email          String?       @unique
+  passwordHash   String?
   displayName    String
   jiraUsername   String?
+  jiraIdentityKey String?      @unique
   role           Role          @default(member)
   pushSubscription Json?
 
@@ -74,6 +76,8 @@ model IssueCache {
   points         Int?
   storyField     String?
   type           String        @default("")
+  dueDate        DateTime?
+  timeSpent      Int?
   createdAt      DateTime?
   updatedAt      DateTime?
   lastSyncedAt   DateTime      @default(now())
@@ -83,6 +87,7 @@ model IssueCache {
   aiScore        AiScore?
   releaseTasks   ReleaseTask[]
   staleSnapshots StaleSnapshot[]
+  branches       BranchInfo[]
 
   @@index([status])
   @@index([projectKey])
@@ -152,6 +157,8 @@ model Release {
   updatedAt     DateTime      @updatedAt
   tasks         ReleaseTask[]
   releaseChecks ReleaseCheck[]
+  approvals     ReleaseApproval[]
+  gateOverrides ReleaseGateOverride[]
 
   @@unique([projectKey, jiraVersionId])
   @@index([projectKey])
@@ -196,6 +203,86 @@ model ReleaseGateResult {
 
   @@index([checkId])
   @@index([gate])
+}
+
+// REL-03 — Human approval of a release (QA / release manager). Recorded with
+// an actor so an approval can be audited. A release may have several approvals
+// (e.g. QA + release manager) per the release policy.
+model ReleaseApproval {
+  id           String    @id @default(cuid())
+  releaseId    String
+  type         String // "qa" | "release_manager"
+  approvedById String
+  note         String    @default("")
+  approvedAt   DateTime  @default(now())
+  revokedAt    DateTime?
+  release      Release   @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@index([releaseId, revokedAt])
+  @@index([approvedById])
+}
+
+// REL-03 — An explicit override of a single gate result, always with a reason
+// and an actor. Never valid for `non_empty_release` (enforced in the gate
+// engine). `revokedAt` / `expiresAt` make an override invalid when set/past.
+model ReleaseGateOverride {
+  id          String    @id @default(cuid())
+  releaseId   String
+  gate        String
+  reason      String
+  createdById String
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  release     Release   @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@index([releaseId, gate, revokedAt, expiresAt])
+  @@index([createdById])
+}
+
+// REL-04 — CI read model. One row per CI run, keyed by (provider, externalId).
+// Populated from the CI webhook; the `ci` release gate reads the latest build
+// for the release's commit(s). A build on a *different* commit is `unknown`,
+// never passed (stale-CI fail-safe, plan §REL-04).
+model CiBuildStatus {
+  id          String    @id @default(cuid())
+  provider    String
+  externalId  String
+  repo        String
+  branch      String
+  commitSha   String
+  status      String // "pending" | "success" | "failed" | "cancelled"
+  testStatus  String?
+  url         String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  receivedAt  DateTime  @default(now())
+
+  @@unique([provider, externalId])
+  @@index([repo, branch, commitSha])
+  @@index([repo, commitSha])
+}
+
+// SEC-01 — Append-only audit trail for all important mutations. Stores the
+// actor, source, target, before/after (redacted) and a correlation id. Raw
+// tokens are never stored; sensitive description/comment content is stored as
+// metadata or a hash only (see audit.ts redaction).
+model AuditLog {
+  id            String   @id @default(cuid())
+  actorId       String?
+  actorEmail    String?
+  action        String // e.g. "release.publish", "issue.transition", "user.role"
+  source        String? // "web" | "chat" | "worker" | "api"
+  target        String? // e.g. jira key, release id, user id
+  before        Json?
+  after         Json?
+  correlationId String?
+  createdAt     DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([target])
+  @@index([correlationId])
 }
 
 // M7 — AI estimation. One row per issue; `scoredAt` marks the latest estimate.
@@ -245,17 +332,36 @@ model BranchInfo {
   repo                String
   branch              String
   jiraKey             String?
+  latestCommitSha     String?
   lastCommitAt        DateTime?
   prId                Int?
+  prTitle             String?
+  prUrl               String?
   prState             String?
   prDestinationBranch String?
+  prUpdatedAt         DateTime?
   merged              Boolean   @default(false)
+  lastSeenAt          DateTime?
+  deletedAt           DateTime?
+  linkSource          String?   // explicit, branch_name, pr_title, jira_label, comment, manual
+  linkConfidence      Int?      // 0..100
+  linkState           String    @default("confirmed") // confirmed, suggested, rejected, manual_unlinked
+  linkReason          String?
+  suggestedJiraKey    String?
+  linkReviewedAt      DateTime?
+  linkReviewedById    String?
   checkedAt           DateTime  @default(now())
+
+  issue               IssueCache? @relation(fields: [jiraKey], references: [jiraKey], onDelete: SetNull)
 
   @@unique([repo, branch])
   @@index([repo])
   @@index([merged])
   @@index([jiraKey])
+  @@index([linkState])
+  @@index([deletedAt, checkedAt])
+  @@index([prState, merged])
+  @@index([suggestedJiraKey])
 }
 
 enum ImportState {
@@ -283,17 +389,22 @@ model SentryIssueImported {
 }
 
 model Notification {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   userId     String
+  eventKey   String    @default("")
   type       String
+  severity   String    @default("info")
   title      String
-  body       String   @default("")
+  body       String    @default("")
   link       String?
-  read       Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  read       Boolean   @default(false)
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, type, eventKey])
   @@index([userId, read])
+  @@index([userId, readAt, createdAt])
   @@index([userId, createdAt])
 }
 
@@ -364,14 +475,16 @@ model IntegrationEvent {
   // `disabledTypes` is a list of event types that should not be delivered.
   // `deliveryMode` is "instant" or "digest" (digest delivered at most once a day).
   model NotificationPreference {
-  id            String  @id @default(cuid())
-  userId        String  @unique
-  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  disabledTypes String[] @default([])
-  deliveryMode  String  @default("instant") // "instant" | "digest"
-  digestHour    Int     @default(8) // local hour for the daily digest
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  disabledTypes     String[] @default([])
+  pushEnabled       Boolean  @default(false)
+  pushDisabledTypes String[] @default([])
+  deliveryMode      String   @default("instant") // "instant" | "digest"
+  digestHour        Int      @default(8) // local hour for the daily digest
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 // M5 — Outbox for reliable notification delivery. Each Notification row is

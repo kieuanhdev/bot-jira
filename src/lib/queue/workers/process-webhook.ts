@@ -55,28 +55,100 @@ async function handleJira(json: unknown): Promise<Record<string, unknown>> {
 /**
  * Bitbucket webhook handler. PR and branch events update BranchInfo so the
  * release gates see the latest state without waiting for the 5-minute cron.
+ * PR comment events notify the author and reviewers.
  */
 async function handleBitbucket(json: unknown): Promise<Record<string, unknown>> {
   const j = json as {
+    eventKey?: string;
     data?: {
       repository?: { slug?: string; project?: { key?: string } };
       pullRequest?: {
         id?: number;
+        title?: string;
         state?: string;
         fromRef?: { branch?: string };
-        toRef?: { branch?: string };
+        toRef?: { branch?: string; repository?: { slug?: string; project?: { key?: string } } };
+        author?: { user?: { name?: string; displayName?: string; emailAddress?: string } };
+        reviewers?: Array<{ user?: { name?: string; displayName?: string; emailAddress?: string } }>;
+      };
+      comment?: {
+        id?: number;
+        text?: string;
+        author?: { name?: string; displayName?: string; emailAddress?: string };
       };
       branches?: Array<{ name?: string; latestCommit?: string }>;
     };
+    repository?: { slug?: string; project?: { key?: string } };
+    pullRequest?: {
+      id?: number;
+      title?: string;
+      state?: string;
+      fromRef?: { branch?: string };
+      toRef?: { branch?: string; repository?: { slug?: string; project?: { key?: string } } };
+      author?: { user?: { name?: string; displayName?: string; emailAddress?: string } };
+      reviewers?: Array<{ user?: { name?: string; displayName?: string; emailAddress?: string } }>;
+    };
+    comment?: {
+      id?: number;
+      text?: string;
+      author?: { name?: string; displayName?: string; emailAddress?: string };
+    };
   };
-  const repo = j.data?.repository
-    ? `${j.data.repository.project?.key ?? ""}/${j.data.repository.slug ?? ""}`
+
+  const repoObj =
+    j.data?.repository ??
+    j.pullRequest?.toRef?.repository ??
+    j.repository;
+  const repo = repoObj
+    ? `${repoObj.project?.key ?? ""}/${repoObj.slug ?? ""}`
     : undefined;
   if (!repo) return { skipped: true, reason: "no repository" };
   if (!hasBitbucketConfig()) return { skipped: true, reason: "bitbucket not configured" };
 
+  const pr = j.pullRequest ?? j.data?.pullRequest;
+  const comment = j.comment ?? j.data?.comment;
+
+  // Handle PR comment events (e.g. pr:comment:added)
+  if (j.eventKey?.startsWith("pr:comment:") || (comment?.id && comment?.text && pr?.id)) {
+    if (comment?.id && comment.text && pr?.id) {
+      const { bitbucket } = await import("@/lib/bitbucket/client");
+      const { notifyPrComment } = await import("@/lib/bitbucket/notify-pr-comment");
+
+      // Load full PR if author or reviewers are missing from payload
+      let fullPr = pr;
+      if (!pr.author?.user || !pr.reviewers) {
+        const fetched = await bitbucket.getPullRequest(repo, pr.id).catch(() => null);
+        if (fetched) {
+          fullPr = fetched as typeof pr;
+        }
+      }
+
+      const res = await notifyPrComment({
+        repo,
+        pr: {
+          id: pr.id,
+          title: fullPr.title ?? pr.title,
+          author: fullPr.author as any,
+          reviewers: fullPr.reviewers as any,
+        },
+        comment: {
+          id: comment.id,
+          text: comment.text,
+          author: comment.author as any,
+        },
+      });
+
+      return {
+        repo,
+        prId: pr.id,
+        commentId: comment.id,
+        notifiedCount: res.notifiedCount,
+      };
+    }
+    return { skipped: true, reason: "incomplete comment payload" };
+  }
+
   const updates: Record<string, unknown> = { repo };
-  const pr = j.data?.pullRequest;
   if (pr?.fromRef?.branch) {
     await prisma.branchInfo.upsert({
       where: { repo_branch: { repo, branch: pr.fromRef.branch } },
@@ -126,34 +198,101 @@ async function handleSentry(json: unknown): Promise<Record<string, unknown>> {
       title?: string;
       permalinkUrl?: string;
       level?: string;
+      project?: { slug?: string };
     };
   };
   if (!hasSentryConfig()) return { skipped: true, reason: "sentry not configured" };
   const issue = j.issue;
   if (!issue) return { skipped: true, reason: "no issue in payload" };
 
+  const issueId = String(issue.id ?? issue.shortId ?? "");
+  const sProject = issue.project?.slug ?? env.sentryProject;
+
+  // M2 — on "created", seed a pending import row so the scheduled
+  // `sentry-import` worker creates the Jira issue promptly (webhook + poll
+  // reconciliation; idempotent on (sentryProject, sentryIssueId)).
+  if (j.action === "created" && issueId) {
+    await prisma.sentryIssueImported.upsert({
+      where: { sentryProject_sentryIssueId: { sentryProject: sProject, sentryIssueId: issueId } },
+      create: { sentryProject: sProject, sentryIssueId: issueId, state: "pending" },
+      update: {},
+    });
+  }
+
   const blocking = env.sentryBlockingLevels.includes((issue.level ?? "").toLowerCase());
   if (j.action === "created" && blocking) {
     const { notifyAll } = await import("@/lib/notify");
     await notifyAll({
       type: "sentry",
-      title: `Sentry ${issue.level ?? "error"}: ${issue.title ?? issue.shortId ?? String(issue.id)}`,
+      title: `Lỗi Sentry chặn phát hành: ${issue.title ?? issue.shortId ?? String(issue.id)}`,
       body: issue.permalinkUrl ?? undefined,
       link: issue.permalinkUrl ?? undefined,
+      severity: "danger",
+      eventKey: `sentry:${sProject}:${issueId}:${j.action}`,
     });
-    return { alerted: true, level: issue.level };
+    return { alerted: true, level: issue.level, seeded: true };
   }
   return { handled: j.action, issue: issue.shortId ?? issue.id };
 }
 
 /**
- * CI webhook handler. Currently stores nothing beyond the event row (the CI
- * gate in the release engine reads CI state through the configured gate). The
- * event row itself gives us a correlation trail for later E2E checks.
+ * CI webhook handler. Upserts the CiBuildStatus read model so the `ci` release
+ * gate can read the latest build for the release's commit. The event row itself
+ * remains the correlation trail for E2E checks.
  */
 async function handleCi(json: unknown): Promise<Record<string, unknown>> {
-  const j = json as { status?: string; branch?: string; repo?: string };
-  return { status: j.status ?? "unknown", branch: j.branch ?? null, repo: j.repo ?? null };
+  const j = json as {
+    runId?: string | number;
+    run_id?: string | number;
+    status?: string;
+    testStatus?: string;
+    branch?: string;
+    commit?: string;
+    repo?: string;
+    url?: string;
+    provider?: string;
+    startedAt?: string;
+    completedAt?: string;
+  };
+  const repo = j.repo ?? "default";
+  const branch = j.branch ?? "";
+  const commit = j.commit ?? "";
+  const runId = String(j.runId ?? j.run_id ?? "");
+  if (!runId || !commit) return { skipped: true, reason: "no runId or commit" };
+
+  const externalId = `${j.status ?? "event"}:${repo}:${commit}:${runId}`;
+  const status = normalizeCiStatus(j.status);
+  await prisma.ciBuildStatus.upsert({
+    where: { provider_externalId: { provider: j.provider ?? "ci", externalId } },
+    create: {
+      provider: j.provider ?? "ci",
+      externalId,
+      repo,
+      branch,
+      commitSha: commit,
+      status,
+      testStatus: j.testStatus ?? null,
+      url: j.url ?? null,
+      startedAt: j.startedAt ? new Date(j.startedAt) : null,
+      completedAt: j.completedAt ? new Date(j.completedAt) : null,
+    },
+    update: {
+      status,
+      testStatus: j.testStatus ?? null,
+      url: j.url ?? null,
+      completedAt: j.completedAt ? new Date(j.completedAt) : new Date(),
+    },
+  });
+  return { upserted: externalId, status };
+}
+
+/** Normalize provider-specific CI status strings into the read-model set. */
+function normalizeCiStatus(status?: string): "pending" | "success" | "failed" | "cancelled" {
+  const s = (status ?? "").toLowerCase();
+  if (/success|passed|pass|succeeded|ok/.test(s)) return "success";
+  if (/fail|error|failed/.test(s)) return "failed";
+  if (/cancel|aborted|stopped/.test(s)) return "cancelled";
+  return "pending";
 }
 
 const HANDLERS: Record<Source, (json: unknown) => Promise<Record<string, unknown>>> = {

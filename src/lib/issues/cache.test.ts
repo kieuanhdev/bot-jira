@@ -39,6 +39,22 @@ describe("issueCacheData", () => {
     expect(data.statusChangedAt?.toISOString()).toBe("2026-09-19T04:05:00.000Z");
   });
 
+  it("parses dueDate and timeSpent when present", () => {
+    const data = issueCacheData(issue({
+      project: { key: "EPM" },
+      duedate: "2026-10-01T00:00:00.000+0000",
+      timespent: 7200,
+    }));
+    expect(data.dueDate?.toISOString()).toBe("2026-10-01T00:00:00.000Z");
+    expect(data.timeSpent).toBe(7200);
+  });
+
+  it("defaults dueDate and timeSpent to null when absent", () => {
+    const data = issueCacheData(issue({ project: { key: "EPM" } }));
+    expect(data.dueDate).toBeNull();
+    expect(data.timeSpent).toBeNull();
+  });
+
   it("fails closed to unknown when Jira omits status category", () => {
     const data = issueCacheData(issue({ status: { name: "Custom state" } }));
     expect(data.statusCategory).toBe("unknown");

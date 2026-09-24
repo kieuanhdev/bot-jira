@@ -40,9 +40,9 @@ export function WatchClient() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold">My watch</h1>
+        <h1 className="text-xl font-semibold">Đang theo dõi</h1>
         <p className="text-sm text-muted-foreground">
-          Tasks you follow. You are notified when they change or get comments.
+          Các task bạn theo dõi. Bạn sẽ nhận thông báo khi task thay đổi hoặc có bình luận mới.
         </p>
       </div>
 
@@ -69,9 +69,9 @@ export function WatchClient() {
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
               <Eye className="h-6 w-6 text-muted-foreground" />
             </div>
-            <p className="text-sm font-medium">Not watching anything yet</p>
+            <p className="text-sm font-medium">Chưa theo dõi task nào</p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              Open a task and hit “Watch” to get notified when it changes or gets comments.
+              Mở một task và bấm “Theo dõi” để nhận thông báo khi có cập nhật hoặc bình luận mới.
             </p>
           </CardContent>
         </Card>
@@ -86,17 +86,17 @@ export function WatchClient() {
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-xs text-muted-foreground">{w.jiraKey}</span>
                     <Badge>{w.status}</Badge>
-                    {w.points != null && <Badge variant="secondary">{w.points}pt</Badge>}
+                    {w.points != null && <Badge variant="secondary">{w.points} điểm</Badge>}
                   </div>
                   <p className="mt-1 line-clamp-1 font-medium">{w.summary}</p>
                 </Link>
-                <Button variant="ghost" size="icon" onClick={() => unwatch(w.jiraKey)}>
+                <Button variant="ghost" size="icon" onClick={() => unwatch(w.jiraKey)} aria-label="Bỏ theo dõi">
                   <Eye className="h-4 w-4" />
                 </Button>
               </div>
               <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-                <span>{w.assigneeJira ?? "unassigned"}</span>
-                <span>· updated {timeAgo(w.updatedAt)}</span>
+                <span>{w.assigneeJira ?? "chưa phân công"}</span>
+                <span>· cập nhật {timeAgo(w.updatedAt)}</span>
               </div>
             </CardContent>
           </Card>

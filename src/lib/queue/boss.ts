@@ -9,6 +9,9 @@ import { runPollJira, type PollJiraJobData } from "./workers/poll-jira";
 import { runBulkOperation } from "./workers/bulk-op";
 import { runProcessWebhook, type ProcessWebhookJobData } from "./workers/process-webhook";
 import { runDeliverNotifications } from "./workers/deliver-notifications";
+import { runParseCommentBranches } from "./workers/parse-comment-branches";
+import { runHealthAlert } from "./workers/health-alert";
+import { runPollPrComments } from "./workers/poll-pr-comments";
 import type { WorkerLog } from "./guard";
 
 const globalForBoss = globalThis as unknown as { boss?: PgBoss; bossStart?: Promise<PgBoss> };
@@ -16,12 +19,15 @@ const globalForBoss = globalThis as unknown as { boss?: PgBoss; bossStart?: Prom
 export const JOB_NAMES = [
   "poll-jira",
   "check-branches",
+  "parse-comment-branches",
+  "poll-pr-comments",
   "ai-score",
   "sentry-import",
   "stale-detect",
   "bulk-op",
   "process-webhook",
   "deliver-notifications",
+  "health-alert",
 ] as const;
 
 export function getBoss(): PgBoss {
@@ -112,6 +118,28 @@ export async function enqueueBulkOperation(operationId: string): Promise<string 
   });
 }
 
+/** Enqueue check-branches manual sync. */
+export async function enqueueCheckBranches(): Promise<string | null> {
+  const boss = await startBoss();
+  return boss.send("check-branches", {}, {
+    singletonKey: "check-branches:manual",
+    singletonSeconds: 30,
+    retryLimit: 1,
+    retryDelay: 15,
+  });
+}
+
+/** Enqueue poll-pr-comments manual sync. */
+export async function enqueuePollPrComments(): Promise<string | null> {
+  const boss = await startBoss();
+  return boss.send("poll-pr-comments", {}, {
+    singletonKey: "poll-pr-comments:manual",
+    singletonSeconds: 30,
+    retryLimit: 1,
+    retryDelay: 15,
+  });
+}
+
 /** Register schedules and consumers. Called only by the standalone worker. */
 export async function registerJobs(): Promise<PgBoss> {
   const boss = await startBoss();
@@ -122,16 +150,23 @@ export async function registerJobs(): Promise<PgBoss> {
 
   await boss.schedule("poll-jira", pollCron(), null, { singletonSeconds: 55, retryLimit: 3, retryDelay: 15, retryBackoff: true });
   await boss.schedule("check-branches", "*/5 * * * *", null, { singletonSeconds: 240, retryLimit: 2, retryDelay: 30 });
+  await boss.schedule("parse-comment-branches", "*/5 * * * *", null, { singletonSeconds: 240, retryLimit: 2, retryDelay: 30 });
+  await boss.schedule("poll-pr-comments", "*/2 * * * *", null, { singletonSeconds: 110, retryLimit: 2, retryDelay: 30 });
   await boss.schedule("ai-score", "*/10 * * * *", null, { singletonSeconds: 540, retryLimit: 2, retryDelay: 30 });
   await boss.schedule("sentry-import", "*/5 * * * *", null, { singletonSeconds: 240, retryLimit: 3, retryDelay: 30, retryBackoff: true });
   await boss.schedule("stale-detect", "*/30 * * * *", null, { singletonSeconds: 1740, retryLimit: 2, retryDelay: 30 });
   await boss.schedule("deliver-notifications", "* * * * *", null, { singletonSeconds: 55, retryLimit: 3, retryDelay: 15, retryBackoff: true });
+  // OPS-03 — freshness/health alerting, deduped by the alert worker itself.
+  await boss.schedule("health-alert", "*/5 * * * *", null, { singletonSeconds: 240, retryLimit: 2, retryDelay: 30 });
 
   await boss.work<PollJiraJobData>("poll-jira", async (jobs) => recordRun("poll-jira", () => runPollJira(jobs[0]?.data ?? {})));
   await boss.work("check-branches", async () => recordRun("check-branches", runCheckBranches));
+  await boss.work("parse-comment-branches", async () => recordRun("parse-comment-branches", runParseCommentBranches));
+  await boss.work("poll-pr-comments", async () => recordRun("poll-pr-comments", runPollPrComments));
   await boss.work("ai-score", async () => recordRun("ai-score", runAiScore));
   await boss.work("sentry-import", async () => recordRun("sentry-import", runSentryImport));
   await boss.work("stale-detect", async () => recordRun("stale-detect", runStaleDetect));
+  await boss.work("health-alert", async () => recordRun("health-alert", runHealthAlert));
   // M5 — webhook processing: one-off jobs enqueued by the webhook endpoints.
   await boss.work<ProcessWebhookJobData>("process-webhook", async (jobs) => {
     const data = jobs[0]?.data ?? { source: "jira", eventId: "" };

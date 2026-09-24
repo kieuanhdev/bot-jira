@@ -12,6 +12,14 @@ import { hasJiraConfig } from "@/lib/env";
  * Settings. Set REGISTER_DISABLED=1 to lock it to admins.
  */
 export async function POST(req: Request) {
+  // Public registration is disabled in favor of Jira token login.
+  if (process.env.LEGACY_PASSWORD_LOGIN !== "1") {
+    return NextResponse.json(
+      { error: "Đăng ký bằng email/mật khẩu đã ngừng hoạt động. Vui lòng đăng nhập trực tiếp bằng Jira API token." },
+      { status: 410 }
+    );
+  }
+
   if (process.env.REGISTER_DISABLED === "1") {
     const session = await getSession();
     if (!session?.user?.role || session.user.role !== "admin") {

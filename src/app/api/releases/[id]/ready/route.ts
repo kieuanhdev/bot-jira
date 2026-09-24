@@ -9,6 +9,7 @@ import {
   collectBlockers,
 } from "@/lib/releases/gates";
 import { buildReleaseContext } from "@/lib/releases/release-context";
+import { can } from "@/lib/permissions";
 
 /**
  * Run the release ready-check through the M3-03 gate engine.
@@ -25,6 +26,10 @@ import { buildReleaseContext } from "@/lib/releases/release-context";
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // REL-01 — running a ready-check is a release_manager/admin action.
+  if (!can(session, "release.check")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   const { id } = await ctx.params;
 
   const release = await prisma.release.findUnique({
@@ -35,7 +40,17 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
 
   const releaseCtx = await buildReleaseContext(id, release.version);
   if (!releaseCtx) return NextResponse.json({ error: "could not build release context" }, { status: 500 });
-  const gates = await runGates(releaseCtx, aiProvider.releaseCheck.bind(aiProvider));
+
+  // REL-03 — load active gate overrides so the engine can mark overridden
+  // gates as "overridden" rather than failed/unknown.
+  const overrides = await prisma.releaseGateOverride.findMany({
+    where: { releaseId: id },
+    select: { gate: true, revokedAt: true, expiresAt: true, createdAt: true, reason: true, createdById: true },
+  });
+
+  const gates = await runGates(releaseCtx, aiProvider.releaseCheck.bind(aiProvider), {
+    overrides,
+  });
   const status = aggregateGates(gates);
   const allBlockers = collectBlockers(gates);
 
@@ -77,11 +92,14 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     const reasons = allBlockers
       .slice(0, 10)
       .map((b) => (b.jiraKey ? `${b.jiraKey}: ${b.reason}` : b.reason));
+    const severity = status === "blocked" ? "danger" : "warning";
     await notifyAll({
       type: "release",
-      title: `Release ${release.version} ${status}`,
+      title: `Bản phát hành ${release.version} ${status === "blocked" ? "bị chặn" : "chưa sẵn sàng"}`,
       body: reasons.join("; ") || summary,
       link: "/release",
+      severity,
+      eventKey: `release-check:${check.id}:${status}`,
     }).catch(() => null);
   }
 

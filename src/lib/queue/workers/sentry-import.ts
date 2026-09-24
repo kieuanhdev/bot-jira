@@ -3,7 +3,7 @@ import { sentry, type SentryIssue } from "@/lib/sentry/client";
 import { jira } from "@/lib/jira/client";
 import { upsertJiraIssue } from "@/lib/issues/cache";
 import { guard, hasSentryConfig, hasJiraConfig } from "../guard";
-import { jiraProjectList, env } from "@/lib/env";
+import { jiraProjectList, env, parseSentryMappings, resolveJiraProject } from "@/lib/env";
 import type { WorkerLog } from "../guard";
 import type { JiraIssue } from "@/lib/jira/types";
 
@@ -11,8 +11,19 @@ const IMPORT_BATCH = 10;
 const MAX_ATTEMPTS = 5;
 const BACKOFF_BASE_MS = 60_000;
 
+// Resolved once per run. `mappings` empty => single-project mode (file into
+// JIRA_PROJECT_KEYS[0]); non-empty => each issue is filed into its mapped
+// project, and unmapped projects are marked "ignored" (never filed into a guess).
+const mappings = parseSentryMappings(env.sentryProjectMappings);
+const fallbackProject = jiraProjectList[0] ?? null;
+
 function sentryProjectSlug(issue: SentryIssue): string {
   return issue.project?.slug ?? env.sentryProject;
+}
+
+/** The Jira project an issue should be filed into, or null when unmapped. */
+function jiraProjectFor(issue: SentryIssue): string | null {
+  return resolveJiraProject(sentryProjectSlug(issue), mappings, fallbackProject);
 }
 
 function sentryIdKey(issue: SentryIssue): string {
@@ -73,6 +84,25 @@ async function processIssue(issue: SentryIssue): Promise<{ ok: boolean; recovere
   }
 
   if (!jiraKey) {
+    const targetProject = jiraProjectFor(issue);
+    if (!targetProject) {
+      // No mapping for this Sentry project and no fallback: clearly mark it so
+      // it is visible and retryable, never silently filed into a guess.
+      await prisma.sentryIssueImported.upsert({
+        where: { sentryProject_sentryIssueId: { sentryProject: sProject, sentryIssueId: sId } },
+        create: {
+          sentryProject: sProject,
+          sentryIssueId: sId,
+          state: "ignored",
+          attemptCount: existing?.attemptCount ?? 0,
+          lastError: `no Jira project mapping for Sentry project "${sProject}"`,
+          lastAttemptAt: new Date(),
+        },
+        update: { state: "ignored", lastError: `no Jira project mapping for Sentry project "${sProject}"` },
+      });
+      return { ok: false, recovered: false, error: `no mapping for ${sProject}` };
+    }
+
     const title = `[Sentry] ${issue.shortId ?? sId}: ${issue.title}`;
     const description = [
       "Auto-created from Sentry.",
@@ -80,11 +110,12 @@ async function processIssue(issue: SentryIssue): Promise<{ ok: boolean; recovere
       `Sentry issue: ${issue.permalinkUrl ?? issue.shortId ?? sId}`,
       `Level: ${issue.level ?? "unknown"}`,
       `Count: ${issue.count ?? "n/a"}`,
+      `First seen: ${issue.firstSeen ?? "n/a"}`,
       `Last seen: ${issue.latestEvent ?? "n/a"}`,
     ].join("\n");
 
     const created = await jira.createIssue({
-      projectKey: jiraProjectList[0] ?? "PROJ",
+      projectKey: targetProject,
       summary: title,
       description,
       issueType: "Bug",
@@ -148,7 +179,9 @@ export async function runSentryImport(): Promise<WorkerLog> {
         where: { sentryProject_sentryIssueId: { sentryProject: sProject, sentryIssueId: sId } },
       });
 
-      if (existing?.state === "created") continue;
+      // "ignored" means no mapping is configured for this Sentry project; it is
+      // not retryable and would otherwise be re-flagged every cycle.
+      if (existing?.state === "created" || existing?.state === "ignored") continue;
 
       try {
         const result = await processIssue(issue);

@@ -102,6 +102,18 @@
   }
 }
 
+/* Board quick panel slide-in (gated by motion-safe in the component). */
+@keyframes panelIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
 /* Rendered Jira wiki markup (descriptions, comments). */
 .wiki-content {
   line-height: 1.6;

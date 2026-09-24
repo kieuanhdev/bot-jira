@@ -36,7 +36,14 @@ export async function POST(req: Request) {
     where: { id: session.user.id },
     select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true },
   });
-  const jira = jiraWith(userJiraAuth(user));
+  const auth = userJiraAuth(user);
+  if (!auth) {
+    return NextResponse.json(
+      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
+      { status: 428 }
+    );
+  }
+  const jira = jiraWith(auth);
 
   const results: CommandResult[] = [];
   for (const key of parsed.keys) {

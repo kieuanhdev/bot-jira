@@ -140,10 +140,15 @@ policy allows, use separate read-only sync and Sentry-writer accounts. The
 initial deployment may use one account, but permissions must be the union of
 only those two responsibilities.
 
-### Personal credentials
+### Personal credentials & Token-based login
 
-User-initiated Jira and Bitbucket mutations use credentials encrypted on the
-user record. This includes:
+Users authenticate directly to Team Task Web using their Jira Personal Access Token (PAT):
+- The server verifies the token against Jira `/rest/api/2/myself` (Bearer preferred, Basic fallback).
+- Matches an existing user by stable `jiraIdentityKey` (or unique username alias / email fallback) or auto-provisions a new internal `User` with role `member`.
+- The token is encrypted using AES-256-GCM at rest; the browser only receives a 30-day `HttpOnly` session cookie. Raw tokens are never stored in browser storage or logs.
+- Bitbucket credentials remain optional and configurable in Settings for branch/PR workflows.
+
+User-initiated Jira and Bitbucket mutations use these encrypted credentials:
 
 - Editing issue metadata.
 - Transitioning an issue.
@@ -158,10 +163,8 @@ authority. Hiding a button in the UI is not an authorization control.
 ### Failure behavior
 
 - Missing personal token: return a setup-required error.
-- Expired personal token: return an integration-authentication error and notify
-  the user to reconnect.
-- Service account unavailable: mark synced data stale and affected gates
-  `unknown`.
+- Expired personal token: return an integration-authentication error and display the reconnect banner.
+- Service account unavailable: mark synced data stale and affected gates `unknown`.
 - Never include tokens in logs, audit payloads or API responses.
 
 ## 6. ADR-003 — Webhook-first with polling reconciliation
@@ -214,6 +217,19 @@ infrastructure state.
 - Handle SIGTERM and stop gracefully.
 - Report last start, last success, last failure and item counts.
 - Use singleton/locking rules to prevent overlapping project syncs.
+
+### Worker jobs (current)
+
+| Job | Schedule | Purpose |
+|---|---|---|
+| `poll-jira` | 1 min | Incremental issue/comment sync |
+| `check-branches` | 5 min | Branch/PR status from Bitbucket API (requires token) |
+| `parse-comment-branches` | 5 min | Parse Jira comments for PR/branch state (no Bitbucket token needed) |
+| `ai-score` | 10 min | Auto-score new unscored issues (optional, `AI_AUTO_SCORE`) |
+| `sentry-import` | 5 min | Create Jira issues from unresolved Sentry issues (idempotent) |
+| `stale-detect` | 30 min | Detect tasks exceeding per-status SLA |
+| `process-webhook` | one-off | Process inbound webhook events (Jira/Sentry/Bitbucket/CI) |
+| `deliver-notifications` | 1 min | Deliver outbox notifications (push + chat) with retry/backoff |
 
 ## 8. ADR-005 — Discord as the first chat integration
 
@@ -339,21 +355,29 @@ deployment platform's secret store and must not be committed.
 
 ## 11. Current state versus target state
 
-This decision record describes the accepted target. The following gaps still
-exist and are tracked in `docs/IMPLEMENTATION_PLAN.md`:
+This decision record describes the accepted target. M0–M8 are implemented
+(2026-09-22). Remaining gaps are tracked in `docs/IMPLEMENTATION_PLAN.md`:
 
 | Area | Current implementation | Accepted target | Work item |
 |---|---|---|---|
-| Board reads | Shared PostgreSQL read model | Shared PostgreSQL read model | Completed in M1-04 |
-| Jira sync | Incremental cursor sync with overlap | Webhook-first + polling reconciliation | M1-03 complete; webhook in M5 |
-| Worker lifecycle | Separate pg-boss process/container | Separate worker process | Completed in M1-05 |
-| Release identity | Jira label | Jira Fix Version | M3-01 |
-| Chat | Web inbox + Discord through `ChatProvider` | Discord first through `ChatProvider` | M6 complete (Discord adapter, commands, outbound, audit); a second adapter (Slack/Teams) still adds via the same interface |
-| Comment events | Web-created comments | Jira webhook + polling repair | M2-04/M5 |
+| Board reads | Shared PostgreSQL read model | Shared PostgreSQL read model | ✅ M1-04 |
+| Jira sync | Incremental cursor sync + webhook + polling reconciliation | Webhook-first + polling reconciliation | ✅ M1-03 + M5 |
+| Worker lifecycle | Separate pg-boss process/container, 8 jobs | Separate worker process | ✅ M1-05 |
+| Release identity | Jira Fix Version | Jira Fix Version | ✅ M3-01 |
+| Release gates | 8-gate engine (non_empty, task_status, critical_bugs, sentry, branches, pull_requests, data_freshness, ai_advisory) | Fail-safe gate engine | ✅ M3-03 |
+| Bulk operations | 10 actions, preview → confirm → worker, max 500 | Bulk with preview/confirm/audit | ✅ M4 |
+| Event/webhook | 4 webhook endpoints + event store + outbox | Webhook-first + dedupe | ✅ M5 |
+| Chat | Discord through `ChatProvider`, commands + confirm + audit | Discord first through `ChatProvider` | ✅ M6; second adapter (Slack/Teams) still pending |
+| AI estimation | Estimate + human review + metrics | AI advisory with human approval | ✅ M7 |
+| Stale analytics | Per-status SLA, 8 reasons, bottleneck dashboard | Bottleneck view, not leaderboard | ✅ M8 |
+| Branch/PR tracking | `check-branches` (Bitbucket API) + `parse-comment-branches` (Jira comment) | Branch/PR evidence for release gates | ✅ (comment-based fallback when no Bitbucket token) |
+| RBAC | `member` / `admin`; chat enforces role | `member` / `release_manager` / `admin` | M9-01 (release_manager role pending) |
+| Audit log | Chat + bulk have audit; release override pending | Full audit for all mutations | M9-02 |
+| Observability | Worker cursor stats, error logging | Structured JSON log, metrics, alerts | M9-03 |
 
-Milestone 1 is implemented; its runtime acceptance checks still need staging
-verification against the real Jira instance. Until M2 is complete, release
-checks must not be used as the sole production release authorization.
+Milestone 9 (hardening/pilot) is the remaining work before production use.
+Until M9 is complete, release checks are advisory and must not be the sole
+production release authorization.
 
 ## 12. Architectural invariants
 

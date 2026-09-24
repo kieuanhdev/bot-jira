@@ -65,6 +65,10 @@ export const env = {
   sentryToken: str("SENTRY_TOKEN"),
   // Sentry base url override (self-hosted). Empty => https://sentry.io
   sentryBaseUrl: str("SENTRY_BASE_URL", "https://sentry.io"),
+  // M2 — Sentry project slug -> Jira project mapping, e.g.
+  //   "mobile-app:EPM,employee-app:MHRM". When empty, imported issues are
+  //   filed into the first entry of JIRA_PROJECT_KEYS (single-project mode).
+  sentryProjectMappings: str("SENTRY_PROJECT_MAPPINGS"),
 
   // AI / LLM. LLM_PROVIDER selects the active provider: "openai" (default)
   // or "ollama".
@@ -100,6 +104,13 @@ export const env = {
   releaseBlockingPriorities: str("RELEASE_BLOCKING_PRIORITIES", "Blocker,Critical"),
   releaseDataFreshnessMinutes: int("RELEASE_DATA_FRESHNESS_MINUTES", 5),
   sentryBlockingLevels: str("SENTRY_BLOCKING_LEVELS", "fatal"),
+  // REL-03 — manual approval policy. Comma-separated required approval types
+  // (e.g. "qa,release_manager"). Empty => no manual approval gate (default).
+  releaseRequiredApprovals: str("RELEASE_REQUIRED_APPROVALS"),
+  // REL-04 — CI gate. When enabled, a release is not ready until CI is green on
+  // the release's commit. Default off so existing deployments are unchanged;
+  // enable per the rollout once CI webhooks are wired.
+  ciGateEnabled: bool("CI_GATE_ENABLED", false),
 
   // Polling
   pollIntervalMs: int("POLL_INTERVAL_MS", 60000),
@@ -114,6 +125,13 @@ export const env = {
   vapidPrivateKey: str("VAPID_PRIVATE_KEY"),
   // The "from" address for push notifications.
   vapidSubject: str("VAPID_SUBJECT", "mailto:admin@team.local"),
+
+  // OPS-03 — Health/freshness alerting. When a background job has no success
+  // record (or a failed record older than the grace window) the alert worker
+  // raises one deduped alert. These thresholds are independent of the SLA used
+  // to block releases.
+  alertStaleCursorMinutes: int("ALERT_STALE_CURSOR_MINUTES", 10),
+  alertRecoveryGraceMs: int("ALERT_RECOVERY_GRACE_MS", 5 * 60_000),
 
   // M5 — Webhook verification. Each source has its own shared secret; the
   // endpoint returns 401 when the signature check fails (or when no secret is
@@ -231,6 +249,12 @@ export const sentryBlockingLevels: string[] = env.sentryBlockingLevels
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
 
+/** REL-03 — required approval types (empty => manual approval gate is vacuous). */
+export const releaseRequiredApprovals: string[] = env.releaseRequiredApprovals
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
 export function hasOllamaConfig(): boolean {
   return Boolean(env.ollamaBaseUrl && env.ollamaModel);
 }
@@ -243,3 +267,12 @@ export function hasOpenAiConfig(): boolean {
 export function hasLLMConfig(): boolean {
   return env.llmProvider === "ollama" ? hasOllamaConfig() : hasOpenAiConfig();
 }
+
+// M2 — re-export the Sentry project-mapping helpers so consumers can import
+// them from the env module alongside the raw config string.
+export {
+  parseSentryMappings,
+  resolveJiraProject,
+  invalidSentryMappings,
+  type SentryMapping,
+} from "@/lib/sentry/mapping";

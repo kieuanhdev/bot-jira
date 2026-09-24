@@ -6,15 +6,18 @@ import { useSession, signOut } from "next-auth/react";
 import { Settings, LogOut, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Derive a short, stable label from the email (e.g. "anhnk").
-function nameFrom(email?: string) {
-  if (!email) return "User";
-  const local = email.split("@")[0] ?? email;
-  return local.charAt(0).toUpperCase() + local.slice(1);
+function nameFrom(name?: string | null, jiraUsername?: string | null, email?: string | null) {
+  if (name?.trim()) return name.trim();
+  if (jiraUsername?.trim()) return jiraUsername.trim();
+  if (email?.trim()) {
+    const local = email.split("@")[0] ?? email;
+    return local.charAt(0).toUpperCase() + local.slice(1);
+  }
+  return "User";
 }
 
-function initials(email?: string) {
-  const n = nameFrom(email);
+function initials(name?: string | null, jiraUsername?: string | null, email?: string | null) {
+  const n = nameFrom(name, jiraUsername, email);
   const parts = n.split(/[\s._-]+/).filter(Boolean);
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "U";
 }
@@ -42,19 +45,21 @@ export function UserMenu() {
   }, [open]);
 
   const email = session?.user?.email ?? undefined;
-  const label = nameFrom(email);
+  const name = session?.user?.name ?? undefined;
+  const jiraUsername = session?.user?.jiraUsername ?? undefined;
+  const label = nameFrom(name, jiraUsername, email);
 
   return (
     <div className="relative" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-accent"
+        className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-accent cursor-pointer"
         aria-haspopup="menu"
         aria-expanded={open}
       >
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-          {initials(email)}
+          {initials(name, jiraUsername, email)}
         </span>
         <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
       </button>
@@ -66,7 +71,7 @@ export function UserMenu() {
         >
           <div className="border-b px-3 py-2">
             <div className="truncate text-sm font-medium">{label}</div>
-            <div className="truncate text-xs text-muted-foreground">{email ?? status}</div>
+            <div className="truncate text-xs text-muted-foreground">{email ?? (jiraUsername ? `@${jiraUsername}` : status)}</div>
           </div>
           <div className="p-1">
             <Link
@@ -74,14 +79,14 @@ export function UserMenu() {
               onClick={() => setOpen(false)}
               className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
             >
-              <Settings className="h-4 w-4" /> Settings
+              <Settings className="h-4 w-4" /> Cài đặt
             </Link>
             <button
               type="button"
               onClick={() => signOut({ callbackUrl: "/login" })}
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-destructive hover:bg-accent"
             >
-              <LogOut className="h-4 w-4" /> Log out
+              <LogOut className="h-4 w-4" /> Đăng xuất
             </button>
           </div>
         </div>

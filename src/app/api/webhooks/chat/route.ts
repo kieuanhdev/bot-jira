@@ -63,17 +63,29 @@ export async function POST(req: Request) {
       where: { id: identity.userId },
       select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true, jiraUsername: true, role: true },
     });
-    const cmd = parseChatCommand(inbound.text);
-    result = await executeChatCommand(cmd, inbound.text, {
-      userId: identity.userId,
-      jiraAuth: userJiraAuth(user),
-      jiraUsername: identity.jiraUsername,
-      role: user?.role ?? "member",
-      provider: providerName,
-      externalAuthorId: inbound.externalAuthorId,
-      externalMessageId: inbound.externalMessageId,
-      channelId: inbound.channelId,
-    });
+    const jiraAuth = userJiraAuth(user);
+    if (!jiraAuth) {
+      result = {
+        status: "blocked" as const,
+        blocks: [
+          { kind: "text" as const, text: "Configure your personal Jira token in Settings before using chat commands." },
+          { kind: "link" as const, label: "Open settings", url: `${process.env.PUBLIC_BASE_URL ?? ""}/settings` },
+        ],
+        text: "Personal Jira credentials are required (Settings → Integrations).",
+      };
+    } else {
+      const cmd = parseChatCommand(inbound.text);
+      result = await executeChatCommand(cmd, inbound.text, {
+        userId: identity.userId,
+        jiraAuth,
+        jiraUsername: identity.jiraUsername,
+        role: user?.role ?? "member",
+        provider: providerName,
+        externalAuthorId: inbound.externalAuthorId,
+        externalMessageId: inbound.externalMessageId,
+        channelId: inbound.channelId,
+      });
+    }
   }
 
   // Post the result back to Discord (best-effort; never fail the ack).

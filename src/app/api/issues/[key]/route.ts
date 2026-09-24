@@ -15,7 +15,14 @@ export async function GET(_req: Request, ctx: { params: Promise<{ key: string }>
     where: { id: session.user.id },
     select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true },
   });
-  const view = await getIssueView(key, userJiraAuth(user));
+  const auth = userJiraAuth(user);
+  if (!auth) {
+    return NextResponse.json(
+      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
+      { status: 428 }
+    );
+  }
+  const view = await getIssueView(key, auth);
   if (!view) return NextResponse.json({ error: "not found" }, { status: 404 });
   return NextResponse.json({ issue: view });
 }
@@ -41,7 +48,14 @@ export async function PATCH(
     where: { id: session.user.id },
     select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true },
   });
-  const client = jiraWith(userJiraAuth(user));
+  const auth = userJiraAuth(user);
+  if (!auth) {
+    return NextResponse.json(
+      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
+      { status: 428 }
+    );
+  }
+  const client = jiraWith(auth);
 
   // Push metadata changes to Jira (source of truth).
   try {

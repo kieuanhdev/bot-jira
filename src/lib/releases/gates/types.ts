@@ -30,7 +30,26 @@ export type ReleaseContext = {
   sentryIssues: SentryIssueInfo[] | null;
   /** Last time the Sentry source was verified; null when it could not be read. */
   sentryCheckedAt: Date | null;
+  /** REL-03 — required approval types; empty means no manual approval gate. */
+  requiredApprovals?: string[];
+  /** REL-03 — which required approvals are currently present (not revoked). */
+  approvalsPresent?: { type: string; present: boolean }[];
+  /** REL-04 — latest CI build states for the release's commits (empty = none). */
+  ciBuilds?: CiBuildState[];
+  /** REL-04 — when true the CI gate is mandatory; default off. */
+  ciGateEnabled?: boolean;
   checkedAt: Date;
+};
+
+export type CiBuildState = {
+  provider: string;
+  commitSha: string;
+  status: string; // pending | success | failed | cancelled
+  testStatus: string | null;
+  url: string | null;
+  completedAt: Date | null;
+  /** The commit the release expects to be checked against. */
+  expectedCommitSha: string | null;
 };
 
 export type TaskInfo = {

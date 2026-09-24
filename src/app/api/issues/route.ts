@@ -81,7 +81,13 @@ export async function GET(req: Request) {
       orderBy: [{ updatedAt: "desc" }, { jiraKey: "asc" }],
       skip: offset,
       take: limit,
-      include: { aiScore: { include: { decisions: { orderBy: { decidedAt: "desc" }, take: 1 } } } },
+      include: {
+        aiScore: { include: { decisions: { orderBy: { decidedAt: "desc" }, take: 1 } } },
+        branches: {
+          where: { deletedAt: null, linkState: { notIn: ["rejected", "manual_unlinked"] } },
+          select: { prState: true, merged: true },
+        },
+      },
     }),
     prisma.issueCache.count({ where }),
     prisma.integrationCursor.findMany({
@@ -122,6 +128,13 @@ export async function GET(req: Request) {
             decision: item.aiScore.decisions[0].decision,
             finalPoints: item.aiScore.decisions[0].finalPoints,
             decidedAt: item.aiScore.decisions[0].decidedAt,
+          }
+        : null,
+      delivery: item.branches && item.branches.length > 0
+        ? {
+            branchCount: item.branches.length,
+            prOpen: item.branches.some((b) => (b.prState ?? "").toUpperCase() === "OPEN"),
+            prMerged: item.branches.some((b) => (b.prState ?? "").toUpperCase() === "MERGED" || b.merged),
           }
         : null,
     })),

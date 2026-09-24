@@ -9,14 +9,27 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
   if (!session?.user?.id) redirect("/login");
 
-  // There is no shared team token: every user must link their own Jira token
-  // before using the app. Gate the whole (app) group on that.
+  // Shared service credentials are only for background synchronization. Every
+  // interactive user must link a verified personal Jira account and finish project onboarding.
+  // Bitbucket is optional and configured in Settings.
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true, onboarded: true },
+    select: {
+      jiraUserEnc: true,
+      jiraTokenEnc: true,
+      jiraAuth: true,
+      jiraVerifiedAt: true,
+      onboarded: true,
+    },
   });
-  // Must link Jira, then complete first-run onboarding (pick projects) once.
-  if (!userJiraAuth(user) || !user?.onboarded) redirect("/setup-jira");
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!userJiraAuth(user) || !user.jiraVerifiedAt || !user.onboarded) {
+    redirect("/setup-jira");
+  }
 
   return <AppShell>{children}</AppShell>;
 }

@@ -145,20 +145,21 @@ Mỗi gate trả một trong bốn trạng thái:
 
 ### 5.2 Mandatory gates
 
-| Gate | Điều kiện pass | Điều kiện failed | Điều kiện unknown |
-|---|---|---|---|
-| `non_empty_release` | Release có ít nhất một issue | Không có issue | Không đọc được Fix Version |
-| `task_status` | Tất cả issue có category `done` | Có issue chưa done | Issue/category không đọc được |
-| `critical_bugs` | Không có bug Blocker/Critical đang mở | Có bug chặn đang mở | Jira data cũ/không đọc được |
-| `sentry` | Không có fatal unresolved trong scope | Có fatal unresolved trong scope | Sentry lỗi hoặc dữ liệu cũ |
-| `pull_requests` | Tất cả PR bắt buộc đã merge đúng base/release branch | Có PR open/closed/declined/chưa tạo | Không map/không đọc được PR bắt buộc |
-| `ci` | Build và test của release commit thành công | Build/test failed | Chưa có build hoặc CI không truy cập được |
-| `data_freshness` | Jira/Sentry/Bitbucket/CI nằm trong SLA | — | Có source vượt SLA hoặc chưa sync |
-| `manual_approval` | Release manager/QA đã approve | Approval bị revoke | Chưa có approval |
+| Gate | Trạng thái implement | Điều kiện pass | Điều kiện failed | Điều kiện unknown |
+|---|---|---|---|---|
+| `non_empty_release` | ✅ | Release có ít nhất một issue | Không có issue | Không đọc được Fix Version |
+| `task_status` | ✅ | Tất cả issue có category `done` | Có issue chưa done | Issue/category không đọc được |
+| `critical_bugs` | ✅ | Không có bug Blocker/Critical đang mở | Có bug chặn đang mở | Jira data cũ/không đọc được |
+| `sentry` | ✅ | Không có fatal unresolved trong scope | Có fatal unresolved trong scope | Sentry lỗi hoặc dữ liệu cũ |
+| `branches` | ✅ | Tất cả branch có PR | Branch không có PR | Không có branch data |
+| `pull_requests` | ✅ | Tất cả PR đã MERGED | PR CLOSED/DECLINED | PR OPEN hoặc không có PR data |
+| `data_freshness` | ✅ | Jira/Sentry/Bitbucket nằm trong SLA (5 phút) | — | Có source vượt SLA hoặc chưa sync |
+| `ci` | ❌ | Build và test của release commit thành công | Build/test failed | Chưa có build hoặc CI không truy cập được |
+| `manual_approval` | ❌ | Release manager/QA đã approve | Approval bị revoke | Chưa có approval |
 
-Trong Pilot MVP, `ci` chỉ trở thành mandatory sau khi CI webhook được tích hợp.
-Trước thời điểm đó, gate phải hiển thị `not_configured` và release manager phải
-xác nhận thủ công; không được giả lập `passed`.
+`ci` và `manual_approval` chưa implement (pending M9). Trong thời gian chưa có,
+2 gate này không chạy — release chỉ dựa trên 7 gate còn lại. CI integration và
+manual approval sẽ được thêm trong M9.
 
 ### 5.3 Advisory gates
 
@@ -237,6 +238,19 @@ Nếu không xác định được scope, không tự chặn nhưng tạo adviso
 - Task được đánh dấu `no-code` không yêu cầu PR, nhưng nhãn/decision phải được
   lưu và audit.
 
+**Nguồn dữ liệu PR/branch (2 nguồn, ưu tiên theo khả dụng):**
+
+1. **Bitbucket API** (`check-branches` worker, 5 phút) — đầy đủ nhất: biết PR
+   OPEN/CLOSED/MERGED/DECLINED, destination branch, last commit. Cần token
+   Bitbucket + `BITBUCKET_REPOS`.
+2. **Jira comment** (`parse-comment-branches` worker, 5 phút) — fallback khi
+   không có token Bitbucket. Parse comment do Bitbucket auto-post trên Jira
+   (VD "Merged pull request #123 from EPM-123 to main"). Chỉ biết PR đã merge
+   (không chặn được PR đang OPEN → gate = `unknown`). Không cần token Bitbucket.
+
+Cả hai nguồn viết vào cùng bảng `BranchInfo`. Release gate đọc từ `BranchInfo`,
+không quan tâm nguồn dữ liệu.
+
 ### 7.2 CI
 
 - Dùng commit SHA đã merge hoặc release branch HEAD làm evidence.
@@ -274,8 +288,10 @@ Policy chốt ba role:
 - `release_manager`
 - `admin`
 
-`release_manager` cần được thêm vào Prisma schema trong M3. Trước migration,
-chỉ `admin` được thực hiện hành động tương đương release manager.
+Trạng thái hiện tại (M8): chỉ `member` và `admin` có trong Prisma schema.
+`release_manager` sẽ được thêm trong M9-01. Trước đó, `admin` thực hiện hành
+động tương đương release manager. Chat command `/release <v> check` đã enforce
+role (chỉ `admin` được chạy — sẽ mở rộng cho `release_manager` khi có role).
 
 ### 9.2 Permission matrix
 
@@ -469,17 +485,26 @@ correlation ID. Không lưu secret trong audit payload.
 
 ## 16. Implementation gaps
 
-Policy đã được chốt nhưng code hiện tại chưa enforce đầy đủ:
+Policy đã được chốt. M0–M8 đã implement (2026-09-22). Các gap còn lại:
 
-| Gap | Work item |
-|---|---|
-| Cache đã lưu status category và statusChangedAt; cần staging verification | M1 completed |
-| Release checker còn hardcode status names | M2-02/M3-03 |
-| Release status chưa có `checking`/`unknown` | M3-01/M3-02 |
-| Chưa có `release_manager` role | M3-04/M9-01 |
-| Chưa có Sentry release scope | M2-01/M3-03 |
-| Chưa có CI integration | M3-03/M5 |
-| Stale chỉ dùng một ngưỡng global | M8 completed |
+| Gap | Trạng thái | Work item |
+|---|---|---|
+| Cache status category + statusChangedAt | ✅ M1 completed | — |
+| Release checker dùng status category (không hardcode) | ✅ M3-03 gate engine | — |
+| Release status `checking`/`unknown`/`blocked`/`ready`/`released` | ✅ M3-02 | — |
+| 8-gate engine (non_empty, task_status, critical_bugs, sentry, branches, pull_requests, data_freshness, ai_advisory) | ✅ M3-03 | — |
+| Fail-safe: unknown ≠ ready, release rỗng luôn blocked | ✅ M2-02/M3-03 | — |
+| AI advisory không tự chặn hoặc tự cho pass | ✅ M3-03 `ai-advisory.ts` | — |
+| Branch/PR tracking từ Jira comment (không cần token Bitbucket) | ✅ M4-06 `parse-comment-branches` | — |
+| Branch/PR tracking từ Bitbucket API (đầy đủ, kể cả PR OPEN) | ⚠️ Cần token Bitbucket | `check-branches` worker |
+| `release_manager` role | ❌ Chưa có (chỉ `member`/`admin`) | M9-01 |
+| Override gate (form + audit + expiry) | ❌ Chưa implement | M3-04/M9 |
+| CI gate | ❌ Chưa có CI integration | M3-03/M5 |
+| Manual approval gate | ❌ Chưa implement | M3-03/M9 |
+| Sentry release scope (khớp environment/release) | ⚠️ Gate `sentry` check level blocking; scope chưa chặt | M3-03 |
+| Audit log cho mọi mutation (bulk, chat, release, override) | ⚠️ Chat + bulk có audit; release override pending | M9-02 |
+| Observability (structured log, metrics, alerts) | ❌ Chưa có | M9-03 |
+| Stale per-status SLA | ✅ M8 completed | — |
 
-Cho tới khi các gap P0 được xử lý, release ready-check hiện tại chỉ mang tính
-tham khảo và không phải quyền phê duyệt production release.
+Cho tới khi M9 (hardening) hoàn thành, release ready-check mang tính tham khảo
+và không phải quyền phê duyệt production release.

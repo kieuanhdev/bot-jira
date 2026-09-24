@@ -3,10 +3,10 @@
 Web nội bộ hỗ trợ team thao tác phía trên Jira. Jira vẫn là source of truth;
 web cung cấp board, automation, release gate và notification.
 
-> **Trạng thái:** dự án đang ở giai đoạn MVP. Milestone 1 đã chuyển Board và
-> các tính năng nền sang PostgreSQL read model chung, đồng thời tách worker
-> thành process riêng. Kiến trúc và các quyết định đã chốt nằm tại
-> [`docs/architecture.md`](docs/architecture.md); kế hoạch chuyển đổi nằm tại
+> **Trạng thái:** MVP — M0–M8 đã hoàn thành (2026-09-22). Board, release gate,
+> bulk operation, event/notification, chat (Discord), AI estimation và stale
+> analytics đều đã implement. Kiến trúc và các quyết định đã chốt nằm tại
+> [`docs/architecture.md`](docs/architecture.md); kế hoạch chi tiết nằm tại
 > [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md). Workflow và
 > release policy nằm tại [`docs/release-policy.md`](docs/release-policy.md).
 
@@ -14,17 +14,17 @@ web cung cấp board, automation, release gate và notification.
 
 | # | Yêu cầu | Trạng thái |
 |---|---|---|
-| 1 | Đồng bộ Jira (poll issue + comment vào cache) | ✅ Incremental sync + cursor + reconciliation |
+| 1 | Đồng bộ Jira (poll issue + comment vào cache) | ✅ Incremental sync + cursor + reconciliation + webhook |
 | 2 | Kanban board (thay Jira), search, filter | ✅ |
-| 3 | Sửa metadata task + **bulk sửa nhiều task** | ✅ |
-| 4 | **AI chấm task point** (Ollama) | ✅ M7: estimate giải thích được (confidence, missing info, similar tasks) + human review Accept/Edit/Reject, chỉ ghi Jira sau khi xác nhận + metrics |
-| 5 | **Release management** + ready-check (rule + AI) + cảnh báo | ⚠️ MVP, chưa dùng cho production gate |
-| 6 | **Tự tạo task Jira từ Sentry** (cron) | ⚠️ MVP, cần hoàn thiện idempotency |
-| 7 | **Check nhánh chưa merge** (Bitbucket DC) | ⚠️ MVP, cần sửa mapping trạng thái PR |
-| 8 | **Stale / task ngâm** + xếp hạng ai ngâm nhiều nhất | ✅ Đọc read model chung |
-| 9 | **Notification** in-app + Web Push + **Inbox lệnh chuyển trạng thái** | ✅ |
- | 10 | **Watch** task quan tâm + notify comment mới | ⚠️ Chưa nhận comment tạo trực tiếp trên Jira |
- | 11 | **Chat (Discord)** — nhận cảnh báo + chạy command an toàn | ✅ M6: `ChatProvider` vendor-neutral, adapter Discord, outbound alert + command có confirm/audit |
+| 3 | Sửa metadata task + **bulk sửa nhiều task** | ✅ M4: 10 action (assign, labels, points, priority, transition, fix-version, comment, create-branches), preview → confirm → worker, max 500 task |
+| 4 | **AI chấm task point** (OpenAI-compatible / Ollama) | ✅ M7: estimate giải thích được (confidence, missing info, similar tasks) + human review Accept/Edit/Reject, chỉ ghi Jira sau khi xác nhận + metrics |
+| 5 | **Release management** + ready-check (rule + AI) + cảnh báo | ✅ M3: 8 gate engine (non_empty, task_status, critical_bugs, sentry, branches, pull_requests, data_freshness, ai_advisory), Fail-safe: unknown ≠ ready, release rỗng luôn blocked |
+| 6 | **Tự tạo task Jira từ Sentry** (cron) | ✅ M2: Idempotent qua `SentryIssueImported` mapping, phục hồi qua label, backoff + failed sau 5 lần |
+| 7 | **Check nhánh chưa merge** (Bitbucket DC + Jira comment) | ✅ M2 + parse-comment: `check-branches` (API, cần token) + `parse-comment-branches` (parse Jira comment, không cần token) |
+| 8 | **Stale / task ngâm** + phân tích bottleneck | ✅ M8: per-status SLA, 8 lý do chờ, dashboard bottleneck + trend + support view |
+| 9 | **Notification** in-app + Web Push + **Inbox lệnh chuyển trạng thái** | ✅ M5: Outbox retry/backoff/dedupe, preference theo event type, digest mode |
+| 10 | **Watch** task quan tâm + notify comment mới | ✅ M5: Nhận comment từ Jira webhook + polling fallback |
+| 11 | **Chat (Discord)** — nhận cảnh báo + chạy command an toàn | ✅ M6: `ChatProvider` vendor-neutral, adapter Discord, outbound alert + command có confirm/audit |
 
 ## Công nghệ
 
@@ -44,15 +44,18 @@ web cung cấp board, automation, release gate và notification.
 
 ```
 [web — Next.js]
- ├─ API Routes (/api/*)     → PostgreSQL read model + user mutations
- └─ Board / Release / Bulk / Watch / Stale
+  ├─ API Routes (/api/*)     → PostgreSQL read model + user mutations
+  └─ Board / Release / Bulk / Watch / Stale / Branches / Inbox / Settings
 [worker — pg-boss]
- ├─ poll-jira          (1–2 phút)  incremental issue/comment sync
- ├─ check-branches     (5 phút)    nhánh chưa merge
- ├─ ai-score           (10 phút)   chấm task mới (tuỳ chọn)
- ├─ sentry-import      (5 phút)    tạo Jira issue từ Sentry
- └─ stale-detect       (30 phút)   phát hiện task ngâm
-[PostgreSQL]   [Jira DC]  [Bitbucket DC]  [Sentry]  [LLM API cty]
+  ├─ poll-jira              (1 phút)    incremental issue/comment sync
+  ├─ check-branches         (5 phút)    nhánh chưa merge (Bitbucket API, cần token)
+  ├─ parse-comment-branches (5 phút)    parse Jira comment để trích PR/branch state (không cần token BB)
+  ├─ ai-score               (10 phút)   chấm task mới (tuỳ chọn)
+  ├─ sentry-import          (5 phút)    tạo Jira issue từ Sentry
+  ├─ stale-detect           (30 phút)   phát hiện task ngâm
+  ├─ process-webhook        (one-off)  xử lý webhook Jira/Sentry/Bitbucket/CI
+  └─ deliver-notifications  (1 phút)   gửi push + chat qua outbox
+[PostgreSQL]   [Jira DC]  [Bitbucket DC]  [Sentry]  [LLM API cty]  [Discord]
 ```
 
 Jira là source of truth. Worker dùng service account để đồng bộ issue/comment
@@ -71,13 +74,14 @@ Web hiển thị **nhiều dự án Jira** (mặc định mobile: `CICM, EDM, EM
 
 **Auth Jira**: server này nhận token **Bearer** (`JIRA_AUTH=Bearer`, mặc định). Nếu server khác dùng Basic: `JIRA_AUTH=basic`.
 
-## Tự đăng ký & liên kết tài khoản của từng thành viên
+## Đăng nhập & Xác thực bằng Jira Token
 
-1. **Đăng ký**: mở `/register` → nhập tên, email, mật khẩu → tự đăng nhập. (Tắt đăng ký công khai: `REGISTER_DISABLED=1`.)
-2. **Liên kết Jira/Bitbucket của riêng mình**: **Settings → My integrations** → dán token Jira (chọn Bearer/Basic) + token Bitbucket → **Save & verify**.
-   - Token **mã hoá AES-256-GCM** lưu trên tài khoản (chìa `CRED_ENCRYPTION_KEY`).
-   - Sau khi lưu, web **gọi Jira/Bitbucket dưới quyền người dùng đó** (task, branch, transition, bulk edit… của chính họ). Để trống → dùng chung token team (env).
-3. Board đọc read model chung; token cá nhân được dùng cho mutation.
+1. **Đăng nhập một bước**: mở `/login` → dán Jira Personal Access Token (PAT) → bấm **Kết nối và tiếp tục**.
+   - Server tự động xác minh token qua Jira `/myself` (hỗ trợ Bearer ưu tiên và Basic fallback).
+   - Tự động liên kết tài khoản cũ hoặc tạo User nội bộ mới với role `member`.
+   - Token được **mã hóa AES-256-GCM** trên server (chìa `CRED_ENCRYPTION_KEY`). Trình duyệt chỉ lưu cookie phiên 30 ngày và không bao giờ giữ token.
+2. **Onboarding rút gọn**: Lần đầu đăng nhập, chọn các dự án muốn theo dõi trên Board → vào thẳng bảng công việc. Bitbucket là tích hợp tùy chọn trong **Settings → My integrations** (dành cho thao tác nhánh/PR).
+3. **Rollback / Break-glass**: Đăng nhập bằng email/mật khẩu cũ được ẩn khỏi UI và chỉ kích hoạt khi cấu hình `LEGACY_PASSWORD_LOGIN=1`.
 
 ## Chạy local (dev)
 
@@ -135,10 +139,30 @@ Xem đầy đủ + mô tả trong [`.env.example`](.env.example).
 - `GET /api/issues/:key` — detail (comments, AI score, releases, stale).
 - `PATCH /api/issues/:key` — sửa metadata (gửi Jira).
 - `POST /api/issues/:key/transition` — chuyển trạng thái (gửi Jira).
-- `POST /api/issues/bulk` — bulk action.
+- `POST /api/issues/:key/ai-score` — chạy AI estimate cho issue.
+- `POST /api/issues/:key/ai-score/decision` — accept/edit/reject AI estimate.
+- `GET /api/ai/estimation/metrics` — metrics AI estimation (accept rate, deviation).
+- `POST /api/issues/bulk` — bulk action (preview).
+- `POST /api/bulk/:id/confirm` — confirm bulk operation.
+- `GET /api/bulk/:id` — xem kết quả bulk operation.
 - `POST /api/inbox/command` — parse + chuyển trạng thái từ lệnh tự do.
-- `GET /api/releases`, `POST /api/releases/:id/ready` — release + ready-check.
-- `GET /api/stale`, `GET /api/branches`, `GET /api/watch`, `GET /api/notify`.
+- `GET /api/releases` — list release.
+- `POST /api/releases` — tạo release (gắn Jira Fix Version).
+- `POST /api/releases/:id/ready` — chạy ready-check (gate engine + AI).
+- `GET /api/releases/:id/versions` — list Jira Fix Versions của project.
+- `GET /api/stale` — stale analytics (bottleneck, trend, support, blocked).
+- `GET /api/branches` — list tracked branches (từ Bitbucket API + Jira comment).
+- `GET /api/watch` — list watched tasks.
+- `POST /api/watch` — watch/unwatch task.
+- `GET /api/notify` — list notifications.
+- `GET /api/projects` — list Jira projects + columns.
+- `PUT /api/me/credentials` — save/disconnect Jira/Bitbucket token.
+- `GET /api/me/integrations` — check integration status.
+- `POST /api/webhooks/jira` — Jira webhook (issue/comment/transition).
+- `POST /api/webhooks/sentry` — Sentry webhook.
+- `POST /api/webhooks/bitbucket` — Bitbucket webhook.
+- `POST /api/webhooks/ci` — CI webhook.
+- `POST /api/webhooks/chat` — Chat (Discord) webhook.
 
 ## Điểm cần xác nhận / giả định hiện tại
 
@@ -150,13 +174,16 @@ xác nhận các mục sau và cập nhật `.env`:
    (ví dụ `customfield_10016`) — cần để ghi points/AI điểm về Jira; để trống = không ghi points.
 2. **Bitbucket Server DC** — version (5/6/7) ảnh hưởng endpoint. Code dùng `/rest/api/1.0/...`
    (branches, pull-requests). Nếu version khác thì sửa `src/lib/bitbucket/client.ts`.
-3. **LLM API (cty cấp)** — đặt `OPENAI_BASE_URL` + `OPENAI_API_KEY` + `OPENAI_MODEL` cho
-   endpoint OpenAI-compatible của cty. Có **retry + fallback** (điểm mặc định trung bình của
-   `POINT_SCALE`) nếu model trả sai JSON. Muốn self-host Ollama: đặt `LLM_PROVIDER=ollama`.
-4. **Sentry** — self-hosted hay SaaS (đặt `SENTRY_BASE_URL`), org + project + token đọc issues.
-5. **Quy ước label release** — release gắn theo một Jira label (ví dụ `release-1.4.2`). Đổi theo team.
-6. **Web Push** — cần **HTTPS** (hoặc localhost). Môi trường nội bộ dùng self-signed cert + trust.
-   Tạo key VAPID: `npx web-push generate-vapid-keys` → điền `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`.
+ 3. **LLM API (cty cấp)** — đặt `OPENAI_BASE_URL` + `OPENAI_API_KEY` + `OPENAI_MODEL` cho
+    endpoint OpenAI-compatible của cty. AI lỗi trả `unavailable` (503), không fabricate
+    estimate. Muốn self-host Ollama: đặt `LLM_PROVIDER=ollama`.
+ 4. **Sentry** — self-hosted hay SaaS (đặt `SENTRY_BASE_URL`), org + project + token đọc issues.
+    Sentry import idempotent: mỗi Sentry issue chỉ tạo tối đa 1 Jira issue.
+ 5. **Release theo Jira Fix Version** — release gắn theo Jira Fix Version (không dùng label).
+    Tạo release trong web → link hoặc tạo mới Fix Version. Task thuộc release = issue có
+    `fixVersionIds` chứa version đó.
+ 6. **Web Push** — cần **HTTPS** (hoặc localhost). Môi trường nội bộ dùng self-signed cert + trust.
+    Tạo key VAPID: `npx web-push generate-vapid-keys` → điền `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`.
  7. **Phân quyền** — `member` / `admin` (cấp thủ công trong Settings). Admin: settings, user roles.
     (SSO/LDAP để phase 2.)
  8. **Chat (Discord)** — optional. Tạo Discord bot → lấy token, set
@@ -165,6 +192,10 @@ xác nhận các mục sau và cập nhật `.env`:
     **Settings → Chat** (dán Discord user id). Command trong channel: `/task`,
     `/move`, `/assign`, `/watch`, `/unwatch`, `/release <v> check`, `/stale`,
     `/confirm`. Command chạy bằng quyền Jira của user đã link; bulk cần `/confirm`.
+ 9. **Bitbucket (optional)** — Branches tab + release gate `branches`/`pull_requests`
+    hoạt động khi có `BITBUCKET_BASE_URL` + token + `BITBUCKET_REPOS`. Không có token
+    Bitbucket thì worker `parse-comment-branches` parse Jira comment để trích PR/branch
+    state (chỉ biết PR đã merge, không chặn được PR đang OPEN).
 
 ### Lưu ý kỹ thuật
 

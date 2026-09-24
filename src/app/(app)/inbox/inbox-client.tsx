@@ -68,9 +68,9 @@ export function InboxClient() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold">Inbox / Command</h1>
+        <h1 className="text-xl font-semibold">Hộp thư lệnh</h1>
         <p className="text-sm text-muted-foreground">
-          Paste commands from chat (or type them) to move tasks. e.g.
+          Dán lệnh từ chat (hoặc gõ trực tiếp) để chuyển trạng thái task. Ví dụ:
           <code className="mx-1 rounded bg-muted px-1 text-xs">MOVE PROJ-123 TO In Progress</code>
         </p>
       </div>
@@ -101,7 +101,7 @@ export function InboxClient() {
             </div>
             <Button onClick={send} disabled={busy} className="gap-1.5">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizonal className="h-4 w-4" />}
-              Send
+              Gửi
             </Button>
           </div>
         </CardContent>
@@ -109,8 +109,8 @@ export function InboxClient() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Transcript</CardTitle>
-          <CardDescription>Most recent commands first.</CardDescription>
+          <CardTitle>Lịch sử lệnh</CardTitle>
+          <CardDescription>Lệnh gần nhất hiển thị trước.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {log.length === 0 && (
@@ -118,9 +118,9 @@ export function InboxClient() {
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                 <Inbox className="h-6 w-6 text-muted-foreground" />
               </div>
-              <p className="text-sm text-muted-foreground">No commands sent yet.</p>
+              <p className="text-sm text-muted-foreground">Chưa có lệnh nào được gửi.</p>
               <p className="max-w-xs text-xs text-muted-foreground">
-                Type a command above and press <kbd className="rounded bg-muted px-1">⌘/Ctrl + Enter</kbd> to send.
+                Gõ lệnh ở trên và nhấn <kbd className="rounded bg-muted px-1">⌘/Ctrl + Enter</kbd> để thực thi.
               </p>
             </div>
           )}
@@ -128,7 +128,7 @@ export function InboxClient() {
             <div key={entry.id} className="rounded-md border p-3">
               <div className="flex items-center justify-between">
                 <code className="text-xs">{entry.command}</code>
-                <Badge variant={entry.ok ? "success" : "danger"}>{entry.ok ? "ok" : "failed"}</Badge>
+                <Badge variant={entry.ok ? "success" : "danger"}>{entry.ok ? "thành công" : "thất bại"}</Badge>
               </div>
               {entry.reason && <p className="mt-1 text-xs text-muted-foreground">{entry.reason}</p>}
               {entry.results && (
@@ -136,7 +136,7 @@ export function InboxClient() {
                   {entry.results.map((r, i) => (
                     <li key={i} className="flex items-center gap-2 text-xs">
                       <Badge variant={r.ok ? "success" : "danger"} className="h-4 px-1.5 text-[10px]">
-                        {r.ok ? "ok" : "fail"}
+                        {r.ok ? "thành công" : "lỗi"}
                       </Badge>
                       <span className="font-mono">{r.key}</span>
                       {r.transitionedTo && <span className="text-muted-foreground">→ {r.transitionedTo}</span>}

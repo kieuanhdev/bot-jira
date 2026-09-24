@@ -62,14 +62,14 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
       {isAdmin && (
         <Card>
           <CardHeader>
-            <CardTitle>Service health</CardTitle>
+            <CardTitle>Tình trạng dịch vụ</CardTitle>
             <CardDescription>
-              Pings Postgres, Jira, Bitbucket, Sentry, and Ollama. Also boots the cron jobs.
+              Kiểm tra kết nối Postgres, Jira, Bitbucket, Sentry và Ollama. Khởi động tác vụ định kỳ.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <Button onClick={checkHealth} disabled={checking}>
-              {checking ? "Checking…" : "Run health check"}
+              {checking ? "Đang kiểm tra…" : "Kiểm tra kết nối"}
             </Button>
             {health && (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -80,7 +80,7 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium capitalize">{k}</span>
                         <Badge variant={s.ok ? "success" : "danger"}>
-                          {s.ok ? "ok" : "down"}
+                          {s.ok ? "hoạt động" : "mất kết nối"}
                         </Badge>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -98,19 +98,19 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
       {isAdmin && (
         <Card>
           <CardHeader>
-            <CardTitle>Users & roles</CardTitle>
+            <CardTitle>Người dùng &amp; vai trò</CardTitle>
             <CardDescription>
-              Assign member/admin roles and map Jira usernames for notifications.
+              Phân vai trò thành viên/quản trị viên và gán username Jira để nhận thông báo.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
-                  <th className="py-1.5">User</th>
+                  <th className="py-1.5">Người dùng</th>
                   <th>Jira</th>
-                  <th>Role</th>
-                  <th>Joined</th>
+                  <th>Vai trò</th>
+                  <th>Ngày tham gia</th>
                 </tr>
               </thead>
               <tbody>
@@ -128,12 +128,12 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
                         value={u.role}
                         onValueChange={(v) => setUserRole(u.id, v as "member" | "admin")}
                       >
-                        <SelectTrigger className="h-8 w-28">
+                        <SelectTrigger className="h-8 w-32">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="member">member</SelectItem>
-                          <SelectItem value="admin">admin</SelectItem>
+                          <SelectItem value="member">thành viên</SelectItem>
+                          <SelectItem value="admin">quản trị viên</SelectItem>
                         </SelectContent>
                       </Select>
                     </td>
@@ -149,7 +149,7 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
       {!isAdmin && (
         <Card>
           <CardContent className="text-sm text-muted-foreground">
-            You need the admin role to manage users.
+            Bạn cần quyền quản trị viên (admin) để quản lý người dùng.
           </CardContent>
         </Card>
       )}

@@ -40,18 +40,20 @@ export async function GET() {
       : m.slice(0, 160);
 
   let jiraStatus: { ok: boolean; detail?: string } = { ok: false };
-  if (jiraLinked && hasJiraConfig()) {
+  const jiraAuth = userJiraAuth(user);
+  if (jiraLinked && jiraAuth && env.jiraBaseUrl) {
     try {
-      const me = await jiraWith(userJiraAuth(user)).me();
+      const me = await jiraWith(jiraAuth).me();
       jiraStatus = { ok: true, detail: me.displayName || me.name };
     } catch (e) {
       jiraStatus = { ok: false, detail: clean((e as Error).message) };
     }
   }
   let bbStatus: { ok: boolean; detail?: string } = { ok: false };
-  if (bbLinked && env.bitbucketBaseUrl && bitbucketRepoList[0]) {
+  const bbCreds = userBitbucketCreds(user);
+  if (bbLinked && bbCreds && env.bitbucketBaseUrl && bitbucketRepoList[0]) {
     try {
-      await bb.listBranches(bitbucketRepoList[0], userBitbucketCreds(user));
+      await bb.listBranches(bitbucketRepoList[0], bbCreds);
       bbStatus = { ok: true, detail: bitbucketRepoList[0] };
     } catch (e) {
       bbStatus = { ok: false, detail: clean((e as Error).message) };
@@ -61,9 +63,8 @@ export async function GET() {
   return NextResponse.json({
     jira: { linked: jiraLinked, status: jiraStatus, verifiedAt: user.jiraVerifiedAt },
     bitbucket: { linked: bbLinked, status: bbStatus, verifiedAt: user.bitbucketVerifiedAt },
-    // Shared fallbacks exist even if the user hasn't linked their own.
-    sharedJira: hasJiraConfig(),
-    sharedBitbucket: hasBitbucketConfig(),
+    // System credentials may sync shared data, but are never a user fallback.
+    syncAvailable: { jira: hasJiraConfig(), bitbucket: hasBitbucketConfig() },
     bitbucketRepo: bitbucketRepoList[0] ?? null,
   });
 }
