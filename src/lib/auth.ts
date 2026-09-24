@@ -18,7 +18,6 @@ const providers: NextAuthOptions["providers"] = [
       const { cleanString } = await import("@/lib/jira/auth-service");
       const cleanUsername = cleanString(credentials?.username) || undefined;
 
-      console.log(`[AUTH] authorize called. Token length: ${token.length}, username: ${cleanUsername || "(none)"}`);
       if (!token) {
         console.warn("[AUTH] Token empty");
         throw new Error("Vui lòng nhập Jira API token.");
@@ -35,24 +34,19 @@ const providers: NextAuthOptions["providers"] = [
         throw new Error("Quá nhiều yêu cầu đăng nhập. Vui lòng thử lại sau ít phút.");
       }
 
-      console.log("[AUTH] Verifying Jira credential...");
       const verification = await verifyJiraCredential({
         token,
         username: cleanUsername,
       });
 
-      console.log("[AUTH] Verification result:", verification.ok ? `OK (${verification.displayName} - ${verification.identityKey})` : `FAILED: ${verification.code} - ${verification.message}`);
-
       if (!verification.ok) {
         throw new Error(verification.message);
       }
 
-      console.log("[AUTH] Resolving/persisting user in DB...");
       const resolved = await resolveAndPersistJiraUser(
         verification,
         cleanUsername
       );
-      console.log(`[AUTH] User resolved successfully: ID ${resolved.user.id}, jiraUsername ${resolved.user.jiraUsername}`);
 
       // Return minimal session profile. Never return Jira token!
       return {

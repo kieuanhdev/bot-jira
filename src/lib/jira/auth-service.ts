@@ -108,7 +108,6 @@ export async function verifyJiraCredential(input: {
   for (const candidate of candidates) {
     try {
       const url = `${base}/rest/api/2/myself`;
-      console.log(`[JIRA_AUTH] Calling Jira ${candidate.mode} at ${url}...`);
       const res = await fetch(url, {
         headers: {
           Accept: "application/json",
@@ -118,11 +117,9 @@ export async function verifyJiraCredential(input: {
       });
 
       lastStatus = res.status;
-      console.log(`[JIRA_AUTH] Jira responded with status ${res.status}`);
 
       if (res.ok) {
         const me = (await res.json()) as JiraUser;
-        console.log(`[JIRA_AUTH] Jira user profile: name=${me.name}, key=${me.key}, email=${me.emailAddress}`);
 
         // Block inactive Jira account
         if (me.active === false) {
