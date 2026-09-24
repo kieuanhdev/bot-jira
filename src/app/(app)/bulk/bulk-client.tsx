@@ -45,7 +45,6 @@ import {
   RefreshCw,
   X,
   TriangleAlert,
-  User,
 } from "lucide-react";
 
 type BulkAction =
