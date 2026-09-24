@@ -3,6 +3,31 @@ import { isSameUser, notifyPrComment } from "./notify-pr-comment";
 import { prisma } from "@/lib/prisma";
 import { notifyUser } from "@/lib/notify";
 import { deliverToChat } from "@/lib/notify/chat-delivery";
+import type { User } from "@prisma/client";
+
+const now = new Date();
+const userRow = (id: string, jiraUsername: string, email: string) =>
+  ({
+    id,
+    email,
+    passwordHash: null,
+    displayName: jiraUsername,
+    jiraUsername,
+    jiraIdentityKey: null,
+    role: "member",
+    pushSubscription: null,
+    jiraUserEnc: null,
+    jiraTokenEnc: null,
+    jiraAuth: null,
+    bitbucketUserEnc: null,
+    bitbucketTokenEnc: null,
+    jiraVerifiedAt: null,
+    bitbucketVerifiedAt: null,
+    boardProjects: [],
+    onboarded: false,
+    createdAt: now,
+    updatedAt: now,
+  }) satisfies User;
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -59,13 +84,13 @@ describe("notifyPrComment", () => {
       const mockFindMany = vi.mocked(prisma.user.findMany);
       // First call for matching users by username/email
       mockFindMany.mockResolvedValueOnce([
-        { id: "user-author", jiraUsername: "author_jira", email: "author@team.com" },
-        { id: "user-reviewer", jiraUsername: "reviewer_jira", email: "reviewer@team.com" },
-      ] as any);
+        userRow("user-author", "author_jira", "author@team.com"),
+        userRow("user-reviewer", "reviewer_jira", "reviewer@team.com"),
+      ]);
       // Second call for bitbucketUserEnc fallback
       mockFindMany.mockResolvedValueOnce([]);
 
-      vi.mocked(notifyUser).mockResolvedValue({ id: "notif-1" } as any);
+      vi.mocked(notifyUser).mockResolvedValue({ id: "notif-1" } as Awaited<ReturnType<typeof notifyUser>>);
 
       const result = await notifyPrComment({
         repo: "EPM/easy_pos",

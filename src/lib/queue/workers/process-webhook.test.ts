@@ -3,6 +3,21 @@ import { runProcessWebhook } from "./process-webhook";
 import { prisma } from "@/lib/prisma";
 import { notifyPrComment } from "@/lib/bitbucket/notify-pr-comment";
 import * as guardModule from "../guard";
+import type { IntegrationEvent } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
+
+const eventRow = (payload: Prisma.JsonValue) =>
+  ({
+    id: "ev-1",
+    source: "bitbucket",
+    externalId: "ext-1",
+    type: "bitbucket_webhook",
+    subject: null,
+    payload,
+    receivedAt: new Date(),
+    processedAt: null,
+    processingError: null,
+  }) satisfies IntegrationEvent;
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -37,11 +52,8 @@ describe("process-webhook for Bitbucket", () => {
   });
 
   it("handles pr:comment:added webhook event and notifies reviewers", async () => {
-    vi.mocked(prisma.integrationEvent.findUnique).mockResolvedValue({
-      id: "ev-1",
-      source: "bitbucket",
-      processedAt: null,
-      payload: {
+    vi.mocked(prisma.integrationEvent.findUnique).mockResolvedValue(
+      eventRow({
         eventKey: "pr:comment:added",
         pullRequest: {
           id: 99,
@@ -55,8 +67,8 @@ describe("process-webhook for Bitbucket", () => {
           text: "Can we use an index here?",
           author: { name: "bob", displayName: "Bob Reviewer" },
         },
-      },
-    } as any);
+      })
+    );
 
     const result = await runProcessWebhook({ source: "bitbucket", eventId: "ev-1" });
 

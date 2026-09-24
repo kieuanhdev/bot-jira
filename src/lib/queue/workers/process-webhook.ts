@@ -3,6 +3,7 @@ import { jira } from "@/lib/jira/client";
 import { upsertJiraIssue, upsertJiraCommentsWithNew } from "@/lib/issues/cache";
 import { notifyWatchersOfComment } from "@/lib/issues/notify-watchers";
 import { markEventProcessed, type Source } from "@/lib/events/store";
+import type { BbUser } from "@/lib/bitbucket/client";
 import { env, hasJiraConfig, hasBitbucketConfig, hasSentryConfig } from "../guard";
 import type { WorkerLog } from "../guard";
 
@@ -128,13 +129,13 @@ async function handleBitbucket(json: unknown): Promise<Record<string, unknown>> 
         pr: {
           id: pr.id,
           title: fullPr.title ?? pr.title,
-          author: fullPr.author as any,
-          reviewers: fullPr.reviewers as any,
+          author: fullPr.author as { user: BbUser } | undefined,
+          reviewers: fullPr.reviewers as Array<{ user: BbUser }> | undefined,
         },
         comment: {
           id: comment.id,
           text: comment.text,
-          author: comment.author as any,
+          author: comment.author as BbUser,
         },
       });
 

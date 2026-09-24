@@ -1,9 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { runPollPrComments } from "./poll-pr-comments";
 import { prisma } from "@/lib/prisma";
-import { bitbucket } from "@/lib/bitbucket/client";
+import { bitbucket, type BbPullRequest, type BbPrActivity } from "@/lib/bitbucket/client";
 import { notifyPrComment } from "@/lib/bitbucket/notify-pr-comment";
 import * as guardModule from "../guard";
+import type { IntegrationCursor } from "@prisma/client";
+
+const cursorRow = (cursor: string) =>
+  ({
+    id: "cur-1",
+    integration: "bitbucket",
+    scope: "pr-comments:EPM/easy_pos",
+    cursor,
+    lastStartedAt: null,
+    lastSuccessAt: null,
+    lastErrorAt: null,
+    lastError: null,
+    stats: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }) satisfies IntegrationCursor;
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -36,7 +52,7 @@ describe("runPollPrComments", () => {
     vi.mocked(bitbucket.repos).mockReturnValue(["EPM/easy_pos"]);
     vi.mocked(prisma.integrationCursor.findUnique).mockResolvedValue(null);
     vi.mocked(bitbucket.listOpenPullRequests).mockResolvedValue([
-      { id: 10, title: "Test PR", fromRef: { branch: "feat/1" } } as any,
+      { id: 10, title: "Test PR", fromRef: { branch: "feat/1" } } satisfies BbPullRequest,
     ]);
     vi.mocked(bitbucket.listPullRequestActivities).mockResolvedValue([
       {
@@ -48,7 +64,7 @@ describe("runPollPrComments", () => {
           createdDate: 10000,
           author: { name: "someone" },
         },
-      } as any,
+      } satisfies BbPrActivity,
     ]);
 
     const result = await runPollPrComments();
@@ -64,12 +80,9 @@ describe("runPollPrComments", () => {
 
   it("notifies for comments newer than the existing cursor", async () => {
     vi.mocked(bitbucket.repos).mockReturnValue(["EPM/easy_pos"]);
-    vi.mocked(prisma.integrationCursor.findUnique).mockResolvedValue({
-      id: "cur-1",
-      cursor: "10000",
-    } as any);
+    vi.mocked(prisma.integrationCursor.findUnique).mockResolvedValue(cursorRow("10000"));
     vi.mocked(bitbucket.listOpenPullRequests).mockResolvedValue([
-      { id: 10, title: "Test PR", fromRef: { branch: "feat/1" } } as any,
+      { id: 10, title: "Test PR", fromRef: { branch: "feat/1" } } satisfies BbPullRequest,
     ]);
     vi.mocked(bitbucket.listPullRequestActivities).mockResolvedValue([
       {
@@ -81,7 +94,7 @@ describe("runPollPrComments", () => {
           createdDate: 9000,
           author: { name: "someone" },
         },
-      } as any,
+      } satisfies BbPrActivity,
       {
         id: 101,
         action: "COMMENTED",
@@ -91,7 +104,7 @@ describe("runPollPrComments", () => {
           createdDate: 12000,
           author: { name: "someone_else" },
         },
-      } as any,
+      } satisfies BbPrActivity,
     ]);
 
     const result = await runPollPrComments();
