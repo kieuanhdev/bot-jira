@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { issuesKeys } from "@/lib/query-keys";
 
 export type IssueItem = {
   jiraKey: string;
@@ -76,7 +77,7 @@ export function useIssues(
   });
   const qs = params.toString();
   return useQuery({
-    queryKey: ["issues", qs || "all"],
+    queryKey: issuesKeys.list(qs),
     queryFn: () => api<IssueResponse>(`/api/issues${qs ? "?" + qs : ""}`),
     refetchInterval: 30000,
     retry: 1,

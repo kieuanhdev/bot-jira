@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { notificationsKeys } from "@/lib/query-keys";
 
 export type Notification = {
   id: string;
@@ -24,7 +25,7 @@ export type NotificationResponse = {
 
 export function useUnreadCount() {
   const { data } = useQuery({
-    queryKey: ["notifications", "unread-count"],
+    queryKey: notificationsKeys.unreadCount,
     queryFn: () => api<{ unread: number }>("/api/notify/unread-count"),
     refetchInterval: 30000,
     refetchOnWindowFocus: true,
@@ -49,7 +50,7 @@ export function useNotifications(options: {
   if (cursor) params.set("cursor", cursor);
 
   return useQuery({
-    queryKey: ["notifications", "list", { limit, unreadOnly, type, cursor }],
+    queryKey: notificationsKeys.list({ limit, unreadOnly, type, cursor }),
     queryFn: () => api<NotificationResponse>(`/api/notify?${params.toString()}`),
     enabled,
     retry: 1,
@@ -66,13 +67,13 @@ export function useMarkNotifications() {
         body,
       }),
     onMutate: async (variables) => {
-      await qc.cancelQueries({ queryKey: ["notifications"] });
+      await qc.cancelQueries({ queryKey: notificationsKeys.all });
 
-      const prevUnread = qc.getQueryData<{ unread: number }>(["notifications", "unread-count"]);
+      const prevUnread = qc.getQueryData<{ unread: number }>(notificationsKeys.unreadCount);
 
       // Optimistically update notifications list queries
       qc.setQueriesData<NotificationResponse>(
-        { queryKey: ["notifications", "list"] },
+        { queryKey: notificationsKeys.lists() },
         (old) => {
           if (!old) return old;
           const markRead = !variables.unread;
@@ -100,11 +101,11 @@ export function useMarkNotifications() {
     },
     onSuccess: (data) => {
       if (typeof data?.unreadCount === "number") {
-        qc.setQueryData(["notifications", "unread-count"], { unread: data.unreadCount });
+        qc.setQueryData(notificationsKeys.unreadCount, { unread: data.unreadCount });
       }
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: ["notifications"] });
+      qc.invalidateQueries({ queryKey: notificationsKeys.all });
     },
   });
 
