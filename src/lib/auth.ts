@@ -40,6 +40,7 @@ const providers: NextAuthOptions["providers"] = [
       });
 
       if (!verification.ok) {
+        console.warn(`[AUTH] Jira verify failed: code=${verification.code} — ${verification.message}`);
         throw new Error(verification.message);
       }
 
