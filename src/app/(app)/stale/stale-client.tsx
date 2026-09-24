@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { staleKeys } from "@/lib/query-keys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -359,7 +360,7 @@ export function StaleClient() {
   if (severity !== ALL) params.set("severity", severity);
   const queryString = params.toString();
   const { data, dataUpdatedAt, error, isFetching, isLoading, refetch } = useQuery({
-    queryKey: ["stale", project, assignee, status, reason, severity],
+    queryKey: staleKeys.list(project, assignee, status, reason, severity),
     queryFn: () => api<StaleResponse>(`/api/stale${queryString ? `?${queryString}` : ""}`),
     refetchInterval: 60_000, retry: 1,
   });

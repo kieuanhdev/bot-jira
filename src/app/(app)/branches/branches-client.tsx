@@ -4,6 +4,7 @@ import { useState, useTransition, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { branchesKeys } from "@/lib/query-keys";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -165,7 +166,7 @@ export function BranchesClient() {
 
   // Query either task delivery workspace or technical branches
   const taskQueryResult = useQuery<TaskDeliveryQueryResult>({
-    queryKey: ["branches-tasks", filters],
+    queryKey: branchesKeys.tasks(filters),
     queryFn: () => api<TaskDeliveryQueryResult>(taskQueryUrl),
     enabled: !isTechnicalView,
     placeholderData: (prev) => prev,
@@ -173,7 +174,7 @@ export function BranchesClient() {
   });
 
   const branchQueryResult = useQuery<BranchesQueryResult>({
-    queryKey: ["branches", filters],
+    queryKey: branchesKeys.list(filters),
     queryFn: () => api<BranchesQueryResult>(branchQueryUrl),
     enabled: isTechnicalView,
     placeholderData: (prev) => prev,
@@ -182,7 +183,7 @@ export function BranchesClient() {
 
   // Facet query to get full projects and repos list even in task view
   const facetQueryResult = useQuery<BranchesQueryResult>({
-    queryKey: ["branches-facets"],
+    queryKey: branchesKeys.facets,
     queryFn: () => api<BranchesQueryResult>("/api/branches?pageSize=1"),
     staleTime: 5 * 60 * 1000,
   });

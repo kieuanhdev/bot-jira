@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api-client";
 import { useIssues, type IssueItem } from "@/hooks/use-issues";
+import { issuesKeys, boardKeys, bulkKeys } from "@/lib/query-keys";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -279,7 +280,7 @@ export function BulkClient() {
 
   // Distinct assignees (for autocomplete) and project keys (for filter select).
   const { data: filterOpts } = useQuery({
-    queryKey: ["issues", "filters", "bulk"],
+    queryKey: issuesKeys.filters("bulk"),
     queryFn: () =>
       api<{ assignees: string[]; labels: string[]; priorities: string[] }>("/api/issues/filters"),
     staleTime: 5 * 60_000,
@@ -296,7 +297,7 @@ export function BulkClient() {
   }, [assigneeOptions, issues]);
 
   const { data: projectsData } = useQuery({
-    queryKey: ["projects"],
+    queryKey: boardKeys.projects,
     queryFn: () => api<{ items: { key: string; openCount: number }[] }>("/api/projects"),
     staleTime: 5 * 60_000,
     retry: 0,
@@ -491,7 +492,7 @@ export function BulkClient() {
       if (selectionMode === "pick") setSelected(new Set());
       setPreview(null);
       setActiveOp(r.operationId);
-      qc.invalidateQueries({ queryKey: ["issues"] });
+      qc.invalidateQueries({ queryKey: issuesKeys.all });
       loadOps();
     } catch (e) {
       setPreviewError((e as Error).message);
@@ -1155,7 +1156,7 @@ function AssigneeInput({
 
 function OperationDetail({ id }: { id: string }) {
   const { data, isFetching, refetch } = useQuery({
-    queryKey: ["bulk-op", id],
+    queryKey: bulkKeys.op(id),
     queryFn: () => api<OpDetail>(`/api/bulk/operations/${id}`),
     refetchInterval: (query) =>
       ["running", "queued"].includes(query.state.data?.operation.state ?? "") ? 2000 : false,

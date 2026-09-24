@@ -19,6 +19,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { api, ApiError } from "@/lib/api-client";
 import { useIssues, fetchIssuesPage, type IssueItem } from "@/hooks/use-issues";
+import { issuesKeys, boardKeys, meKeys, transitionsKeys } from "@/lib/query-keys";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -803,7 +804,7 @@ export function BoardClient() {
   );
 
   const { data: projects } = useQuery({
-    queryKey: ["projects"],
+    queryKey: boardKeys.projects,
     queryFn: () => api<{ items: Project[] }>("/api/projects"),
     refetchInterval: 30000,
     retry: 0,
@@ -811,7 +812,7 @@ export function BoardClient() {
   const allProjects = useMemo(() => projects?.items ?? [], [projects?.items]);
 
   const { data: meStatus } = useQuery({
-    queryKey: ["me", "status"],
+    queryKey: meKeys.status,
     queryFn: () =>
       api<{ jiraName: string | null; jiraBaseUrl?: string }>("/api/me/status"),
     retry: 0,
@@ -820,7 +821,7 @@ export function BoardClient() {
   const jiraBaseUrl = meStatus?.jiraBaseUrl ?? "";
 
   const { data: prefs } = useQuery({
-    queryKey: ["me", "prefs"],
+    queryKey: meKeys.prefs,
     queryFn: () => api<{ projects: string[]; available: string[] }>("/api/me/preferences"),
     retry: 0,
   });
@@ -835,8 +836,8 @@ export function BoardClient() {
   const savePrefs = useCallback(async (next: string[]) => {
     await api("/api/me/preferences", { method: "PUT", body: { projects: next } });
     await Promise.all([
-      qc.invalidateQueries({ queryKey: ["me", "prefs"] }),
-      qc.invalidateQueries({ queryKey: ["projects"] }),
+      qc.invalidateQueries({ queryKey: meKeys.prefs }),
+      qc.invalidateQueries({ queryKey: boardKeys.projects }),
     ]);
     setProject((prev) => (next.length > 0 && (!prev || !next.includes(prev)) ? next[0] : prev));
   }, [qc]);
@@ -984,8 +985,8 @@ export function BoardClient() {
       });
       setToast("Jira sync queued. The board will refresh automatically.");
       window.setTimeout(() => {
-        void qc.invalidateQueries({ queryKey: ["issues"] });
-        void qc.invalidateQueries({ queryKey: ["projects"] });
+        void qc.invalidateQueries({ queryKey: issuesKeys.all });
+        void qc.invalidateQueries({ queryKey: boardKeys.projects });
         setSyncQueued(false);
       }, 1500);
     } catch (error) {
@@ -995,7 +996,7 @@ export function BoardClient() {
   }
 
   const { data: optData } = useQuery({
-    queryKey: ["issues", "filters", selectedProject],
+    queryKey: issuesKeys.filters(selectedProject),
     enabled: effectivePreferred.length > 0,
     queryFn: () =>
       api<{ assignees: string[]; labels: string[]; priorities: string[] }>(
@@ -1052,7 +1053,7 @@ export function BoardClient() {
   // empty (Jira not configured / error). Column identity = category key, so an
   // issue routes by its category, not by a fragile status-name match.
   const { data: statusesData } = useQuery({
-    queryKey: ["board", "statuses", selectedProject],
+    queryKey: boardKeys.statuses(selectedProject),
     enabled: effectivePreferred.length > 0 && Boolean(selectedProject),
     queryFn: () =>
       api<{
@@ -1285,7 +1286,7 @@ export function BoardClient() {
     }
     invalidateTransitionCache(key);
     setOptimisticStatus(key, null); // confirmed; the refetch below reconciles
-    await qc.invalidateQueries({ queryKey: ["issues"] });
+    await qc.invalidateQueries({ queryKey: issuesKeys.all });
   }
 
   async function handleTransition(key: string, target: string) {
@@ -1375,7 +1376,7 @@ export function BoardClient() {
             method: "PATCH",
             body: { assignee: action.value },
           });
-          await qc.invalidateQueries({ queryKey: ["issues"] });
+          await qc.invalidateQueries({ queryKey: issuesKeys.all });
           setToast(action.value ? `${key} → ${action.value}` : `${key} unassigned`);
           return;
         }
@@ -1384,7 +1385,7 @@ export function BoardClient() {
             method: "PATCH",
             body: { priority: action.value },
           });
-          await qc.invalidateQueries({ queryKey: ["issues"] });
+          await qc.invalidateQueries({ queryKey: issuesKeys.all });
           setToast(`${key} priority → ${action.value}`);
           return;
         }
@@ -2098,14 +2099,14 @@ function QuickPanel({
   const priorities = ["Blocker", "Highest", "High", "Medium", "Low", "Lowest"];
 
   const { data: detail } = useQuery({
-    queryKey: ["issues", issue.jiraKey],
+    queryKey: issuesKeys.detail(issue.jiraKey),
     queryFn: () => api<{ issue: QuickPanelDetail }>(`/api/issues/${issue.jiraKey}`),
     staleTime: 15_000,
     retry: 1,
   });
 
   const { data: transitions } = useQuery({
-    queryKey: ["transitions", issue.jiraKey],
+    queryKey: transitionsKeys.forIssue(issue.jiraKey),
     queryFn: () =>
       api<{ transitions: { id: string; to?: { name?: string } | string }[] }>(
         `/api/issues/${issue.jiraKey}/transitions`
@@ -2168,8 +2169,8 @@ function QuickPanel({
   }, [onClose]);
 
   async function invalidate() {
-    await qc.invalidateQueries({ queryKey: ["issues"] });
-    qc.invalidateQueries({ queryKey: ["issues", issue.jiraKey] });
+    await qc.invalidateQueries({ queryKey: issuesKeys.all });
+    qc.invalidateQueries({ queryKey: issuesKeys.detail(issue.jiraKey) });
   }
 
   async function doAction(action: QuickAction) {

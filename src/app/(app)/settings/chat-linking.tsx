@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { chatKeys } from "@/lib/query-keys";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +25,7 @@ export function ChatLinking() {
   const [busy, setBusy] = useState<"link" | "unlink" | null>(null);
 
   const { data, isLoading } = useQuery<{ identities: Identity[] }>({
-    queryKey: ["chat", "identity"],
+    queryKey: chatKeys.identity,
     queryFn: () => api<{ identities: Identity[] }>("/api/chat/identity"),
   });
 
@@ -34,7 +35,7 @@ export function ChatLinking() {
     mutationFn: () =>
       api("/api/chat/identity/link", { method: "POST", body: { provider: "discord", externalId: discordId, displayName: displayName || undefined } }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["chat", "identity"] });
+      qc.invalidateQueries({ queryKey: chatKeys.identity });
       setDiscordId("");
       setDisplayName("");
     },
@@ -42,7 +43,7 @@ export function ChatLinking() {
 
   const unlinkMutation = useMutation({
     mutationFn: () => api("/api/chat/identity/unlink", { method: "POST", body: { provider: "discord" } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat", "identity"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: chatKeys.identity }),
   });
 
   function submitLink(e: React.FormEvent) {

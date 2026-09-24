@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { notificationsKeys } from "@/lib/query-keys";
 import {
   Bell,
   BellOff,
@@ -124,7 +125,7 @@ export function NotificationsClient() {
     isFetchingNextPage,
     refetch,
   } = useInfiniteQuery({
-    queryKey: ["notifications", "infinite", { unreadOnly, type: typeFilter }],
+    queryKey: notificationsKeys.infinite({ unreadOnly, type: typeFilter }),
     queryFn: async ({ pageParam }) => {
       const params = new URLSearchParams();
       params.set("limit", "25");
@@ -160,7 +161,7 @@ export function NotificationsClient() {
 
   const handleMarkAll = async () => {
     await markAllRead();
-    qc.invalidateQueries({ queryKey: ["notifications", "infinite"] });
+    qc.invalidateQueries({ queryKey: notificationsKeys.infiniteAll() });
   };
 
   const handleToggleRead = async (e: React.MouseEvent, n: Notification) => {
@@ -170,7 +171,7 @@ export function NotificationsClient() {
     } else {
       await markRead([n.id]);
     }
-    qc.invalidateQueries({ queryKey: ["notifications", "infinite"] });
+    qc.invalidateQueries({ queryKey: notificationsKeys.infiniteAll() });
   };
 
   return (

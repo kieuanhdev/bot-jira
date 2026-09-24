@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { settingsKeys } from "@/lib/query-keys";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +50,7 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
 
   async function setUserRole(id: string, role: "member" | "admin") {
     await api(`/api/users/${id}/role`, { method: "PATCH", body: { role } });
-    qc.invalidateQueries({ queryKey: ["settings", "users"] });
+    qc.invalidateQueries({ queryKey: settingsKeys.users });
   }
 
   const serviceKeys = ["db", "jira", "bitbucket", "sentry", "openai", "ollama"] as const;

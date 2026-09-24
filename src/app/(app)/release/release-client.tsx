@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { releasesKeys } from "@/lib/query-keys";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -155,7 +156,7 @@ export function ReleaseClient() {
         { method: "POST", body: {} }
       );
       if (!r.ok) setReleaseError(r.error ?? "Phát hành thất bại");
-      qc.invalidateQueries({ queryKey: ["releases"] });
+      qc.invalidateQueries({ queryKey: releasesKeys.all });
     } catch (e) {
       setReleaseError((e as Error).message);
     } finally {
@@ -164,7 +165,7 @@ export function ReleaseClient() {
   }
 
   const { data } = useQuery({
-    queryKey: ["releases"],
+    queryKey: releasesKeys.all,
     queryFn: () => api<{ items: Release[] }>("/api/releases"),
     refetchInterval: 30000,
     retry: 1,
@@ -211,7 +212,7 @@ export function ReleaseClient() {
     setLinkVersionId("");
     setDescription("");
     setOpen(false);
-    qc.invalidateQueries({ queryKey: ["releases"] });
+    qc.invalidateQueries({ queryKey: releasesKeys.all });
   }
 
   async function checkReady(id: string) {
@@ -230,7 +231,7 @@ export function ReleaseClient() {
     } finally {
       setCheckingId(null);
     }
-    qc.invalidateQueries({ queryKey: ["releases"] });
+    qc.invalidateQueries({ queryKey: releasesKeys.all });
   }
 
   const releases = data?.items ?? [];

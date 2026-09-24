@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { watchKeys } from "@/lib/query-keys";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,7 @@ type Watched = {
 export function WatchClient() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
-    queryKey: ["watch"],
+    queryKey: watchKeys.all,
     queryFn: () => api<{ items: Watched[] }>("/api/watch"),
     refetchInterval: 30000,
     retry: 1,
@@ -32,7 +33,7 @@ export function WatchClient() {
 
   async function unwatch(key: string) {
     await api(`/api/issues/${key}/watch`, { method: "POST", body: {} });
-    qc.invalidateQueries({ queryKey: ["watch"] });
+    qc.invalidateQueries({ queryKey: watchKeys.all });
   }
 
   const items = data?.items ?? [];

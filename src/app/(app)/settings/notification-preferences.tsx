@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { notifyKeys } from "@/lib/query-keys";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -77,7 +78,7 @@ export function NotificationPreferences() {
   } = useWebPush();
 
   const { data, isLoading } = useQuery<Preferences>({
-    queryKey: ["notify", "preferences"],
+    queryKey: notifyKeys.preferences,
     queryFn: () => api<Preferences>("/api/notify/preferences"),
   });
 
@@ -85,7 +86,7 @@ export function NotificationPreferences() {
     mutationFn: (body: Partial<Preferences>) =>
       api<Preferences>("/api/notify/preferences", { method: "PATCH", body }),
     onSuccess: (next) => {
-      qc.setQueryData(["notify", "preferences"], next);
+      qc.setQueryData(notifyKeys.preferences, next);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     },

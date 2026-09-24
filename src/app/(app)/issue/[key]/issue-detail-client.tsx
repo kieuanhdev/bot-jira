@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { transitionsKeys, branchesForKeys } from "@/lib/query-keys";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -96,14 +97,14 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
   const [editPoints, setEditPoints] = useState("");
 
   const { data: transitions } = useQuery({
-    queryKey: ["transitions", issue.jiraKey],
+    queryKey: transitionsKeys.forIssue(issue.jiraKey),
     queryFn: () => api<{ transitions: Transition[] }>(`/api/issues/${issue.jiraKey}/transitions`),
     retry: 1,
   });
 
   const queryClient = useQueryClient();
   const { data: branches } = useQuery({
-    queryKey: ["branches-for", issue.jiraKey],
+    queryKey: branchesForKeys.forIssue(issue.jiraKey),
     queryFn: () =>
       api<{ items: BranchRow[]; suggestedItems?: (BranchRow & { id: string })[] }>(
         `/api/issues/${issue.jiraKey}/branches`
@@ -119,7 +120,7 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
         body: JSON.stringify({ action: "confirm" }),
       });
       if (!res.ok) throw new Error("Không thể xác nhận");
-      await queryClient.invalidateQueries({ queryKey: ["branches-for", issue.jiraKey] });
+      await queryClient.invalidateQueries({ queryKey: branchesForKeys.forIssue(issue.jiraKey) });
       setMsg("Đã xác nhận liên kết nhánh");
     } catch (e) {
       setMsg(`Lỗi: ${(e as Error).message}`);
@@ -134,7 +135,7 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
         body: JSON.stringify({ action: "reject" }),
       });
       if (!res.ok) throw new Error("Không thể từ chối");
-      await queryClient.invalidateQueries({ queryKey: ["branches-for", issue.jiraKey] });
+      await queryClient.invalidateQueries({ queryKey: branchesForKeys.forIssue(issue.jiraKey) });
       setMsg("Đã từ chối gợi ý liên kết");
     } catch (e) {
       setMsg(`Lỗi: ${(e as Error).message}`);

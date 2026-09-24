@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { api } from "@/lib/api-client";
+import { meKeys } from "@/lib/query-keys";
 import { AlertTriangle, ArrowRight } from "lucide-react";
 
 type Integrations = {
@@ -16,7 +17,7 @@ type Integrations = {
  */
 export function ReconnectBanner() {
   const { data } = useQuery<Integrations>({
-    queryKey: ["me-integrations"],
+    queryKey: meKeys.integrations,
     queryFn: () => api<Integrations>("/api/me/integrations"),
     staleTime: 60_000,
     retry: 0,

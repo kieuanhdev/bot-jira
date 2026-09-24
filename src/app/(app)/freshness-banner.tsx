@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { freshnessKeys } from "@/lib/query-keys";
 import { TriangleAlert, WifiOff } from "lucide-react";
 
 type Freshness = {
@@ -26,7 +27,7 @@ function secondsLabel(ms: number | null): string {
  */
 export function FreshnessBanner() {
   const { data } = useQuery<Freshness>({
-    queryKey: ["freshness"],
+    queryKey: freshnessKeys.all,
     queryFn: () => api<Freshness>("/api/freshness"),
     refetchInterval: 30_000,
     retry: 0,
