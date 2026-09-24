@@ -115,9 +115,9 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = (user as unknown as { id: string }).id;
-        token.role = (user as unknown as { role: string }).role;
-        const rawJiraUser = (user as unknown as { jiraUsername?: string }).jiraUsername;
+        token.id = user.id ?? undefined;
+        token.role = user.role;
+        const rawJiraUser = user.jiraUsername;
         token.jiraUsername =
           rawJiraUser && rawJiraUser !== "undefined" ? rawJiraUser : undefined;
         if (user.name) token.name = user.name;
