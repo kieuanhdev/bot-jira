@@ -22,7 +22,7 @@ export const env = {
   nodeEnv: str("NODE_ENV", "development"),
   databaseUrl: str("DATABASE_URL"),
   nextAuthSecret: str("NEXTAUTH_SECRET"),
-  nextAuthUrl: str("NEXTAUTH_URL", "http://localhost:3000"),
+  nextAuthUrl: str("NEXTAUTH_URL", "http://localhost:3100"),
 
   // Jira Server / Data Center
   jiraBaseUrl: str("JIRA_BASE_URL"),
@@ -164,7 +164,7 @@ export const env = {
   // The channel id Team Task Web posts alerts/commands to. Empty => disabled.
   discordChannelId: str("DISCORD_CHANNEL_ID"),
   // Base URL of the public deployment (used to build web deep-links in chat).
-  publicBaseUrl: str("PUBLIC_BASE_URL", "http://localhost:3000"),
+  publicBaseUrl: str("PUBLIC_BASE_URL", "http://localhost:3100"),
 
   // Admin bootstrap (used by seed script)
   adminEmail: str("ADMIN_EMAIL", "admin@team.local"),

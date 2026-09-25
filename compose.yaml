@@ -1,11 +1,11 @@
-# Team Task Web — Podman Compose
+# Team Task Web — Podman / Docker Compose
 #
 #   podman compose up -d --build
+#   docker compose up -d --build
 #
-# Brings up: postgres (db) and the web app (builds from ./Dockerfile).
-# The AI provider uses the company's OpenAI-compatible API (no self-hosted
-# Ollama). All services share the `teamweb` network so the web app can reach
-# `db` and (by external URL) your Jira / Bitbucket / Sentry / LLM API.
+# Brings up: postgres (db), web app, and worker.
+# Real secrets and configuration are read directly from .env.
+# Intra-cluster DATABASE_URL connects web and worker to db inside the container network.
 
 name: teamweb
 
@@ -18,7 +18,7 @@ services:
       POSTGRES_PASSWORD: teamweb
       POSTGRES_DB: teamweb
     ports:
-      - "5433:5432"
+      - "${DB_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -33,98 +33,16 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    # Pull real secrets from .env (JIRA_*, BITBUCKET_*, SENTRY_*, DISCORD_*,
-    # VAPID_*, CRED_ENCRYPTION_KEY, ...). Keys set below take precedence, so the
-    # intra-cluster DATABASE_URL still overrides whatever is in .env.
     env_file:
       - .env
     environment:
       # Intra-cluster URL (service name on the teamweb network)
       DATABASE_URL: postgresql://teamweb:teamweb@db:5432/teamweb
-      NEXTAUTH_URL: http://localhost:3000
-
-      # ── LLM (công ty cấp, OpenAI-compatible) ──────────────
-      # LLM_PROVIDER: "openai" (mặc định) hoặc "ollama".
-      LLM_PROVIDER: openai
-      # Base URL của API cty cấp (kết thúc bằng /v1 nếu là OpenAI-style).
-      # Ví dụ: https://llm-gateway.company.com/v1  hoặc https://api.openai.com/v1
-      OPENAI_BASE_URL: ""
-      OPENAI_API_KEY: ""
-      OPENAI_MODEL: gpt-4o-mini
-
-      # Real external endpoints — fill these in.
-      NEXTAUTH_SECRET: change-me-to-a-long-random-string
-      # 64-char hex master key for encrypting per-user credentials. MUST be
-      # stable (set once) or stored credentials become unreadable. Provided in
-      # .env; declared here so the dependency is explicit.
-      CRED_ENCRYPTION_KEY: ""
-      JIRA_BASE_URL: ""
-      JIRA_USER: ""
-      JIRA_TOKEN: ""
-      JIRA_PROJECT_KEYS: CICM,EDM,EMA,EPM,ETM,MHRM,MR
-      JIRA_POINTS_FIELD_ID: ""
-      JIRA_REQUEST_TIMEOUT_MS: "15000"
-      JIRA_SYNC_OVERLAP_SECONDS: "300"
-      JIRA_FRESHNESS_MINUTES: "5"
-
-      BITBUCKET_BASE_URL: ""
-      BITBUCKET_USER: ""
-      BITBUCKET_TOKEN: ""
-      BITBUCKET_REPOS: ""
-      BITBUCKET_BASE_BRANCH: main
-
-      SENTRY_ORG: ""
-      SENTRY_PROJECT: ""
-      SENTRY_TOKEN: ""
-      SENTRY_BASE_URL: https://sentry.io
-
-      SENTRY_PROJECT_MAPPINGS: ""
-
-      POINT_SCALE: 1,2,3,5,8,13
-      AI_AUTO_SCORE: "false"
-      STALE_DAYS: "7"
-      STALE_BACKLOG_DAYS: "30"
-      STALE_TODO_DAYS: "14"
-      STALE_IN_PROGRESS_DAYS: "5"
-      STALE_REVIEW_DAYS: "2"
-      STALE_QA_DAYS: "2"
-      STALE_BLOCKED_DAYS: "3"
-      STALE_UNKNOWN_DAYS: "7"
-      STALE_REMINDER_DAYS: "7"
-      RELEASE_DONE_CATEGORIES: done
-      RELEASE_BLOCKING_PRIORITIES: Blocker,Critical
-      RELEASE_DATA_FRESHNESS_MINUTES: "5"
-      SENTRY_BLOCKING_LEVELS: fatal
-      POLL_INTERVAL_MS: "60000"
-
-      # M5 — webhook verification secrets (web verifies inbound signatures)
-      JIRA_WEBHOOK_SECRET: ""
-      SENTRY_WEBHOOK_SECRET: ""
-      BITBUCKET_WEBHOOK_SECRET: ""
-      CI_WEBHOOK_SECRET: ""
-
-      # M6 — chat (web receives + links commands; worker delivers alerts)
-      DISCORD_BOT_TOKEN: ""
-      DISCORD_CHANNEL_ID: ""
-      DISCORD_WEBHOOK_SECRET: ""
-      PUBLIC_BASE_URL: http://localhost:3000
-
-      ADMIN_EMAIL: admin@team.local
-      ADMIN_PASSWORD: admin123
-      ADMIN_NAME: Admin
-
-      VAPID_PUBLIC_KEY: ""
-      VAPID_PRIVATE_KEY: ""
-      VAPID_SUBJECT: mailto:admin@team.local
-
-      # ── Release gates (REL-03 / REL-04) ──────────────────────────
-      # Comma-separated required approvers, or empty to require none.
-      RELEASE_REQUIRED_APPROVALS: ""
-      # Enable the mandatory, non-overridable CI gate.
-      CI_GATE_ENABLED: "false"
-
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3100}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3100}
+      AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
     ports:
-      - "3000:3000"
+      - "${PORT:-3100}:3000"
 
   worker:
     build:
@@ -134,86 +52,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    # Real secrets come from .env (parity with web). Intra-cluster DATABASE_URL
-    # and the fail-fast markers below take precedence.
     env_file:
       - .env
     environment:
-      # ── Required (fail-fast on boot, OPS-02) ─────────────────────
+      # Intra-cluster URL (service name on the teamweb network)
       DATABASE_URL: postgresql://teamweb:teamweb@db:5432/teamweb
-      CRED_ENCRYPTION_KEY: ""
-      JIRA_BASE_URL: ""
-      JIRA_USER: ""
-      JIRA_TOKEN: ""
-
-      # ── Jira (parity with web) ──────────────────────────────────
-      JIRA_AUTH: Bearer
-      JIRA_PROJECT_KEYS: CICM,EDM,EMA,EPM,ETM,MHRM,MR
-      JIRA_POINTS_FIELD_ID: ""
-      JIRA_REQUEST_TIMEOUT_MS: "15000"
-      JIRA_SYNC_OVERLAP_SECONDS: "300"
-      JIRA_FRESHNESS_MINUTES: "5"
-
-      # ── Bitbucket (worker syncs branches/PRs) ───────────────────
-      BITBUCKET_BASE_URL: ""
-      BITBUCKET_USER: ""
-      BITBUCKET_TOKEN: ""
-      BITBUCKET_REPOS: ""
-      BITBUCKET_BASE_BRANCH: main
-
-      # ── Sentry (worker imports issues; project mapping for M2) ──
-      SENTRY_ORG: ""
-      SENTRY_PROJECT: ""
-      SENTRY_TOKEN: ""
-      SENTRY_BASE_URL: https://sentry.io
-      # M2 — map Sentry project -> Jira project, e.g. "mobile-app:EPM,employee-app:MHRM"
-      SENTRY_PROJECT_MAPPINGS: ""
-
-      # ── AI / LLM (worker auto-score) ────────────────────────────
-      LLM_PROVIDER: openai
-      OPENAI_BASE_URL: ""
-      OPENAI_API_KEY: ""
-      OPENAI_MODEL: gpt-4o-mini
-      POINT_SCALE: 1,2,3,5,8,13
-      AI_AUTO_SCORE: "false"
-
-      # ── Behaviour (parity with web) ─────────────────────────────
-      STALE_DAYS: "7"
-      POLL_INTERVAL_MS: "60000"
-      STALE_BACKLOG_DAYS: "30"
-      STALE_TODO_DAYS: "14"
-      STALE_IN_PROGRESS_DAYS: "5"
-      STALE_REVIEW_DAYS: "2"
-      STALE_QA_DAYS: "2"
-      STALE_BLOCKED_DAYS: "3"
-      STALE_UNKNOWN_DAYS: "7"
-      STALE_REMINDER_DAYS: "7"
-      RELEASE_DONE_CATEGORIES: done
-      RELEASE_BLOCKING_PRIORITIES: Blocker,Critical
-      RELEASE_DATA_FRESHNESS_MINUTES: "5"
-      SENTRY_BLOCKING_LEVELS: fatal
-
-      # ── Notifications / alerts (worker delivers outbox + alerts) ─
-      VAPID_PUBLIC_KEY: ""
-      VAPID_PRIVATE_KEY: ""
-      VAPID_SUBJECT: mailto:admin@team.local
-      NOTIFY_MAX_ATTEMPTS: "5"
-      NOTIFY_BACKOFF_BASE_MS: "60000"
-      ALERT_STALE_CURSOR_MINUTES: "10"
-      ALERT_RECOVERY_GRACE_MS: "300000"
-      DISCORD_BOT_TOKEN: ""
-      DISCORD_CHANNEL_ID: ""
-      PUBLIC_BASE_URL: http://localhost:3000
-
-      # ── Release gates (REL-03 / REL-04) ──────────────────────────
-      RELEASE_REQUIRED_APPROVALS: ""
-      CI_GATE_ENABLED: "false"
-
-      # ── Webhook secrets (worker only reads already-verified events) ─
-      JIRA_WEBHOOK_SECRET: ""
-      SENTRY_WEBHOOK_SECRET: ""
-      BITBUCKET_WEBHOOK_SECRET: ""
-      CI_WEBHOOK_SECRET: ""
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3100}
 
 volumes:
   pgdata:
