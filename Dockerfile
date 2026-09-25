@@ -38,7 +38,7 @@ COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/prisma.config.ts ./prisma.config.ts
 COPY --from=build /app/tsconfig.json ./tsconfig.json
 COPY --from=build /app/package.json ./package.json
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run worker"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && npm run worker"]
 
 # ── Runtime ───────────────────────────────────────────────────────────
 FROM base AS runner
@@ -52,13 +52,17 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
-# Prisma schema + migrations (for `migrate deploy` on boot) and the generated client.
+# Prisma schema, config + migrations (for `migrate deploy` on boot) and CLI.
 COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/prisma.config.ts ./prisma.config.ts
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=build /app/node_modules/prisma ./node_modules/prisma
+COPY --from=build /app/node_modules/.bin ./node_modules/.bin
+COPY --from=build /app/node_modules/dotenv ./node_modules/dotenv
 COPY --from=build /app/scripts ./scripts
 COPY --from=build /app/package.json ./package.json
 
 EXPOSE 3000
 # Apply migrations, seed the admin, then start the server.
-CMD ["sh", "-c", "npx prisma migrate deploy && node scripts/seed-admin.mjs && node server.js"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node scripts/seed-admin.mjs && node server.js"]
