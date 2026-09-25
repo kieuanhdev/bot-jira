@@ -52,14 +52,10 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
-# Prisma schema, config + migrations (for `migrate deploy` on boot) and CLI.
+# Full node_modules from build ensuring all Prisma CLI dependencies (effect, c12, etc.) and scripts work.
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/prisma.config.ts ./prisma.config.ts
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=build /app/node_modules/prisma ./node_modules/prisma
-COPY --from=build /app/node_modules/.bin ./node_modules/.bin
-COPY --from=build /app/node_modules/dotenv ./node_modules/dotenv
 COPY --from=build /app/scripts ./scripts
 COPY --from=build /app/package.json ./package.json
 
