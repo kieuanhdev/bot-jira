@@ -38,6 +38,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { type BoardWidth } from "@/lib/status-groups";
 import {
+  canTransitionToStatus,
+  findTransitionToStatus,
+  transitionTarget,
+  type BoardTransition,
+} from "@/lib/jira/board-transitions";
+import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -84,7 +90,7 @@ type QuickAction =
   | { kind: "copyKey" }
   | { kind: "openFull" };
 type ViewMode = "board" | "list";
-type Transition = { id: string; to?: { name?: string } | string };
+type Transition = BoardTransition;
 
 const PRIORITY_RANK: Record<string, number> = {
   Blocker: 0,
@@ -772,6 +778,7 @@ export function BoardClient() {
   const boardScrollRef = useRef<HTMLDivElement | null>(null);
   const [transitionBusy, setTransitionBusy] = useState(false);
   const [activeDrag, setActiveDrag] = useState<IssueItem | null>(null);
+  const activeDragKeyRef = useRef<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -1171,24 +1178,34 @@ export function BoardClient() {
   const columnKeys = useMemo(() => columns.map((c) => c.key), [columns]);
 
   const transitionCache = useRef(new Map<string, Transition[]>());
+  const transitionRequests = useRef(new Map<string, Promise<Transition[]>>());
   // While dragging, the set of column keys the active card can legally move to.
   const [allowedCols, setAllowedCols] = useState<Set<string> | null>(null);
 
   function toName(tr: Transition): string {
-    return typeof tr.to === "string" ? tr.to : tr.to?.name ?? "";
+    return transitionTarget(tr);
   }
 
-  async function fetchTransitions(key: string, force = false) {
-    if (!force && transitionCache.current.has(key)) {
+  const fetchTransitions = useCallback(async (key: string) => {
+    if (transitionCache.current.has(key)) {
       return transitionCache.current.get(key)!;
     }
-    const t = await api<{ transitions: Transition[] }>(`/api/issues/${key}/transitions`);
-    transitionCache.current.set(key, t.transitions);
-    return t.transitions;
-  }
+    if (transitionRequests.current.has(key)) {
+      return transitionRequests.current.get(key)!;
+    }
+    const request = api<{ transitions: Transition[] }>(`/api/issues/${key}/transitions`)
+      .then((result) => {
+        transitionCache.current.set(key, result.transitions);
+        return result.transitions;
+      })
+      .finally(() => transitionRequests.current.delete(key));
+    transitionRequests.current.set(key, request);
+    return request;
+  }, []);
 
   function invalidateTransitionCache(key: string) {
     transitionCache.current.delete(key);
+    transitionRequests.current.delete(key);
   }
 
   // Preload each visible issue's available transitions once so drag-over can
@@ -1198,21 +1215,21 @@ export function BoardClient() {
   useEffect(() => {
     const keys = transitionKeys ? transitionKeys.split("|") : [];
     let cancelled = false;
-    (async () => {
+    void (async () => {
       for (const key of keys) {
-        if (cancelled || transitionCache.current.has(key)) continue;
+        if (cancelled) return;
+        if (transitionCache.current.has(key)) continue;
         try {
-          const t = await api<{ transitions: Transition[] }>(`/api/issues/${key}/transitions`);
-          if (!cancelled) transitionCache.current.set(key, t.transitions);
+          await fetchTransitions(key);
         } catch {
-          // Leave it uncached; the lazy path fetches on demand instead.
+          // Leave it uncached; drag-start and transition execution retry it.
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [transitionKeys]);
+  }, [transitionKeys, fetchTransitions]);
 
   /**
    * Can an issue legally transition into `targetLabel`? Exact status-name match
@@ -1225,7 +1242,7 @@ export function BoardClient() {
     targetCat: string | undefined,
     targetKey: string
   ): boolean {
-    if (all.some((tr) => toName(tr).toLowerCase().trim() === targetLabel.toLowerCase().trim())) {
+    if (canTransitionToStatus(all, targetLabel)) {
       return true;
     }
     if (targetCat && targetKey !== targetLabel) {
@@ -1245,10 +1262,7 @@ export function BoardClient() {
    * like "To Do"/"In Progress"/"Done" rather than a single status).
    */
   function findTransition(all: Transition[], targetLabel: string): Transition | null {
-    const exact = all.find((tr) => {
-      const n = toName(tr).toLowerCase().trim();
-      return n === targetLabel.toLowerCase().trim();
-    });
+    const exact = findTransitionToStatus(all, targetLabel);
     if (exact) return exact;
     const targetCat = columns.find((c) => c.key === targetLabel)?.category;
     if (targetCat) {
@@ -1419,6 +1433,7 @@ export function BoardClient() {
   }
 
   function onDragEnd(event: DragEndEvent) {
+    activeDragKeyRef.current = null;
     setAllowedCols(null);
     setActiveDrag(null);
     const { active, over } = event;
@@ -1478,6 +1493,37 @@ export function BoardClient() {
           .map((c) => c.key)
       )
     );
+  }
+
+  function onDragStart(key: string) {
+    const issue = issues.find((item) => item.jiraKey === key) ?? null;
+    activeDragKeyRef.current = issue?.jiraKey ?? null;
+    setActiveDrag(issue);
+    setAllowedCols(null);
+    if (!issue) return;
+
+    // The board preloads transitions, but a user can start dragging before that
+    // background work finishes. Fetch the active card immediately so a cold
+    // cache cannot make a valid destination (notably Waiting For Deploy on MR)
+    // look blocked for the entire gesture.
+    void fetchTransitions(issue.jiraKey)
+      .then((all) => {
+        if (activeDragKeyRef.current !== issue.jiraKey) return;
+        const currentCol = findColumnForIssue(issue);
+        setAllowedCols(
+          new Set(
+            columns
+              .filter((column) =>
+                column.key === currentCol ||
+                canDropTo(all, column.label, column.category, column.key)
+              )
+              .map((column) => column.key)
+          )
+        );
+      })
+      .catch(() => {
+        // `handleTransition` reports the actionable error if the user drops.
+      });
   }
 
   // A signature of the visible set + sort; when it changes, the bounded
@@ -1869,14 +1915,11 @@ export function BoardClient() {
         <DndContext
           sensors={sensors}
           collisionDetection={collisionDetection}
-          onDragStart={(e) => {
-            const issue = issues.find((i) => i.jiraKey === String(e.active.id));
-            setActiveDrag(issue ?? null);
-            setAllowedCols(null);
-          }}
+          onDragStart={(e) => onDragStart(String(e.active.id))}
           onDragOver={onDragOver}
           onDragEnd={onDragEnd}
           onDragCancel={() => {
+            activeDragKeyRef.current = null;
             setAllowedCols(null);
             setActiveDrag(null);
           }}
