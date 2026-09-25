@@ -45,7 +45,7 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV PORT=3000
+ENV PORT=3100
 ENV HOSTNAME=0.0.0.0
 
 # Standalone server + public assets.
@@ -59,6 +59,6 @@ COPY --from=build /app/prisma.config.ts ./prisma.config.ts
 COPY --from=build /app/scripts ./scripts
 COPY --from=build /app/package.json ./package.json
 
-EXPOSE 3000
+EXPOSE 3100
 # Apply migrations, seed the admin, then start the server.
 CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node scripts/seed-admin.mjs && node server.js"]

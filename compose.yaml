@@ -42,7 +42,7 @@ services:
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3100}
       AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
     ports:
-      - "${PORT:-3100}:3000"
+      - "${PORT:-3100}:${PORT:-3100}"
 
   worker:
     build:
