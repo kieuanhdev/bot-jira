@@ -19,6 +19,7 @@ export type LiveIssue = {
   status: string;
   assigneeJira: string | null;
   labels: string[];
+  fixVersions: string[];
   priority: string;
   points: number | null;
   type: string;
@@ -34,6 +35,7 @@ export type IssueView = {
   status: string;
   assigneeJira: string | null;
   labels: string[];
+  fixVersions: string[];
   priority: string;
   points: number | null;
   type: string;
@@ -93,6 +95,7 @@ export async function fetchLiveIssue(
       status: f.status?.name ?? "",
       assigneeJira: f.assignee?.name ?? null,
       labels: f.labels ?? [],
+      fixVersions: (f.fixVersions ?? []).map((v) => v.name ?? "").filter(Boolean),
       priority: f.priority?.name ?? "",
       points,
       type: f.issuetype?.name ?? "",
@@ -146,6 +149,7 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
       status: live.status,
       assigneeJira: live.assigneeJira,
       labels: live.labels,
+      fixVersions: live.fixVersions,
       priority: live.priority,
       points: live.points,
       type: live.type,
@@ -168,6 +172,7 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
     status: cached.status,
     assigneeJira: cached.assigneeJira,
     labels: cached.labels,
+    fixVersions: cached.fixVersionNames ?? [],
     priority: cached.priority,
     points: cached.points,
     type: cached.type,

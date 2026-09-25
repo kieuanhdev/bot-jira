@@ -15,6 +15,8 @@ export const issuesKeys = {
   dependencies: (jiraKey: string) => ["issues", jiraKey, "dependencies"] as const,
   /** `["issues", "filters", <project or "bulk">]`. */
   filters: (scope: string) => ["issues", "filters", scope] as const,
+  /** `["issues", <jiraKey>, "versions"]` — available project versions for an issue. */
+  versions: (jiraKey: string) => ["issues", jiraKey, "versions"] as const,
 };
 
 export const notificationsKeys = {

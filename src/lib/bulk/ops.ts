@@ -1007,7 +1007,7 @@ async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
   }
 }
 
-async function createBranchForIssue(
+export async function createBranchForIssue(
   jira: ReturnType<typeof jiraWith>,
   key: string,
   params: BranchParams,

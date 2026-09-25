@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import { transitionsKeys, branchesForKeys } from "@/lib/query-keys";
+import { transitionsKeys, branchesForKeys, meKeys, issuesKeys } from "@/lib/query-keys";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,8 +13,16 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Tabs,
   TabsContent,
@@ -26,7 +34,27 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { formatDateTime, timeAgo } from "@/lib/utils";
 import { wikiToHtml } from "@/lib/wiki";
-import { Bot, Check, Eye, EyeOff, RefreshCw, GitBranch, Send, X, Pencil, AlertTriangle, Info } from "lucide-react";
+import {
+  Bot,
+  Check,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  GitBranch,
+  Send,
+  X,
+  Pencil,
+  AlertTriangle,
+  Info,
+  User,
+  UserCheck,
+  Hash,
+  Flag,
+  Plus,
+  ChevronDown,
+  CornerDownLeft,
+  ExternalLink,
+} from "lucide-react";
 
 import { IssueDependencies } from "@/components/issue-dependencies";
 
@@ -37,6 +65,7 @@ type IssueDetail = {
   status: string;
   assigneeJira: string | null;
   labels: string[];
+  fixVersions?: string[];
   priority: string;
   points: number | null;
   type: string;
@@ -97,6 +126,13 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
   const [commenting, setCommenting] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editPoints, setEditPoints] = useState("");
+  const [creatingBranch, setCreatingBranch] = useState(false);
+  const [newLabelInput, setNewLabelInput] = useState("");
+  const [showAddLabel, setShowAddLabel] = useState(false);
+  const [newVersionInput, setNewVersionInput] = useState("");
+  const [showAddVersion, setShowAddVersion] = useState(false);
+  const priorities = ["Blocker", "Highest", "High", "Medium", "Low", "Lowest"];
+  const projectKey = issue.jiraKey.split("-")[0];
 
   const { data: transitions } = useQuery({
     queryKey: transitionsKeys.forIssue(issue.jiraKey),
@@ -105,13 +141,32 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
   });
 
   const queryClient = useQueryClient();
+
+  const { data: me } = useQuery({
+    queryKey: meKeys.status,
+    queryFn: () => api<{ jiraName: string | null; jiraBaseUrl?: string }>("/api/me/status"),
+    staleTime: 60_000,
+  });
+
+  const { data: filterOpts } = useQuery({
+    queryKey: issuesKeys.filters(projectKey),
+    queryFn: () => api<{ assignees: string[]; priorities: string[] }>(`/api/issues/filters?project=${projectKey}`),
+    staleTime: 60_000,
+  });
+
+  const { data: projectVersions } = useQuery({
+    queryKey: issuesKeys.versions(issue.jiraKey),
+    queryFn: () => api<{ items: { id: string; name: string }[] }>(`/api/issues/${issue.jiraKey}/versions`),
+    staleTime: 60_000,
+  });
+
   const { data: branches } = useQuery({
     queryKey: branchesForKeys.forIssue(issue.jiraKey),
     queryFn: () =>
       api<{ items: BranchRow[]; suggestedItems?: (BranchRow & { id: string })[] }>(
         `/api/issues/${issue.jiraKey}/branches`
       ),
-    retry: 1,
+    staleTime: 15_000,
   });
 
   async function handleConfirmBranch(branchId: string) {
@@ -153,10 +208,71 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
       // Refresh the issue from the cache after the mutation invalidated it.
       const fresh = await api<{ issue: IssueDetail }>(`/api/issues/${issue.jiraKey}`);
       setIssue(fresh.issue);
+      await queryClient.invalidateQueries({ queryKey: issuesKeys.all });
     } catch (e) {
-      setMsg(`Error: ${(e as Error).message}`);
+      setMsg(`Lỗi: ${(e as Error).message}`);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleMutateField(patch: Record<string, unknown>, successMsg?: string) {
+    await doAction(
+      () => api(`/api/issues/${issue.jiraKey}`, { method: "PATCH", body: patch }),
+      successMsg ?? "Đã cập nhật task thành công"
+    );
+  }
+
+  async function handleAssign(assignee: string | null) {
+    await handleMutateField({ assignee }, assignee ? `Đã gán cho ${assignee}` : "Đã hủy gán");
+  }
+
+  async function handleSetPoints(points: number | null) {
+    await handleMutateField({ points }, points != null ? `Đã đặt điểm thành ${points}` : "Đã xóa điểm");
+  }
+
+  async function handleSetPriority(priority: string) {
+    await handleMutateField({ priority }, `Đã đổi độ ưu tiên thành ${priority}`);
+  }
+
+  async function handleAddVersion(ver: string) {
+    const val = ver.trim();
+    if (!val) return;
+    await handleMutateField({ addFixVersion: val }, `Đã thêm phiên bản ${val}`);
+    setNewVersionInput("");
+    setShowAddVersion(false);
+  }
+
+  async function handleRemoveVersion(ver: string) {
+    await handleMutateField({ removeFixVersion: ver }, `Đã gỡ phiên bản ${ver}`);
+  }
+
+  async function handleAddLabel(l?: string) {
+    const val = (l ?? newLabelInput).trim();
+    if (!val) return;
+    await handleMutateField({ addLabel: val }, `Đã thêm nhãn ${val}`);
+    setNewLabelInput("");
+    setShowAddLabel(false);
+  }
+
+  async function handleRemoveLabel(l: string) {
+    await handleMutateField({ removeLabel: l }, `Đã gỡ nhãn ${l}`);
+  }
+
+  async function handleCreateBranch() {
+    setCreatingBranch(true);
+    setMsg(null);
+    try {
+      const res = await api<{ ok: boolean; branch?: string; error?: string }>(
+        `/api/issues/${issue.jiraKey}/branches`,
+        { method: "POST", body: {} }
+      );
+      await queryClient.invalidateQueries({ queryKey: branchesForKeys.forIssue(issue.jiraKey) });
+      setMsg(`Đã tạo thành công nhánh: ${res.branch}`);
+    } catch (e) {
+      setMsg(`Lỗi tạo nhánh: ${(e as Error).message}`);
+    } finally {
+      setCreatingBranch(false);
     }
   }
 
@@ -297,23 +413,250 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
         </div>
       </div>
 
-      {issue.releaseTasks.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {issue.releaseTasks.map((rt, i) => (
-            <Badge key={i} variant="info">
-              bản phát hành {rt.release.version} ({rt.release.status})
+      {/* Quick Action Bar */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-2.5 shadow-sm">
+        {/* Assignee Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+              <User className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>{issue.assigneeJira ? `Gán: ${issue.assigneeJira}` : "Chưa gán ai"}</span>
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56 max-h-64 overflow-y-auto">
+            <DropdownMenuLabel className="text-xs">Gán người thực hiện</DropdownMenuLabel>
+            {me?.jiraName && (
+              <DropdownMenuItem
+                onClick={() => handleAssign(me.jiraName)}
+                className="gap-2 text-xs font-medium text-primary"
+              >
+                <UserCheck className="h-3.5 w-3.5" /> Gán cho tôi ({me.jiraName})
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={() => handleAssign(null)} className="gap-2 text-xs text-muted-foreground">
+              <User className="h-3.5 w-3.5" /> Hủy gán (Unassigned)
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {(filterOpts?.assignees ?? []).map((a) => (
+              <DropdownMenuItem key={a} onClick={() => handleAssign(a)} className="gap-2 text-xs">
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="truncate">{a}</span>
+                {a === issue.assigneeJira && <span className="ml-auto text-primary font-bold">•</span>}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Quick Assign to me button */}
+        {me?.jiraName && issue.assigneeJira !== me.jiraName && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => handleAssign(me.jiraName)}
+            className="gap-1.5 text-xs text-primary hover:bg-primary/10"
+            title={`Gán nhanh cho tôi (${me.jiraName})`}
+          >
+            <UserCheck className="h-3.5 w-3.5" />
+            Gán cho tôi
+          </Button>
+        )}
+
+        {/* Priority Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+              <Flag className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>{issue.priority || "Độ ưu tiên"}</span>
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-36">
+            <DropdownMenuLabel className="text-xs">Độ ưu tiên</DropdownMenuLabel>
+            {priorities.map((p) => (
+              <DropdownMenuItem key={p} onClick={() => handleSetPriority(p)} className="gap-2 text-xs">
+                <Flag className="h-3.5 w-3.5" /> {p}
+                {p === issue.priority && <span className="ml-auto text-primary font-bold">•</span>}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Story Points Picker */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+              <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>{issue.points != null ? `${issue.points} pt` : "Đặt điểm"}</span>
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-40">
+            <DropdownMenuLabel className="text-xs">Story Points</DropdownMenuLabel>
+            <div className="grid grid-cols-4 gap-1 p-1">
+              {[1, 2, 3, 5, 8, 13, 21].map((p) => (
+                <Button
+                  key={p}
+                  variant={issue.points === p ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 px-0 text-xs"
+                  onClick={() => handleSetPoints(p)}
+                >
+                  {p}
+                </Button>
+              ))}
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => handleSetPoints(null)} className="text-xs text-destructive">
+              Xóa điểm (None)
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Create Bitbucket Branch */}
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={creatingBranch}
+          onClick={handleCreateBranch}
+          className="gap-1.5 text-xs ml-auto"
+          title="Tạo nhánh Bitbucket theo chuẩn quy ước của team"
+        >
+          {creatingBranch ? (
+            <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />
+          ) : (
+            <GitBranch className="h-3.5 w-3.5 text-primary" />
+          )}
+          {creatingBranch ? "Đang tạo nhánh…" : "Tạo nhánh Git"}
+        </Button>
+      </div>
+
+      {/* Fix Versions & Labels Interactive Bar */}
+      <div className="flex flex-wrap items-center gap-6 rounded-lg border bg-muted/20 px-3 py-2 text-xs">
+        {/* Fix Versions */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-semibold text-muted-foreground">Fix Version:</span>
+          {(issue.fixVersions ?? issue.releaseTasks.map((rt) => rt.release.version)).length === 0 && !showAddVersion && (
+            <span className="italic text-muted-foreground">Chưa có</span>
+          )}
+          {(issue.fixVersions ?? issue.releaseTasks.map((rt) => rt.release.version)).map((v) => (
+            <Badge key={v} variant="info" className="gap-1 text-[11px]">
+              {v}
+              <button
+                onClick={() => handleRemoveVersion(v)}
+                className="ml-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10"
+                title={`Gỡ ${v}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           ))}
+          {showAddVersion ? (
+            <div className="flex items-center gap-1">
+              {projectVersions?.items && projectVersions.items.length > 0 ? (
+                <Select onValueChange={(val) => handleAddVersion(val)}>
+                  <SelectTrigger className="h-6 w-32 text-xs">
+                    <SelectValue placeholder="Chọn version…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projectVersions.items.map((pv) => (
+                      <SelectItem key={pv.id} value={pv.name} className="text-xs">
+                        {pv.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  autoFocus
+                  value={newVersionInput}
+                  onChange={(e) => setNewVersionInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddVersion(newVersionInput);
+                    if (e.key === "Escape") setShowAddVersion(false);
+                  }}
+                  placeholder="1.0.0"
+                  className="h-6 w-24 text-xs px-1.5"
+                />
+              )}
+              {!projectVersions?.items?.length && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => handleAddVersion(newVersionInput)}
+                >
+                  Lưu
+                </Button>
+              )}
+              <button
+                onClick={() => setShowAddVersion(false)}
+                className="p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddVersion(true)}
+              className="flex items-center gap-0.5 text-primary hover:underline font-medium"
+            >
+              <Plus className="h-3 w-3" /> Thêm version
+            </button>
+          )}
         </div>
-      )}
 
-      {issue.labels.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        {/* Labels */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-semibold text-muted-foreground">Nhãn:</span>
+          {issue.labels.length === 0 && !showAddLabel && (
+            <span className="italic text-muted-foreground">Không có</span>
+          )}
           {issue.labels.map((l) => (
-            <Badge key={l} variant="outline">{l}</Badge>
+            <Badge key={l} variant="outline" className="gap-1 text-[11px]">
+              {l}
+              <button
+                onClick={() => handleRemoveLabel(l)}
+                className="ml-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10"
+                title={`Xóa nhãn ${l}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
           ))}
+          {showAddLabel ? (
+            <div className="flex items-center gap-1">
+              <Input
+                autoFocus
+                value={newLabelInput}
+                onChange={(e) => setNewLabelInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddLabel();
+                  if (e.key === "Escape") setShowAddLabel(false);
+                }}
+                placeholder="Tên nhãn…"
+                className="h-6 w-24 text-xs px-1.5"
+              />
+              <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => handleAddLabel()}>
+                Lưu
+              </Button>
+              <button
+                onClick={() => setShowAddLabel(false)}
+                className="p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddLabel(true)}
+              className="flex items-center gap-0.5 text-primary hover:underline font-medium"
+            >
+              <Plus className="h-3 w-3" /> Thêm nhãn
+            </button>
+          )}
         </div>
-      )}
+      </div>
 
       {msg && (
         <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">{msg}</div>

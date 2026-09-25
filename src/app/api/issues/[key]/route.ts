@@ -41,6 +41,11 @@ export async function PATCH(
     labels?: string[];
     priority?: string;
     points?: number | null;
+    fixVersions?: string[];
+    addFixVersion?: string;
+    removeFixVersion?: string;
+    addLabel?: string;
+    removeLabel?: string;
   };
 
   // Act as the current user if they linked their own Jira token.
@@ -57,9 +62,74 @@ export async function PATCH(
   }
   const client = jiraWith(auth);
 
-  // Push metadata changes to Jira (source of truth).
   try {
-    await client.updateIssue(key, patch);
+    const updatePayload: {
+      summary?: string;
+      description?: string;
+      assignee?: string | null;
+      labels?: string[];
+      priority?: string;
+      points?: number | null;
+      fixVersions?: string[];
+    } = {};
+
+    if (patch.summary !== undefined) updatePayload.summary = patch.summary;
+    if (patch.description !== undefined) updatePayload.description = patch.description;
+    if (patch.assignee !== undefined) updatePayload.assignee = patch.assignee;
+    if (patch.priority !== undefined) updatePayload.priority = patch.priority;
+    if (patch.points !== undefined) updatePayload.points = patch.points;
+    if (patch.fixVersions !== undefined) updatePayload.fixVersions = patch.fixVersions;
+
+    // Handle add/remove labels
+    if (patch.labels !== undefined) {
+      updatePayload.labels = patch.labels;
+    } else if (patch.addLabel || patch.removeLabel) {
+      const issueRes = await client.getIssue(key, "labels");
+      const curLabels = issueRes.fields.labels ?? [];
+      let newLabels = [...curLabels];
+      if (patch.addLabel) {
+        const val = patch.addLabel.trim();
+        if (val && !newLabels.includes(val)) newLabels.push(val);
+      }
+      if (patch.removeLabel) {
+        const val = patch.removeLabel.trim();
+        newLabels = newLabels.filter((l) => l !== val);
+      }
+      updatePayload.labels = newLabels;
+    }
+
+    // Handle add/remove fix version
+    if (patch.addFixVersion || patch.removeFixVersion) {
+      const projectKey = key.split("-")[0];
+      const issueRes = await client.getIssue(key, "fixVersions");
+      const current = (issueRes.fields.fixVersions ?? []).map((v) => v.id ?? "").filter(Boolean);
+      let nextVersions = [...current];
+
+      if (patch.addFixVersion) {
+        const id = await client.resolveVersionId(projectKey, patch.addFixVersion.trim());
+        if (!id) {
+          return NextResponse.json(
+            { error: `Không tìm thấy phiên bản "${patch.addFixVersion}" trong dự án ${projectKey}` },
+            { status: 400 }
+          );
+        }
+        if (!nextVersions.includes(id)) {
+          nextVersions.push(id);
+        }
+      }
+
+      if (patch.removeFixVersion) {
+        const id = await client.resolveVersionId(projectKey, patch.removeFixVersion.trim());
+        if (id) {
+          nextVersions = nextVersions.filter((vId) => vId !== id);
+        }
+      }
+
+      updatePayload.fixVersions = nextVersions;
+    }
+
+    // Push metadata changes to Jira (source of truth).
+    await client.updateIssue(key, updatePayload);
   } catch (e) {
     return NextResponse.json({ error: `Jira update failed: ${(e as Error).message}` }, { status: 502 });
   }
