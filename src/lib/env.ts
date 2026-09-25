@@ -50,6 +50,12 @@ export const env = {
   // shown in this order. Projects not listed here use an auto-derived set.
   jiraProjectColumns: str("JIRA_PROJECT_COLUMNS"),
 
+  // Jira Issue Link Dependency Config
+  jiraDependencyLinkType: str("JIRA_DEPENDENCY_LINK_TYPE", "Blocks"),
+  jiraDependencyInwardLabel: str("JIRA_DEPENDENCY_INWARD_LABEL", "is blocked by"),
+  jiraDependencyMaxDepth: int("JIRA_DEPENDENCY_MAX_DEPTH", 10),
+  jiraDependencyMaxIssues: int("JIRA_DEPENDENCY_MAX_ISSUES", 500),
+
   // Bitbucket Server / Data Center
   bitbucketBaseUrl: str("BITBUCKET_BASE_URL"),
   bitbucketUser: str("BITBUCKET_USER"),

@@ -38,6 +38,12 @@ export type ReleaseContext = {
   ciBuilds?: CiBuildState[];
   /** REL-04 — when true the CI gate is mandatory; default off. */
   ciGateEnabled?: boolean;
+  /** DEP-09/10 — dependency graph metadata for the release scope. */
+  dependencyGraph?: {
+    cycles: Array<{ path: string[] }>;
+    truncated: boolean;
+    missingKeys: string[];
+  };
   checkedAt: Date;
 };
 
@@ -61,6 +67,12 @@ export type TaskInfo = {
   statusCategory: string;
   issueType: string;
   lastSyncedAt: Date;
+  inclusion?: "direct" | "dependency";
+  rootKeys?: string[];
+  depth?: number;
+  sameProject?: boolean;
+  hasReleaseVersion?: boolean;
+  projectKey?: string;
 };
 
 export type BranchInfoRow = {

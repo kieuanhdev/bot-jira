@@ -8,6 +8,8 @@ import type { JiraIssue } from "@/lib/jira/types";
 import { userJiraAuth, userBitbucketCreds } from "@/lib/user-creds";
 import { renderBranchName } from "./branch-name";
 import { recordExplicitBranchLink } from "@/lib/bitbucket/link-service";
+import { expandDependencies } from "@/lib/issues/dependencies";
+import { audit } from "@/lib/audit";
 
 /**
  * M4 — Bulk operations.
@@ -24,6 +26,8 @@ import { recordExplicitBranchLink } from "@/lib/bitbucket/link-service";
  * worker process can reuse it.
  */
 
+export type DependencyScope = "none" | "direct" | "recursive";
+
 export type BulkAction =
   | { kind: "assign"; value: string | null }
   | { kind: "add-labels"; value: string[] }
@@ -31,8 +35,8 @@ export type BulkAction =
   | { kind: "set-points"; value: number | null }
   | { kind: "set-priority"; value: string }
   | { kind: "transition"; value: string }
-  | { kind: "add-fix-version"; value: string }
-  | { kind: "remove-fix-version"; value: string }
+  | { kind: "add-fix-version"; value: string; dependencyScope?: DependencyScope }
+  | { kind: "remove-fix-version"; value: string; dependencyScope?: DependencyScope; forceRemove?: boolean }
   | { kind: "add-comment"; value: string }
   | { kind: "create-branches"; value: BranchParams };
 
@@ -213,8 +217,6 @@ export function validateBulkRequest(body: unknown): ValidationResult {
         }
         case "set-priority":
         case "transition":
-        case "add-fix-version":
-        case "remove-fix-version":
         case "add-comment": {
           const v = rawAction.value;
           if (isNonEmptyString(v)) {
@@ -223,6 +225,49 @@ export function validateBulkRequest(body: unknown): ValidationResult {
             else action = { kind, value: v } as BulkAction;
           } else {
             errors.push(`${kind}.value must be a non-empty string`);
+          }
+          break;
+        }
+        case "add-fix-version": {
+          const v = rawAction.value;
+          if (isNonEmptyString(v)) {
+            if (v.length > MAX_STRING_FIELD) {
+              errors.push("add-fix-version.value too long");
+            } else {
+              let scope: DependencyScope = "recursive";
+              if (rawAction.dependencyScope !== undefined) {
+                if (["none", "direct", "recursive"].includes(String(rawAction.dependencyScope))) {
+                  scope = rawAction.dependencyScope as DependencyScope;
+                } else {
+                  errors.push("dependencyScope must be 'none', 'direct', or 'recursive'");
+                }
+              }
+              action = { kind: "add-fix-version", value: v, dependencyScope: scope };
+            }
+          } else {
+            errors.push("add-fix-version.value must be a non-empty string");
+          }
+          break;
+        }
+        case "remove-fix-version": {
+          const v = rawAction.value;
+          if (isNonEmptyString(v)) {
+            if (v.length > MAX_STRING_FIELD) {
+              errors.push("remove-fix-version.value too long");
+            } else {
+              let scope: DependencyScope = "recursive";
+              if (rawAction.dependencyScope !== undefined) {
+                if (["none", "direct", "recursive"].includes(String(rawAction.dependencyScope))) {
+                  scope = rawAction.dependencyScope as DependencyScope;
+                } else {
+                  errors.push("dependencyScope must be 'none', 'direct', or 'recursive'");
+                }
+              }
+              const force = rawAction.forceRemove === true;
+              action = { kind: "remove-fix-version", value: v, dependencyScope: scope, forceRemove: force };
+            }
+          } else {
+            errors.push("remove-fix-version.value must be a non-empty string");
           }
           break;
         }
@@ -274,7 +319,7 @@ export type TransitionErrorKind =
   | "upstream_unavailable"
   | "unverified";
 
-type PreviewItem = {
+export type PreviewItem = {
   jiraKey: string;
   before: Record<string, unknown>;
   after: Record<string, unknown>;
@@ -283,6 +328,12 @@ type PreviewItem = {
   transitionError: TransitionErrorKind | null;
   branchName: string | null;
   exists: boolean; // for create-branches: branch already present
+  relation?: "explicit" | "dependency";
+  depth?: number;
+  via?: string;
+  rootKey?: string;
+  projectKey?: string;
+  sameProject?: boolean;
 };
 
 export function isTransitionError(e: unknown): TransitionErrorKind | null {
@@ -303,11 +354,16 @@ export type PreviewResult = {
   operationId: string;
   type: string;
   total: number;
-  items: PreviewItem[];
+  items: (PreviewItem & { skipReason: string | null })[];
   /** Count of items that will actually be acted on. */
   actionable: number;
   /** Count of items that will be left untouched (no-op, blocked, unknown). */
   skipped: number;
+  cycles?: Array<{ path: string[] }>;
+  truncated?: boolean;
+  selectedCount?: number;
+  dependencyCount?: number;
+  externalCount?: number;
 };
 
 export function normalizeKey(k: string): string {
@@ -458,17 +514,68 @@ export async function previewBulk(
   const unique = Array.from(new Set(keys.map(normalizeKey))).slice(0, MAX_KEYS);
   if (unique.length === 0) throw new Error("no_keys");
 
+  const isFixVersionAction = action.kind === "add-fix-version" || action.kind === "remove-fix-version";
+  const scope: DependencyScope = isFixVersionAction ? (action.dependencyScope ?? "recursive") : "none";
+
+  type Target = {
+    key: string;
+    relation: "explicit" | "dependency";
+    depth: number;
+    via?: string;
+    rootKey?: string;
+  };
+
+  let targets: Target[] = unique.map((k) => ({
+    key: k,
+    relation: "explicit",
+    depth: 0,
+    rootKey: k,
+  }));
+
+  let cycles: Array<{ path: string[] }> = [];
+  let truncated = false;
+
+  if (scope !== "none") {
+    const depGraph = await expandDependencies({
+      rootKeys: unique,
+      maxDepth: scope === "direct" ? 1 : env.jiraDependencyMaxDepth,
+      maxIssues: MAX_KEYS,
+    });
+    targets = depGraph.issues.map((i) => ({
+      key: i.key,
+      relation: i.relation,
+      depth: i.depth,
+      via: i.via,
+      rootKey: i.rootKey ?? i.key,
+    }));
+    cycles = depGraph.cycles;
+    truncated = depGraph.truncated;
+  }
+
+  const allTargetKeys = Array.from(new Set(targets.map((t) => t.key)));
   const issues = await prisma.issueCache.findMany({
-    where: { jiraKey: { in: unique } },
+    where: { jiraKey: { in: allTargetKeys }, deletedAt: null },
   });
   const byKey = new Map(issues.map((i) => [i.jiraKey, i]));
 
   const items: (PreviewItem & { skipReason: string | null })[] = [];
   let actionable = 0;
   let skipped = 0;
+  let externalCount = 0;
+  let dependencyCount = 0;
 
-  for (const key of unique) {
+  for (const target of targets) {
+    const key = target.key;
+    const isDep = target.relation === "dependency";
+    if (isDep) dependencyCount++;
+
     const issue = byKey.get(key);
+    const rootKey = target.rootKey ?? key;
+    const rootIssue = byKey.get(rootKey);
+    const rootProject = rootIssue?.projectKey || rootKey.split("-")[0];
+    const depProject = issue?.projectKey || key.split("-")[0];
+    const sameProject = Boolean(rootProject && depProject && rootProject === depProject);
+
     if (!issue) {
       // BULK-002 — mark as skipped at preview time; the worker never runs it.
       skipped++;
@@ -482,6 +589,12 @@ export async function previewBulk(
         branchName: null,
         exists: false,
         skipReason: "not_in_cache",
+        relation: target.relation,
+        depth: target.depth,
+        via: target.via,
+        rootKey: target.rootKey,
+        projectKey: depProject,
+        sameProject,
       });
       continue;
     }
@@ -494,8 +607,8 @@ export async function previewBulk(
     if (action.kind === "transition") {
       try {
         const transitions = await jira.getTransitions(key);
-        const target = action.value.toLowerCase();
-        const match = transitions.find((t) => t.to?.name?.toLowerCase() === target);
+        const targetStatus = action.value.toLowerCase();
+        const match = transitions.find((t) => t.to?.name?.toLowerCase() === targetStatus);
         transitionName = match?.to?.name ?? null;
       } catch (e) {
         // BULK-009 — distinguish upstream failures from a genuine missing path.
@@ -535,10 +648,48 @@ export async function previewBulk(
 
     // BULK-005/009 — no-op and blocked/unverified items are skipped, not run.
     let skipReason: string | null = null;
+    let warning = preview.warning;
+
     if (preview.classification === "no_change") skipReason = "no_change";
     else if (preview.classification === "blocked")
       skipReason = transitionError ?? "no_transition";
     else if (preview.classification === "unverified") skipReason = "unverified";
+
+    // Dependency specific rules (DEP-06, DEP-07, DEP-08)
+    if (isDep) {
+      if (!sameProject) {
+        // External project dependency: do NOT mutate in Jira!
+        skipReason = "external_dependency";
+        warning = "external_dependency";
+        externalCount++;
+      } else if (action.kind === "remove-fix-version" && !action.forceRemove) {
+        // Provenance check for safe removal
+        const prop = await prisma.fixVersionPropagation.findFirst({
+          where: {
+            rootKey,
+            dependencyKey: key,
+            active: true,
+          },
+        });
+        if (!prop) {
+          // Version was not propagated by app from this root
+          skipReason = "manual_or_unpropagated";
+        } else {
+          // Check if another root also references this dependency for the same version
+          const otherProp = await prisma.fixVersionPropagation.findFirst({
+            where: {
+              dependencyKey: key,
+              jiraVersionId: prop.jiraVersionId,
+              active: true,
+              rootKey: { not: rootKey },
+            },
+          });
+          if (otherProp) {
+            skipReason = "shared_with_other_root";
+          }
+        }
+      }
+    }
 
     if (skipReason) skipped++;
     else actionable++;
@@ -546,13 +697,19 @@ export async function previewBulk(
     items.push({
       jiraKey: key,
       before: preview.before,
-      after: preview.after,
-      warning: preview.warning,
+      after: skipReason ? preview.before : preview.after,
+      warning,
       transitionName,
       transitionError,
       branchName,
       exists: branchExists === true,
       skipReason,
+      relation: target.relation,
+      depth: target.depth,
+      via: target.via,
+      rootKey: target.rootKey,
+      projectKey: depProject,
+      sameProject,
     });
   }
 
@@ -560,9 +717,9 @@ export async function previewBulk(
     data: {
       type: action.kind,
       requestedBy,
-      payload: { action, params: actionParams(action) } as Prisma.InputJsonValue,
+      payload: { action, params: actionParams(action), cycles, truncated } as Prisma.InputJsonValue,
       state: "preview",
-      total: unique.length,
+      total: targets.length,
     },
   });
 
@@ -578,6 +735,12 @@ export async function previewBulk(
         branchName: item.branchName,
         warning: item.warning,
         skipReason: item.skipReason,
+        relation: item.relation,
+        depth: item.depth,
+        via: item.via,
+        rootKey: item.rootKey,
+        projectKey: item.projectKey,
+        sameProject: item.sameProject,
       } as Prisma.InputJsonValue,
       // BULK-002 — skipped items are persisted as `skipped` so the worker never
       // picks them up; only actionable items are created as `pending`.
@@ -589,10 +752,15 @@ export async function previewBulk(
   return {
     operationId: op.id,
     type: action.kind,
-    total: unique.length,
+    total: targets.length,
     items,
     actionable,
     skipped,
+    cycles,
+    truncated,
+    selectedCount: unique.length,
+    dependencyCount,
+    externalCount,
   };
 }
 
@@ -729,6 +897,50 @@ async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
         if (!current.includes(id)) {
           await jira.updateIssue(key, { fixVersions: [...current, id] });
         }
+
+        // Provenance tracking & audit (DEP-07, DEP-12)
+        const itemRow = await prisma.bulkOperationItem.findUnique({
+          where: { operationId_jiraKey: { operationId: ctx.op.id, jiraKey: key } },
+          select: { requested: true },
+        });
+        const reqMeta = itemRow?.requested as Record<string, unknown> | null;
+        if (reqMeta?.relation === "dependency" && reqMeta.rootKey) {
+          const rootKey = String(reqMeta.rootKey);
+          await prisma.fixVersionPropagation.upsert({
+            where: {
+              rootKey_dependencyKey_jiraVersionId: {
+                rootKey,
+                dependencyKey: key,
+                jiraVersionId: id,
+              },
+            },
+            create: {
+              rootKey,
+              dependencyKey: key,
+              jiraVersionId: id,
+              projectKey,
+              operationId: ctx.op.id,
+              active: true,
+              appliedAt: new Date(),
+            },
+            update: {
+              active: true,
+              operationId: ctx.op.id,
+              appliedAt: new Date(),
+              removedAt: null,
+            },
+          });
+
+          await audit({
+            actorId: ctx.op.requestedBy,
+            action: "issue.fix_version.propagate",
+            target: key,
+            before: { fixVersions: current },
+            after: { fixVersions: [...current, id], rootKey, versionId: id },
+            source: "worker",
+            correlationId: ctx.op.id,
+          });
+        }
         break;
       }
       case "remove-fix-version": {
@@ -736,8 +948,33 @@ async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
         const projectKey = issue.fields.project?.key ?? key.split("-")[0] ?? "";
         const id = await jira.resolveVersionId(projectKey, a.value);
         if (id) {
-          const kept = (issue.fields.fixVersions ?? []).map((v) => v.id ?? "").filter((x) => x && x !== id);
-          await jira.updateIssue(key, { fixVersions: kept });
+          const current = (issue.fields.fixVersions ?? []).map((v) => v.id ?? "").filter((x) => x);
+          const kept = current.filter((x) => x !== id);
+          if (kept.length !== current.length) {
+            await jira.updateIssue(key, { fixVersions: kept });
+
+            // Provenance update & audit (DEP-08, DEP-12)
+            await prisma.fixVersionPropagation.updateMany({
+              where: {
+                dependencyKey: key,
+                jiraVersionId: id,
+              },
+              data: {
+                active: false,
+                removedAt: new Date(),
+              },
+            });
+
+            await audit({
+              actorId: ctx.op.requestedBy,
+              action: "issue.fix_version.propagate_remove",
+              target: key,
+              before: { fixVersions: current },
+              after: { fixVersions: kept, versionId: id },
+              source: "worker",
+              correlationId: ctx.op.id,
+            });
+          }
         }
         break;
       }

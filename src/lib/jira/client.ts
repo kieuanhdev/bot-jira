@@ -22,6 +22,7 @@ const BASE_ISSUE_FIELDS = [
   "fixVersions",
   "priority",
   "issuetype",
+  "issuelinks",
   "created",
   "updated",
   "duedate",

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { jira } from "@/lib/jira/client";
+import { jira, jiraIssueFields } from "@/lib/jira/client";
 import { upsertJiraIssue, upsertJiraCommentsWithNew } from "@/lib/issues/cache";
 import { notifyWatchersOfComment } from "@/lib/issues/notify-watchers";
 import { markEventProcessed, type Source } from "@/lib/events/store";
@@ -18,7 +18,7 @@ function safeError(error: unknown): string {
 
 /** Refresh a single Jira issue + comments into the cache (idempotent). */
 async function refreshIssue(key: string): Promise<string[]> {
-  const issue = await jira.getIssue(key);
+  const issue = await jira.getIssue(key, jiraIssueFields());
   await upsertJiraIssue(issue);
   const { newComments } = await upsertJiraCommentsWithNew(key, await jira.getComments(key));
   return newComments.map((c) => c.id);
@@ -33,14 +33,25 @@ async function refreshIssue(key: string): Promise<string[]> {
 async function handleJira(json: unknown): Promise<Record<string, unknown>> {
   const j = json as {
     event?: string;
-    webHookEvent?: { key?: string };
+    webHookEvent?: {
+      key?: string;
+      changelog?: {
+        items?: Array<{
+          field?: string;
+          from?: string;
+          to?: string;
+          fromString?: string;
+          toString?: string;
+        }>;
+      };
+    };
   };
   const key = j.webHookEvent?.key;
   if (!key) return { skipped: true, reason: "no issue key" };
   if (!hasJiraConfig()) return { skipped: true, reason: "jira not configured" };
 
   if (j.event === "jira:issue_commented") {
-    await upsertJiraIssue(await jira.getIssue(key));
+    await upsertJiraIssue(await jira.getIssue(key, jiraIssueFields()));
     const { newComments } = await upsertJiraCommentsWithNew(key, await jira.getComments(key));
     for (const nc of newComments) {
       // The comment id is the dedupe key, so the poll worker and this handler
@@ -49,8 +60,29 @@ async function handleJira(json: unknown): Promise<Record<string, unknown>> {
     }
     return { refreshed: key, newComments: newComments.length };
   }
+
   await refreshIssue(key);
-  return { refreshed: key };
+
+  // If the changelog indicates issue link changes, also refresh any linked issue keys mentioned
+  const items = j.webHookEvent?.changelog?.items ?? [];
+  const linkItems = items.filter(
+    (i) => (i.field ?? "").toLowerCase() === "link" || (i.field ?? "").toLowerCase() === "issuelinks"
+  );
+  const otherRefreshed: string[] = [];
+  if (linkItems.length > 0) {
+    for (const item of linkItems) {
+      const text = `${item.fromString ?? ""} ${item.toString ?? ""} ${item.from ?? ""} ${item.to ?? ""}`;
+      const matches = text.match(/[A-Z][A-Z0-9]+-\d+/g) ?? [];
+      for (const otherKey of matches) {
+        if (otherKey !== key && !otherRefreshed.includes(otherKey)) {
+          otherRefreshed.push(otherKey);
+          await refreshIssue(otherKey).catch(() => null);
+        }
+      }
+    }
+  }
+
+  return { refreshed: key, otherRefreshed };
 }
 
 /**

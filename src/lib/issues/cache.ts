@@ -46,6 +46,66 @@ export function issueCacheData(issue: JiraIssue) {
   };
 }
 
+export async function syncIssueLinks(
+  issueKey: string,
+  rawLinks?: JiraIssue["fields"]["issuelinks"]
+): Promise<number> {
+  if (!Array.isArray(rawLinks)) {
+    return 0;
+  }
+
+  const { normalizeIssueLink } = await import("@/lib/jira/issue-links");
+  const key = issueKey.trim().toUpperCase();
+  const normalizedLinks = rawLinks
+    .map((l) => normalizeIssueLink(key, l))
+    .filter((l): l is NonNullable<typeof l> => l !== null);
+
+  const activeLinkIds: string[] = [];
+
+  for (const link of normalizedLinks) {
+    activeLinkIds.push(link.jiraLinkId);
+    await prisma.issueLinkCache.upsert({
+      where: { jiraLinkId: link.jiraLinkId },
+      create: {
+        jiraLinkId: link.jiraLinkId,
+        linkTypeId: link.linkTypeId,
+        linkTypeName: link.linkTypeName,
+        inwardLabel: link.inwardLabel,
+        outwardLabel: link.outwardLabel,
+        outwardKey: link.outwardKey,
+        inwardKey: link.inwardKey,
+        lastSyncedAt: new Date(),
+        deletedAt: null,
+      },
+      update: {
+        linkTypeId: link.linkTypeId,
+        linkTypeName: link.linkTypeName,
+        inwardLabel: link.inwardLabel,
+        outwardLabel: link.outwardLabel,
+        outwardKey: link.outwardKey,
+        inwardKey: link.inwardKey,
+        lastSyncedAt: new Date(),
+        deletedAt: null,
+      },
+    });
+  }
+
+  // Soft-delete links for this issue that are no longer present in Jira's active response
+  await prisma.issueLinkCache.updateMany({
+    where: {
+      OR: [{ inwardKey: key }, { outwardKey: key }],
+      deletedAt: null,
+      jiraLinkId: { notIn: activeLinkIds },
+    },
+    data: {
+      deletedAt: new Date(),
+      lastSyncedAt: new Date(),
+    },
+  });
+
+  return normalizedLinks.length;
+}
+
 export async function upsertJiraIssue(issue: JiraIssue) {
   const data = issueCacheData(issue);
   await prisma.issueCache.upsert({
@@ -53,6 +113,9 @@ export async function upsertJiraIssue(issue: JiraIssue) {
     create: { jiraKey: issue.key, ...data },
     update: data,
   });
+  if (Array.isArray(issue.fields.issuelinks)) {
+    await syncIssueLinks(issue.key, issue.fields.issuelinks).catch(() => null);
+  }
   return data;
 }
 

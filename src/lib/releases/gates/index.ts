@@ -8,6 +8,8 @@ import { dataFreshnessGate } from "./data-freshness";
 import { aiAdvisoryGate } from "./ai-advisory";
 import { manualApprovalGate } from "./manual-approval";
 import { ciGate } from "./ci";
+import { dependencyVersionConsistencyGate } from "./dependency-version-consistency";
+import { dependencyGraphIntegrityGate } from "./dependency-graph-integrity";
 
 export type {
   GateState,
@@ -28,6 +30,14 @@ export { dataFreshnessGate } from "./data-freshness";
 export { aiAdvisoryGate } from "./ai-advisory";
 export { manualApprovalGate } from "./manual-approval";
 export { ciGate } from "./ci";
+export {
+  dependencyVersionConsistencyGate,
+  GATE_DEPENDENCY_VERSION_CONSISTENCY,
+} from "./dependency-version-consistency";
+export {
+  dependencyGraphIntegrityGate,
+  GATE_DEPENDENCY_GRAPH_INTEGRITY,
+} from "./dependency-graph-integrity";
 export type { CiBuildState } from "./ci";
 
 /**
@@ -158,6 +168,8 @@ export async function runGates(
     gates.push(applyOverride(branchesGate(ctx.branchInfos)));
     gates.push(applyOverride(pullRequestsGate(ctx.branchInfos)));
     gates.push(applyOverride(dataFreshnessGate(ctx)));
+    gates.push(applyOverride(dependencyVersionConsistencyGate(ctx.tasks)));
+    gates.push(applyOverride(dependencyGraphIntegrityGate(ctx.dependencyGraph)));
     gates.push(applyOverride(await aiAdvisoryGate(ctx, releaseCheck)));
     // REL-03 — manual approval (mandatory when approvals are required).
     gates.push(

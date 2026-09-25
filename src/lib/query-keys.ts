@@ -11,6 +11,8 @@ export const issuesKeys = {
   list: (qs: string) => ["issues", qs || "all"] as const,
   /** `["issues", <jiraKey>]` — a single issue. */
   detail: (jiraKey: string) => ["issues", jiraKey] as const,
+  /** `["issues", <jiraKey>, "dependencies"]` — dependency graph for an issue. */
+  dependencies: (jiraKey: string) => ["issues", jiraKey, "dependencies"] as const,
   /** `["issues", "filters", <project or "bulk">]`. */
   filters: (scope: string) => ["issues", "filters", scope] as const,
 };

@@ -109,5 +109,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     gates,
     blockers: allBlockers,
     checkId: check.id,
+    tasks: releaseCtx.tasks,
+    dependencyGraph: releaseCtx.dependencyGraph,
   });
 }

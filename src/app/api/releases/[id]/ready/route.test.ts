@@ -27,6 +27,9 @@ const { prismaMock, releaseCheckMock, notifyAllMock, sentryListMock, sessionMock
       releaseCheck: {
         create: vi.fn(),
       },
+      issueLinkCache: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
     };
     return {
       prismaMock,

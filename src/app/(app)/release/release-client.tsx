@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +21,20 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { timeAgo } from "@/lib/utils";
-import { Rocket, ShieldCheck, ShieldAlert, Plus, PackageOpen, Tag, Send } from "lucide-react";
+import {
+  Rocket,
+  ShieldCheck,
+  ShieldAlert,
+  Plus,
+  PackageOpen,
+  Tag,
+  Send,
+  Network,
+  Layers,
+  Filter,
+  RefreshCw,
+  CornerDownRight,
+} from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -28,6 +42,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+export type ReleaseTask = {
+  jiraKey: string;
+  projectKey?: string;
+  issue: {
+    status: string;
+    statusCategory: string;
+    summary: string;
+    points: number | null;
+    priority: string;
+    fixVersions?: string[];
+  };
+  inclusion?: "direct" | "dependency";
+  rootKeys?: string[];
+  depth?: number;
+  sameProject?: boolean;
+  hasReleaseVersion?: boolean;
+};
+
+export type DependencyGraph = {
+  nodes: Array<{ key: string; status: string; statusCategory: string; points: number | null; summary: string }>;
+  edges: Array<{ inwardKey: string; outwardKey: string; type: string }>;
+  missingKeys: string[];
+  cycles: string[][];
+  truncated: boolean;
+};
 
 type Task = {
   jiraKey: string;
@@ -62,6 +102,15 @@ type Release = {
   tasks: Task[];
 };
 
+type ReleaseCheckState = {
+  ready: boolean;
+  status: string;
+  blockers: GateBlocker[];
+  gates: GateResult[];
+  tasks?: ReleaseTask[];
+  dependencyGraph?: DependencyGraph;
+};
+
 const DONE_CATEGORIES = ["done"];
 
 const GATE_LABELS: Record<string, string> = {
@@ -75,6 +124,8 @@ const GATE_LABELS: Record<string, string> = {
   ci: "CI Build",
   manual_approval: "Phê duyệt thủ công",
   ai_advisory: "Tư vấn AI",
+  dependency_version_consistency: "Nhất quán Fix Version dependency",
+  dependency_graph_integrity: "Toàn vẹn đồ thị dependency",
 };
 
 const STATUS_LABELS: Record<Release["status"], string> = {
@@ -123,6 +174,13 @@ function StatusBadge({ status }: { status: Release["status"] }) {
   return <Badge variant={map[status] ?? "secondary"}>{STATUS_LABELS[status] ?? status}</Badge>;
 }
 
+function isTaskBlocked(t: ReleaseTask, blockers: GateBlocker[]): boolean {
+  if (!DONE_CATEGORIES.includes(t.issue.statusCategory)) return true;
+  if (t.hasReleaseVersion === false) return true;
+  if (blockers.some((b) => b.jiraKey === t.jiraKey)) return true;
+  return false;
+}
+
 export function ReleaseClient() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -135,9 +193,83 @@ export function ReleaseClient() {
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [releasingId, setReleasingId] = useState<string | null>(null);
   const [releaseError, setReleaseError] = useState<string | null>(null);
-  const [lastCheck, setLastCheck] = useState<
-    Record<string, { ready: boolean; status: string; blockers: GateBlocker[]; gates: GateResult[] }>
-  >({});
+  const [lastCheck, setLastCheck] = useState<Record<string, ReleaseCheckState>>({});
+
+  // View state per release
+  const [viewModes, setViewModes] = useState<Record<string, "tree" | "flat">>({});
+  const [filterBlockersOnly, setFilterBlockersOnly] = useState<Record<string, boolean>>({});
+
+  // Fix Version Sync Modal state
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [syncRel, setSyncRel] = useState<Release | null>(null);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncConfirming, setSyncConfirming] = useState(false);
+  const [syncPreview, setSyncPreview] = useState<{
+    operationId: string;
+    total: number;
+    actionable: number;
+    skipped: number;
+    items: Array<{ jiraKey: string; actionable: boolean; reason?: string }>;
+  } | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  async function openSyncDialog(rel: Release) {
+    setSyncRel(rel);
+    setSyncOpen(true);
+    setSyncLoading(true);
+    setSyncPreview(null);
+    setSyncError(null);
+
+    try {
+      const directKeys = rel.tasks.map((t) => t.jiraKey);
+      const res = await api<{
+        operationId: string;
+        total: number;
+        actionable: number;
+        skipped: number;
+        items: Array<{ jiraKey: string; actionable: boolean; reason?: string }>;
+      }>("/api/issues/bulk", {
+        method: "POST",
+        body: {
+          action: {
+            kind: "add-fix-version",
+            version: rel.version,
+            dependencyScope: "recursive",
+          },
+          keys: directKeys,
+        },
+      });
+      setSyncPreview(res);
+    } catch (e) {
+      setSyncError((e as Error).message || "Không thể tải trước thông tin đồng bộ.");
+    } finally {
+      setSyncLoading(false);
+    }
+  }
+
+  async function confirmSync() {
+    if (!syncPreview || !syncRel) return;
+    setSyncConfirming(true);
+    setSyncError(null);
+    try {
+      await api("/api/issues/bulk", {
+        method: "POST",
+        body: {
+          confirm: true,
+          operationId: syncPreview.operationId,
+        },
+      });
+      setSyncOpen(false);
+      // Re-trigger ready check to show fresh gate statuses
+      setTimeout(() => {
+        checkReady(syncRel.id);
+      }, 1500);
+    } catch (e) {
+      setSyncError((e as Error).message || "Không thể thực hiện đồng bộ.");
+    } finally {
+      setSyncConfirming(false);
+    }
+  }
 
   // REL-02 — release a release only when its latest ready-check is ready.
   async function publishRelease(rel: Release) {
@@ -171,10 +303,6 @@ export function ReleaseClient() {
     retry: 1,
   });
 
-  // Load the available Jira Fix Versions for the selected project so the user
-  // can link an existing version (or create a new one by leaving the link
-  // empty). The versions proxy is per-release, so we fetch it from the first
-  // existing release in that project.
   async function loadVersions(key: string) {
     if (!key) {
       setVersions([]);
@@ -190,8 +318,6 @@ export function ReleaseClient() {
         setVersions(v.items ?? []);
       }
     } catch {
-      // No release yet for this project (or Jira unavailable) — the user can
-      // still create a brand-new Fix Version by leaving the link empty.
       setVersions([]);
     } finally {
       setVersionsLoading(false);
@@ -223,10 +349,19 @@ export function ReleaseClient() {
         status: string;
         blockers: GateBlocker[];
         gates: GateResult[];
+        tasks?: ReleaseTask[];
+        dependencyGraph?: DependencyGraph;
       }>(`/api/releases/${id}/ready`, { method: "POST", body: {} });
       setLastCheck((prev) => ({
         ...prev,
-        [id]: { ready: r.ready, status: r.status, blockers: r.blockers ?? [], gates: r.gates ?? [] },
+        [id]: {
+          ready: r.ready,
+          status: r.status,
+          blockers: r.blockers ?? [],
+          gates: r.gates ?? [],
+          tasks: r.tasks,
+          dependencyGraph: r.dependencyGraph,
+        },
       }));
     } finally {
       setCheckingId(null);
@@ -242,12 +377,12 @@ export function ReleaseClient() {
         <div>
           <h1 className="text-xl font-semibold">Phát hành</h1>
           <p className="text-sm text-muted-foreground">
-            Gộp task theo nhãn phát hành, sau đó chạy kiểm tra sẵn sàng (quy tắc + AI).
+            Gộp task theo nhãn phát hành hoặc Fix Version, sau đó chạy kiểm tra sẵn sàng phát hành.
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-1.5"><Plus className="h-4 w-4" /> Tạo bản phát hành</Button>
+            <Button className="gap-1.5 cursor-pointer"><Plus className="h-4 w-4" /> Tạo bản phát hành</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -319,7 +454,7 @@ export function ReleaseClient() {
               )}
             </div>
             <DialogFooter>
-              <Button onClick={createRelease} disabled={!version.trim() || versionsLoading}>
+              <Button onClick={createRelease} disabled={!version.trim() || versionsLoading} className="cursor-pointer">
                 Tạo mới
               </Button>
             </DialogFooter>
@@ -342,14 +477,45 @@ export function ReleaseClient() {
       )}
 
       {releases.map((rel) => {
-        const done = rel.tasks.filter((t) => DONE_CATEGORIES.includes(t.issue.statusCategory)).length;
         const check = lastCheck[rel.id];
+        const allTasks: ReleaseTask[] =
+          check?.tasks && check.tasks.length > 0
+            ? check.tasks
+            : rel.tasks.map((t) => ({
+                ...t,
+                inclusion: "direct" as const,
+                depth: 0,
+                sameProject: true,
+                hasReleaseVersion: true,
+                rootKeys: [t.jiraKey],
+              }));
+
+        const doneCount = allTasks.filter((t) => DONE_CATEGORIES.includes(t.issue.statusCategory)).length;
+        const directTasks = allTasks.filter((t) => t.inclusion !== "dependency");
+        const dependencyTasks = allTasks.filter((t) => t.inclusion === "dependency");
+
+        // Missing dependency versions condition for repair action
+        const hasMissingDependencyVersions = Boolean(
+          dependencyTasks.some((t) => t.sameProject !== false && t.hasReleaseVersion === false) ||
+            check?.gates.some(
+              (g) => g.gate === "dependency_version_consistency" && (g.state === "failed" || g.state === "unknown")
+            )
+        );
+
+        const currentView = viewModes[rel.id] ?? "tree";
+        const currentFilterBlockers = filterBlockersOnly[rel.id] ?? false;
+
+        const blockersList = check?.blockers ?? [];
+
+        // Filter tasks if filterBlockersOnly is active
+        const filterFn = (t: ReleaseTask) => !currentFilterBlockers || isTaskBlocked(t, blockersList);
+
         return (
           <Card key={rel.id}>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Rocket className="h-5 w-5" />
+                  <Rocket className="h-5 w-5 text-teal-600 dark:text-teal-400" />
                   <CardTitle className="text-lg">v{rel.version}</CardTitle>
                   <StatusBadge status={rel.status} />
                 </div>
@@ -359,7 +525,7 @@ export function ReleaseClient() {
                     size="sm"
                     disabled={checkingId === rel.id}
                     onClick={() => checkReady(rel.id)}
-                    className="gap-1.5"
+                    className="gap-1.5 cursor-pointer"
                   >
                     {check?.ready ? <ShieldCheck className="h-4 w-4 text-emerald-500" /> : <ShieldAlert className="h-4 w-4" />}
                     {checkingId === rel.id ? "Đang kiểm tra…" : "Kiểm tra sẵn sàng"}
@@ -369,7 +535,7 @@ export function ReleaseClient() {
                       size="sm"
                       disabled={releasingId === rel.id}
                       onClick={() => publishRelease(rel)}
-                      className="gap-1.5"
+                      className="gap-1.5 cursor-pointer"
                     >
                       <Send className="h-4 w-4" />
                       {releasingId === rel.id ? "Đang phát hành…" : "Phát hành phiên bản"}
@@ -393,12 +559,22 @@ export function ReleaseClient() {
                   </span>
                 )}
                 <span>·</span>
-                <span>{done}/{rel.tasks.length} hoàn thành</span>
+                <span>
+                  {doneCount}/{allTasks.length} hoàn thành
+                </span>
+                {dependencyTasks.length > 0 && (
+                  <>
+                    <span>·</span>
+                    <span className="text-xs text-muted-foreground">
+                      ({directTasks.length} trực tiếp, {dependencyTasks.length} phụ thuộc)
+                    </span>
+                  </>
+                )}
                 <span>·</span>
                 <span>{timeAgo(rel.createdAt)}</span>
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col gap-3">
+            <CardContent className="flex flex-col gap-4">
               {releaseError && (
                 <div className="rounded-md border border-red-300/40 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
                   Phát hành thất bại: {releaseError}
@@ -418,17 +594,30 @@ export function ReleaseClient() {
                       : "border-red-300/40 bg-red-500/10")
                   }
                 >
-                  <p className="font-medium">
-                    {check.ready ? "Sẵn sàng phát hành" : `Chưa sẵn sàng (${check.status})`}
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium">
+                      {check.ready ? "Sẵn sàng phát hành" : `Chưa sẵn sàng (${check.status})`}
+                    </p>
+                    {hasMissingDependencyVersions && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openSyncDialog(rel)}
+                        className="gap-1.5 border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 text-xs h-7 cursor-pointer"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        Đồng bộ version xuống dependency
+                      </Button>
+                    )}
+                  </div>
                   {check.gates.length > 0 && (
-                    <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                    <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
                       {check.gates.map((g, i) => (
                         <div
                           key={`${g.gate}-${i}`}
-                          className="flex items-start gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
+                          className="flex items-start gap-2 rounded-md border border-border/60 bg-background/50 px-2.5 py-1.5 transition-colors"
                         >
-                          <Badge variant={gateVariant(g.state)} className="mt-0.5 shrink-0">
+                          <Badge variant={gateVariant(g.state)} className="mt-0.5 shrink-0 text-[10px]">
                             {GATE_STATE_LABELS[g.state] ?? g.state}
                           </Badge>
                           <div className="min-w-0">
@@ -459,30 +648,377 @@ export function ReleaseClient() {
                   )}
                 </div>
               )}
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs text-muted-foreground">
-                    <th className="py-1.5">Task</th>
-                    <th>Tóm tắt</th>
-                    <th>Trạng thái</th>
-                    <th>Điểm story</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rel.tasks.map((t) => (
-                    <tr key={t.jiraKey} className="border-b last:border-0">
-                      <td className="py-1.5"><Link href={`/issue/${t.jiraKey}`} className="font-mono text-xs hover:underline">{t.jiraKey}</Link></td>
-                      <td className="line-clamp-1">{t.issue.summary}</td>
-                      <td><Badge variant={DONE_CATEGORIES.includes(t.issue.statusCategory) ? "success" : "secondary"}>{t.issue.status}</Badge></td>
-                      <td>{t.issue.points ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+              {/* Tasks Toolbar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-foreground">
+                    Danh sách task ({allTasks.length})
+                  </span>
+                  {dependencyTasks.length > 0 && (
+                    <Badge variant="outline" className="text-[10px]">
+                      {dependencyTasks.length} dependencies
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    size="sm"
+                    variant={currentFilterBlockers ? "secondary" : "ghost"}
+                    onClick={() =>
+                      setFilterBlockersOnly((prev) => ({ ...prev, [rel.id]: !prev[rel.id] }))
+                    }
+                    className="h-7 gap-1 px-2 text-xs cursor-pointer"
+                  >
+                    <Filter className="h-3.5 w-3.5" />
+                    Chỉ task chặn / lỗi
+                  </Button>
+                  {dependencyTasks.length > 0 && (
+                    <div className="flex items-center rounded-md border border-border p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setViewModes((prev) => ({ ...prev, [rel.id]: "tree" }))}
+                        className={`flex items-center gap-1 rounded px-2 py-1 text-xs cursor-pointer transition-colors ${
+                          currentView === "tree"
+                            ? "bg-accent font-medium text-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                        title="Xem dạng cây"
+                      >
+                        <Network className="h-3.5 w-3.5" />
+                        Dạng cây
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setViewModes((prev) => ({ ...prev, [rel.id]: "flat" }))}
+                        className={`flex items-center gap-1 rounded px-2 py-1 text-xs cursor-pointer transition-colors ${
+                          currentView === "flat"
+                            ? "bg-accent font-medium text-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                        title="Xem danh sách phẳng"
+                      >
+                        <Layers className="h-3.5 w-3.5" />
+                        Phẳng
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Tree View Mode */}
+              {currentView === "tree" && (
+                <div className="flex flex-col gap-3">
+                  {directTasks.filter(filterFn).length === 0 && (
+                    <p className="py-4 text-center text-xs text-muted-foreground">
+                      Không có task nào khớp bộ lọc.
+                    </p>
+                  )}
+                  {directTasks.filter(filterFn).map((root) => {
+                    const deps = dependencyTasks.filter(
+                      (d) => d.rootKeys?.includes(root.jiraKey) && filterFn(d)
+                    );
+                    const rootIsBlocked = isTaskBlocked(root, blockersList);
+
+                    return (
+                      <div
+                        key={root.jiraKey}
+                        className={`rounded-lg border p-3 transition-colors ${
+                          rootIsBlocked
+                            ? "border-amber-500/30 bg-amber-500/5"
+                            : "border-border/60 bg-card"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Link
+                              href={`/issue/${root.jiraKey}`}
+                              className="font-mono text-xs font-semibold text-primary hover:underline"
+                            >
+                              {root.jiraKey}
+                            </Link>
+                            <Badge variant="secondary" className="text-[10px] font-semibold">
+                              Task lớn
+                            </Badge>
+                            <span className="line-clamp-1 text-sm font-medium text-foreground">
+                              {root.issue.summary}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Badge
+                              variant={
+                                DONE_CATEGORIES.includes(root.issue.statusCategory)
+                                  ? "success"
+                                  : "secondary"
+                              }
+                            >
+                              {root.issue.status}
+                            </Badge>
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {root.issue.points ?? "—"} pts
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Indented Dependencies */}
+                        {deps.length > 0 && (
+                          <div className="mt-3 flex flex-col gap-2 border-l-2 border-border/60 pl-3">
+                            {deps.map((dep) => {
+                              const depBlocked = isTaskBlocked(dep, blockersList);
+                              return (
+                                <div
+                                  key={dep.jiraKey}
+                                  className={`flex items-start justify-between gap-3 rounded-md px-2 py-1.5 text-xs transition-colors ${
+                                    depBlocked
+                                      ? "bg-amber-500/10 border border-amber-500/20"
+                                      : "bg-muted/30 hover:bg-muted/50"
+                                  }`}
+                                >
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <CornerDownRight className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                                    <Link
+                                      href={`/issue/${dep.jiraKey}`}
+                                      className="font-mono font-medium hover:underline text-foreground"
+                                    >
+                                      {dep.jiraKey}
+                                    </Link>
+                                    <Badge variant="outline" className="text-[10px]">
+                                      Cấp {dep.depth ?? 1}
+                                    </Badge>
+                                    {dep.sameProject === false && (
+                                      <Badge variant="secondary" className="text-[10px] text-muted-foreground">
+                                        Project khác ({dep.projectKey || dep.jiraKey.split("-")[0]})
+                                      </Badge>
+                                    )}
+                                    {dep.hasReleaseVersion === false && (
+                                      <Badge variant="danger" className="text-[10px]">
+                                        Thiếu version
+                                      </Badge>
+                                    )}
+                                    {!DONE_CATEGORIES.includes(dep.issue.statusCategory) && (
+                                      <Badge variant="warning" className="text-[10px]">
+                                        Chưa xong
+                                      </Badge>
+                                    )}
+                                    <span className="line-clamp-1 text-muted-foreground">
+                                      {dep.issue.summary}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <Badge
+                                      variant={
+                                        DONE_CATEGORIES.includes(dep.issue.statusCategory)
+                                          ? "success"
+                                          : "secondary"
+                                      }
+                                      className="text-[10px]"
+                                    >
+                                      {dep.issue.status}
+                                    </Badge>
+                                    <span className="font-mono text-[10px] text-muted-foreground">
+                                      {dep.issue.points ?? "—"} pts
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Flat View Mode */}
+              {currentView === "flat" && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-xs text-muted-foreground">
+                        <th className="py-2">Task</th>
+                        <th>Phân loại</th>
+                        <th>Tóm tắt</th>
+                        <th>Cảnh báo</th>
+                        <th>Trạng thái</th>
+                        <th>Điểm</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {allTasks.filter(filterFn).length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-4 text-center text-xs text-muted-foreground">
+                            Không có task nào khớp bộ lọc.
+                          </td>
+                        </tr>
+                      ) : (
+                        allTasks.filter(filterFn).map((t) => {
+                          const isDep = t.inclusion === "dependency";
+                          return (
+                            <tr key={t.jiraKey} className="hover:bg-muted/20">
+                              <td className="py-2">
+                                <Link
+                                  href={`/issue/${t.jiraKey}`}
+                                  className="font-mono text-xs font-semibold hover:underline"
+                                >
+                                  {t.jiraKey}
+                                </Link>
+                              </td>
+                              <td>
+                                {isDep ? (
+                                  <Badge variant="outline" className="text-[10px]">
+                                    Cấp {t.depth ?? 1}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="secondary" className="text-[10px]">
+                                    Task lớn
+                                  </Badge>
+                                )}
+                              </td>
+                              <td className="line-clamp-1 max-w-xs">{t.issue.summary}</td>
+                              <td>
+                                <div className="flex flex-wrap gap-1">
+                                  {t.sameProject === false && (
+                                    <Badge variant="secondary" className="text-[10px]">
+                                      Project khác
+                                    </Badge>
+                                  )}
+                                  {t.hasReleaseVersion === false && (
+                                    <Badge variant="danger" className="text-[10px]">
+                                      Thiếu version
+                                    </Badge>
+                                  )}
+                                </div>
+                              </td>
+                              <td>
+                                <Badge
+                                  variant={
+                                    DONE_CATEGORIES.includes(t.issue.statusCategory)
+                                      ? "success"
+                                      : "secondary"
+                                  }
+                                >
+                                  {t.issue.status}
+                                </Badge>
+                              </td>
+                              <td className="font-mono text-xs">{t.issue.points ?? "—"}</td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         );
       })}
+
+      {/* Sync Fix Version Dialog */}
+      <Dialog open={syncOpen} onOpenChange={setSyncOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+              Đồng bộ Fix Version xuống dependency
+            </DialogTitle>
+            <DialogDescription>
+              Tự động thêm Fix Version <strong>v{syncRel?.version}</strong> vào các dependency cùng dự án (
+              {syncRel?.projectKey}) đang bị thiếu version.
+            </DialogDescription>
+          </DialogHeader>
+
+          {syncLoading && (
+            <div className="flex flex-col gap-2 py-4">
+              <Skeleton className="h-5 w-1/2" />
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          )}
+
+          {syncError && (
+            <div className="rounded-md border border-red-300/40 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
+              {syncError}
+            </div>
+          )}
+
+          {!syncLoading && syncPreview && (
+            <div className="flex flex-col gap-3 py-2">
+              <div className="flex items-center gap-2 text-xs">
+                <Badge variant="secondary" className="px-2 py-1">
+                  Tổng duyệt: {syncPreview.total}
+                </Badge>
+                <Badge variant="success" className="px-2 py-1">
+                  Sẽ cập nhật: {syncPreview.actionable}
+                </Badge>
+                <Badge variant="outline" className="px-2 py-1">
+                  Bỏ qua: {syncPreview.skipped}
+                </Badge>
+              </div>
+
+              {syncPreview.actionable === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  Tất cả các dependency cùng dự án đã có Fix Version này hoặc không có mục nào cần cập nhật.
+                </p>
+              ) : (
+                <div className="max-h-60 overflow-y-auto rounded-md border border-border/60">
+                  <table className="w-full text-xs">
+                    <thead className="border-b bg-muted/50 text-left text-muted-foreground sticky top-0">
+                      <tr>
+                        <th className="py-2 px-3">Task</th>
+                        <th className="py-2 px-3">Hành động</th>
+                        <th className="py-2 px-3">Ghi chú</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {syncPreview.items.map((item) => (
+                        <tr
+                          key={item.jiraKey}
+                          className={item.actionable ? "bg-background" : "bg-muted/20 text-muted-foreground"}
+                        >
+                          <td className="py-2 px-3 font-mono font-medium">{item.jiraKey}</td>
+                          <td className="py-2 px-3">
+                            {item.actionable ? (
+                              <Badge variant="success" className="text-[10px]">
+                                Cập nhật
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-[10px]">
+                                Bỏ qua
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="py-2 px-3">{item.reason || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setSyncOpen(false)}
+              disabled={syncConfirming}
+              className="cursor-pointer"
+            >
+              Đóng
+            </Button>
+            <Button
+              onClick={confirmSync}
+              disabled={syncLoading || syncConfirming || !syncPreview || syncPreview.actionable === 0}
+              className="gap-1.5 cursor-pointer"
+            >
+              <RefreshCw className={`h-4 w-4 ${syncConfirming ? "animate-spin" : ""}`} />
+              {syncConfirming ? "Đang xử lý…" : "Xác nhận đồng bộ"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

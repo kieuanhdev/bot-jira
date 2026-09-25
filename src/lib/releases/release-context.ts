@@ -17,6 +17,7 @@
 import { prisma } from "@/lib/prisma";
 import { hasSentryConfig, releaseRequiredApprovals, env } from "@/lib/env";
 import { sentry } from "@/lib/sentry/client";
+import { expandDependencies } from "@/lib/issues/dependencies";
 import {
   selectReleaseBranches,
   type ReleaseContext,
@@ -24,19 +25,6 @@ import {
   type BranchInfoRow,
   type SentryIssueInfo,
 } from "@/lib/releases/gates";
-
-type IssueRow = {
-  jiraKey: string;
-  summary: string;
-  description: string;
-  priority: string;
-  status: string;
-  statusCategory: string;
-  type: string;
-  lastSyncedAt: Date;
-  fixVersionIds: string[];
-  deletedAt: Date | null;
-};
 
 export async function buildReleaseContext(releaseId: string, version: string): Promise<ReleaseContext | null> {
   const checkedAt = new Date();
@@ -48,6 +36,7 @@ export async function buildReleaseContext(releaseId: string, version: string): P
         include: {
           issue: {
             select: {
+              projectKey: true,
               summary: true,
               description: true,
               priority: true,
@@ -63,12 +52,15 @@ export async function buildReleaseContext(releaseId: string, version: string): P
   });
   if (!release) return null;
 
-  let issueRows: IssueRow[];
+  let tasks: TaskInfo[];
+  let dependencyGraph: ReleaseContext["dependencyGraph"] | undefined;
+
   if (release.jiraVersionId) {
     const issues = await prisma.issueCache.findMany({
       where: { deletedAt: null, fixVersionIds: { has: release.jiraVersionId } },
       select: {
         jiraKey: true,
+        projectKey: true,
         summary: true,
         description: true,
         priority: true,
@@ -80,32 +72,93 @@ export async function buildReleaseContext(releaseId: string, version: string): P
         deletedAt: true,
       },
     });
-    issueRows = issues.filter((i) => !i.deletedAt);
+    const directIssues = issues.filter((i) => !i.deletedAt);
+    const directKeys = directIssues.map((i) => i.jiraKey);
+
+    // Expand dependencies (DEP-09)
+    const graph = await expandDependencies({ rootKeys: directKeys });
+    dependencyGraph = {
+      cycles: graph.cycles,
+      truncated: graph.truncated,
+      missingKeys: graph.missingKeys,
+    };
+
+    // Build unique task list
+    const taskMap = new Map<string, TaskInfo>();
+
+    for (const d of directIssues) {
+      taskMap.set(d.jiraKey, {
+        jiraKey: d.jiraKey,
+        projectKey: d.projectKey,
+        summary: d.summary,
+        description: d.description,
+        priority: d.priority,
+        status: d.status,
+        statusCategory: d.statusCategory,
+        issueType: d.type,
+        lastSyncedAt: d.lastSyncedAt,
+        inclusion: "direct",
+        rootKeys: [d.jiraKey],
+        depth: 0,
+        sameProject: true,
+        hasReleaseVersion: true,
+      });
+    }
+
+    for (const depNode of graph.issues) {
+      if (depNode.relation === "dependency") {
+        const existing = taskMap.get(depNode.key);
+        if (existing) {
+          if (depNode.rootKey && !existing.rootKeys?.includes(depNode.rootKey)) {
+            existing.rootKeys = [...(existing.rootKeys ?? []), depNode.rootKey];
+          }
+        } else {
+          const depIssue = depNode.issue;
+          const depProjectKey = depIssue?.projectKey ?? depNode.key.split("-")[0];
+          const sameProj = Boolean(
+            release.projectKey && depProjectKey && release.projectKey === depProjectKey
+          );
+          const hasRelVer = (depIssue?.fixVersionIds ?? []).includes(release.jiraVersionId);
+
+          taskMap.set(depNode.key, {
+            jiraKey: depNode.key,
+            projectKey: depProjectKey,
+            summary: depIssue?.summary ?? "",
+            description: depIssue?.description ?? "",
+            priority: depIssue?.priority ?? "",
+            status: depIssue?.status ?? "",
+            statusCategory: depIssue?.statusCategory ?? "unknown",
+            issueType: depIssue?.type ?? "",
+            lastSyncedAt: depIssue?.lastSyncedAt ?? new Date(0),
+            inclusion: "dependency",
+            rootKeys: depNode.rootKey ? [depNode.rootKey] : depNode.via ? [depNode.via] : [],
+            depth: depNode.depth,
+            sameProject: sameProj,
+            hasReleaseVersion: hasRelVer,
+          });
+        }
+      }
+    }
+
+    tasks = Array.from(taskMap.values());
   } else {
-    issueRows = release.tasks.map((t) => ({
+    tasks = release.tasks.map((t) => ({
       jiraKey: t.jiraKey,
+      projectKey: t.issue.projectKey || release.projectKey,
       summary: t.issue.summary,
       description: t.issue.description,
       priority: t.issue.priority,
       status: t.issue.status,
       statusCategory: t.issue.statusCategory,
-      type: t.issue.type,
+      issueType: t.issue.type,
       lastSyncedAt: t.issue.lastSyncedAt,
-      fixVersionIds: [] as string[],
-      deletedAt: null,
+      inclusion: "direct",
+      rootKeys: [t.jiraKey],
+      depth: 0,
+      sameProject: true,
+      hasReleaseVersion: false,
     }));
   }
-
-  const tasks: TaskInfo[] = issueRows.map((i) => ({
-    jiraKey: i.jiraKey,
-    summary: i.summary,
-    description: i.description,
-    priority: i.priority,
-    status: i.status,
-    statusCategory: i.statusCategory,
-    issueType: i.type,
-    lastSyncedAt: i.lastSyncedAt,
-  }));
 
   const branchRows = await prisma.branchInfo.findMany();
   const allBranchInfos: BranchInfoRow[] = branchRows.map((b) => ({
@@ -189,6 +242,7 @@ export async function buildReleaseContext(releaseId: string, version: string): P
     approvalsPresent,
     ciBuilds,
     ciGateEnabled: env.ciGateEnabled,
+    dependencyGraph,
     checkedAt,
   };
 }

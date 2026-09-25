@@ -28,6 +28,8 @@ import { formatDateTime, timeAgo } from "@/lib/utils";
 import { wikiToHtml } from "@/lib/wiki";
 import { Bot, Check, Eye, EyeOff, RefreshCw, GitBranch, Send, X, Pencil, AlertTriangle, Info } from "lucide-react";
 
+import { IssueDependencies } from "@/components/issue-dependencies";
+
 type IssueDetail = {
   jiraKey: string;
   summary: string;
@@ -320,12 +322,13 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
       <Tabs defaultValue="detail">
         <TabsList>
           <TabsTrigger value="detail">Chi tiết</TabsTrigger>
+          <TabsTrigger value="dependencies">Phụ thuộc</TabsTrigger>
           <TabsTrigger value="comments">Bình luận ({issue.comments.length})</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
           <TabsTrigger value="branches">Nhánh</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="detail">
+        <TabsContent value="detail" className="space-y-4">
           <Card>
             <CardHeader><CardTitle>Mô tả</CardTitle></CardHeader>
             <CardContent>
@@ -345,6 +348,20 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
               </div>
             </CardContent>
           </Card>
+
+          <IssueDependencies
+            jiraKey={issue.jiraKey}
+            rootProjectKey={issue.jiraKey.split("-")[0]}
+            rootFixVersionNames={issue.releaseTasks.map((rt) => rt.release.version)}
+          />
+        </TabsContent>
+
+        <TabsContent value="dependencies">
+          <IssueDependencies
+            jiraKey={issue.jiraKey}
+            rootProjectKey={issue.jiraKey.split("-")[0]}
+            rootFixVersionNames={issue.releaseTasks.map((rt) => rt.release.version)}
+          />
         </TabsContent>
 
         <TabsContent value="comments">

@@ -110,6 +110,44 @@ model CommentCache {
   @@index([jiraKey])
 }
 
+model IssueLinkCache {
+  id            String    @id @default(cuid())
+  jiraLinkId    String    @unique
+  linkTypeId    String
+  linkTypeName  String
+  inwardLabel   String
+  outwardLabel  String
+
+  // Với link B blocks A:
+  // outwardKey = B, inwardKey = A
+  outwardKey    String
+  inwardKey     String
+
+  lastSyncedAt  DateTime  @default(now())
+  deletedAt     DateTime?
+
+  @@index([outwardKey, deletedAt])
+  @@index([inwardKey, deletedAt])
+  @@index([linkTypeId, deletedAt])
+}
+
+model FixVersionPropagation {
+  id             String    @id @default(cuid())
+  rootKey        String
+  dependencyKey  String
+  jiraVersionId  String
+  projectKey     String
+  operationId    String?
+  active         Boolean   @default(true)
+  appliedAt      DateTime  @default(now())
+  removedAt      DateTime?
+  lastVerifiedAt DateTime?
+
+  @@unique([rootKey, dependencyKey, jiraVersionId])
+  @@index([dependencyKey, jiraVersionId, active])
+  @@index([rootKey, jiraVersionId, active])
+}
+
 model IntegrationCursor {
   id            String    @id @default(cuid())
   integration   String

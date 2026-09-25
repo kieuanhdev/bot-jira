@@ -7,6 +7,18 @@ export type JiraUser = {
   avatarUrls?: Record<string, string>;
 };
 
+export type JiraIssueLink = {
+  id: string;
+  type: {
+    id: string;
+    name: string;
+    inward: string;
+    outward: string;
+  };
+  inwardIssue?: { id?: string; key: string };
+  outwardIssue?: { id?: string; key: string };
+};
+
 export type JiraFields = {
   summary?: string;
   description?: string;
@@ -23,6 +35,7 @@ export type JiraFields = {
   fixVersions?: { id?: string; name?: string; released?: boolean }[];
   priority?: { name?: string; id?: string } | null;
   issuetype?: { name?: string; id?: string };
+  issuelinks?: JiraIssueLink[];
   created?: string;
   updated?: string;
   key?: string;
