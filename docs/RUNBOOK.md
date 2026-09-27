@@ -41,8 +41,9 @@ alert per condition and one recovery alert when the condition clears:
 - **Background job error** — a job's last error is newer than its last success.
 - **Notification outbox backlog** — a pending push older than 10 minutes.
 
-Alerts go to all users' in-app + push, and to the Discord channel when
-`DISCORD_BOT_TOKEN` + `DISCORD_CHANNEL_ID` are set.
+Alerts go to all users' in-app + push destinations. Users who configured a
+private Discord webhook or Discord User ID in Settings also receive the alert
+at that destination; alerts are not broadcast to the shared Discord channel.
 
 ## Incident: worker stopped or wedged
 

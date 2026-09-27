@@ -188,8 +188,9 @@ xác nhận các mục sau và cập nhật `.env`:
     (SSO/LDAP để phase 2.)
  8. **Chat (Discord)** — optional. Tạo Discord bot → lấy token, set
     `DISCORD_BOT_TOKEN`, `DISCORD_CHANNEL_ID`, `DISCORD_WEBHOOK_SECRET` (HMAC cho
-    webhook) và chỉ định webhook cho channel. User link tài khoản của mình tại
-    **Settings → Chat** (dán Discord user id). Command trong channel: `/task`,
+    webhook) nếu dùng command trong kênh nhóm. Mỗi user cấu hình đích nhận thông
+    báo riêng tại **Settings → Thông báo Discord cá nhân** bằng Discord User ID
+    hoặc webhook riêng; URL webhook được mã hóa. Command trong channel: `/task`,
     `/move`, `/assign`, `/watch`, `/unwatch`, `/release <v> check`, `/stale`,
     `/confirm`. Command chạy bằng quyền Jira của user đã link; bulk cần `/confirm`.
  9. **Bitbucket (optional)** — Branches tab + release gate `branches`/`pull_requests`

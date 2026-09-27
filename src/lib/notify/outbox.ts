@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import type { NotifyType } from "./index";
+import { deliverToChat } from "./chat-delivery";
 
 /**
  * Reliable notification delivery via web-first model and outbox for Web Push.
@@ -16,7 +17,7 @@ import type { NotifyType } from "./index";
  *     - user opted into push (pref.pushEnabled = true)
  *     - type is not in pref.pushDisabledTypes
  *     - user has a valid push subscription.
- *  5. Chat delivery is decoupled and not part of the active notification pipeline.
+ *  5. Enqueues Discord delivery when the user configured a private destination.
  */
 
 export function dedupeKeyFor(args: {
@@ -127,12 +128,26 @@ export async function deliverNotification(
     user.pushSubscription
   );
 
-  if (!pushOptedIn || !isNew) {
+  if (!isNew) {
     return {
       delivered: true,
       notificationId: notification.id,
-      skippedReason: isNew ? undefined : "already_queued",
+      skippedReason: "already_queued",
     };
+  }
+
+  await deliverToChat({
+    userId,
+    type: data.type,
+    title: data.title,
+    body: data.body,
+    link: data.link,
+    eventId: eventKey,
+    scheduledAt: data.scheduledAt,
+  });
+
+  if (!pushOptedIn) {
+    return { delivered: true, notificationId: notification.id };
   }
 
   const key = dedupeKeyFor({ userId, type: data.type, eventId: eventKey });

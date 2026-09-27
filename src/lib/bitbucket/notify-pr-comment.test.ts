@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { isSameUser, notifyPrComment } from "./notify-pr-comment";
 import { prisma } from "@/lib/prisma";
 import { notifyUser } from "@/lib/notify";
-import { deliverToChat } from "@/lib/notify/chat-delivery";
 import type { User } from "@prisma/client";
 
 const now = new Date();
@@ -39,10 +38,6 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/notify", () => ({
   notifyUser: vi.fn(),
-}));
-
-vi.mock("@/lib/notify/chat-delivery", () => ({
-  deliverToChat: vi.fn().mockResolvedValue({ delivered: true }),
 }));
 
 describe("notifyPrComment", () => {
@@ -126,7 +121,6 @@ describe("notifyPrComment", () => {
         eventKey: "bb-pr-comment:EPM/easy_pos:42:101",
       });
 
-      expect(deliverToChat).toHaveBeenCalledTimes(1);
       expect(result.notifiedCount).toBe(1);
       expect(result.targetUserIds).toEqual(["user-author"]);
     });
@@ -150,7 +144,6 @@ describe("notifyPrComment", () => {
 
       expect(result.notifiedCount).toBe(0);
       expect(notifyUser).not.toHaveBeenCalled();
-      expect(deliverToChat).not.toHaveBeenCalled();
     });
   });
 });

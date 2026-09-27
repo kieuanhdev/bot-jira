@@ -156,12 +156,13 @@ export const env = {
   // vendor-neutral ChatProvider contract lets Slack/Teams be added later.
   // CHAT_PROVIDER selects the adapter ("discord" only for now).
   chatProvider: str("CHAT_PROVIDER", "discord"),
-  // Discord bot token (used to post messages + build embeds).
+  // Discord bot token (used for command replies and private DM delivery).
   discordBotToken: str("DISCORD_BOT_TOKEN"),
   // Discord shared secret for webhook signature verification (HMAC-SHA256 of
   // the raw body, sent by Discord in the `X-Discord-Signature` header).
   discordWebhookSecret: str("DISCORD_WEBHOOK_SECRET"),
-  // The channel id Team Task Web posts alerts/commands to. Empty => disabled.
+  // Optional legacy/default channel for command responses. Notifications use
+  // each user's private destination configured in Settings.
   discordChannelId: str("DISCORD_CHANNEL_ID"),
   // Base URL of the public deployment (used to build web deep-links in chat).
   publicBaseUrl: str("PUBLIC_BASE_URL", "http://localhost:3100"),

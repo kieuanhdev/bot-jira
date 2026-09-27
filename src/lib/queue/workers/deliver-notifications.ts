@@ -34,17 +34,24 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
   const errors: string[] = [];
 
   for (const row of due) {
-    // M6-02 — chat channel: post to the shared team channel via ChatProvider.
-    // Chat delivery has no per-user subscription, so it short-circuits the
-    // push-only logic below.
-    if (row.channel === "chat") {
+    // Resolve Discord from this outbox row's user. "chat" remains supported
+    // only so rows queued before the migration are safely drained.
+    if (row.channel === "discord" || row.channel === "chat") {
       try {
-        await sendChatOutbox({ title: row.title, body: row.body, link: row.link });
+        const delivered = await sendChatOutbox({
+          userId: row.userId,
+          title: row.title,
+          body: row.body,
+          link: row.link,
+        });
         await prisma.notificationOutbox.update({
           where: { id: row.id },
-          data: { state: "sent", deliveredAt: now, lastError: null },
+          data: delivered
+            ? { state: "sent", deliveredAt: now, lastError: null }
+            : { state: "skipped", deliveredAt: now, lastError: "no Discord destination" },
         });
-        sent++;
+        if (delivered) sent++;
+        else skipped++;
       } catch (chatError) {
         const message = (chatError instanceof Error ? chatError.message : String(chatError)).slice(0, 500);
         const attempts = row.attemptCount + 1;

@@ -7,6 +7,7 @@ const { prismaMock } = vi.hoisted(() => {
       notificationPreference: { findUnique: vi.fn() },
       notification: { findUnique: vi.fn(), create: vi.fn() },
       notificationOutbox: { create: vi.fn() },
+      discordIntegration: { findUnique: vi.fn() },
     },
   };
 });
@@ -49,6 +50,7 @@ describe("backoffMs", () => {
 describe("deliverNotification", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.discordIntegration.findUnique.mockResolvedValue(null);
   });
 
   it("returns no_user when user is not found", async () => {
@@ -153,6 +155,31 @@ describe("deliverNotification", () => {
         data: expect.objectContaining({
           channel: "push",
           dedupeKey: "u1:release:release:r1:published",
+        }),
+      })
+    );
+  });
+
+  it("enqueues a private Discord delivery for a configured user", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: "u1", pushSubscription: null });
+    prismaMock.notificationPreference.findUnique.mockResolvedValue(null);
+    prismaMock.notification.findUnique.mockResolvedValue(null);
+    prismaMock.notification.create.mockResolvedValue({ id: "n3" });
+    prismaMock.discordIntegration.findUnique.mockResolvedValue({ id: "discord-1" });
+    prismaMock.notificationOutbox.create.mockResolvedValue({ id: "out-discord" });
+
+    await deliverNotification("u1", {
+      type: "system",
+      title: "System alert",
+      eventKey: "system:1",
+    });
+
+    expect(prismaMock.notificationOutbox.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: "u1",
+          channel: "discord",
+          dedupeKey: "u1:discord:system:system:1",
         }),
       })
     );

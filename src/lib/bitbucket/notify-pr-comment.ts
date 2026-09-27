@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { notifyUser } from "@/lib/notify";
-import { deliverToChat } from "@/lib/notify/chat-delivery";
 import { jiraUsernameAliases } from "@/lib/user-creds";
 import { safeDecrypt } from "@/lib/crypto";
 import type { BbUser } from "./client";
@@ -164,15 +163,6 @@ export async function notifyPrComment(args: NotifyPrCommentArgs): Promise<{
       /* ignore per-user notification errors */
     }
 
-    // Also queue delivery to chat (Discord)
-    await deliverToChat({
-      userId,
-      type: "comment",
-      title: `💬 ${title}`,
-      body: bodyText,
-      link,
-      eventId: `${repo}:${pr.id}:${comment.id}`,
-    }).catch(() => null);
   }
 
   return { notifiedCount, targetUserIds: Array.from(targetUserIds) };

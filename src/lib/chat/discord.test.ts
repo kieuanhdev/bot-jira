@@ -6,6 +6,9 @@ import {
   renderText,
   setDiscordFetch,
   discordProvider,
+  isDiscordWebhookUrl,
+  sendDiscordDirectMessage,
+  sendDiscordWebhook,
 } from "./discord";
 import type { ChatMessagePayload } from "./index";
 
@@ -93,5 +96,37 @@ describe("discordProvider.send", () => {
   it("throws when Discord returns an error status", async () => {
     setDiscordFetch(vi.fn(async () => new Response("nope", { status: 403 })));
     await expect(discordProvider.send("", { text: "x" })).rejects.toThrow(/Discord 403/);
+  });
+});
+
+describe("personal Discord destinations", () => {
+  it("accepts only Discord HTTPS webhook URLs", () => {
+    expect(isDiscordWebhookUrl("https://discord.com/api/webhooks/123456789012345678/token-value")).toBe(true);
+    expect(isDiscordWebhookUrl("http://discord.com/api/webhooks/123/token")).toBe(false);
+    expect(isDiscordWebhookUrl("https://example.com/api/webhooks/123/token")).toBe(false);
+  });
+
+  it("posts directly to a user's webhook", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    setDiscordFetch(fetchMock);
+    await sendDiscordWebhook(
+      "https://discord.com/api/webhooks/123456789012345678/token-value",
+      { text: "Private alert" }
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/webhooks/"),
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("opens a DM channel before posting to a Discord User ID", async () => {
+    process.env.DISCORD_BOT_TOKEN = "bot-token";
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: "dm-channel" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: "message-1" }), { status: 200 }));
+    setDiscordFetch(fetchMock);
+    await sendDiscordDirectMessage("123456789012345678", { text: "Private alert" });
+    expect(fetchMock.mock.calls[0][0]).toContain("/users/@me/channels");
+    expect(fetchMock.mock.calls[1][0]).toContain("/channels/dm-channel/messages");
   });
 });

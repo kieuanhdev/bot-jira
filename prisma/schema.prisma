@@ -56,6 +56,7 @@ model User {
   watches        Watch[]
   notifications  Notification[]
   chatIdentities ChatIdentity[]
+  discordIntegration DiscordIntegration?
   chatCommands   ChatMessage[]
   chatConfirmations ChatMessageConfirmation[]
 }
@@ -509,6 +510,22 @@ model IntegrationEvent {
     @@index([userId])
   }
 
+// A user's private Discord notification destination. Webhook URLs are stored
+// encrypted; API responses expose only whether one is configured. A Discord
+// user ID is delivered as a bot DM and may also be linked as a ChatIdentity.
+model DiscordIntegration {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  destinationType String // "webhook" | "user_id"
+  discordUserId String?
+  webhookUrlEnc String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([discordUserId])
+}
+
   // M5 — Notification preferences. One row per user; defaults allow everything.
   // `disabledTypes` is a list of event types that should not be delivered.
   // `deliveryMode` is "instant" or "digest" (digest delivered at most once a day).
@@ -644,5 +661,4 @@ model ChatMessageConfirmation {
 
   @@index([userId, status])
 }
-
 

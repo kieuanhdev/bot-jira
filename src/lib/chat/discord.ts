@@ -39,6 +39,10 @@ export function hasDiscordConfig(): boolean {
   return Boolean(process.env.DISCORD_BOT_TOKEN && process.env.DISCORD_CHANNEL_ID);
 }
 
+export function hasDiscordBotConfig(): boolean {
+  return Boolean(process.env.DISCORD_BOT_TOKEN);
+}
+
 /**
  * Verify a Discord webhook signature. Discord signs the raw request body with
  * the shared secret (HMAC-SHA256, hex) and sends it in `X-Discord-Signature`.
@@ -114,6 +118,69 @@ async function post(channelId: string, body: Record<string, unknown>, messageId?
   }
   const json = (await res.json()) as { id?: string };
   return json.id ?? "";
+}
+
+/** Send a notification through a webhook owned by an individual user. */
+export async function sendDiscordWebhook(
+  webhookUrl: string,
+  payload: ChatMessagePayload
+): Promise<void> {
+  if (!isDiscordWebhookUrl(webhookUrl)) throw new Error("Invalid Discord webhook URL");
+  const res = await fetchImpl(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(toEmbed(payload)),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Discord webhook ${res.status}: ${text.slice(0, 200)}`);
+  }
+}
+
+/** Open (or reuse) a Discord DM channel and send a private bot message. */
+export async function sendDiscordDirectMessage(
+  discordUserId: string,
+  payload: ChatMessagePayload
+): Promise<string> {
+  await loadConfig();
+  if (!cachedToken) throw new Error("Discord not configured (missing DISCORD_BOT_TOKEN)");
+  if (!/^\d{15,22}$/.test(discordUserId)) throw new Error("Invalid Discord User ID");
+
+  const dmResponse = await fetchImpl(`${DISCORD_API}/users/@me/channels`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${cachedToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ recipient_id: discordUserId }),
+  });
+  if (!dmResponse.ok) {
+    const text = await dmResponse.text().catch(() => "");
+    throw new Error(`Discord DM ${dmResponse.status}: ${text.slice(0, 200)}`);
+  }
+  const dm = (await dmResponse.json()) as { id?: string };
+  if (!dm.id) throw new Error("Discord DM channel was not returned");
+  return post(dm.id, toEmbed(payload));
+}
+
+/** Restrict user-supplied webhooks to Discord's HTTPS webhook endpoints. */
+export function isDiscordWebhookUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const allowedHosts = new Set([
+      "discord.com",
+      "ptb.discord.com",
+      "canary.discord.com",
+      "discordapp.com",
+    ]);
+    return (
+      url.protocol === "https:" &&
+      allowedHosts.has(url.hostname.toLowerCase()) &&
+      /^\/api(?:\/v\d+)?\/webhooks\/\d+\/[^/]+\/?$/.test(url.pathname)
+    );
+  } catch {
+    return false;
+  }
 }
 
 export const discordProvider: ChatProvider = {

@@ -19,8 +19,8 @@ const ALERT_KEY = "worker";
  *  - jira sync stale (no successful poll > JIRA_FRESHNESS_MINUTES)
  *  - a job reported an error more recently than it last succeeded
  *
- * Notifications go to all users via the existing outbox (in-app + push), and
- * to Discord when it is configured.
+ * Notifications go to all users via the existing outbox. That unified path
+ * fans out to in-app, push, and each user's private Discord destination.
  */
 export async function runHealthAlert(): Promise<WorkerLog> {
   const health = await getWorkerHealth();
@@ -93,7 +93,6 @@ export async function runHealthAlert(): Promise<WorkerLog> {
         severity: "warning",
         eventKey: `health:${c.key}:${now.toISOString().slice(0, 10)}:alert`,
       }).catch(() => null);
-      await postDiscord(`${c.title}\n${c.body}`).catch(() => null);
       alerted++;
     }
   } else if (prevHadKeys) {
@@ -105,7 +104,6 @@ export async function runHealthAlert(): Promise<WorkerLog> {
       severity: "success",
       eventKey: `health:system:${now.toISOString().slice(0, 10)}:recovered`,
     }).catch(() => null);
-    await postDiscord("Worker healthy (recovered) — background syncs restored.").catch(() => null);
     recovered = 1;
   }
 
@@ -136,10 +134,4 @@ export async function runHealthAlert(): Promise<WorkerLog> {
       recovered,
     } as unknown as Record<string, unknown>,
   };
-}
-
-async function postDiscord(text: string): Promise<void> {
-  const { hasDiscordConfig, discordProvider } = await import("@/lib/chat/discord");
-  if (!hasDiscordConfig()) return;
-  await discordProvider.send("", { text, blocks: [] });
 }
