@@ -66,15 +66,16 @@ export async function sendChatOutbox(row: {
   const { resolveDiscordDestination } = await import("@/lib/chat/discord-integration");
   const destination = await resolveDiscordDestination(row.userId);
   if (!destination) return false;
-  const { sendDiscordDirectMessage, sendDiscordWebhook } = await import("@/lib/chat/discord");
+  const { sendDiscordDirectMessage, sendDiscordWebhook, resolveAbsoluteUrl } = await import("@/lib/chat/discord");
+  const fullUrl = resolveAbsoluteUrl(row.link ?? undefined);
   const payload: ChatMessagePayload = {
     text: row.title,
     blocks: [
       { kind: "text", text: row.title },
       ...(row.body ? [{ kind: "text" as const, text: row.body }] : []),
-      ...(row.link ? [{ kind: "link" as const, label: "Open in web", url: row.link }] : []),
+      ...(fullUrl ? [{ kind: "link" as const, label: "Open in web", url: fullUrl }] : []),
     ],
-    url: row.link ?? undefined,
+    url: fullUrl ?? undefined,
   };
   if (destination.type === "webhook") {
     await sendDiscordWebhook(destination.webhookUrl, payload);

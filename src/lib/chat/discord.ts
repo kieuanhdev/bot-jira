@@ -73,6 +73,17 @@ export function renderText(payload: ChatMessagePayload): string {
   return lines.filter(Boolean).join("\n") || payload.text;
 }
 
+/** Ensure an URL is an absolute http(s) URL for Discord embeds. */
+export function resolveAbsoluteUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  if (/^https?:\/\//i.test(url)) return url;
+  const base = (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
+  if (base && /^https?:\/\//i.test(base)) {
+    return `${base}${url.startsWith("/") ? "" : "/"}${url}`;
+  }
+  return undefined;
+}
+
 function toEmbed(payload: ChatMessagePayload) {
   const fields: { name: string; value: string; inline: boolean }[] = [];
   const descriptionParts: string[] = [];
@@ -80,8 +91,14 @@ function toEmbed(payload: ChatMessagePayload) {
     for (const b of payload.blocks) {
       if (b.kind === "text") descriptionParts.push(b.text);
       else if (b.kind === "fields") for (const f of b.fields) fields.push({ name: f.label, value: f.value, inline: f.inline !== false });
-      else if (b.kind === "link") descriptionParts.push(`[${b.label}](${b.url})`);
-      else if (b.kind === "divider") {
+      else if (b.kind === "link") {
+        const absUrl = resolveAbsoluteUrl(b.url);
+        if (absUrl) {
+          descriptionParts.push(`[${b.label}](${absUrl})`);
+        } else {
+          descriptionParts.push(`${b.label}: ${b.url}`);
+        }
+      } else if (b.kind === "divider") {
         descriptionParts.push("---");
       }
     }
@@ -91,7 +108,8 @@ function toEmbed(payload: ChatMessagePayload) {
     description: descriptionParts.join("\n") || null,
   };
   if (fields.length) embed.fields = fields;
-  if (payload.url) embed.url = payload.url;
+  const absPayloadUrl = resolveAbsoluteUrl(payload.url);
+  if (absPayloadUrl) embed.url = absPayloadUrl;
   return {
     embeds: [embed],
     content: fields.length === 0 && descriptionParts.length === 0 ? payload.text : null,

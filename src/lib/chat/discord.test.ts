@@ -129,4 +129,25 @@ describe("personal Discord destinations", () => {
     expect(fetchMock.mock.calls[0][0]).toContain("/users/@me/channels");
     expect(fetchMock.mock.calls[1][0]).toContain("/channels/dm-channel/messages");
   });
+
+  it("safely resolves relative URLs with PUBLIC_BASE_URL and drops invalid URLs", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    setDiscordFetch(fetchMock);
+    process.env.PUBLIC_BASE_URL = "https://task.example.com";
+
+    await sendDiscordWebhook("https://discord.com/api/webhooks/123/token", {
+      text: "Task updated",
+      url: "/issue/MR-6",
+      blocks: [
+        { kind: "text", text: "Details" },
+        { kind: "link", label: "View Task", url: "/issue/MR-6" },
+      ],
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
+    const body = JSON.parse(init.body);
+    expect(body.embeds[0].url).toBe("https://task.example.com/issue/MR-6");
+    expect(body.embeds[0].description).toContain("[View Task](https://task.example.com/issue/MR-6)");
+  });
 });
+
