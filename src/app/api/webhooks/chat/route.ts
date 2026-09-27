@@ -65,11 +65,12 @@ export async function POST(req: Request) {
     });
     const jiraAuth = userJiraAuth(user);
     if (!jiraAuth) {
+      const { env } = await import("@/lib/env");
       result = {
         status: "blocked" as const,
         blocks: [
           { kind: "text" as const, text: "Configure your personal Jira token in Settings before using chat commands." },
-          { kind: "link" as const, label: "Open settings", url: `${process.env.PUBLIC_BASE_URL ?? ""}/settings` },
+          { kind: "link" as const, label: "Open settings", url: `${env.publicBaseUrl}/settings` },
         ],
         text: "Personal Jira credentials are required (Settings → Integrations).",
       };
