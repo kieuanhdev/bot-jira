@@ -15,31 +15,46 @@ export const dynamic = "force-dynamic";
  * is enough to deduplicate retries of the same change without blocking
  * legitimate rapid edits (different `from`/`to` values produce different ids).
  */
-function jiraExternalId(json: unknown): string {
+export function jiraExternalId(json: unknown): string {
   const j = json as {
-    webHookEvent?: {
+    timestamp?: number | string;
+    webhookEvent?: string;
+    issue?: { key?: string; fields?: { updated?: string } };
+    comment?: { id?: string };
+    changelog?: {
+      id?: string;
+      items?: Array<{ field?: string; fieldtype?: string; from?: string; to?: string }>;
+    };
+    webHookEvent?: string | {
       key?: string;
       changelog?: { items?: Array<{ field?: string; fieldtype?: string; from?: string; to?: string }> };
     };
     event?: string;
   };
-  const key = j.webHookEvent?.key ?? "unknown";
-  const items = j.webHookEvent?.changelog?.items ?? [];
+  const legacyEnvelope = typeof j.webHookEvent === "object" ? j.webHookEvent : undefined;
+  const key = legacyEnvelope?.key ?? j.issue?.key ?? "unknown";
+  const items = legacyEnvelope?.changelog?.items ?? j.changelog?.items ?? [];
   const itemsKey = items
-    .map((i) => `${i.fieldtype ?? ""}:${i.field ?? ""}:${i.to ?? ""}`)
+    .map((i) => `${i.fieldtype ?? ""}:${i.field ?? ""}:${i.from ?? ""}:${i.to ?? ""}`)
     .sort()
     .join("|");
-  return `${j.event ?? "event"}:${key}:${itemsKey}`;
+  const eventName = j.event ?? j.webhookEvent ??
+    (typeof j.webHookEvent === "string" ? j.webHookEvent : undefined) ?? "event";
+  const occurrence = j.comment?.id ?? j.changelog?.id ?? j.timestamp ??
+    j.issue?.fields?.updated ?? itemsKey;
+  return `${eventName}:${key}:${occurrence}:${itemsKey}`;
 }
 
-function jiraType(json: unknown): string {
-  const j = json as { event?: string };
-  return j.event ?? "unknown";
+export function jiraType(json: unknown): string {
+  const j = json as { event?: string; webhookEvent?: string; webHookEvent?: string | object };
+  return j.event ?? j.webhookEvent ??
+    (typeof j.webHookEvent === "string" ? j.webHookEvent : undefined) ?? "unknown";
 }
 
-function jiraSubject(json: unknown): string | null {
-  const j = json as { webHookEvent?: { key?: string } };
-  return j.webHookEvent?.key ?? null;
+export function jiraSubject(json: unknown): string | null {
+  const j = json as { issue?: { key?: string }; webHookEvent?: string | { key?: string } };
+  return (typeof j.webHookEvent === "object" ? j.webHookEvent.key : undefined) ??
+    j.issue?.key ?? null;
 }
 
 export async function POST(req: Request) {

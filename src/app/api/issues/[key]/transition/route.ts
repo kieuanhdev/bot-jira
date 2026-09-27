@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { jiraWith } from "@/lib/jira/client";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { notifyUser } from "@/lib/notify";
 import { userJiraAuth } from "@/lib/user-creds";
 import { refreshJiraIssueCache } from "@/lib/issues/cache";
 
@@ -53,33 +52,9 @@ export async function POST(
     return NextResponse.json({ error: `Jira transition failed (${status ?? "unknown"})`, code: "upstream" }, { status: 502 });
   }
 
-  const cacheSynced = await refreshJiraIssueCache(client, key);
-
-  // Notify watchers (best-effort).
-  try {
-    const issue = await prisma.issueCache.findUnique({
-      where: { jiraKey: key },
-      include: { comments: false },
-    });
-    const watcherRows = await prisma.watch.findMany({
-      where: { jiraKey: key },
-      include: { user: true },
-    });
-    const targetStatus = issue?.status ?? "updated";
-    const eventKey = `jira-transition:${key}:${targetStatus}:${transitionId}`;
-    for (const w of watcherRows) {
-      await notifyUser(w.userId, {
-        type: "transition",
-        title: `Trạng thái ${key} đã thay đổi`,
-        body: `Trạng thái hiện tại: ${targetStatus}`,
-        link: `/issue/${key}`,
-        severity: "info",
-        eventKey,
-      }).catch(() => null);
-    }
-  } catch {
-    /* ignore notification errors */
-  }
+  const cacheSynced = await refreshJiraIssueCache(client, key, {
+    excludeUserId: session.user.id,
+  });
 
   return NextResponse.json({ ok: true, cacheSynced });
 }

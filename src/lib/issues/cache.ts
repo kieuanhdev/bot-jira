@@ -4,6 +4,7 @@ import { env } from "@/lib/env";
 import { parseJiraDate } from "@/lib/jira/client";
 import type { JiraComment, JiraIssue } from "@/lib/jira/types";
 import { jiraIssueFields } from "@/lib/jira/client";
+import { notifyWatchersOfIssueChange } from "@/lib/issues/notify-watchers";
 
 function descriptionText(value: unknown): string {
   if (typeof value === "string") return value;
@@ -121,10 +122,14 @@ export async function upsertJiraIssue(issue: JiraIssue) {
 
 export async function refreshJiraIssueCache(
   client: { getIssue: (key: string, fields?: string) => Promise<JiraIssue> },
-  key: string
+  key: string,
+  options: { authorName?: string | null; excludeUserId?: string | null } = {}
 ): Promise<boolean> {
   try {
-    await upsertJiraIssue(await client.getIssue(key, jiraIssueFields()));
+    const previous = await prisma.issueCache.findUnique({ where: { jiraKey: key } });
+    const current = await upsertJiraIssue(await client.getIssue(key, jiraIssueFields()));
+    await notifyWatchersOfIssueChange(previous, { jiraKey: key, ...current }, options)
+      .catch(() => null);
     return true;
   } catch {
     return false;

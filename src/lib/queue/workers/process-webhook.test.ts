@@ -6,10 +6,10 @@ import * as guardModule from "../guard";
 import type { IntegrationEvent } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 
-const eventRow = (payload: Prisma.JsonValue) =>
+const eventRow = (payload: Prisma.JsonValue, source = "bitbucket") =>
   ({
     id: "ev-1",
-    source: "bitbucket",
+    source,
     externalId: "ext-1",
     type: "bitbucket_webhook",
     subject: null,
@@ -28,11 +28,25 @@ vi.mock("@/lib/prisma", () => ({
     branchInfo: {
       upsert: vi.fn(),
     },
+    issueCache: {
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
+    },
+    issueLinkCache: {
+      upsert: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    commentCache: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+    },
   },
 }));
 
 vi.mock("@/lib/events/store", () => ({
   markEventProcessed: vi.fn().mockResolvedValue({}),
+  markEventFailed: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock("@/lib/bitbucket/client", () => ({
@@ -43,6 +57,29 @@ vi.mock("@/lib/bitbucket/client", () => ({
 
 vi.mock("@/lib/bitbucket/notify-pr-comment", () => ({
   notifyPrComment: vi.fn().mockResolvedValue({ notifiedCount: 1, targetUserIds: ["u-1"] }),
+}));
+
+vi.mock("@/lib/jira/client", () => ({
+  jiraIssueFields: vi.fn(() => "summary,status,updated"),
+  parseJiraDate: vi.fn((value?: string) => value ? new Date(value) : null),
+  jira: {
+    getIssue: vi.fn().mockResolvedValue({
+      id: "42",
+      key: "EPM-42",
+      self: "https://jira.example/browse/EPM-42",
+      fields: {
+        summary: "Changed",
+        status: { name: "In Progress", statusCategory: { key: "indeterminate" } },
+        updated: "2026-09-27T01:00:00.000Z",
+      },
+    }),
+    getComments: vi.fn().mockResolvedValue([]),
+  },
+}));
+
+vi.mock("@/lib/issues/notify-watchers", () => ({
+  notifyWatchersOfComment: vi.fn().mockResolvedValue(0),
+  notifyWatchersOfIssueChange: vi.fn().mockResolvedValue(1),
 }));
 
 describe("process-webhook for Bitbucket", () => {
@@ -78,5 +115,28 @@ describe("process-webhook for Bitbucket", () => {
       pr: expect.objectContaining({ id: 99, title: "Optimize queries" }),
       comment: expect.objectContaining({ id: 888, text: "Can we use an index here?" }),
     });
+  });
+});
+
+describe("process-webhook for Jira", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(guardModule, "hasJiraConfig").mockReturnValue(true);
+  });
+
+  it("handles the standard Jira issue payload shape", async () => {
+    vi.mocked(prisma.integrationEvent.findUnique).mockResolvedValue(
+      eventRow({
+        webhookEvent: "jira:issue_updated",
+        issue: { key: "EPM-42" },
+        user: { name: "alice" },
+        changelog: { items: [{ field: "status", fromString: "To Do", toString: "In Progress" }] },
+      }, "jira")
+    );
+
+    const result = await runProcessWebhook({ source: "jira", eventId: "ev-1" });
+
+    expect(result.ok).toBe(true);
+    expect(result.stats).toEqual(expect.objectContaining({ refreshed: "EPM-42" }));
   });
 });

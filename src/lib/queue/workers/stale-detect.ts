@@ -111,8 +111,13 @@ export async function runStaleDetect(): Promise<WorkerLog> {
       // M8-03: notification only on first breach, severity increase, or
       // reminder period elapsed. Never notify for "no_assignee" reason to
       // the assignee (there is none); notify watchers instead.
-      if (shouldNotify && issue.assigneeJira && reason !== "no_assignee") {
-        const users = await usersByJiraUsernames([issue.assigneeJira]);
+      if (shouldNotify) {
+        const users = issue.assigneeJira && reason !== "no_assignee"
+          ? await usersByJiraUsernames([issue.assigneeJira])
+          : await prisma.watch.findMany({
+              where: { jiraKey: issue.jiraKey },
+              select: { userId: true },
+            }).then((rows) => rows.map((row) => ({ id: row.userId })));
         const reasonLabel = STALE_REASON_LABELS[reason];
         const eventId = `stale:${issue.jiraKey}:${severity}:${overBy}`;
         for (const u of users) {

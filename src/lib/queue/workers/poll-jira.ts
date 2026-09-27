@@ -2,7 +2,10 @@ import { prisma } from "@/lib/prisma";
 import { jira, parseJiraDate } from "@/lib/jira/client";
 import { buildProjectPollJql } from "@/lib/jira/jql";
 import { upsertJiraCommentsWithNew, upsertJiraIssue } from "@/lib/issues/cache";
-import { notifyWatchersOfComment } from "@/lib/issues/notify-watchers";
+import {
+  notifyWatchersOfComment,
+  notifyWatchersOfIssueChange,
+} from "@/lib/issues/notify-watchers";
 import { jiraProjectList } from "@/lib/env";
 import { guard, hasJiraConfig, env } from "../guard";
 import type { WorkerLog } from "../guard";
@@ -68,13 +71,17 @@ async function syncProject(projectKey: string, full: boolean): Promise<ProjectSt
       for (const issue of result.issues) {
         seenKeys.add(issue.key);
         try {
-          const exists = await prisma.issueCache.findUnique({
+          const previous = await prisma.issueCache.findUnique({
             where: { jiraKey: issue.key },
-            select: { jiraKey: true },
           });
-          await upsertJiraIssue(issue);
-          if (exists) stats.updated++;
+          const current = await upsertJiraIssue(issue);
+          if (previous) stats.updated++;
           else stats.created++;
+
+          await notifyWatchersOfIssueChange(previous, {
+            jiraKey: issue.key,
+            ...current,
+          }).catch(() => null);
 
           const issueUpdatedAt = parseJiraDate(issue.fields.updated);
           if (issueUpdatedAt && (!newestUpdatedAt || issueUpdatedAt > newestUpdatedAt)) {

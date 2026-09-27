@@ -37,6 +37,13 @@ export type DeliverResult = {
   outboxId?: string;
 };
 
+async function wakeDeliveryWorker(): Promise<void> {
+  // The one-minute schedule remains the recovery path if this best-effort
+  // wake-up cannot reach pg-boss during a deploy or transient DB failure.
+  const { enqueueNotificationDelivery } = await import("@/lib/queue/boss");
+  await enqueueNotificationDelivery().catch(() => null);
+}
+
 export async function deliverNotification(
   userId: string,
   data: {
@@ -136,7 +143,7 @@ export async function deliverNotification(
     };
   }
 
-  await deliverToChat({
+  const chatDelivery = await deliverToChat({
     userId,
     type: data.type,
     title: data.title,
@@ -147,6 +154,7 @@ export async function deliverNotification(
   });
 
   if (!pushOptedIn) {
+    if (chatDelivery.delivered) await wakeDeliveryWorker();
     return { delivered: true, notificationId: notification.id };
   }
 
@@ -165,9 +173,11 @@ export async function deliverNotification(
         scheduledAt: data.scheduledAt ?? null,
       },
     });
+    await wakeDeliveryWorker();
     return { delivered: true, notificationId: notification.id, outboxId: outbox.id };
   } catch (e) {
     if (e instanceof Error && e.message.includes("P2002")) {
+      if (chatDelivery.delivered) await wakeDeliveryWorker();
       return { delivered: true, notificationId: notification.id, skippedReason: "already_queued" };
     }
     throw e;

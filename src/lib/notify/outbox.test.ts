@@ -15,8 +15,10 @@ const { prismaMock } = vi.hoisted(() => {
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/notify/push", () => ({ sendPush: vi.fn() }));
 vi.mock("@/lib/env", () => ({ env: { notifyBackoffBaseMs: 60_000 } }));
+vi.mock("@/lib/queue/boss", () => ({ enqueueNotificationDelivery: vi.fn().mockResolvedValue("job-1") }));
 
 import { dedupeKeyFor, backoffMs, deliverNotification } from "./outbox";
+import { enqueueNotificationDelivery } from "@/lib/queue/boss";
 
 describe("dedupeKeyFor", () => {
   it("produces a stable, scoped key", () => {
@@ -158,6 +160,7 @@ describe("deliverNotification", () => {
         }),
       })
     );
+    expect(enqueueNotificationDelivery).toHaveBeenCalledTimes(1);
   });
 
   it("enqueues a private Discord delivery for a configured user", async () => {
@@ -183,6 +186,7 @@ describe("deliverNotification", () => {
         }),
       })
     );
+    expect(enqueueNotificationDelivery).toHaveBeenCalledTimes(1);
   });
 
   it("returns existing notification on dedupe replay without creating duplicates", async () => {

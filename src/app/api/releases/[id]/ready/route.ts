@@ -21,7 +21,7 @@ import { can } from "@/lib/permissions";
  *
  * Results are persisted to `ReleaseCheck` plus one `ReleaseGateResult` row per
  * gate (M3-02), the release status is updated, and a notification is sent when
- * the outcome is blocked or unknown.
+ * the outcome actually changes (including becoming ready).
  */
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -34,7 +34,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
 
   const release = await prisma.release.findUnique({
     where: { id },
-    select: { id: true, version: true },
+    select: { id: true, version: true, status: true },
   });
   if (!release) return NextResponse.json({ error: "not found" }, { status: 404 });
 
@@ -88,15 +88,20 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     include: { gates: true },
   });
 
-  if (status === "blocked" || status === "unknown") {
+  if (release.status !== status) {
     const reasons = allBlockers
       .slice(0, 10)
       .map((b) => (b.jiraKey ? `${b.jiraKey}: ${b.reason}` : b.reason));
-    const severity = status === "blocked" ? "danger" : "warning";
+    const severity = status === "blocked" ? "danger" : status === "unknown" ? "warning" : "success";
+    const statusText = status === "blocked"
+      ? "bị chặn"
+      : status === "unknown"
+        ? "chưa sẵn sàng"
+        : "đã sẵn sàng";
     await notifyAll({
       type: "release",
-      title: `Bản phát hành ${release.version} ${status === "blocked" ? "bị chặn" : "chưa sẵn sàng"}`,
-      body: reasons.join("; ") || summary,
+      title: `Bản phát hành ${release.version} ${statusText}`,
+      body: status === "ready" ? summary : (reasons.join("; ") || summary),
       link: "/release",
       severity,
       eventKey: `release-check:${check.id}:${status}`,

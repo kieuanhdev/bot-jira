@@ -84,3 +84,11 @@ export async function markEventProcessed(eventId: string, error?: string | null)
     data: { processedAt: new Date(), processingError: error ?? null },
   });
 }
+
+/** Keep failed events retryable; only successful processing sets processedAt. */
+export async function markEventFailed(eventId: string, error: string) {
+  await prisma.integrationEvent.update({
+    where: { id: eventId },
+    data: { processedAt: null, processingError: error },
+  });
+}

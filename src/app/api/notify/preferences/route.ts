@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 
 export const KNOWN_TYPES = [
   "comment",
+  "issue",
   "release",
   "transition",
   "stale",

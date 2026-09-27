@@ -32,6 +32,10 @@ const TYPE_DETAILS: Record<string, { label: string; desc: string }> = {
     label: "Bình luận trên task theo dõi",
     desc: "Khi ai đó để lại bình luận trên task bạn đang theo dõi.",
   },
+  issue: {
+    label: "Thay đổi trên task theo dõi",
+    desc: "Khi task bạn đang theo dõi đổi người phụ trách, nội dung, độ ưu tiên, phiên bản hoặc trường quan trọng khác.",
+  },
   transition: {
     label: "Thay đổi trạng thái task",
     desc: "Khi trạng thái workflow của task được chuyển tiếp.",

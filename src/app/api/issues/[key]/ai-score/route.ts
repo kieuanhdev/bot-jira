@@ -5,6 +5,7 @@ import { aiProvider, AI_PROMPT_VERSION } from "@/lib/ai";
 import { AiUnavailableError } from "@/lib/ai/provider";
 import { buildEstimateInput } from "@/lib/ai/estimation-input";
 import { hasLLMConfig, env } from "@/lib/env";
+import { notifyAiEstimateReady } from "@/lib/ai/notify";
 
 /**
  * M7 — Compute a fresh AI estimate for a task and persist it. The estimate is
@@ -48,6 +49,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ key: string }
     throw e;
   }
 
+  const scoredAt = new Date();
   await prisma.aiScore.upsert({
     where: { jiraKey: key },
     update: {
@@ -59,7 +61,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ key: string }
       similarTasks: result.similarTasks,
       model: aiProvider.name,
       promptVersion: AI_PROMPT_VERSION,
-      scoredAt: new Date(),
+      scoredAt,
     },
     create: {
       jiraKey: key,
@@ -73,6 +75,16 @@ export async function POST(_req: Request, ctx: { params: Promise<{ key: string }
       promptVersion: AI_PROMPT_VERSION,
     },
   });
+
+  await notifyAiEstimateReady({
+    jiraKey: issue.jiraKey,
+    summary: issue.summary,
+    assigneeJira: issue.assigneeJira,
+    points: result.suggestedPoints,
+    confidence: result.confidence,
+    scoredAt,
+    requesterId: session.user.id,
+  }).catch(() => null);
 
   return NextResponse.json({
     suggestedPoints: result.suggestedPoints,

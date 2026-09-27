@@ -140,6 +140,19 @@ export async function enqueuePollPrComments(): Promise<string | null> {
   });
 }
 
+/** Wake the outbox consumer immediately after a push/Discord row is created. */
+export async function enqueueNotificationDelivery(): Promise<string | null> {
+  const boss = await startBoss();
+  return boss.send("deliver-notifications", {}, {
+    // Coalesce bursts: one run drains up to BATCH_SIZE due rows.
+    singletonKey: "instant-delivery",
+    singletonSeconds: 1,
+    retryLimit: 3,
+    retryDelay: 15,
+    retryBackoff: true,
+  });
+}
+
 /** Register schedules and consumers. Called only by the standalone worker. */
 export async function registerJobs(): Promise<PgBoss> {
   const boss = await startBoss();
@@ -170,12 +183,11 @@ export async function registerJobs(): Promise<PgBoss> {
   // M5 — webhook processing: one-off jobs enqueued by the webhook endpoints.
   await boss.work<ProcessWebhookJobData>("process-webhook", async (jobs) => {
     const data = jobs[0]?.data ?? { source: "jira", eventId: "" };
-    try {
-      const result = await runProcessWebhook(data);
-      return { ok: result.ok, stats: result.stats, errors: result.errors };
-    } catch (error) {
-      return { ok: false, errors: [(error as Error).message] };
+    const result = await runProcessWebhook(data);
+    if (!result.ok) {
+      throw new Error((result.errors ?? ["webhook processing failed"]).join("; "));
     }
+    return { ok: true, stats: result.stats };
   });
   // M5 — outbox delivery: send due pushes with retry/backoff.
   await boss.work("deliver-notifications", async () => recordRun("deliver-notifications", runDeliverNotifications));

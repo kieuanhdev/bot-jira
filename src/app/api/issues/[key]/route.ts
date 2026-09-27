@@ -134,6 +134,8 @@ export async function PATCH(
     return NextResponse.json({ error: `Jira update failed: ${(e as Error).message}` }, { status: 502 });
   }
 
-  const cacheSynced = await refreshJiraIssueCache(client, key);
+  const cacheSynced = await refreshJiraIssueCache(client, key, {
+    excludeUserId: session.user.id,
+  });
   return NextResponse.json({ ok: true, cacheSynced });
 }

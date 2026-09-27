@@ -3,6 +3,7 @@ import { deliverNotification } from "./outbox";
 
 export type NotifyType =
   | "comment"
+  | "issue"
   | "release"
   | "transition"
   | "stale"

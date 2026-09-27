@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { jira, jiraIssueFields } from "@/lib/jira/client";
 import { upsertJiraIssue, upsertJiraCommentsWithNew } from "@/lib/issues/cache";
-import { notifyWatchersOfComment } from "@/lib/issues/notify-watchers";
-import { markEventProcessed, type Source } from "@/lib/events/store";
+import {
+  notifyWatchersOfComment,
+  notifyWatchersOfIssueChange,
+} from "@/lib/issues/notify-watchers";
+import { markEventFailed, markEventProcessed, type Source } from "@/lib/events/store";
 import type { BbUser } from "@/lib/bitbucket/client";
 import { env, hasJiraConfig, hasBitbucketConfig, hasSentryConfig } from "../guard";
 import type { WorkerLog } from "../guard";
@@ -17,9 +20,12 @@ function safeError(error: unknown): string {
 }
 
 /** Refresh a single Jira issue + comments into the cache (idempotent). */
-async function refreshIssue(key: string): Promise<string[]> {
+async function refreshIssue(key: string, authorName?: string | null): Promise<string[]> {
+  const previous = await prisma.issueCache.findUnique({ where: { jiraKey: key } });
   const issue = await jira.getIssue(key, jiraIssueFields());
-  await upsertJiraIssue(issue);
+  const current = await upsertJiraIssue(issue);
+  await notifyWatchersOfIssueChange(previous, { jiraKey: key, ...current }, { authorName })
+    .catch(() => null);
   const { newComments } = await upsertJiraCommentsWithNew(key, await jira.getComments(key));
   return newComments.map((c) => c.id);
 }
@@ -33,8 +39,22 @@ async function refreshIssue(key: string): Promise<string[]> {
 async function handleJira(json: unknown): Promise<Record<string, unknown>> {
   const j = json as {
     event?: string;
-    webHookEvent?: {
+    webhookEvent?: string;
+    user?: { name?: string; displayName?: string; accountId?: string };
+    issue?: { key?: string };
+    comment?: { id?: string };
+    changelog?: {
+      items?: Array<{
+        field?: string;
+        from?: string;
+        to?: string;
+        fromString?: string;
+        toString?: string;
+      }>;
+    };
+    webHookEvent?: string | {
       key?: string;
+      author?: { name?: string; displayName?: string };
       changelog?: {
         items?: Array<{
           field?: string;
@@ -46,12 +66,21 @@ async function handleJira(json: unknown): Promise<Record<string, unknown>> {
       };
     };
   };
-  const key = j.webHookEvent?.key;
+  const legacyEnvelope = typeof j.webHookEvent === "object" ? j.webHookEvent : undefined;
+  const eventName = j.event ?? j.webhookEvent ??
+    (typeof j.webHookEvent === "string" ? j.webHookEvent : undefined) ?? "";
+  const key = legacyEnvelope?.key ?? j.issue?.key;
+  const authorName = legacyEnvelope?.author?.name ?? legacyEnvelope?.author?.displayName ??
+    j.user?.name ?? j.user?.displayName ?? j.user?.accountId ?? null;
   if (!key) return { skipped: true, reason: "no issue key" };
   if (!hasJiraConfig()) return { skipped: true, reason: "jira not configured" };
 
-  if (j.event === "jira:issue_commented") {
-    await upsertJiraIssue(await jira.getIssue(key, jiraIssueFields()));
+  if (eventName === "jira:issue_commented" || Boolean(j.comment?.id)) {
+    const previous = await prisma.issueCache.findUnique({ where: { jiraKey: key } });
+    const issue = await jira.getIssue(key, jiraIssueFields());
+    const current = await upsertJiraIssue(issue);
+    await notifyWatchersOfIssueChange(previous, { jiraKey: key, ...current }, { authorName })
+      .catch(() => null);
     const { newComments } = await upsertJiraCommentsWithNew(key, await jira.getComments(key));
     for (const nc of newComments) {
       // The comment id is the dedupe key, so the poll worker and this handler
@@ -61,10 +90,10 @@ async function handleJira(json: unknown): Promise<Record<string, unknown>> {
     return { refreshed: key, newComments: newComments.length };
   }
 
-  await refreshIssue(key);
+  await refreshIssue(key, authorName);
 
   // If the changelog indicates issue link changes, also refresh any linked issue keys mentioned
-  const items = j.webHookEvent?.changelog?.items ?? [];
+  const items = legacyEnvelope?.changelog?.items ?? j.changelog?.items ?? [];
   const linkItems = items.filter(
     (i) => (i.field ?? "").toLowerCase() === "link" || (i.field ?? "").toLowerCase() === "issuelinks"
   );
@@ -316,7 +345,26 @@ async function handleCi(json: unknown): Promise<Record<string, unknown>> {
       completedAt: j.completedAt ? new Date(j.completedAt) : new Date(),
     },
   });
-  return { upserted: externalId, status };
+
+  let notified = false;
+  if (status !== "pending") {
+    const { notifyAll } = await import("@/lib/notify");
+    const statusText = status === "success"
+      ? "thành công"
+      : status === "failed"
+        ? "thất bại"
+        : "đã bị hủy";
+    await notifyAll({
+      type: "ci",
+      title: `CI ${repo}${branch ? ` / ${branch}` : ""} ${statusText}`,
+      body: `Commit ${commit.slice(0, 12)} · run ${runId}`,
+      link: j.url ?? "/release",
+      severity: status === "success" ? "success" : status === "failed" ? "danger" : "warning",
+      eventKey: `ci:${externalId}`,
+    });
+    notified = true;
+  }
+  return { upserted: externalId, status, notified };
 }
 
 /** Normalize provider-specific CI status strings into the read-model set. */
@@ -356,7 +404,7 @@ export async function runProcessWebhook(data: ProcessWebhookJobData): Promise<Wo
     return { ok: true, stats: { source, eventId, ...result } };
   } catch (error) {
     const message = safeError(error);
-    await markEventProcessed(eventId, message).catch(() => null);
+    await markEventFailed(eventId, message).catch(() => null);
     return { ok: false, errors: [message], stats: { source, eventId } };
   }
 }

@@ -27,7 +27,9 @@ export function useUnreadCount() {
   const { data } = useQuery({
     queryKey: notificationsKeys.unreadCount,
     queryFn: () => api<{ unread: number }>("/api/notify/unread-count"),
-    refetchInterval: 30000,
+    // Cross-process notifications are persisted in PostgreSQL; a short poll
+    // keeps the badge near-real-time without relying on in-memory events.
+    refetchInterval: 3000,
     refetchOnWindowFocus: true,
     retry: 0,
   });
@@ -53,6 +55,8 @@ export function useNotifications(options: {
     queryKey: notificationsKeys.list({ limit, unreadOnly, type, cursor }),
     queryFn: () => api<NotificationResponse>(`/api/notify?${params.toString()}`),
     enabled,
+    refetchInterval: enabled ? 3000 : false,
+    refetchOnWindowFocus: true,
     retry: 1,
   });
 }

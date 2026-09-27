@@ -45,6 +45,7 @@ import { timeAgo } from "@/lib/utils";
 const TYPE_FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "all", label: "Tất cả các loại" },
   { value: "comment", label: "Bình luận (comment)" },
+  { value: "issue", label: "Cập nhật task (issue)" },
   { value: "transition", label: "Chuyển trạng thái (transition)" },
   { value: "stale", label: "Tồn đọng / SLA (stale)" },
   { value: "release", label: "Bản phát hành (release)" },
@@ -58,6 +59,8 @@ function getNotificationIcon(type: string) {
   switch (type) {
     case "comment":
       return <MessageSquare className="h-4 w-4 text-blue-500" aria-hidden="true" />;
+    case "issue":
+      return <RefreshCw className="h-4 w-4 text-cyan-500" aria-hidden="true" />;
     case "transition":
       return <ArrowRightLeft className="h-4 w-4 text-purple-500" aria-hidden="true" />;
     case "stale":
@@ -103,7 +106,7 @@ function groupNotificationsByDate(items: Notification[]): { group: string; items
   }
 
   return Object.entries(groups)
-    .filter(([_, list]) => list.length > 0)
+    .filter(([, list]) => list.length > 0)
     .map(([group, list]) => ({ group, items: list }));
 }
 
@@ -136,6 +139,8 @@ export function NotificationsClient() {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    refetchInterval: 3000,
+    refetchOnWindowFocus: true,
   });
 
   const { markRead, markUnread, markAllRead, isPending } = useMarkNotifications();
