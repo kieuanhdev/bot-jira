@@ -88,6 +88,7 @@ export type TaskDeliveryQueryResult = {
   tasks: DeliveryTaskRow[];
   reviewItems?: ReviewSuggestionItem[];
   unlinkedItems?: UnlinkedBranchItem[];
+  jiraNotConfigured?: boolean;
   page: {
     index: number;
     size: number;
@@ -111,24 +112,27 @@ export async function queryDeliveryTasks(
   const pageSize = Math.min(100, Math.max(10, params.pageSize ?? 20));
 
   // Compute workspace counts for tab headers
-  const userAliasFilter: Prisma.IssueCacheWhereInput = params.userAliases && params.userAliases.length > 0
+  const hasUserAliases = Boolean(params.userAliases && params.userAliases.length > 0);
+  const userAliasFilter: Prisma.IssueCacheWhereInput = hasUserAliases
     ? { assigneeJira: { in: params.userAliases } }
-    : {};
+    : { assigneeJira: "__NO_USER_CONFIGURED__" };
 
   const [countMyWork, countPendingReview, countUnlinked, countAllBranches] = await Promise.all([
     // My work: issues assigned to user that have active linked branches
-    prisma.issueCache.count({
-      where: {
-        deletedAt: null,
-        ...userAliasFilter,
-        branches: {
-          some: {
+    hasUserAliases
+      ? prisma.issueCache.count({
+          where: {
             deletedAt: null,
-            linkState: { notIn: ["rejected", "manual_unlinked"] },
+            ...userAliasFilter,
+            branches: {
+              some: {
+                deletedAt: null,
+                linkState: { notIn: ["rejected", "manual_unlinked"] },
+              },
+            },
           },
-        },
-      },
-    }),
+        })
+      : Promise.resolve(0),
     // Pending review: branches with suggestions awaiting confirmation
     prisma.branchInfo.count({
       where: {
@@ -304,7 +308,26 @@ export async function queryDeliveryTasks(
     },
   ];
 
-  if (view === "my-work" && params.userAliases && params.userAliases.length > 0) {
+  if (view === "my-work") {
+    if (!hasUserAliases) {
+      return {
+        tasks: [],
+        jiraNotConfigured: true,
+        page: {
+          index: pageIndex,
+          size: pageSize,
+          totalItems: 0,
+          totalPages: 1,
+        },
+        counts: {
+          myWork: 0,
+          needsAttention: 0,
+          pendingReview: countPendingReview,
+          unlinked: countUnlinked,
+          allBranches: countAllBranches,
+        },
+      };
+    }
     andIssueConditions.push({ assigneeJira: { in: params.userAliases } });
   }
 

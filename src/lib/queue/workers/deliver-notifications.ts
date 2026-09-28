@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { sendPush } from "@/lib/notify/push";
 import { backoffMs } from "@/lib/notify/outbox";
 import { sendChatOutbox } from "@/lib/notify/chat-delivery";
+import { DiscordDeliveryError } from "@/lib/chat/discord";
 import { env } from "../guard";
 import type { WorkerLog } from "../guard";
 
@@ -32,8 +33,25 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
   let failed = 0;
   let skipped = 0;
   const errors: string[] = [];
+  let nextRetry: Date | undefined;
+  const retryAt = (attempts: number, delay?: number) => {
+    const at = new Date(Date.now() + (delay ?? backoffMs(attempts - 1)));
+    if (!nextRetry || at < nextRetry) nextRetry = at;
+    return at;
+  };
 
   for (const row of due) {
+    // A short lease prevents concurrent workers sending the same row. If a
+    // worker exits during delivery, the normal sweep recovers the expired lease.
+    const claimed = await prisma.notificationOutbox.updateMany({
+      where: {
+        id: row.id,
+        state: "pending",
+        OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }],
+      },
+      data: { scheduledAt: new Date(Date.now() + 120_000) },
+    });
+    if (claimed.count === 0) continue;
     // Resolve Discord from this outbox row's user. "chat" remains supported
     // only so rows queued before the migration are safely drained.
     if (row.channel === "discord" || row.channel === "chat") {
@@ -62,7 +80,8 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
             state: exhausted ? "failed" : "pending",
             attemptCount: attempts,
             lastError: message,
-            scheduledAt: exhausted ? null : new Date(Date.now() + backoffMs(attempts)),
+            scheduledAt: exhausted ? null : retryAt(attempts,
+              chatError instanceof DiscordDeliveryError ? chatError.retryAfterMs : undefined),
           },
         });
         if (exhausted) failed++;
@@ -125,7 +144,7 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
               state: exhausted ? "failed" : "pending",
               attemptCount: attempts,
               lastError: message,
-              scheduledAt: exhausted ? null : new Date(Date.now() + backoffMs(attempts)),
+              scheduledAt: exhausted ? null : retryAt(attempts),
             },
           });
           if (exhausted) failed++;
@@ -135,6 +154,15 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
     } catch (e) {
       errors.push(`${row.id}: ${(e as Error).message}`);
     }
+  }
+
+  if (due.length === BATCH_SIZE) {
+    const { enqueueNotificationDelivery } = await import("../boss");
+    await enqueueNotificationDelivery();
+  }
+  if (nextRetry) {
+    const { enqueueNotificationDelivery } = await import("../boss");
+    await enqueueNotificationDelivery(nextRetry);
   }
 
   return {

@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { runProcessWebhook } from "./process-webhook";
 import { prisma } from "@/lib/prisma";
 import { notifyPrComment } from "@/lib/bitbucket/notify-pr-comment";
+import { notifyWatchersOfComment } from "@/lib/issues/notify-watchers";
+import { jira } from "@/lib/jira/client";
 import * as guardModule from "../guard";
 import type { IntegrationEvent } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
@@ -138,5 +140,18 @@ describe("process-webhook for Jira", () => {
 
     expect(result.ok).toBe(true);
     expect(result.stats).toEqual(expect.objectContaining({ refreshed: "EPM-42" }));
+  });
+
+  it("notifies new comments discovered by an issue update without a comment payload", async () => {
+    vi.mocked(prisma.integrationEvent.findUnique).mockResolvedValue(
+      eventRow({ webhookEvent: "jira:issue_updated", issue: { key: "EPM-42" } }, "jira")
+    );
+    vi.mocked(jira.getComments).mockResolvedValueOnce([
+      { id: "comment-42", body: "Ready for review", author: { name: "alice" } },
+    ]);
+    vi.mocked(prisma.commentCache.findUnique).mockResolvedValueOnce(null);
+    const result = await runProcessWebhook({ source: "jira", eventId: "ev-1" });
+    expect(result.ok).toBe(true);
+    expect(notifyWatchersOfComment).toHaveBeenCalledWith("EPM-42", "alice", "Ready for review", "comment-42");
   });
 });

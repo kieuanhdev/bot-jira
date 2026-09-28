@@ -150,7 +150,7 @@ export const env = {
   webhookMaxPayloadBytes: int("WEBHOOK_MAX_PAYLOAD_BYTES", 64 * 1024),
   // M5 — notification delivery retry policy.
   notifyMaxAttempts: int("NOTIFY_MAX_ATTEMPTS", 5),
-  notifyBackoffBaseMs: int("NOTIFY_BACKOFF_BASE_MS", 60_000),
+  notifyBackoffBaseMs: int("NOTIFY_BACKOFF_BASE_MS", 5_000),
 
   // M6 — Chat integration. The first adapter is Discord (ADR-005); the
   // vendor-neutral ChatProvider contract lets Slack/Teams be added later.

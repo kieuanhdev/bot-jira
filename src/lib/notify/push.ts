@@ -22,5 +22,5 @@ export async function sendPush(
   });
   if (!user?.pushSubscription) return;
   const sub = user.pushSubscription as unknown as webpush.PushSubscription;
-  await webpush.sendNotification(sub, JSON.stringify(payload));
+  await webpush.sendNotification(sub, JSON.stringify(payload), { timeout: 15000 });
 }

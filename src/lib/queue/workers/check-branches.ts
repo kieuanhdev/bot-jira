@@ -5,7 +5,9 @@ import { guard, hasBitbucketConfig } from "../guard";
 import type { WorkerLog } from "../guard";
 
 export async function runCheckBranches(): Promise<WorkerLog> {
-  if (!hasBitbucketConfig()) return guard(hasBitbucketConfig(), "Bitbucket not configured");
+  const { getSystemBitbucketCreds } = await import("@/lib/bitbucket/client");
+  const creds = await getSystemBitbucketCreds();
+  if (!creds) return guard(false, "Bitbucket not configured in env or user settings");
   const errors: string[] = [];
   let checked = 0;
   let deleted = 0;

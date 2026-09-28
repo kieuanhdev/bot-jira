@@ -154,7 +154,9 @@ async function syncProject(projectKey: string, full: boolean): Promise<ProjectSt
 }
 
 export async function runPollJira(data: PollJiraJobData = {}): Promise<WorkerLog> {
-  if (!hasJiraConfig()) return guard(false, "Jira service account not configured");
+  const { getSystemJiraAuth } = await import("@/lib/jira/client");
+  const auth = await getSystemJiraAuth();
+  if (!auth) return guard(false, "Jira not configured in env or user settings");
 
   const requestedProject = data.projectKey?.trim().toUpperCase();
   const projects = requestedProject

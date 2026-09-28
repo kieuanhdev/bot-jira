@@ -4,6 +4,7 @@ import { env, bitbucketRepoList } from "@/lib/env";
 import { jiraWith, jiraIssueFields, JiraRequestError, type JiraAuth } from "@/lib/jira/client";
 import { bitbucket, type BbCreds } from "@/lib/bitbucket/client";
 import { refreshJiraIssueCache } from "@/lib/issues/cache";
+import { notifyWatchersOfComment } from "@/lib/issues/notify-watchers";
 import type { JiraIssue } from "@/lib/jira/types";
 import { userJiraAuth, userBitbucketCreds } from "@/lib/user-creds";
 import { renderBranchName } from "./branch-name";
@@ -979,7 +980,9 @@ async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
         break;
       }
       case "add-comment": {
-        await jira.addComment(key, a.value);
+        const comment = await jira.addComment(key, a.value);
+        await notifyWatchersOfComment(key, comment.author?.name ?? comment.author?.displayName ?? "User", a.value, comment.id)
+          .catch(() => null);
         break;
       }
       case "create-branches": {
@@ -1039,7 +1042,11 @@ export async function createBranchForIssue(
   if (params.comment === true) {
     const repoUrl = `${env.bitbucketBaseUrl.replace(/\/$/, "")}/${repo}`;
     const comment = `Branch created: [${branchName}](${repoUrl}/src/branch/${encodeURIComponent(branchName)}) (base: ${base})`;
-    await jira.addComment(key, comment).catch(() => null);
+    const created = await jira.addComment(key, comment).catch(() => null);
+    if (created) {
+      await notifyWatchersOfComment(key, created.author?.name ?? created.author?.displayName ?? "User", comment, created.id)
+        .catch(() => null);
+    }
   }
 
   return { branch: branchName, repo };

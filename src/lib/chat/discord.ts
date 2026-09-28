@@ -19,6 +19,26 @@ import type { ChatMessagePayload, ChatProvider, InboundMessage } from "./index";
 
 const DISCORD_API = "https://discord.com/api/v10";
 
+export class DiscordDeliveryError extends Error {
+  constructor(message: string, public readonly retryAfterMs?: number) {
+    super(message);
+  }
+}
+
+async function deliveryError(response: Response): Promise<DiscordDeliveryError> {
+  const text = await response.text().catch(() => "");
+  let retryAfterMs: number | undefined;
+  if (response.status === 429) {
+    let seconds = Number(response.headers.get("Retry-After"));
+    try {
+      const body = JSON.parse(text) as { retry_after?: number };
+      seconds = Number(body.retry_after ?? seconds);
+    } catch { /* Use Retry-After when no JSON body is present. */ }
+    if (Number.isFinite(seconds) && seconds > 0) retryAfterMs = Math.ceil(seconds * 1000);
+  }
+  return new DiscordDeliveryError(`Discord ${response.status}: ${text.slice(0, 200)}`, retryAfterMs);
+}
+
 /** Injectable for tests: default to global fetch. */
 type FetchFn = typeof fetch;
 let fetchImpl: FetchFn = (input, init) => fetch(input, init);
@@ -123,6 +143,7 @@ async function post(channelId: string, body: Record<string, unknown>, messageId?
     ? `${DISCORD_API}/channels/${channelId}/messages/${messageId}`
     : `${DISCORD_API}/channels/${channelId}/messages`;
   const res = await fetchImpl(url, {
+    signal: AbortSignal.timeout(15000),
     method: "POST",
     headers: {
       Authorization: `Bot ${cachedToken}`,
@@ -131,8 +152,7 @@ async function post(channelId: string, body: Record<string, unknown>, messageId?
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Discord ${res.status}: ${text.slice(0, 200)}`);
+    throw await deliveryError(res);
   }
   const json = (await res.json()) as { id?: string };
   return json.id ?? "";
@@ -145,13 +165,13 @@ export async function sendDiscordWebhook(
 ): Promise<void> {
   if (!isDiscordWebhookUrl(webhookUrl)) throw new Error("Invalid Discord webhook URL");
   const res = await fetchImpl(webhookUrl, {
+    signal: AbortSignal.timeout(15000),
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(toEmbed(payload)),
   });
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Discord webhook ${res.status}: ${text.slice(0, 200)}`);
+    throw await deliveryError(res);
   }
 }
 
@@ -165,6 +185,7 @@ export async function sendDiscordDirectMessage(
   if (!/^\d{15,22}$/.test(discordUserId)) throw new Error("Invalid Discord User ID");
 
   const dmResponse = await fetchImpl(`${DISCORD_API}/users/@me/channels`, {
+    signal: AbortSignal.timeout(15000),
     method: "POST",
     headers: {
       Authorization: `Bot ${cachedToken}`,
@@ -173,8 +194,7 @@ export async function sendDiscordDirectMessage(
     body: JSON.stringify({ recipient_id: discordUserId }),
   });
   if (!dmResponse.ok) {
-    const text = await dmResponse.text().catch(() => "");
-    throw new Error(`Discord DM ${dmResponse.status}: ${text.slice(0, 200)}`);
+    throw await deliveryError(dmResponse);
   }
   const dm = (await dmResponse.json()) as { id?: string };
   if (!dm.id) throw new Error("Discord DM channel was not returned");

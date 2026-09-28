@@ -13,15 +13,12 @@ import { env } from "@/lib/env";
  * (never the values) so an error can safely be logged.
  */
 
-/** Variables the standalone worker cannot operate without. */
-export const WORKER_REQUIRED = ["DATABASE_URL", "JIRA_BASE_URL", "JIRA_USER", "JIRA_TOKEN"] as const;
+/** Variables the standalone worker cannot operate without (database connection). */
+export const WORKER_REQUIRED = ["DATABASE_URL"] as const;
 
 export function missingWorkerRequired(): string[] {
   const map: Record<string, string> = {
     DATABASE_URL: env.databaseUrl,
-    JIRA_BASE_URL: env.jiraBaseUrl,
-    JIRA_USER: env.jiraUser,
-    JIRA_TOKEN: env.jiraToken,
   };
   return WORKER_REQUIRED.filter((name) => !map[name]);
 }

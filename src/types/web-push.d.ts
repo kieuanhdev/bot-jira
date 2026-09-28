@@ -12,6 +12,6 @@ declare module "web-push" {
   export function sendNotification(
     subscription: PushSubscription,
     payload?: string,
-    options?: { ttl?: number; urgency?: string }
+    options?: { ttl?: number; urgency?: string; timeout?: number }
   ): Promise<void>;
 }

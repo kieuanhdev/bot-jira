@@ -27,8 +27,10 @@ function extractComments(activity: BbPrActivity): BbPrComment[] {
  * baseline without firing spam for past comments.
  */
 export async function runPollPrComments(): Promise<WorkerLog> {
-  if (!hasBitbucketConfig()) {
-    return guard(hasBitbucketConfig(), "Bitbucket not configured");
+  const { getSystemBitbucketCreds } = await import("@/lib/bitbucket/client");
+  const creds = await getSystemBitbucketCreds();
+  if (!creds) {
+    return guard(false, "Bitbucket not configured in env or user settings");
   }
 
   const errors: string[] = [];

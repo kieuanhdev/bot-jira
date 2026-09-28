@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useCallback, useMemo } from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
@@ -369,7 +370,24 @@ export function BranchesClient() {
           {/* 1 & 2: Task-centric views (my-work, needs-attention) */}
           {(filters.view === "my-work" || filters.view === "needs-attention") && (
             <>
-              {taskQueryResult.data?.tasks && taskQueryResult.data.tasks.length > 0 ? (
+              {filters.view === "my-work" && taskQueryResult.data?.jiraNotConfigured ? (
+                <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border py-14 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                    <GitBranch className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-foreground">Chưa liên kết tài khoản Jira</h3>
+                    <p className="max-w-sm text-xs text-muted-foreground">
+                      Bạn chưa cấu hình thông tin Jira cá nhân. Vui lòng vào Cài đặt để kết nối tài khoản và xem các nhánh/công việc được giao cho bạn.
+                    </p>
+                  </div>
+                  <Link href="/settings">
+                    <Button variant="outline" size="sm" className="mt-2 text-xs">
+                      Đi đến Cài đặt tích hợp
+                    </Button>
+                  </Link>
+                </div>
+              ) : taskQueryResult.data?.tasks && taskQueryResult.data.tasks.length > 0 ? (
                 <TaskDeliveryList
                   tasks={taskQueryResult.data.tasks}
                   onOpenRelink={(jiraKey) => setSelectedBranchForLink(toBranchRow({ id: "", repo: "", branch: "", jiraKey }))}

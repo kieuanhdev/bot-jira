@@ -47,20 +47,18 @@ export async function POST(
     session.user.name ||
     session.user.email;
 
-  // Refresh the comment cache from Jira so the new comment shows up locally.
-  try {
-    const comments = await client.getComments(key);
-    await upsertJiraComments(key, comments);
-  } catch {
-    // Cache refresh is best-effort; the comment is already in Jira.
-  }
-
   // Notify watchers (excluding the author) that a new comment landed.
   try {
     const commentId = (created as { id?: string } | undefined)?.id ?? null;
     await notifyWatchersOfComment(key, authorName || "User", body.trim(), commentId);
   } catch {
     /* ignore notification errors */
+  }
+
+  // Cache only the returned comment; fetching every comment here can delay
+  // delivery and consume other authors' comments before the sync notifies them.
+  if (created?.id) {
+    await upsertJiraComments(key, [created]).catch(() => null);
   }
 
   return NextResponse.json({ ok: true, comment: { author: authorName, body: body.trim() } });

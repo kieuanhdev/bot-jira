@@ -27,6 +27,9 @@ async function refreshIssue(key: string, authorName?: string | null): Promise<st
   await notifyWatchersOfIssueChange(previous, { jiraKey: key, ...current }, { authorName })
     .catch(() => null);
   const { newComments } = await upsertJiraCommentsWithNew(key, await jira.getComments(key));
+  for (const comment of newComments) {
+    await notifyWatchersOfComment(key, comment.author, comment.body, comment.id);
+  }
   return newComments.map((c) => c.id);
 }
 

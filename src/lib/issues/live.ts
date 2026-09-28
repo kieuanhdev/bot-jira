@@ -4,6 +4,7 @@ import { userJiraAuth } from "@/lib/user-creds";
 import { env } from "@/lib/env";
 import type { JiraIssue } from "@/lib/jira/types";
 import { upsertJiraComments, upsertJiraIssue } from "@/lib/issues/cache";
+import { notifyWatchersOfIssueChange } from "@/lib/issues/notify-watchers";
 
 export type LiveComment = {
   id: string;
@@ -131,7 +132,12 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
   });
 
   if (live) {
-    await upsertJiraIssue(live.rawIssue).catch(() => null);
+    // Live reads can see a change before reconciliation. Notify using the old
+    // snapshot before its replacement hides that change from the worker.
+    try {
+      const current = await upsertJiraIssue(live.rawIssue);
+      await notifyWatchersOfIssueChange(cached, { jiraKey: key, ...current });
+    } catch { /* Live data remains usable if cache or notification delivery fails. */ }
     await upsertJiraComments(
       key,
       live.comments.map((comment) => ({

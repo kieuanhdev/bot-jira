@@ -12,12 +12,15 @@ import { runDeliverNotifications } from "./workers/deliver-notifications";
 import { runParseCommentBranches } from "./workers/parse-comment-branches";
 import { runHealthAlert } from "./workers/health-alert";
 import { runPollPrComments } from "./workers/poll-pr-comments";
+import { runPollWatchedIssues } from "./workers/poll-watched-issues";
 import type { WorkerLog } from "./guard";
 
 const globalForBoss = globalThis as unknown as { boss?: PgBoss; bossStart?: Promise<PgBoss> };
+let watchTimer: ReturnType<typeof setInterval> | undefined;
 
 export const JOB_NAMES = [
   "poll-jira",
+  "poll-watched-issues",
   "check-branches",
   "parse-comment-branches",
   "poll-pr-comments",
@@ -31,7 +34,10 @@ export const JOB_NAMES = [
 ] as const;
 
 export function getBoss(): PgBoss {
-  if (!globalForBoss.boss) globalForBoss.boss = new PgBoss(env.databaseUrl);
+  if (!globalForBoss.boss) globalForBoss.boss = new PgBoss({
+    connectionString: env.databaseUrl,
+    useListenNotify: true,
+  });
   return globalForBoss.boss;
 }
 
@@ -52,6 +58,10 @@ function pollCron(): string {
 }
 
 async function recordRun(name: string, run: () => Promise<WorkerLog>): Promise<WorkerLog> {
+  const startedAt = Date.now();
+  if (name !== "poll-watched-issues") {
+    console.info(JSON.stringify({ level: "info", job: name, message: `job ${name} started` }));
+  }
   const cursor = await prisma.integrationCursor.upsert({
     where: { integration_scope: { integration: "worker", scope: name } },
     create: { integration: "worker", scope: name, lastStartedAt: new Date() },
@@ -59,6 +69,7 @@ async function recordRun(name: string, run: () => Promise<WorkerLog>): Promise<W
   });
   try {
     const result = await run();
+    const durationMs = Date.now() - startedAt;
     const errorText = result.ok ? null : (result.errors ?? [result.reason ?? "Worker failed"]).join("; ").slice(0, 2000);
     await prisma.integrationCursor.update({
       where: { id: cursor.id },
@@ -69,10 +80,43 @@ async function recordRun(name: string, run: () => Promise<WorkerLog>): Promise<W
         stats: { ...(result.stats ?? {}), skipped: Boolean(result.skipped), reason: result.reason ?? null },
       },
     });
-    if (!result.ok) throw new Error(errorText ?? `${name} failed`);
+    if (!result.ok) {
+      console.warn(
+        JSON.stringify({
+          level: "warn",
+          job: name,
+          durationMs,
+          message: `job ${name} finished with warning/error`,
+          error: errorText,
+          stats: result.stats,
+        })
+      );
+      throw new Error(errorText ?? `${name} failed`);
+    }
+    if (name !== "poll-watched-issues") {
+      console.info(
+        JSON.stringify({
+          level: "info",
+          job: name,
+          durationMs,
+          message: `job ${name} completed`,
+          stats: result.stats,
+        })
+      );
+    }
     return result;
   } catch (error) {
+    const durationMs = Date.now() - startedAt;
     const message = (error instanceof Error ? error.message : String(error)).slice(0, 2000);
+    console.error(
+      JSON.stringify({
+        level: "error",
+        job: name,
+        durationMs,
+        message: `job ${name} failed`,
+        error: message,
+      })
+    );
     await prisma.integrationCursor.update({
       where: { id: cursor.id },
       data: { lastErrorAt: new Date(), lastError: message },
@@ -141,38 +185,59 @@ export async function enqueuePollPrComments(): Promise<string | null> {
 }
 
 /** Wake the outbox consumer immediately after a push/Discord row is created. */
-export async function enqueueNotificationDelivery(): Promise<string | null> {
+export async function enqueueNotificationDelivery(startAfter?: Date): Promise<string | null> {
   const boss = await startBoss();
   return boss.send("deliver-notifications", {}, {
-    // Coalesce bursts: one run drains up to BATCH_SIZE due rows.
-    singletonKey: "instant-delivery",
-    singletonSeconds: 1,
+    ...(startAfter ? { startAfter } : {}),
+    // Include insertions arriving while an earlier job is draining its batch.
     retryLimit: 3,
     retryDelay: 15,
     retryBackoff: true,
   });
 }
 
+const QUEUE_EXPIRE_SECONDS: Record<string, number> = {
+  "poll-jira": 120,
+  "poll-watched-issues": 30,
+  "deliver-notifications": 60,
+  "check-branches": 300,
+  "parse-comment-branches": 120,
+  "poll-pr-comments": 180,
+  "ai-score": 300,
+  "sentry-import": 120,
+  "stale-detect": 300,
+  "health-alert": 120,
+  "process-webhook": 120,
+  "bulk-op": 3600,
+};
+
 /** Register schedules and consumers. Called only by the standalone worker. */
 export async function registerJobs(): Promise<PgBoss> {
   const boss = await startBoss();
   await boss.createQueue("poll-jira", { policy: "singleton" });
-  for (const name of JOB_NAMES.filter((item) => item !== "poll-jira")) {
+  await boss.createQueue("poll-watched-issues", { policy: "singleton" });
+  for (const name of JOB_NAMES.filter((item) => item !== "poll-jira" && item !== "poll-watched-issues")) {
     await boss.createQueue(name);
   }
+  for (const name of JOB_NAMES) {
+    const expireInSeconds = QUEUE_EXPIRE_SECONDS[name] ?? 300;
+    await boss.updateQueue(name, { notify: true, expireInSeconds });
+  }
 
-  await boss.schedule("poll-jira", pollCron(), null, { singletonSeconds: 55, retryLimit: 3, retryDelay: 15, retryBackoff: true });
-  await boss.schedule("check-branches", "*/5 * * * *", null, { singletonSeconds: 240, retryLimit: 2, retryDelay: 30 });
-  await boss.schedule("parse-comment-branches", "*/5 * * * *", null, { singletonSeconds: 240, retryLimit: 2, retryDelay: 30 });
-  await boss.schedule("poll-pr-comments", "*/2 * * * *", null, { singletonSeconds: 110, retryLimit: 2, retryDelay: 30 });
-  await boss.schedule("ai-score", "*/10 * * * *", null, { singletonSeconds: 540, retryLimit: 2, retryDelay: 30 });
-  await boss.schedule("sentry-import", "*/5 * * * *", null, { singletonSeconds: 240, retryLimit: 3, retryDelay: 30, retryBackoff: true });
-  await boss.schedule("stale-detect", "*/30 * * * *", null, { singletonSeconds: 1740, retryLimit: 2, retryDelay: 30 });
-  await boss.schedule("deliver-notifications", "* * * * *", null, { singletonSeconds: 55, retryLimit: 3, retryDelay: 15, retryBackoff: true });
+  await boss.schedule("poll-jira", pollCron(), null, { singletonSeconds: 55, expireInSeconds: 120, retryLimit: 3, retryDelay: 15, retryBackoff: true });
+  await boss.schedule("check-branches", "*/5 * * * *", null, { singletonSeconds: 240, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 });
+  await boss.schedule("parse-comment-branches", "*/5 * * * *", null, { singletonSeconds: 240, expireInSeconds: 120, retryLimit: 2, retryDelay: 30 });
+  await boss.schedule("poll-pr-comments", "*/2 * * * *", null, { singletonSeconds: 110, expireInSeconds: 180, retryLimit: 2, retryDelay: 30 });
+  await boss.schedule("ai-score", "*/10 * * * *", null, { singletonSeconds: 540, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 });
+  await boss.schedule("sentry-import", "*/5 * * * *", null, { singletonSeconds: 240, expireInSeconds: 120, retryLimit: 3, retryDelay: 30, retryBackoff: true });
+  await boss.schedule("stale-detect", "*/30 * * * *", null, { singletonSeconds: 1740, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 });
+  await boss.schedule("deliver-notifications", "* * * * *", null, { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 3, retryDelay: 15, retryBackoff: true });
   // OPS-03 — freshness/health alerting, deduped by the alert worker itself.
-  await boss.schedule("health-alert", "*/5 * * * *", null, { singletonSeconds: 240, retryLimit: 2, retryDelay: 30 });
+  await boss.schedule("health-alert", "*/5 * * * *", null, { singletonSeconds: 240, expireInSeconds: 120, retryLimit: 2, retryDelay: 30 });
 
   await boss.work<PollJiraJobData>("poll-jira", async (jobs) => recordRun("poll-jira", () => runPollJira(jobs[0]?.data ?? {})));
+  await boss.work("poll-watched-issues", { pollingIntervalSeconds: 0.5 },
+    async () => recordRun("poll-watched-issues", runPollWatchedIssues));
   await boss.work("check-branches", async () => recordRun("check-branches", runCheckBranches));
   await boss.work("parse-comment-branches", async () => recordRun("parse-comment-branches", runParseCommentBranches));
   await boss.work("poll-pr-comments", async () => recordRun("poll-pr-comments", runPollPrComments));
@@ -181,7 +246,7 @@ export async function registerJobs(): Promise<PgBoss> {
   await boss.work("stale-detect", async () => recordRun("stale-detect", runStaleDetect));
   await boss.work("health-alert", async () => recordRun("health-alert", runHealthAlert));
   // M5 — webhook processing: one-off jobs enqueued by the webhook endpoints.
-  await boss.work<ProcessWebhookJobData>("process-webhook", async (jobs) => {
+  await boss.work<ProcessWebhookJobData>("process-webhook", { pollingIntervalSeconds: 0.5 }, async (jobs) => {
     const data = jobs[0]?.data ?? { source: "jira", eventId: "" };
     const result = await runProcessWebhook(data);
     if (!result.ok) {
@@ -190,7 +255,13 @@ export async function registerJobs(): Promise<PgBoss> {
     return { ok: true, stats: result.stats };
   });
   // M5 — outbox delivery: send due pushes with retry/backoff.
-  await boss.work("deliver-notifications", async () => recordRun("deliver-notifications", runDeliverNotifications));
+  await boss.work("deliver-notifications", {
+    pollingIntervalSeconds: 0.5,
+    notifyPollingIntervalSeconds: 0.5,
+    batchSize: 100,
+    burstWhenBatchFull: true,
+  },
+    async () => recordRun("deliver-notifications", runDeliverNotifications));
   // M4 — bulk operations are one-off jobs (not scheduled). We wrap them in a
   // minimal log so failures are visible, but the operation's own state
   // (completed / partially_failed / failed) is the source of truth.
@@ -203,10 +274,22 @@ export async function registerJobs(): Promise<PgBoss> {
       return { ok: false, errors: [(error as Error).message] };
     }
   });
+  const pollWatches = () => boss.send("poll-watched-issues", {}, {
+    singletonKey: "watched-issues",
+    singletonSeconds: 5,
+    expireInSeconds: 30,
+    retryLimit: 0,
+  }).catch((error) => console.error("Watch sync enqueue failed", String(error)));
+  await pollWatches();
+  if (watchTimer) clearInterval(watchTimer);
+  watchTimer = setInterval(() => { void pollWatches(); }, 5000);
+  watchTimer.unref();
   return boss;
 }
 
 export async function stopBoss(): Promise<void> {
+  if (watchTimer) clearInterval(watchTimer);
+  watchTimer = undefined;
   if (!globalForBoss.boss) return;
   await globalForBoss.boss.stop({ graceful: true, timeout: 30_000 });
   globalForBoss.boss = undefined;

@@ -90,6 +90,34 @@ export type BbCreds = { user: string; token: string };
 /** Only these states count as a PR that has been merged. */
 const MERGED_STATES = new Set(["MERGED"]);
 
+export async function getSystemBitbucketCreds(): Promise<BbCreds | null> {
+  if (env.bitbucketToken && env.bitbucketUser) {
+    return {
+      user: env.bitbucketUser,
+      token: env.bitbucketToken,
+    };
+  }
+  try {
+    const { prisma } = await import("@/lib/prisma");
+    const { safeDecrypt } = await import("@/lib/crypto");
+    const user = await prisma.user.findFirst({
+      where: { bitbucketTokenEnc: { not: null } },
+      orderBy: [{ role: "asc" }, { updatedAt: "desc" }],
+      select: { bitbucketUserEnc: true, bitbucketTokenEnc: true },
+    });
+    if (user?.bitbucketTokenEnc) {
+      const token = safeDecrypt(user.bitbucketTokenEnc);
+      const username = safeDecrypt(user.bitbucketUserEnc);
+      if (token && username) {
+        return { user: username, token };
+      }
+    }
+  } catch {
+    // DB not available
+  }
+  return null;
+}
+
 async function request<T>(
   repo: string,
   path: string,
@@ -97,10 +125,18 @@ async function request<T>(
   creds?: BbCreds
 ): Promise<T> {
   const base = env.bitbucketBaseUrl.replace(/\/$/, "");
-  // Calls without explicit credentials are system-only (workers/health) and
-  // maintain the shared read model. Interactive paths always pass user creds.
-  const user = creds?.user ?? env.bitbucketUser;
-  const token = creds?.token ?? env.bitbucketToken;
+  let user = creds?.user;
+  let token = creds?.token;
+  if (!token) {
+    const sys = await getSystemBitbucketCreds();
+    if (sys) {
+      user = sys.user;
+      token = sys.token;
+    }
+  }
+  if (!token || !user) {
+    throw new Error("Chưa cấu hình tài khoản Bitbucket trong hệ thống hoặc thiết lập người dùng");
+  }
   const basic = Buffer.from(`${user}:${token}`).toString("base64");
   const url = `${base}/rest/api/1.0/projects/${encodeURIComponent(
     repo.split("/")[0] ?? repo

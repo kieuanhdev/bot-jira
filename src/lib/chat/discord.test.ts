@@ -9,10 +9,18 @@ import {
   isDiscordWebhookUrl,
   sendDiscordDirectMessage,
   sendDiscordWebhook,
+  DiscordDeliveryError,
 } from "./discord";
 import type { ChatMessagePayload } from "./index";
 
 const SECRET = "test-discosecret";
+
+it("preserves Discord's rate-limit retry delay", async () => {
+  setDiscordFetch(vi.fn(async () => new Response(JSON.stringify({ retry_after: 1.25 }), { status: 429 })));
+  const send = sendDiscordWebhook("https://discord.com/api/webhooks/123456789012345678/token", { text: "Changed" });
+  await expect(send).rejects.toBeInstanceOf(DiscordDeliveryError);
+  await expect(send).rejects.toMatchObject({ retryAfterMs: 1250 });
+});
 
 describe("verifyDiscordSignature", () => {
   it("accepts a valid HMAC-SHA256 signature", () => {
@@ -133,7 +141,7 @@ describe("personal Discord destinations", () => {
   it("safely resolves relative URLs with PUBLIC_BASE_URL and drops invalid URLs", async () => {
     const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
     setDiscordFetch(fetchMock);
-    process.env.PUBLIC_BASE_URL = "https://task.example.com";
+    process.env.PUBLIC_BASE_URL = "https://jira.kieuanhdev.id.vn/";
 
     await sendDiscordWebhook("https://discord.com/api/webhooks/123/token", {
       text: "Task updated",
@@ -146,8 +154,7 @@ describe("personal Discord destinations", () => {
 
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
     const body = JSON.parse(init.body);
-    expect(body.embeds[0].url).toBe("https://task.example.com/issue/MR-6");
-    expect(body.embeds[0].description).toContain("[View Task](https://task.example.com/issue/MR-6)");
+    expect(body.embeds[0].url).toBe("https://jira.kieuanhdev.id.vn/issue/MR-6");
+    expect(body.embeds[0].description).toContain("[View Task](https://jira.kieuanhdev.id.vn/issue/MR-6)");
   });
 });
-

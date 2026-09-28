@@ -61,11 +61,35 @@ export type JiraAuth = {
   authMode: "Bearer" | "basic";
 };
 
-const systemAuth: JiraAuth = {
-  user: env.jiraUser,
-  token: env.jiraToken,
-  authMode: (env.jiraAuth || "Bearer").toLowerCase() === "basic" ? "basic" : "Bearer",
-};
+export async function getSystemJiraAuth(): Promise<JiraAuth | null> {
+  if (env.jiraToken) {
+    return {
+      user: env.jiraUser,
+      token: env.jiraToken,
+      authMode: (env.jiraAuth || "Bearer").toLowerCase() === "basic" ? "basic" : "Bearer",
+    };
+  }
+  try {
+    const { prisma } = await import("@/lib/prisma");
+    const { safeDecrypt } = await import("@/lib/crypto");
+    const user = await prisma.user.findFirst({
+      where: { jiraTokenEnc: { not: null } },
+      orderBy: [{ role: "asc" }, { updatedAt: "desc" }],
+      select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true, jiraUsername: true },
+    });
+    if (user?.jiraTokenEnc) {
+      const token = safeDecrypt(user.jiraTokenEnc);
+      if (token) {
+        const username = user.jiraUsername || safeDecrypt(user.jiraUserEnc) || "";
+        const authMode = (user.jiraAuth || "Bearer").toLowerCase() === "basic" ? "basic" : "Bearer";
+        return { user: username, token, authMode };
+      }
+    }
+  } catch {
+    // Database may not be connected yet
+  }
+  return null;
+}
 
 function authHeader(a: JiraAuth): string {
   return a.authMode === "basic"
@@ -142,8 +166,20 @@ export async function probeJiraAuth(userAuth: JiraAuth | null): Promise<boolean>
 async function request<T>(
   path: string,
   init: RequestInit = {},
-  auth: JiraAuth
+  auth?: JiraAuth
 ): Promise<T> {
+  let effectiveAuth = auth;
+  if (!effectiveAuth || !effectiveAuth.token) {
+    const sys = await getSystemJiraAuth();
+    if (sys) effectiveAuth = sys;
+  }
+  if (!effectiveAuth || !effectiveAuth.token) {
+    throw new JiraRequestError(
+      "Chưa cấu hình tài khoản Jira trong hệ thống hoặc thiết lập người dùng",
+      401,
+      false
+    );
+  }
   const url = env.jiraBaseUrl.replace(/\/$/, "") + path;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), env.jiraRequestTimeoutMs);
@@ -156,7 +192,7 @@ async function request<T>(
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
-        Authorization: authHeader(auth),
+        Authorization: authHeader(effectiveAuth),
         ...(init.headers ?? {}),
       },
     });
@@ -187,11 +223,10 @@ async function request<T>(
 }
 
 /**
- * Build a scoped Jira client that always uses the explicitly supplied auth.
- * User-facing code must pass the current user's credential. The exported
- * `jira` singleton below is reserved for background synchronization/system work.
+ * Build a scoped Jira client that uses the explicitly supplied auth,
+ * or dynamically falls back to the system/configured user auth.
  */
-export function jiraWith(auth: JiraAuth) {
+export function jiraWith(auth?: JiraAuth) {
   return {
     me: () => request<JiraUser>("/rest/api/2/myself", {}, auth),
     search: (jql: string, maxResults = 50, startAt = 0) => {
@@ -341,7 +376,7 @@ export function jiraWith(auth: JiraAuth) {
     getProjectStatuses: (projectKey: string) =>
       request<JiraProjectStatus[]>(`/rest/api/2/project/${encodeURIComponent(projectKey)}/statuses`, {}, auth),
     addComment: (key: string, body: string) =>
-      request(
+      request<JiraComment>(
         `/rest/api/2/issue/${encodeURIComponent(key)}/comment`,
         { method: "POST", body: JSON.stringify({ body }) },
         auth
@@ -384,6 +419,6 @@ export function jiraWith(auth: JiraAuth) {
   };
 }
 
-// System-only client for workers, webhooks and health checks that maintain the
-// shared read model. Never use this client for an end-user initiated action.
-export const jira = jiraWith(systemAuth);
+// System client for workers, webhooks and health checks.
+// Falls back to system credentials from .env, or the first configured user in DB.
+export const jira = jiraWith();
