@@ -54,8 +54,10 @@ export function FreshnessBanner() {
       <span className="min-w-0 truncate">
         {down ? (
           <>Tiến trình nền (Worker) bị gián đoạn — dữ liệu có thể đã cũ. Tín hiệu cuối cách đây {secondsLabel(data.workerAgeMs)}.</>
+        ) : !data.jiraFresh ? (
+          <>Dữ liệu Jira chưa mới — đồng bộ Jira lần cuối cách đây {secondsLabel(data.jiraSyncAgeMs)}.</>
         ) : (
-          <>Dữ liệu chưa mới — đồng bộ Jira lần cuối cách đây {secondsLabel(data.jiraSyncAgeMs)}.</>
+          <>Một số tác vụ nền đang gặp sự cố — đồng bộ Jira vẫn hoạt động bình thường (lần cuối cách đây {secondsLabel(data.jiraSyncAgeMs)}).</>
         )}
       </span>
       {stale && <span className="ml-auto shrink-0 text-xs opacity-70">Kiểm tra phát hành có thể bị chặn cho đến khi dữ liệu mới</span>}

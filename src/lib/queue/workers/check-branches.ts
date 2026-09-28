@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { bitbucket } from "@/lib/bitbucket/client";
+import { bitbucket, isBitbucketPermissionError } from "@/lib/bitbucket/client";
 import { resolveBranchLink } from "@/lib/bitbucket/branch-linker";
 import { guard, hasBitbucketConfig } from "../guard";
 import type { WorkerLog } from "../guard";
@@ -11,6 +11,7 @@ export async function runCheckBranches(): Promise<WorkerLog> {
   const errors: string[] = [];
   let checked = 0;
   let deleted = 0;
+  let skippedUnauthorized = 0;
   const runStartedAt = new Date();
 
   // Load known active issues for candidate resolution
@@ -90,7 +91,12 @@ export async function runCheckBranches(): Promise<WorkerLog> {
       }
       repoSuccess = true;
     } catch (e) {
-      errors.push(`${repo}: ${(e as Error).message}`);
+      if (isBitbucketPermissionError(e)) {
+        skippedUnauthorized++;
+        console.warn(`[check-branches] Bỏ qua repo ${repo}: không có quyền truy cập (401/403)`);
+      } else {
+        errors.push(`${repo}: ${(e as Error).message}`);
+      }
     }
 
     // Only mark deleted branches if the repo fetched successfully without error
@@ -123,7 +129,7 @@ export async function runCheckBranches(): Promise<WorkerLog> {
       lastSuccessAt: errors.length === 0 ? new Date() : undefined,
       lastErrorAt: errors.length > 0 ? new Date() : undefined,
       lastError: errors.length > 0 ? errors.join("; ").slice(0, 500) : null,
-      stats: { checked, deleted, errorsCount: errors.length },
+      stats: { checked, deleted, skippedUnauthorized, errorsCount: errors.length },
     },
     create: {
       integration: "bitbucket",
@@ -132,9 +138,9 @@ export async function runCheckBranches(): Promise<WorkerLog> {
       lastSuccessAt: errors.length === 0 ? new Date() : null,
       lastErrorAt: errors.length > 0 ? new Date() : null,
       lastError: errors.length > 0 ? errors.join("; ").slice(0, 500) : null,
-      stats: { checked, deleted, errorsCount: errors.length },
+      stats: { checked, deleted, skippedUnauthorized, errorsCount: errors.length },
     },
   });
 
-  return { ok: errors.length === 0, stats: { checked, deleted } as unknown as Record<string, number>, errors };
+  return { ok: errors.length === 0, stats: { checked, deleted, skippedUnauthorized } as unknown as Record<string, number>, errors: errors.length > 0 ? errors : undefined };
 }

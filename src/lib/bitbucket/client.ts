@@ -158,6 +158,19 @@ async function request<T>(
   return res.json() as Promise<T>;
 }
 
+/** Check if an error from Bitbucket indicates unauthorized / forbidden access. */
+export function isBitbucketPermissionError(err: unknown): boolean {
+  if (!err) return false;
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes("-> 401") ||
+    msg.includes("-> 403") ||
+    msg.includes("AuthorisationException") ||
+    msg.includes("not permitted to access this resource") ||
+    msg.includes("Authentication failed")
+  );
+}
+
 type Paged<T> = {
   values: T[];
   isLastPage: boolean;

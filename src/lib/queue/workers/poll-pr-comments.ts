@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { bitbucket, type BbPrActivity, type BbPrComment } from "@/lib/bitbucket/client";
+import { bitbucket, isBitbucketPermissionError, type BbPrActivity, type BbPrComment } from "@/lib/bitbucket/client";
 import { notifyPrComment } from "@/lib/bitbucket/notify-pr-comment";
 import { guard, hasBitbucketConfig } from "../guard";
 import type { WorkerLog } from "../guard";
@@ -37,6 +37,7 @@ export async function runPollPrComments(): Promise<WorkerLog> {
   let checkedRepos = 0;
   let checkedPrs = 0;
   let newCommentsNotified = 0;
+  let skippedUnauthorizedRepos = 0;
 
   for (const repo of bitbucket.repos()) {
     checkedRepos++;
@@ -72,7 +73,11 @@ export async function runPollPrComments(): Promise<WorkerLog> {
             }
           }
         } catch (prErr) {
-          errors.push(`${repo} PR #${pr.id}: ${(prErr as Error).message}`);
+          if (isBitbucketPermissionError(prErr)) {
+            console.warn(`[poll-pr-comments] Bỏ qua activities trên ${repo} PR #${pr.id}: không có quyền truy cập`);
+          } else {
+            errors.push(`${repo} PR #${pr.id}: ${(prErr as Error).message}`);
+          }
         }
       }
 
@@ -93,7 +98,12 @@ export async function runPollPrComments(): Promise<WorkerLog> {
         },
       });
     } catch (repoErr) {
-      errors.push(`${repo}: ${(repoErr as Error).message}`);
+      if (isBitbucketPermissionError(repoErr)) {
+        skippedUnauthorizedRepos++;
+        console.warn(`[poll-pr-comments] Bỏ qua repo ${repo}: không có quyền truy cập (401/403)`);
+      } else {
+        errors.push(`${repo}: ${(repoErr as Error).message}`);
+      }
     }
   }
 
@@ -104,6 +114,7 @@ export async function runPollPrComments(): Promise<WorkerLog> {
       checkedRepos,
       checkedPrs,
       newCommentsNotified,
+      skippedUnauthorizedRepos,
     },
   };
 }
