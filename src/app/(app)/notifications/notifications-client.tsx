@@ -32,6 +32,7 @@ import {
   Info,
   CheckCircle2,
   Sparkles,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -58,7 +59,7 @@ const CATEGORIES: {
   id: string;
   label: string;
   shortLabel: string;
-  icon: React.ComponentType<{ className?: string; "aria-hidden"?: string | boolean }>;
+  icon: LucideIcon;
   color: {
     bg: string;
     text: string;

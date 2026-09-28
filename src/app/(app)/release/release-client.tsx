@@ -64,6 +64,8 @@ import {
   Sparkles,
   FolderKanban,
   Briefcase,
+  CloudDownload,
+  Loader2,
 } from "lucide-react";
 import {
   Select,
@@ -352,6 +354,31 @@ export function ReleaseClient() {
     items: Array<{ jiraKey: string; actionable: boolean; reason?: string }>;
   } | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [isSyncingJira, setIsSyncingJira] = useState(false);
+
+  async function handleSyncJira() {
+    setIsSyncingJira(true);
+    try {
+      const q = selectedProject !== "all" ? `?projectKey=${encodeURIComponent(selectedProject)}` : "";
+      const res = await api<{
+        success: boolean;
+        result: { totalReleases: number; created: number; updated: number; tasksLinked: number };
+      }>(`/api/releases/sync${q}`, {
+        method: "POST",
+        body: {},
+      });
+      await qc.invalidateQueries({ queryKey: releasesKeys.all });
+      if (res?.result) {
+        alert(
+          `Đã đồng bộ thành công ${res.result.totalReleases} bản phát hành từ Jira (tạo mới: ${res.result.created}, cập nhật: ${res.result.updated}, liên kết: ${res.result.tasksLinked} task).`
+        );
+      }
+    } catch (err) {
+      alert((err as Error).message || "Không thể đồng bộ bản phát hành từ Jira.");
+    } finally {
+      setIsSyncingJira(false);
+    }
+  }
 
   // Load Releases
   const { data, isLoading } = useQuery<{ items: Release[] }>({
@@ -768,6 +795,22 @@ export function ReleaseClient() {
           <Button
             variant="outline"
             size="sm"
+            onClick={handleSyncJira}
+            disabled={isSyncingJira}
+            className="gap-1.5 cursor-pointer text-xs"
+            title="Đồng bộ các Fix Version từ Jira về hệ thống"
+          >
+            {isSyncingJira ? (
+              <RefreshCw className="h-3.5 w-3.5 animate-spin text-teal-600" />
+            ) : (
+              <CloudDownload className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+            )}
+            {isSyncingJira ? "Đang đồng bộ..." : "Đồng bộ từ Jira"}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => qc.invalidateQueries({ queryKey: releasesKeys.all })}
             className="gap-1.5 cursor-pointer text-xs"
           >
@@ -963,12 +1006,27 @@ export function ReleaseClient() {
                 Tạo bản phát hành mới gắn với Jira Fix Version để tự động kiểm tra chất lượng trước khi ra mắt production.
               </p>
             </div>
-            <Button
-              onClick={() => handleOpenCreateDialog()}
-              className="mt-2 gap-1.5 bg-teal-600 hover:bg-teal-700 text-white cursor-pointer text-xs"
-            >
-              <Plus className="h-3.5 w-3.5" /> Tạo bản phát hành đầu tiên
-            </Button>
+            <div className="flex items-center gap-2 mt-2">
+              <Button
+                onClick={handleSyncJira}
+                disabled={isSyncingJira}
+                variant="outline"
+                className="gap-1.5 cursor-pointer text-xs"
+              >
+                {isSyncingJira ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-teal-600" />
+                ) : (
+                  <CloudDownload className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                )}
+                {isSyncingJira ? "Đang đồng bộ Jira..." : "Đồng bộ từ Jira"}
+              </Button>
+              <Button
+                onClick={() => handleOpenCreateDialog()}
+                className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white cursor-pointer text-xs"
+              >
+                <Plus className="h-3.5 w-3.5" /> Tạo bản phát hành đầu tiên
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -985,10 +1043,24 @@ export function ReleaseClient() {
                 Dự án <span className="font-mono text-teal-600 dark:text-teal-400">{selectedProject}</span> chưa có bản phát hành nào
               </p>
               <p className="max-w-md text-xs text-muted-foreground mt-1">
-                Bạn có thể tạo bản phát hành đầu tiên cho dự án {selectedProject}. Hệ thống sẽ liên kết với Jira Fix Version tương ứng.
+                Bạn có thể đồng bộ từ Jira hoặc tạo bản phát hành đầu tiên cho dự án {selectedProject}.
               </p>
             </div>
             <div className="flex items-center gap-2 mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSyncJira}
+                disabled={isSyncingJira}
+                className="gap-1.5 text-xs cursor-pointer"
+              >
+                {isSyncingJira ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-teal-600" />
+                ) : (
+                  <CloudDownload className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                )}
+                Đồng bộ {selectedProject} từ Jira
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

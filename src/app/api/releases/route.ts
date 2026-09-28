@@ -3,6 +3,41 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { jiraWith, JiraRequestError } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
+import { syncReleasesFromJira } from "@/lib/releases/sync";
+
+const RELEASE_INCLUDE = {
+  tasks: {
+    select: {
+      jiraKey: true,
+      issue: {
+        select: {
+          status: true,
+          statusCategory: true,
+          summary: true,
+          points: true,
+          priority: true,
+        },
+      },
+    },
+  },
+  releaseChecks: {
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+    include: {
+      gates: {
+        orderBy: { createdAt: "asc" as const },
+      },
+    },
+  },
+  approvals: {
+    where: { revokedAt: null },
+    orderBy: { approvedAt: "desc" as const },
+  },
+  gateOverrides: {
+    where: { revokedAt: null },
+    orderBy: { createdAt: "desc" as const },
+  },
+};
 
 /** List releases, optionally filtered by project. Includes task counts. */
 export async function GET(req: Request) {
@@ -12,43 +47,28 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const projectKey = url.searchParams.get("projectKey")?.trim() || undefined;
 
-  const releases = await prisma.release.findMany({
+  let releases = await prisma.release.findMany({
     where: projectKey ? { projectKey } : undefined,
     orderBy: { createdAt: "desc" },
-    include: {
-      tasks: {
-        select: {
-          jiraKey: true,
-          issue: {
-            select: {
-              status: true,
-              statusCategory: true,
-              summary: true,
-              points: true,
-              priority: true,
-            },
-          },
-        },
-      },
-      releaseChecks: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        include: {
-          gates: {
-            orderBy: { createdAt: "asc" },
-          },
-        },
-      },
-      approvals: {
-        where: { revokedAt: null },
-        orderBy: { approvedAt: "desc" },
-      },
-      gateOverrides: {
-        where: { revokedAt: null },
-        orderBy: { createdAt: "desc" },
-      },
-    },
+    include: RELEASE_INCLUDE,
   });
+
+  // If there are no releases in the database yet, run an initial sync from Jira
+  if (releases.length === 0) {
+    try {
+      await syncReleasesFromJira({
+        userId: session.user?.id,
+        projectKeys: projectKey ? [projectKey] : undefined,
+      });
+      releases = await prisma.release.findMany({
+        where: projectKey ? { projectKey } : undefined,
+        orderBy: { createdAt: "desc" },
+        include: RELEASE_INCLUDE,
+      });
+    } catch {
+      // Proceed with empty list if sync encounters error
+    }
+  }
 
   const items = releases.map((r) => {
     const doneCount = r.tasks.filter(
@@ -215,6 +235,25 @@ export async function POST(req: Request) {
           createdById: userId,
           notes: body.notes ?? "",
         },
+      });
+    }
+
+    // Attach all cached issues carrying this Fix Version.
+    const issues = await prisma.issueCache.findMany({
+      where: {
+        projectKey,
+        deletedAt: null,
+        OR: [
+          { fixVersionIds: { has: jiraVersionId } },
+          { fixVersionNames: { has: body.version } },
+        ],
+      },
+      select: { jiraKey: true },
+    });
+    if (issues.length) {
+      await prisma.releaseTask.createMany({
+        data: issues.map((i) => ({ releaseId: release.id, jiraKey: i.jiraKey })),
+        skipDuplicates: true,
       });
     }
   } else {
