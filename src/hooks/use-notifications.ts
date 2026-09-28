@@ -120,3 +120,52 @@ export function useMarkNotifications() {
     isPending: markMutation.isPending,
   };
 }
+
+export function useDeleteNotifications() {
+  const qc = useQueryClient();
+
+  const deleteMutation = useMutation({
+    mutationFn: (body: { ids?: string[]; allRead?: boolean; all?: boolean }) =>
+      api<{ ok: boolean; unreadCount: number }>("/api/notify", {
+        method: "DELETE",
+        body,
+      }),
+    onMutate: async (variables) => {
+      await qc.cancelQueries({ queryKey: notificationsKeys.all });
+
+      const prevUnread = qc.getQueryData<{ unread: number }>(notificationsKeys.unreadCount);
+
+      qc.setQueriesData<NotificationResponse>(
+        { queryKey: notificationsKeys.lists() },
+        (old) => {
+          if (!old) return old;
+          const items = old.items.filter((item) => {
+            if (variables.all) return false;
+            if (variables.allRead && item.read) return false;
+            if (variables.ids && variables.ids.includes(item.id)) return false;
+            return true;
+          });
+          return { ...old, items };
+        }
+      );
+
+      return { prevUnread };
+    },
+    onSuccess: (data) => {
+      if (typeof data?.unreadCount === "number") {
+        qc.setQueryData(notificationsKeys.unreadCount, { unread: data.unreadCount });
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: notificationsKeys.all });
+      qc.invalidateQueries({ queryKey: notificationsKeys.infiniteAll() });
+    },
+  });
+
+  return {
+    deleteNotifications: (ids: string[]) => deleteMutation.mutateAsync({ ids }),
+    deleteAllRead: () => deleteMutation.mutateAsync({ allRead: true }),
+    deleteAll: () => deleteMutation.mutateAsync({ all: true }),
+    isDeleting: deleteMutation.isPending,
+  };
+}

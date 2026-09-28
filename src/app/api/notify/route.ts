@@ -87,3 +87,44 @@ export async function GET(req: Request) {
     nextCursor,
   });
 }
+
+export async function DELETE(req: Request) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  const body = (await req.json().catch(() => ({}))) as {
+    ids?: string[];
+    allRead?: boolean;
+    all?: boolean;
+  };
+
+  if (body.allRead) {
+    await prisma.notification.deleteMany({
+      where: {
+        userId: session.user.id,
+        read: true,
+      },
+    });
+  } else if (body.all) {
+    await prisma.notification.deleteMany({
+      where: {
+        userId: session.user.id,
+      },
+    });
+  } else if (Array.isArray(body.ids) && body.ids.length > 0) {
+    await prisma.notification.deleteMany({
+      where: {
+        userId: session.user.id,
+        id: { in: body.ids },
+      },
+    });
+  } else {
+    return NextResponse.json({ error: "ids, allRead, or all required" }, { status: 400 });
+  }
+
+  const unreadCount = await prisma.notification.count({
+    where: { userId: session.user.id, read: false },
+  });
+
+  return NextResponse.json({ ok: true, unreadCount });
+}

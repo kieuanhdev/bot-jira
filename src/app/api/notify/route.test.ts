@@ -6,6 +6,7 @@ const { prismaMock, sessionMock } = vi.hoisted(() => ({
       findMany: vi.fn(),
       count: vi.fn(),
       updateMany: vi.fn(),
+      deleteMany: vi.fn(),
     },
   },
   sessionMock: vi.fn(),
@@ -14,7 +15,7 @@ const { prismaMock, sessionMock } = vi.hoisted(() => ({
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/session", () => ({ getSession: sessionMock }));
 
-import { GET, encodeCursor, decodeCursor } from "./route";
+import { GET, DELETE, encodeCursor, decodeCursor } from "./route";
 import { POST as markReadPOST } from "./mark-read/route";
 
 describe("cursor encode/decode", () => {
@@ -139,5 +140,60 @@ describe("POST /api/notify/mark-read", () => {
         data: { read: false, readAt: null },
       })
     );
+  });
+});
+
+describe("DELETE /api/notify", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns 401 when unauthenticated", async () => {
+    sessionMock.mockResolvedValue(null);
+    const req = new Request("http://localhost/api/notify", {
+      method: "DELETE",
+      body: JSON.stringify({ ids: ["n1"] }),
+    });
+    const res = await DELETE(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("deletes specified ids", async () => {
+    sessionMock.mockResolvedValue({ user: { id: "user_1" } });
+    prismaMock.notification.deleteMany.mockResolvedValue({ count: 2 });
+    prismaMock.notification.count.mockResolvedValue(0);
+
+    const req = new Request("http://localhost/api/notify", {
+      method: "DELETE",
+      body: JSON.stringify({ ids: ["n1", "n2"] }),
+    });
+    const res = await DELETE(req);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data.ok).toBe(true);
+    expect(prismaMock.notification.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "user_1", id: { in: ["n1", "n2"] } },
+    });
+  });
+
+  it("deletes all read notifications", async () => {
+    sessionMock.mockResolvedValue({ user: { id: "user_1" } });
+    prismaMock.notification.deleteMany.mockResolvedValue({ count: 5 });
+    prismaMock.notification.count.mockResolvedValue(2);
+
+    const req = new Request("http://localhost/api/notify", {
+      method: "DELETE",
+      body: JSON.stringify({ allRead: true }),
+    });
+    const res = await DELETE(req);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data.ok).toBe(true);
+    expect(data.unreadCount).toBe(2);
+    expect(prismaMock.notification.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "user_1", read: true },
+    });
   });
 });
