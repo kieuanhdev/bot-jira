@@ -1,7 +1,6 @@
-import { InboxClient } from "./inbox-client";
-
-export const metadata = { title: "Inbox" };
+import { redirect } from "next/navigation";
 
 export default function InboxPage() {
-  return <InboxClient />;
+  redirect("/bulk");
 }
+

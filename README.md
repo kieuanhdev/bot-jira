@@ -145,7 +145,6 @@ Xem đầy đủ + mô tả trong [`.env.example`](.env.example).
 - `POST /api/issues/bulk` — bulk action (preview).
 - `POST /api/bulk/:id/confirm` — confirm bulk operation.
 - `GET /api/bulk/:id` — xem kết quả bulk operation.
-- `POST /api/inbox/command` — parse + chuyển trạng thái từ lệnh tự do.
 - `GET /api/releases` — list release.
 - `POST /api/releases` — tạo release (gắn Jira Fix Version).
 - `POST /api/releases/:id/ready` — chạy ready-check (gate engine + AI).
