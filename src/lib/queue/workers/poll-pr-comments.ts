@@ -48,15 +48,23 @@ export async function runPollPrComments(): Promise<WorkerLog> {
         where: { integration_scope: { integration: "bitbucket", scope } },
       });
 
-      const openPrs = await bitbucket.listOpenPullRequests(repo);
-      checkedPrs += openPrs.length;
+      // Quét các PR ở mọi trạng thái (OPEN, MERGED, DECLINED) để nhận thông báo comment cả khi PR đã merge/đóng
+      const prs = typeof bitbucket.listPullRequests === "function"
+        ? await bitbucket.listPullRequests(repo, creds, 2)
+        : await bitbucket.listOpenPullRequests(repo, creds);
+      checkedPrs += prs.length;
 
       let maxSeenTime = cursorRecord?.cursor ? Number(cursorRecord.cursor) : 0;
       const isInitialRun = !cursorRecord || !cursorRecord.cursor;
 
-      for (const pr of openPrs) {
+      for (const pr of prs) {
+        // Bỏ qua các PR không có hoạt động mới hơn maxSeenTime
+        if (!isInitialRun && maxSeenTime > 0 && pr.updatedDate && pr.updatedDate <= maxSeenTime) {
+          continue;
+        }
+
         try {
-          const activities = await bitbucket.listPullRequestActivities(repo, pr.id);
+          const activities = await bitbucket.listPullRequestActivities(repo, pr.id, creds);
           for (const act of activities) {
             if (act.action !== "COMMENTED") continue;
 
@@ -89,12 +97,12 @@ export async function runPollPrComments(): Promise<WorkerLog> {
           scope,
           cursor: String(maxSeenTime),
           lastSuccessAt: new Date(),
-          stats: { checkedPrs: openPrs.length },
+          stats: { checkedPrs: prs.length },
         },
         update: {
           cursor: String(maxSeenTime),
           lastSuccessAt: new Date(),
-          stats: { checkedPrs: openPrs.length },
+          stats: { checkedPrs: prs.length },
         },
       });
     } catch (repoErr) {

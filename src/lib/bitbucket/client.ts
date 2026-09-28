@@ -179,11 +179,16 @@ type Paged<T> = {
   start: number;
 };
 
-async function fetchPaged<T>(repo: string, basePath: string, creds?: BbCreds): Promise<T[]> {
+async function fetchPaged<T>(
+  repo: string,
+  basePath: string,
+  creds?: BbCreds,
+  maxPages = 500
+): Promise<T[]> {
   const pageSize = 100;
   const out: T[] = [];
   let start = 0;
-  for (let page = 0; page < 500; page++) {
+  for (let page = 0; page < maxPages; page++) {
     const res = await request<Paged<T>>(
       repo,
       `${basePath}${basePath.includes("?") ? "&" : "?"}start=${start}&limit=${pageSize}`,
@@ -195,6 +200,27 @@ async function fetchPaged<T>(repo: string, basePath: string, creds?: BbCreds): P
     start += pageSize;
   }
   return out;
+}
+
+function normalizePullRequest(pullRequest: BitbucketPullRequestResponse): BbPullRequest {
+  let url: string | undefined;
+  if (pullRequest.links?.self) {
+    if (Array.isArray(pullRequest.links.self)) {
+      url = pullRequest.links.self[0]?.href;
+    } else if (typeof pullRequest.links.self === "object" && "href" in pullRequest.links.self) {
+      url = (pullRequest.links.self as { href?: string }).href;
+    }
+  }
+  return {
+    ...pullRequest,
+    url,
+    fromRef: {
+      branch: pullRequest.fromRef.branch ?? pullRequest.fromRef.displayId ?? "",
+    },
+    toRef: pullRequest.toRef
+      ? { branch: pullRequest.toRef.branch ?? pullRequest.toRef.displayId ?? "" }
+      : undefined,
+  };
 }
 
 export const bitbucket = {
@@ -251,32 +277,18 @@ export const bitbucket = {
     );
   },
 
-  async listPullRequests(repo: string, creds?: BbCreds): Promise<BbPullRequest[]> {
+  async listPullRequests(
+    repo: string,
+    creds?: BbCreds,
+    maxPages = 500
+  ): Promise<BbPullRequest[]> {
     const pullRequests = await fetchPaged<BitbucketPullRequestResponse>(
       repo,
       "pull-requests?state=ALL",
-      creds
+      creds,
+      maxPages
     );
-    return pullRequests.map((pullRequest) => {
-      let url: string | undefined;
-      if (pullRequest.links?.self) {
-        if (Array.isArray(pullRequest.links.self)) {
-          url = pullRequest.links.self[0]?.href;
-        } else if (typeof pullRequest.links.self === "object" && "href" in pullRequest.links.self) {
-          url = (pullRequest.links.self as { href?: string }).href;
-        }
-      }
-      return {
-        ...pullRequest,
-        url,
-        fromRef: {
-          branch: pullRequest.fromRef.branch ?? pullRequest.fromRef.displayId ?? "",
-        },
-        toRef: pullRequest.toRef
-          ? { branch: pullRequest.toRef.branch ?? pullRequest.toRef.displayId ?? "" }
-          : undefined,
-      };
-    });
+    return pullRequests.map(normalizePullRequest);
   },
 
   async listOpenPullRequests(repo: string, creds?: BbCreds): Promise<BbPullRequest[]> {
@@ -285,26 +297,7 @@ export const bitbucket = {
       "pull-requests?state=OPEN",
       creds
     );
-    return pullRequests.map((pullRequest) => {
-      let url: string | undefined;
-      if (pullRequest.links?.self) {
-        if (Array.isArray(pullRequest.links.self)) {
-          url = pullRequest.links.self[0]?.href;
-        } else if (typeof pullRequest.links.self === "object" && "href" in pullRequest.links.self) {
-          url = (pullRequest.links.self as { href?: string }).href;
-        }
-      }
-      return {
-        ...pullRequest,
-        url,
-        fromRef: {
-          branch: pullRequest.fromRef.branch ?? pullRequest.fromRef.displayId ?? "",
-        },
-        toRef: pullRequest.toRef
-          ? { branch: pullRequest.toRef.branch ?? pullRequest.toRef.displayId ?? "" }
-          : undefined,
-      };
-    });
+    return pullRequests.map(normalizePullRequest);
   },
 
   async getPullRequest(

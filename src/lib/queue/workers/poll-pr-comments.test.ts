@@ -33,9 +33,12 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/bitbucket/client", () => ({
   bitbucket: {
     repos: vi.fn(),
+    listPullRequests: vi.fn(),
     listOpenPullRequests: vi.fn(),
     listPullRequestActivities: vi.fn(),
   },
+  getSystemBitbucketCreds: vi.fn().mockResolvedValue({ user: "sys-user", token: "sys-token" }),
+  isBitbucketPermissionError: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("@/lib/bitbucket/notify-pr-comment", () => ({
@@ -51,9 +54,9 @@ describe("runPollPrComments", () => {
   it("skips notifications on initial run and sets baseline cursor", async () => {
     vi.mocked(bitbucket.repos).mockReturnValue(["EPM/easy_pos"]);
     vi.mocked(prisma.integrationCursor.findUnique).mockResolvedValue(null);
-    vi.mocked(bitbucket.listOpenPullRequests).mockResolvedValue([
-      { id: 10, title: "Test PR", fromRef: { branch: "feat/1" } } satisfies BbPullRequest,
-    ]);
+    const mockPr = { id: 10, title: "Test PR", fromRef: { branch: "feat/1" } } satisfies BbPullRequest;
+    vi.mocked(bitbucket.listPullRequests).mockResolvedValue([mockPr]);
+    vi.mocked(bitbucket.listOpenPullRequests).mockResolvedValue([mockPr]);
     vi.mocked(bitbucket.listPullRequestActivities).mockResolvedValue([
       {
         id: 100,
@@ -81,9 +84,9 @@ describe("runPollPrComments", () => {
   it("notifies for comments newer than the existing cursor", async () => {
     vi.mocked(bitbucket.repos).mockReturnValue(["EPM/easy_pos"]);
     vi.mocked(prisma.integrationCursor.findUnique).mockResolvedValue(cursorRow("10000"));
-    vi.mocked(bitbucket.listOpenPullRequests).mockResolvedValue([
-      { id: 10, title: "Test PR", fromRef: { branch: "feat/1" } } satisfies BbPullRequest,
-    ]);
+    const mockPr = { id: 10, title: "Test PR", fromRef: { branch: "feat/1" } } satisfies BbPullRequest;
+    vi.mocked(bitbucket.listPullRequests).mockResolvedValue([mockPr]);
+    vi.mocked(bitbucket.listOpenPullRequests).mockResolvedValue([mockPr]);
     vi.mocked(bitbucket.listPullRequestActivities).mockResolvedValue([
       {
         id: 100,
