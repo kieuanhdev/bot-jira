@@ -56,7 +56,8 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string; 
   }
   const params = await ctx.params;
   const id = params.id;
-  const approvalId = params.approvalId;
+  const url = new URL(req.url);
+  const approvalId = params.approvalId || url.searchParams.get("approvalId");
   if (!approvalId) return NextResponse.json({ error: "approvalId required" }, { status: 400 });
 
   const approval = await prisma.releaseApproval.findUnique({ where: { id: approvalId } });

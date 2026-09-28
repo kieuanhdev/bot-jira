@@ -30,6 +30,23 @@ export async function GET(req: Request) {
           },
         },
       },
+      releaseChecks: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        include: {
+          gates: {
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      },
+      approvals: {
+        where: { revokedAt: null },
+        orderBy: { approvedAt: "desc" },
+      },
+      gateOverrides: {
+        where: { revokedAt: null },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 
@@ -37,7 +54,45 @@ export async function GET(req: Request) {
     const doneCount = r.tasks.filter(
       (t) => t.issue.statusCategory === "done"
     ).length;
-    return { ...r, taskCount: r.tasks.length, doneCount };
+    const latestCheck = r.releaseChecks[0] ?? null;
+
+    return {
+      ...r,
+      taskCount: r.tasks.length,
+      doneCount,
+      latestCheck: latestCheck
+        ? {
+            id: latestCheck.id,
+            status: latestCheck.status,
+            summary: latestCheck.summary,
+            blockers: latestCheck.blockers,
+            createdAt: latestCheck.createdAt.toISOString(),
+            gates: latestCheck.gates.map((g) => ({
+              id: g.id,
+              gate: g.gate,
+              state: g.state,
+              summary: g.summary,
+              details: g.details,
+              sourceTime: g.sourceTime ? g.sourceTime.toISOString() : null,
+            })),
+          }
+        : null,
+      approvals: r.approvals.map((a) => ({
+        id: a.id,
+        type: a.type,
+        approvedById: a.approvedById,
+        note: a.note,
+        approvedAt: a.approvedAt.toISOString(),
+      })),
+      gateOverrides: r.gateOverrides.map((o) => ({
+        id: o.id,
+        gate: o.gate,
+        reason: o.reason,
+        createdById: o.createdById,
+        createdAt: o.createdAt.toISOString(),
+        expiresAt: o.expiresAt ? o.expiresAt.toISOString() : null,
+      })),
+    };
   });
 
   return NextResponse.json({ items });

@@ -67,7 +67,8 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string; 
   }
   const params = await ctx.params;
   const id = params.id;
-  const overrideId = params.overrideId;
+  const url = new URL(req.url);
+  const overrideId = params.overrideId || url.searchParams.get("overrideId");
   if (!overrideId) return NextResponse.json({ error: "overrideId required" }, { status: 400 });
 
   const override = await prisma.releaseGateOverride.findUnique({ where: { id: overrideId } });
