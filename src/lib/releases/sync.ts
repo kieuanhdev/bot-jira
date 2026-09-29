@@ -86,6 +86,8 @@ export async function syncReleasesFromJira(
 
         const releaseDate = v.releaseDate ? new Date(v.releaseDate) : null;
         const isReleased = Boolean(v.released);
+        const isArchived = Boolean(v.archived);
+        const now = new Date();
 
         const existing = await prisma.release.findFirst({
           where: { projectKey, jiraVersionId: v.id },
@@ -98,14 +100,12 @@ export async function syncReleasesFromJira(
             where: { id: existing.id },
             data: {
               version: v.name,
+              archived: isArchived,
+              lastSyncedAt: now,
               ...(v.description !== undefined ? { description: v.description ?? "" } : {}),
               ...(releaseDate ? { releaseDate } : {}),
-              ...(isReleased
-                ? {
-                    status: "released",
-                    releasedAt: existing.releasedAt ?? releaseDate ?? new Date(),
-                  }
-                : {}),
+              status: isReleased ? "released" : "draft",
+              releasedAt: isReleased ? (existing.releasedAt ?? releaseDate ?? now) : null,
             },
           });
           releaseId = updated.id;
@@ -118,8 +118,10 @@ export async function syncReleasesFromJira(
               jiraVersionId: v.id,
               description: v.description ?? "",
               releaseDate,
+              archived: isArchived,
               status: isReleased ? "released" : "draft",
-              releasedAt: isReleased ? (releaseDate ?? new Date()) : null,
+              releasedAt: isReleased ? (releaseDate ?? now) : null,
+              lastSyncedAt: now,
               createdById: userId ?? null,
             },
           });

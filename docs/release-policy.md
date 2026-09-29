@@ -9,6 +9,13 @@
 > Policy owner: Release manager; administrator manages configuration
 >
 > Implementation status: Policy approved, enforcement is delivered by M1–M3
+>
+> **Cập nhật (2026-09-29):** Quy trình phát hành đã được đơn giản hóa theo [RELEASE_MANAGEMENT_SIMPLIFICATION_PLAN.md](RELEASE_MANAGEMENT_SIMPLIFICATION_PLAN.md).
+> Tiêu chí phát hành dựa trực tiếp vào:
+> 1. Toàn bộ Jira task trực tiếp thuộc Fix Version có `statusCategory = done`.
+> 2. Mọi task cần code có branch confirmed và toàn bộ PR liên quan đã merged vào branch đích.
+> 3. Task mang label `no-code` được miễn trừ yêu cầu Git branch/PR.
+> Không còn phụ thuộc vào CI/CD pipeline, Sentry release health, hay ký duyệt thủ công QA/Release Manager.
 
 ## 1. Mục đích
 

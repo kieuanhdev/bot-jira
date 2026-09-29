@@ -37,7 +37,14 @@ export async function runHealthAlert(): Promise<WorkerLog> {
     });
   }
 
-  if (health.jiraSyncAgeMs !== null && health.jiraSyncAgeMs > env.jiraFreshnessMinutes * 60_000) {
+  if (health.staleProjects && health.staleProjects.length > 0) {
+    const sorted = [...health.staleProjects].sort();
+    conditions.push({
+      key: `jira-stale:${sorted.join(",")}`,
+      title: `Jira sync stale: ${sorted.join(", ")}`,
+      body: `Dự án chưa được đồng bộ mới (> ${env.jiraFreshnessMinutes} phút): ${sorted.join(", ")}.`,
+    });
+  } else if (health.jiraSyncAgeMs !== null && health.jiraSyncAgeMs > env.jiraFreshnessMinutes * 60_000) {
     conditions.push({
       key: "jira-stale",
       title: "Jira sync stale",
@@ -45,7 +52,16 @@ export async function runHealthAlert(): Promise<WorkerLog> {
     });
   }
 
-  if (health.hasErrors && health.status !== "down") {
+  if (health.failingProjects && health.failingProjects.length > 0 && health.status !== "down") {
+    const sorted = [...health.failingProjects].sort();
+    conditions.push({
+      key: `jira-failed:${sorted.join(",")}`,
+      title: `Jira sync failed: ${sorted.join(", ")}`,
+      body: `Đồng bộ Jira thất bại cho dự án: ${sorted.join(", ")}.`,
+    });
+  }
+
+  if (health.hasErrors && health.status !== "down" && (!health.failingProjects || health.failingProjects.length === 0)) {
     const failing = health.jobs.filter((j) => j.lastErrorAt).slice(0, 3);
     const detail = failing.map((j) => `${j.job}${j.lastError ? `: ${j.lastError.slice(0, 80)}` : ""}`).join("; ");
     conditions.push({

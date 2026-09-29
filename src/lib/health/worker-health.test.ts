@@ -5,7 +5,10 @@ const { prismaMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
-vi.mock("@/lib/env", () => ({ env: { jiraFreshnessMinutes: 5 } }));
+vi.mock("@/lib/env", () => ({
+  env: { jiraFreshnessMinutes: 5 },
+  jiraProjectList: [],
+}));
 
 import { getWorkerHealth, isJiraFresh } from "./worker-health";
 
@@ -63,5 +66,51 @@ describe("getWorkerHealth", () => {
     const h = await getWorkerHealth();
     expect(h.status).toBe("degraded");
     expect(h.hasErrors).toBe(true);
+  });
+});
+
+describe("getWorkerHealth with per-project Jira cursors", () => {
+  it("derives degraded status and tracks staleProjects when a project is missing or stale", async () => {
+    const { jiraProjectList } = await import("@/lib/env");
+    jiraProjectList.push("EPM", "MR");
+
+    rows([
+      { integration: "worker", scope: "liveness", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+      // EPM is fresh (1 min ago)
+      { integration: "jira", scope: "EPM", lastStartedAt: ago(60_000), lastSuccessAt: ago(60_000), lastErrorAt: null, lastError: null, stats: null },
+      // MR is stale (7 min ago)
+      { integration: "jira", scope: "MR", lastStartedAt: ago(7 * 60_000), lastSuccessAt: ago(7 * 60_000), lastErrorAt: null, lastError: null, stats: null },
+    ]);
+
+    const h = await getWorkerHealth();
+    expect(h.status).toBe("degraded");
+    expect(h.staleProjects).toEqual(["MR"]);
+    // jiraSyncAgeMs uses oldest success (MR ~ 7m)
+    expect(h.jiraSyncAgeMs).toBeGreaterThanOrEqual(6 * 60_000);
+    expect(isJiraFresh(h)).toBe(false);
+
+    // Clean up
+    jiraProjectList.length = 0;
+  });
+
+  it("derives failingProjects and hasErrors when a project has an error newer than success", async () => {
+    const { jiraProjectList } = await import("@/lib/env");
+    jiraProjectList.push("EPM", "CICM");
+
+    rows([
+      { integration: "worker", scope: "liveness", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+      // EPM is fresh and ok
+      { integration: "jira", scope: "EPM", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+      // CICM has recent error
+      { integration: "jira", scope: "CICM", lastStartedAt: ago(2000), lastSuccessAt: ago(60_000), lastErrorAt: ago(1000), lastError: "Jira 401", stats: null },
+    ]);
+
+    const h = await getWorkerHealth();
+    expect(h.status).toBe("degraded");
+    expect(h.hasErrors).toBe(true);
+    expect(h.failingProjects).toEqual(["CICM"]);
+
+    // Clean up
+    jiraProjectList.length = 0;
   });
 });

@@ -20,7 +20,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { api, ApiError } from "@/lib/api-client";
 import { useIssues, fetchIssuesPage, type IssueItem } from "@/hooks/use-issues";
-import { issuesKeys, boardKeys, meKeys, transitionsKeys, branchesForKeys } from "@/lib/query-keys";
+import { issuesKeys, boardKeys, meKeys, transitionsKeys, branchesForKeys, freshnessKeys } from "@/lib/query-keys";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -1029,24 +1029,129 @@ export function BoardClient() {
     () => (data?.items ?? []).concat(extraIssues),
     [data?.items, extraIssues]
   );
-  const [syncQueued, setSyncQueued] = useState(false);
+  type BoardSyncState = "idle" | "enqueueing" | "queued" | "running" | "succeeded" | "failed";
+
+  const [boardSync, setBoardSync] = useState<{
+    projectKey: string;
+    state: BoardSyncState;
+    acceptedAt?: string;
+    pollStartMs?: number;
+  }>({
+    projectKey: "",
+    state: "idle",
+  });
+
+  const isCurrentProjectSyncing =
+    boardSync.projectKey === selectedProject &&
+    (boardSync.state === "enqueueing" ||
+      boardSync.state === "queued" ||
+      boardSync.state === "running");
+
+  // Status polling effect when a sync is active
+  useEffect(() => {
+    if (boardSync.state !== "queued" && boardSync.state !== "running") return;
+    const { projectKey, acceptedAt, pollStartMs = Date.now() } = boardSync;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
+
+    async function checkStatus() {
+      const elapsed = Date.now() - pollStartMs;
+      // Timeout after 60 seconds
+      if (elapsed > 60_000) {
+        if (!cancelled) {
+          setToast("Chưa nhận được trạng thái đồng bộ. Hãy kiểm tra worker hoặc thử lại.");
+          setBoardSync({ projectKey: "", state: "idle" });
+        }
+        return;
+      }
+
+      try {
+        const queryParams = new URLSearchParams({ projectKey });
+        if (acceptedAt) queryParams.set("since", acceptedAt);
+        const res = await api<{
+          projectKey: string;
+          state: "queued" | "running" | "succeeded" | "failed" | "unknown";
+          lastError: string | null;
+        }>(`/api/sync/jira/status?${queryParams.toString()}`);
+
+        if (cancelled) return;
+
+        if (res.state === "succeeded") {
+          void qc.invalidateQueries({ queryKey: issuesKeys.all });
+          void qc.invalidateQueries({ queryKey: boardKeys.projects });
+          void qc.invalidateQueries({ queryKey: freshnessKeys.all });
+          setToast(`Đã đồng bộ ${projectKey}.`);
+          setBoardSync({ projectKey, state: "succeeded" });
+          setTimeout(() => {
+            if (!cancelled) setBoardSync({ projectKey: "", state: "idle" });
+          }, 2000);
+          return;
+        }
+
+        if (res.state === "failed") {
+          const shortErr = res.lastError ? res.lastError.slice(0, 100) : "Lỗi đồng bộ";
+          setToast(`Không thể đồng bộ ${projectKey}: ${shortErr}`);
+          setBoardSync({ projectKey, state: "failed" });
+          setTimeout(() => {
+            if (!cancelled) setBoardSync({ projectKey: "", state: "idle" });
+          }, 3500);
+          return;
+        }
+
+        if (res.state === "running" && boardSync.state !== "running") {
+          setBoardSync((prev) => (prev.projectKey === projectKey ? { ...prev, state: "running" } : prev));
+        }
+
+        // Schedule next check: 1s for first 15s, then 2.5s
+        const nextDelay = elapsed < 15_000 ? 1000 : 2500;
+        timer = setTimeout(checkStatus, nextDelay);
+      } catch {
+        // Retry on network jitter
+        if (!cancelled) {
+          timer = setTimeout(checkStatus, 2500);
+        }
+      }
+    }
+
+    // Start checking after a short delay
+    timer = setTimeout(checkStatus, 800);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [boardSync, qc]);
 
   async function syncJira() {
-    setSyncQueued(true);
+    if (!selectedProject || isCurrentProjectSyncing) return;
+    const targetProject = selectedProject;
+    setBoardSync({ projectKey: targetProject, state: "enqueueing" });
+    setToast(`Đang gửi yêu cầu đồng bộ ${targetProject}…`);
+
     try {
-      await api("/api/sync/jira", {
+      const res = await api<{
+        state: "queued" | "already_running";
+        acceptedAt: string;
+      }>("/api/sync/jira", {
         method: "POST",
-        body: selectedProject ? { projectKey: selectedProject } : {},
+        body: { projectKey: targetProject },
       });
-      setToast("Jira sync queued. The board will refresh automatically.");
-      window.setTimeout(() => {
-        void qc.invalidateQueries({ queryKey: issuesKeys.all });
-        void qc.invalidateQueries({ queryKey: boardKeys.projects });
-        setSyncQueued(false);
-      }, 1500);
+
+      if (res.state === "already_running") {
+        setToast(`${targetProject} đang được đồng bộ. Dữ liệu sẽ tự cập nhật khi hoàn tất.`);
+      } else {
+        setToast(`${targetProject} đang chờ đồng bộ.`);
+      }
+
+      setBoardSync({
+        projectKey: targetProject,
+        state: "queued",
+        acceptedAt: res.acceptedAt || new Date().toISOString(),
+        pollStartMs: Date.now(),
+      });
     } catch (error) {
-      setToast(`Could not queue Jira sync: ${(error as Error).message.slice(0, 100)}`);
-      setSyncQueued(false);
+      setToast(`Không thể đồng bộ ${targetProject}: ${(error as Error).message.slice(0, 100)}`);
+      setBoardSync({ projectKey: "", state: "idle" });
     }
   }
 
@@ -1879,11 +1984,33 @@ export function BoardClient() {
             variant="outline"
             size="sm"
             onClick={syncJira}
-            disabled={syncQueued}
-            className="gap-1.5"
+            disabled={isCurrentProjectSyncing}
+            className="gap-1.5 cursor-pointer"
+            title={
+              isCurrentProjectSyncing
+                ? boardSync.state === "enqueueing"
+                  ? `Đang gửi yêu cầu đồng bộ ${selectedProject}…`
+                  : boardSync.state === "running"
+                  ? `Đang đồng bộ Jira cho ${selectedProject}…`
+                  : `${selectedProject} đang chờ đồng bộ.`
+                : `Đồng bộ Jira cho ${selectedProject}`
+            }
           >
-            <RefreshCw className={cn("h-4 w-4", (syncQueued || isFetching) && "animate-spin motion-reduce:animate-none")} />
-            {syncQueued ? "Đã xếp hàng" : "Đồng bộ Jira"}
+            <RefreshCw
+              className={cn(
+                "h-4 w-4",
+                (isCurrentProjectSyncing || isFetching) && "animate-spin motion-reduce:animate-none"
+              )}
+            />
+            {boardSync.projectKey === selectedProject && boardSync.state === "enqueueing"
+              ? "Đang gửi…"
+              : boardSync.projectKey === selectedProject && boardSync.state === "queued"
+              ? "Đang chờ…"
+              : boardSync.projectKey === selectedProject && boardSync.state === "running"
+              ? "Đang đồng bộ…"
+              : boardSync.projectKey === selectedProject && boardSync.state === "succeeded"
+              ? "Đã đồng bộ"
+              : "Đồng bộ Jira"}
           </Button>
           <div className="flex rounded-md border p-0.5">
           {(["board", "list"] as ViewMode[]).map((m) => {

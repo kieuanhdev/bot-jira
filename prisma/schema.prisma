@@ -191,6 +191,9 @@ model Release {
   createdById   String?
   releasedAt    DateTime?
   status        ReleaseStatus @default(draft)
+  archived      Boolean       @default(false)
+  jiraUpdatedAt DateTime?
+  lastSyncedAt  DateTime?
   notes         String        @default("")
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -201,6 +204,7 @@ model Release {
 
   @@unique([projectKey, jiraVersionId])
   @@index([projectKey])
+  @@index([archived])
 }
 
 model ReleaseTask {

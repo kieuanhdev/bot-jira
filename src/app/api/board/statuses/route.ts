@@ -114,24 +114,74 @@ export async function GET(req: Request) {
   }
 
   /**
+   * Sort status progression logically:
+   * 1. Backlog / Plan / Pending (rank 10-15)
+   * 2. To do / Selected for Dev / Reopened (rank 20-25)
+   * 3. In Progress (rank 30)
+   * 4. In Review (rank 35)
+   * 5. Waiting For Deploy (rank 40)
+   * 6. Test / To Do Test / ToDo Test / READY FOR TEST (rank 50)
+   * 7. Done Test / Done / Completed (rank 60)
+   * 8. Released / Deploy (rank 65)
+   * 9. Reject / Cancelled (rank 70)
+   */
+  function getWorkflowRank(name: string, category: CategoryKey): number {
+    const n = (name || "").toLowerCase().trim();
+    if (category === "new") {
+      if (n.includes("backlog")) return 10;
+      if (n.includes("plan")) return 11;
+      if (n.includes("pending")) return 12;
+      if (n.includes("select")) return 20;
+      if (n.includes("to do") || n.includes("todo")) return 21;
+      if (n.includes("reopen")) return 22;
+      return 15;
+    }
+    if (category === "indeterminate") {
+      if (n.includes("progress") || n.includes("doing") || n.includes("active")) return 30;
+      if (n.includes("review")) return 35;
+      if (n.includes("deploy") || n.includes("waiting for deploy") || n.includes("wating for deploy")) return 40;
+      if (n.includes("test") || n.includes("qa")) return 50;
+      return 32;
+    }
+    if (category === "done") {
+      if (n.includes("done") || n.includes("resolved") || n.includes("complete")) return 60;
+      if (n.includes("deploy") || n.includes("release")) return 65;
+      if (n.includes("reject")) return 70;
+      return 62;
+    }
+    return 100;
+  }
+
+  /**
    * Auto-derive board columns from a project's workflow when none are
-   * configured: keep every to-do and in-progress state (in workflow order) and
-   * collapse all done-family states into a single "Done" column. This mirrors
-   * how most Jira boards are laid out.
+   * configured: sort states logically by workflow stage, keep relevant to-do,
+   * in-progress, review, test states, and collapse done-family states into the
+   * primary Done column.
    */
   function autoColumns(states: FlowStatus[]): BoardStatus[] {
-    const out: BoardStatus[] = [];
-    let doneAdded = false;
+    const seen = new Set<string>();
+    const candidates: BoardStatus[] = [];
     for (const s of states) {
       if (!s?.name) continue;
-      const category = normalizeCategory(s.statusCategory?.key);
-      if (category === "done") {
+      const name = s.name.trim();
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      candidates.push({ name, category: normalizeCategory(s.statusCategory?.key) });
+    }
+
+    // Sort by workflow progression
+    candidates.sort((a, b) => getWorkflowRank(a.name, a.category) - getWorkflowRank(b.name, b.category));
+
+    const out: BoardStatus[] = [];
+    let doneAdded = false;
+    for (const item of candidates) {
+      if (item.category === "done") {
         if (!doneAdded) {
-          out.push({ name: s.name, category });
+          out.push(item);
           doneAdded = true;
         }
       } else {
-        out.push({ name: s.name, category });
+        out.push(item);
       }
     }
     return out;
@@ -176,7 +226,7 @@ export async function GET(req: Request) {
   }
 
   // "All" (multiple projects): union of each project's columns (manual or
-  // auto), de-duplicated by name, first-seen order.
+  // auto), de-duplicated by name, sorted by workflow progression.
   const ordered = new Map<string, BoardStatus>();
   const rawCategory = new Map<string, CategoryKey>();
   await Promise.all(
@@ -205,7 +255,9 @@ export async function GET(req: Request) {
     })
   );
 
-  const items: BoardStatus[] = [...ordered.values()];
+  const items: BoardStatus[] = [...ordered.values()].sort(
+    (a, b) => getWorkflowRank(a.name, a.category) - getWorkflowRank(b.name, b.category)
+  );
   const statusCategoryMap: Record<string, string> = Object.fromEntries(rawCategory);
   return NextResponse.json({ items, statusCategoryMap });
 }

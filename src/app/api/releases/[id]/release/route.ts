@@ -3,25 +3,20 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
-import { aiProvider } from "@/lib/ai";
 import { notifyAll } from "@/lib/notify";
-import { runGates, aggregateGates, collectBlockers } from "@/lib/releases/gates";
-import { buildReleaseContext } from "@/lib/releases/release-context";
 import { jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
+import { getReleaseReadiness } from "@/lib/releases/release-readiness";
 
 /**
- * REL-02 — Actually release a Jira Fix Version.
+ * Actually release a Jira Fix Version based on Jira Done and Git merge.
  *
- * Safety rules (plan §REL-02):
- *  - release_manager/admin only.
- *  - Idempotent: releasing an already-released version returns success.
- *  - Re-runs the mandatory gates immediately before the Jira mutation (a stale
- *    ready-check is never the sole basis for release).
- *  - An empty release or any failed/unknown mandatory gate => 409, no mutation.
+ * Rules:
+ *  - release_manager/admin only (permission: release.publish).
+ *  - Idempotent: releasing an already-released version returns success without re-calling Jira.
+ *  - Evaluates Jira Done and Bitbucket Git delivery immediately before mutation.
+ *  - An empty release, incomplete tasks, or unmerged PRs return 409 with structured blockers.
  *  - Only marks the DB released after Jira confirms the mutation.
- *  - Jira is called at most once per request; concurrent requests are guarded
- *    by the already-released check + the release status flip.
  */
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -29,17 +24,17 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   if (!can(session, "release.publish")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+
   const actorId = session.user?.id ?? null;
   const actorEmail = session.user?.email ?? null;
   const { id } = await ctx.params;
 
   const release = await prisma.release.findUnique({
     where: { id },
-    include: { tasks: { select: { jiraKey: true } } },
   });
   if (!release) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  // Idempotency: already released.
+  // Idempotency: already marked released locally
   if (release.status === "released") {
     return NextResponse.json({
       ok: true,
@@ -49,7 +44,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     });
   }
 
-  // Need a Jira Fix Version to release.
+  // Need a Jira Fix Version to release
   if (!release.jiraVersionId || !release.projectKey) {
     return NextResponse.json(
       { error: "release is not tied to a Jira Fix Version (projectKey + jiraVersionId required)" },
@@ -57,29 +52,9 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     );
   }
 
-  // Re-run the gates now, immediately before the mutation.
-  const releaseCtx = await buildReleaseContext(id, release.version);
-  if (!releaseCtx) return NextResponse.json({ error: "could not build release context" }, { status: 500 });
-  const gates = await runGates(releaseCtx, aiProvider.releaseCheck.bind(aiProvider));
-  const status = aggregateGates(gates);
-  const blockers = collectBlockers(gates);
-
-  if (releaseCtx.tasks.length === 0) {
-    return NextResponse.json(
-      { error: "EMPTY_RELEASE", status: "blocked", blockers },
-      { status: 409 }
-    );
-  }
-  if (status === "blocked" || status === "unknown") {
-    return NextResponse.json(
-      { error: "release not ready", status, blockers, gates },
-      { status: 409 }
-    );
-  }
-
-  // Call Jira as the actor. Interactive mutations never use system auth.
+  // Personal Jira credentials required for mutation
   const user = await prisma.user.findUnique({
-    where: { id: actorId },
+    where: { id: actorId ?? "" },
     select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true },
   });
   const auth = userJiraAuth(user);
@@ -89,13 +64,84 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
       { status: 428 }
     );
   }
+
   const client = jiraWith(auth);
-  let jiraOk = false;
+
+  // Check Jira version directly
+  try {
+    let jiraVersion = null;
+    if (typeof client.getVersion === "function") {
+      jiraVersion = await client.getVersion(release.jiraVersionId).catch(() => null);
+    }
+    if (!jiraVersion && typeof client.getVersions === "function") {
+      const versions = await client.getVersions(release.projectKey).catch(() => []);
+      jiraVersion = versions.find((v) => v.id === release.jiraVersionId) || null;
+    }
+
+    if (jiraVersion) {
+      if (jiraVersion.released) {
+        // Idempotent sync from Jira
+        const updated = await prisma.release.update({
+          where: { id },
+          data: { status: "released", releasedAt: new Date() },
+          select: { id: true, version: true, releasedAt: true, status: true },
+        });
+        return NextResponse.json({
+          ok: true,
+          released: true,
+          already: true,
+          releasedAt: updated.releasedAt?.toISOString() ?? null,
+        });
+      }
+      if (jiraVersion.archived) {
+        return NextResponse.json(
+          { error: "VERSION_ARCHIVED", message: "Fix Version đã bị lưu trữ trên Jira." },
+          { status: 409 }
+        );
+      }
+    }
+  } catch {
+    // Proceed to readiness check
+  }
+
+  // Evaluate release readiness from Jira tasks and Git branch/PR data
+  const readiness = await getReleaseReadiness(id);
+  if (!readiness) {
+    return NextResponse.json({ error: "could not evaluate release readiness" }, { status: 500 });
+  }
+
+  if (readiness.state !== "ready") {
+    await audit({
+      actorId,
+      actorEmail,
+      action: "release.publish_failed",
+      source: "web",
+      target: release.jiraVersionId,
+      after: {
+        reason: readiness.state === "empty" ? "EMPTY_RELEASE" : "RELEASE_NOT_READY",
+        taskCount: readiness.taskCount,
+        blockersCount: readiness.blockers.length,
+      },
+    });
+
+    return NextResponse.json(
+      {
+        error: readiness.state === "empty" ? "EMPTY_RELEASE" : "RELEASE_NOT_READY",
+        readiness: readiness.state,
+        taskCount: readiness.taskCount,
+        doneCount: readiness.doneCount,
+        gitCompleteCount: readiness.gitCompleteCount,
+        deliveryReadyCount: readiness.deliveryReadyCount,
+        blockers: readiness.blockers,
+      },
+      { status: 409 }
+    );
+  }
+
+  // Ready: call Jira mutation once
   try {
     await client.releaseVersion(release.jiraVersionId);
-    jiraOk = true;
   } catch (e) {
-    // Jira mutation failed: do NOT flip the DB to released.
     await audit({
       actorId,
       actorEmail,
@@ -110,11 +156,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     );
   }
 
-  if (!jiraOk) {
-    return NextResponse.json({ error: "Jira release failed" }, { status: 502 });
-  }
-
-  // Jira confirmed. Persist released + audit + notify.
+  // Update local DB to released after Jira confirms
   const updated = await prisma.release.update({
     where: { id },
     data: { status: "released", releasedAt: new Date() },

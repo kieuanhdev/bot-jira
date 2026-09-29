@@ -3,7 +3,7 @@
  * No database or environment dependencies, fully unit testable.
  */
 
-const JIRA_KEY_REGEX = /(?:^|[^A-Za-z0-9])([A-Z][A-Z0-9_]+-\d+)(?=[^0-9]|$)/gi;
+const JIRA_KEY_REGEX = /(?:^|[^A-Za-z0-9]|_)([A-Z][A-Z0-9]+-\d+)(?=[^0-9]|$)/gi;
 
 /**
  * Extract all unique uppercase Jira keys from any text string (e.g. branch name, PR title).

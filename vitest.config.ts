@@ -8,6 +8,7 @@ export default defineConfig({
     },
   },
   test: {
+    cache: false,
     environment: "node",
     include: ["src/**/*.test.ts", "prisma/**/*.test.ts"],
     setupFiles: ["./vitest.setup.ts"],

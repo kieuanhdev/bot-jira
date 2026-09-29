@@ -32,6 +32,7 @@ const BASE_ISSUE_FIELDS = [
   "timeoriginalestimate",
   "timeestimate",
   "timetracking",
+  "comment",
 ];
 
 const POINT_FIELD_NAMES = new Set(["story points", "task points"]);
@@ -535,6 +536,9 @@ export function jiraWith(auth?: JiraAuth) {
         {},
         auth
       ),
+    /** Get a single Fix Version by ID. */
+    getVersion: (versionId: string) =>
+      request<JiraVersion>(`/rest/api/2/version/${encodeURIComponent(versionId)}`, {}, auth),
     /** Create a new Fix Version on a project. */
     createVersion: (projectKey: string, name: string, description?: string) =>
       request<JiraVersion>(

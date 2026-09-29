@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { env } from "@/lib/env";
+import { env, jiraProjectList } from "@/lib/env";
 
 // OPS-01 / OPS-03 — Worker + job liveness/freshness.
 //
@@ -7,9 +7,8 @@ import { env } from "@/lib/env";
 // "worker"): one per named job (scope = job name) recording each run's
 // started/success/error timestamps, plus a single "liveness" row written on a
 // cadence so a crashed-but-still-running worker (pg-boss up, process wedged)
-// is still detectable. This module centralises how those rows are read so the
-// admin health endpoint, the public freshness endpoint and the alert worker
-// all classify health the same way.
+// is still detectable. Jira polling cursors (integration "jira", scope = projectKey)
+// record per-project freshness.
 
 const LIVENESS_SCOPE = "liveness";
 
@@ -29,12 +28,14 @@ export type WorkerHealth = {
   status: "healthy" | "degraded" | "down" | "unknown";
   /** Milliseconds since the worker last wrote a liveness heartbeat. */
   workerAgeMs: number | null;
-  /** Milliseconds since the Jira poll last succeeded (null = never). */
+  /** Milliseconds since the Jira poll last succeeded (null = never). Oldest across configured projects. */
   jiraSyncAgeMs: number | null;
-  /** A job reported an error more recently than its last success. */
+  /** A job or project reported an error more recently than its last success. */
   hasErrors: boolean;
   jobs: JobState[];
   checkedAt: string;
+  staleProjects?: string[];
+  failingProjects?: string[];
 };
 
 const SLA = {
@@ -69,7 +70,7 @@ export async function writeWorkerHeartbeat(): Promise<void> {
  * Classify worker + job liveness from the IntegrationCursor read model.
  *
  * - "down":    no liveness heartbeat, or it is older than `workerDownMs`.
- * - "degraded": a job's latest activity is stale, or a job reported an error
+ * - "degraded": a project's latest activity is stale, or a job/project reported an error
  *               more recently than it last succeeded.
  * - "unknown": liveness was never recorded (fresh install, worker not run yet).
  * - "healthy": everything is within SLA.
@@ -77,8 +78,14 @@ export async function writeWorkerHeartbeat(): Promise<void> {
 export async function getWorkerHealth(): Promise<WorkerHealth> {
   const now = Date.now();
   const rows = await prisma.integrationCursor.findMany({
-    where: { integration: HEARTBEAT_INTEGRATION },
+    where: {
+      OR: [
+        { integration: HEARTBEAT_INTEGRATION },
+        { integration: "jira" },
+      ],
+    },
     select: {
+      integration: true,
       scope: true,
       lastStartedAt: true,
       lastSuccessAt: true,
@@ -88,12 +95,53 @@ export async function getWorkerHealth(): Promise<WorkerHealth> {
     },
   }).catch(() => []);
 
-  const liveness = rows.find((r) => r.scope === LIVENESS_SCOPE);
-  const jobs = rows.filter((r) => r.scope !== LIVENESS_SCOPE);
+  const workerRows = rows.filter((r) => !r.integration || r.integration === HEARTBEAT_INTEGRATION);
+  const jiraRows = rows.filter((r) => r.integration === "jira");
+
+  const liveness = workerRows.find((r) => r.scope === LIVENESS_SCOPE);
+  const jobs = workerRows.filter((r) => r.scope !== LIVENESS_SCOPE);
 
   const workerAgeMs = ageMs(liveness?.lastStartedAt, now);
-  const jiraRow = jobs.find((r) => r.scope === "poll-jira");
-  const jiraSyncAgeMs = ageMs(jiraRow?.lastSuccessAt, now);
+
+  const configuredProjects = jiraProjectList;
+  const staleProjects: string[] = [];
+  const failingProjects: string[] = [];
+  let jiraSyncAgeMs: number | null = null;
+  let jiraStale = false;
+
+  if (jiraRows.length > 0 && configuredProjects.length > 0) {
+    let maxAgeMs: number | null = 0;
+    for (const pKey of configuredProjects) {
+      const pRow = jiraRows.find((r) => r.scope.toUpperCase() === pKey.toUpperCase());
+      if (!pRow || !pRow.lastSuccessAt) {
+        staleProjects.push(pKey);
+        maxAgeMs = null;
+      } else {
+        const pAge = ageMs(pRow.lastSuccessAt, now);
+        if (pAge === null || pAge > SLA.jiraStaleMs) {
+          staleProjects.push(pKey);
+        }
+        if (maxAgeMs !== null && pAge !== null) {
+          maxAgeMs = Math.max(maxAgeMs, pAge);
+        }
+      }
+
+      if (pRow?.lastErrorAt) {
+        const errTime = pRow.lastErrorAt instanceof Date ? pRow.lastErrorAt.getTime() : new Date(pRow.lastErrorAt).getTime();
+        const succTime = pRow.lastSuccessAt ? (pRow.lastSuccessAt instanceof Date ? pRow.lastSuccessAt.getTime() : new Date(pRow.lastSuccessAt).getTime()) : 0;
+        if (errTime > succTime) {
+          failingProjects.push(pKey);
+        }
+      }
+    }
+    jiraSyncAgeMs = maxAgeMs;
+    jiraStale = staleProjects.length > 0;
+  } else {
+    // Fallback to legacy poll-jira row if no per-project cursors exist yet
+    const jiraRow = jobs.find((r) => r.scope === "poll-jira");
+    jiraSyncAgeMs = ageMs(jiraRow?.lastSuccessAt, now);
+    jiraStale = jiraSyncAgeMs !== null && jiraSyncAgeMs > SLA.jiraStaleMs;
+  }
 
   let hasErrors = false;
   let anyErrorRecent = false;
@@ -108,10 +156,11 @@ export async function getWorkerHealth(): Promise<WorkerHealth> {
     if (r.lastError) hasErrors = true;
   }
 
-  // Jira sync only degrades health once the worker has actually run (we have
-  // job rows); on a brand-new install the absence of a poll-jira row is not a
-  // staleness signal by itself.
-  const jiraStale = jiraSyncAgeMs !== null && jiraSyncAgeMs > SLA.jiraStaleMs;
+  if (failingProjects.length > 0) {
+    hasErrors = true;
+    anyErrorRecent = true;
+  }
+
   const workerNeverSeen = liveness ? false : rows.length === 0;
   const workerDown = workerAgeMs === null ? !workerNeverSeen : workerAgeMs > SLA.workerDownMs;
 
@@ -131,6 +180,8 @@ export async function getWorkerHealth(): Promise<WorkerHealth> {
     workerAgeMs,
     jiraSyncAgeMs,
     hasErrors,
+    staleProjects,
+    failingProjects,
     jobs: jobs.map((r) => ({
       job: r.scope,
       lastStartedAt: toIso(r.lastStartedAt),
@@ -145,6 +196,7 @@ export async function getWorkerHealth(): Promise<WorkerHealth> {
 
 /** Convenience for the public endpoint: is Jira sync fresh? */
 export function isJiraFresh(health: WorkerHealth): boolean {
+  if (health.staleProjects && health.staleProjects.length > 0) return false;
   return health.jiraSyncAgeMs !== null && health.jiraSyncAgeMs <= SLA.jiraStaleMs;
 }
 

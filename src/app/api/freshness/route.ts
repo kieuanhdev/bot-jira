@@ -24,5 +24,7 @@ export async function GET() {
     workerAgeMs: health.workerAgeMs,
     jiraSyncAgeMs: health.jiraSyncAgeMs,
     checkedAt: health.checkedAt,
+    staleProjects: health.staleProjects ?? [],
+    failingProjects: health.failingProjects ?? [],
   });
 }

@@ -383,10 +383,7 @@ export const bitbucket = {
         const pr = matchingPrs[0];
         const prState = pr?.state;
         const prDestinationBranch = pr?.toRef?.branch;
-        const prMerged =
-          prState != null &&
-          MERGED_STATES.has(prState) &&
-          (prDestinationBranch === base || prDestinationBranch == null);
+        const prMerged = prState != null && MERGED_STATES.has(prState);
         return {
           branch: b,
           pr,

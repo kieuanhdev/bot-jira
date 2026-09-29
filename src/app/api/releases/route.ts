@@ -1,136 +1,232 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { can } from "@/lib/permissions";
+import { audit } from "@/lib/audit";
 import { jiraWith, JiraRequestError } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 import { syncReleasesFromJira } from "@/lib/releases/sync";
+import {
+  evaluateTaskReadiness,
+  evaluateReleaseReadiness,
+  type BranchDeliveryInfo,
+} from "@/lib/releases/release-readiness";
+import { computeReleaseSummary } from "@/lib/releases/release-summary";
+import { env } from "@/lib/env";
 
-const RELEASE_INCLUDE = {
+const RELEASE_SELECT = {
+  id: true,
+  version: true,
+  targetLabel: true,
+  projectKey: true,
+  jiraVersionId: true,
+  description: true,
+  releaseDate: true,
+  createdById: true,
+  releasedAt: true,
+  status: true,
+  archived: true,
+  jiraUpdatedAt: true,
+  lastSyncedAt: true,
+  notes: true,
+  createdAt: true,
+  updatedAt: true,
   tasks: {
     select: {
       jiraKey: true,
       issue: {
         select: {
+          jiraKey: true,
           status: true,
           statusCategory: true,
           summary: true,
           points: true,
           priority: true,
+          labels: true,
+          assigneeJira: true,
+          deletedAt: true,
         },
       },
     },
   },
-  releaseChecks: {
-    orderBy: { createdAt: "desc" as const },
-    take: 1,
-    include: {
-      gates: {
-        orderBy: { createdAt: "asc" as const },
-      },
-    },
-  },
-  approvals: {
-    where: { revokedAt: null },
-    orderBy: { approvedAt: "desc" as const },
-  },
-  gateOverrides: {
-    where: { revokedAt: null },
-    orderBy: { createdAt: "desc" as const },
-  },
 };
 
-/** List releases, optionally filtered by project. Includes task counts. */
+/** List releases, optionally filtered by project and readiness. Includes summary KPIs. */
 export async function GET(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const url = new URL(req.url);
   const projectKey = url.searchParams.get("projectKey")?.trim() || undefined;
+  const readinessFilter = url.searchParams.get("readiness")?.trim();
+  const includeArchived = url.searchParams.get("includeArchived") === "true";
 
   let releases = await prisma.release.findMany({
-    where: projectKey ? { projectKey } : undefined,
+    where: projectKey && projectKey !== "all" ? { projectKey } : undefined,
     orderBy: { createdAt: "desc" },
-    include: RELEASE_INCLUDE,
+    select: RELEASE_SELECT,
   });
 
   // If there are no releases in the database yet, run an initial sync from Jira
-  if (releases.length === 0) {
+  if (releases.length === 0 && projectKey && projectKey !== "all") {
     try {
       await syncReleasesFromJira({
         userId: session.user?.id,
-        projectKeys: projectKey ? [projectKey] : undefined,
+        projectKeys: [projectKey],
       });
       releases = await prisma.release.findMany({
-        where: projectKey ? { projectKey } : undefined,
+        where: { projectKey },
         orderBy: { createdAt: "desc" },
-        include: RELEASE_INCLUDE,
+        select: RELEASE_SELECT,
       });
     } catch {
       // Proceed with empty list if sync encounters error
     }
   }
 
-  const items = releases.map((r) => {
-    const doneCount = r.tasks.filter(
-      (t) => t.issue.statusCategory === "done"
-    ).length;
-    const latestCheck = r.releaseChecks[0] ?? null;
+  // Collect all unique Jira keys across releases for a single batched branch lookup
+  const allJiraKeys = Array.from(
+    new Set(
+      releases.flatMap((r) =>
+        r.tasks
+          .map((t) => t.issue)
+          .filter((i) => i && i.deletedAt == null)
+          .map((i) => i.jiraKey)
+      )
+    )
+  );
+
+  const branches = allJiraKeys.length > 0
+    ? await prisma.branchInfo.findMany({
+        where: {
+          jiraKey: { in: allJiraKeys },
+          deletedAt: null,
+        },
+        select: {
+          jiraKey: true,
+          repo: true,
+          branch: true,
+          linkState: true,
+          prId: true,
+          prTitle: true,
+          prUrl: true,
+          prState: true,
+          prDestinationBranch: true,
+          merged: true,
+          checkedAt: true,
+          deletedAt: true,
+        },
+      })
+    : [];
+
+  const branchesByKey = new Map<string, BranchDeliveryInfo[]>();
+  for (const b of branches) {
+    if (!b.jiraKey) continue;
+    const list = branchesByKey.get(b.jiraKey) || [];
+    list.push({
+      repo: b.repo,
+      branch: b.branch,
+      linkState: b.linkState,
+      prId: b.prId,
+      prTitle: b.prTitle,
+      prUrl: b.prUrl,
+      prState: b.prState,
+      prDestinationBranch: b.prDestinationBranch,
+      merged: b.merged,
+      checkedAt: b.checkedAt,
+      deletedAt: b.deletedAt,
+    });
+    branchesByKey.set(b.jiraKey, list);
+  }
+
+  const allowedDestinations = [env.bitbucketBaseBranch, "dev", "develop", "master", "main", "prod"].filter(Boolean);
+
+  // Evaluate readiness for all releases
+  const evaluatedReleases = releases.map((r) => {
+    const activeTasks = r.tasks
+      .map((t) => t.issue)
+      .filter((i): i is NonNullable<typeof i> => i != null && i.deletedAt == null);
+
+    const taskResults = activeTasks.map((issue) =>
+      evaluateTaskReadiness(
+        {
+          jiraKey: issue.jiraKey,
+          summary: issue.summary,
+          status: issue.status,
+          statusCategory: issue.statusCategory,
+          labels: issue.labels,
+          assignee: issue.assigneeJira,
+          priority: issue.priority,
+          points: issue.points,
+          branches: branchesByKey.get(issue.jiraKey) || [],
+        },
+        { allowedDestinations }
+      )
+    );
+
+    const isArchived = Boolean((r as { archived?: boolean }).archived);
+    const readiness = evaluateReleaseReadiness(
+      {
+        jiraReleased: r.status === "released",
+        released: r.status === "released",
+        archived: isArchived,
+        lastSyncedAt: (r as { lastSyncedAt?: Date | null }).lastSyncedAt,
+      },
+      taskResults
+    );
 
     return {
       ...r,
-      taskCount: r.tasks.length,
-      doneCount,
-      latestCheck: latestCheck
-        ? {
-            id: latestCheck.id,
-            status: latestCheck.status,
-            summary: latestCheck.summary,
-            blockers: latestCheck.blockers,
-            createdAt: latestCheck.createdAt.toISOString(),
-            gates: latestCheck.gates.map((g) => ({
-              id: g.id,
-              gate: g.gate,
-              state: g.state,
-              summary: g.summary,
-              details: g.details,
-              sourceTime: g.sourceTime ? g.sourceTime.toISOString() : null,
-            })),
-          }
-        : null,
-      approvals: r.approvals.map((a) => ({
-        id: a.id,
-        type: a.type,
-        approvedById: a.approvedById,
-        note: a.note,
-        approvedAt: a.approvedAt.toISOString(),
-      })),
-      gateOverrides: r.gateOverrides.map((o) => ({
-        id: o.id,
-        gate: o.gate,
-        reason: o.reason,
-        createdById: o.createdById,
-        createdAt: o.createdAt.toISOString(),
-        expiresAt: o.expiresAt ? o.expiresAt.toISOString() : null,
-      })),
+      archived: isArchived,
+      readiness: readiness.state,
+      taskCount: readiness.taskCount,
+      doneCount: readiness.doneCount,
+      gitCompleteCount: readiness.gitCompleteCount,
+      deliveryReadyCount: readiness.deliveryReadyCount,
+      blockers: readiness.blockers,
+      tasks: taskResults,
+      // Compatibility fields for any legacy consumer
+      latestCheck: null,
+      approvals: [],
+      gateOverrides: [],
     };
   });
 
-  return NextResponse.json({ items });
+  // Calculate summary across all items (totalActive, inProgress, ready, empty, released, archived)
+  const summary = computeReleaseSummary(
+    evaluatedReleases.map((r) => ({
+      id: r.id,
+      archived: r.archived,
+      jiraReleased: r.readiness === "released",
+      taskCount: r.taskCount,
+      deliveryReadyCount: r.deliveryReadyCount,
+    }))
+  );
+
+  // Filter items by readiness or archived state
+  let items = evaluatedReleases;
+  if (readinessFilter === "archived") {
+    items = items.filter((r) => r.archived);
+  } else if (readinessFilter && readinessFilter !== "all") {
+    items = items.filter((r) => !r.archived && r.readiness === readinessFilter);
+  } else if (!includeArchived) {
+    items = items.filter((r) => !r.archived);
+  }
+
+  return NextResponse.json({ summary, items });
 }
 
 /**
- * Create a release. New releases are identified by a Jira Fix Version:
+ * Create a release. Identified by a Jira Fix Version:
  * { projectKey, jiraVersionId? , version, description?, targetLabel? }.
- *
- * - If jiraVersionId is provided, it must already exist in Jira.
- * - Otherwise a new Jira Fix Version is created (using the caller's personal
- *   token per ADR-002) and the returned id is stored as the release identity.
- * - Legacy label-based releases (targetLabel only, no projectKey) are still
- *   accepted for backward compatibility.
+ * Requires release.manage permission (REL-S07).
  */
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!can(session, "release.manage")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const body = (await req.json()) as {
     projectKey?: string;
@@ -160,6 +256,8 @@ export async function POST(req: Request) {
   // Resolve the Jira Fix Version identity.
   let jiraVersionId: string | null = null;
   let releaseDate: Date | null = null;
+  let isReleased = false;
+  let isArchived = false;
 
   if (projectKey) {
     const user = await prisma.user.findUnique({
@@ -188,6 +286,8 @@ export async function POST(req: Request) {
         }
         jiraVersionId = match.id;
         releaseDate = match.releaseDate ? new Date(match.releaseDate) : null;
+        isReleased = Boolean(match.released);
+        isArchived = Boolean(match.archived);
       } else {
         // No version given: create a new Fix Version in Jira.
         const created = await client.createVersion(projectKey, body.version, body.description);
@@ -199,6 +299,8 @@ export async function POST(req: Request) {
         }
         jiraVersionId = created.id;
         releaseDate = created.releaseDate ? new Date(created.releaseDate) : null;
+        isReleased = Boolean(created.released);
+        isArchived = Boolean(created.archived);
       }
     } catch (e) {
       const msg = e instanceof JiraRequestError ? e.message : (e as Error).message;
@@ -206,11 +308,9 @@ export async function POST(req: Request) {
     }
   }
 
-  // Persist. A Jira-version release is identified by (projectKey,
-  // jiraVersionId); a legacy label release is identified by targetLabel (no
-  // longer a Prisma unique field, so we locate the row first, then
-  // update-or-create).
+  const now = new Date();
   let release: Awaited<ReturnType<typeof prisma.release.findUniqueOrThrow>>;
+
   if (jiraVersionId) {
     const found = await prisma.release.findFirst({
       where: { projectKey, jiraVersionId },
@@ -220,6 +320,9 @@ export async function POST(req: Request) {
         where: { id: found.id },
         data: {
           version: body.version,
+          archived: isArchived,
+          status: isReleased ? "released" : "draft",
+          lastSyncedAt: now,
           ...(body.description !== undefined ? { description: body.description } : {}),
           ...(releaseDate ? { releaseDate } : {}),
         },
@@ -231,8 +334,12 @@ export async function POST(req: Request) {
           projectKey,
           jiraVersionId,
           description: body.description ?? "",
-          ...(releaseDate ? { releaseDate } : {}),
+          releaseDate,
+          archived: isArchived,
+          status: isReleased ? "released" : "draft",
+          releasedAt: isReleased ? (releaseDate ?? now) : null,
           createdById: userId,
+          lastSyncedAt: now,
           notes: body.notes ?? "",
         },
       });
@@ -257,7 +364,7 @@ export async function POST(req: Request) {
       });
     }
   } else {
-    // Legacy label-based release (no Jira Fix Version).
+    // Legacy label-based release
     const found = await prisma.release.findFirst({
       where: { targetLabel, jiraVersionId: null },
     });
@@ -284,7 +391,6 @@ export async function POST(req: Request) {
       });
     }
 
-    // Attach all cached issues carrying the target label.
     const issues = await prisma.issueCache.findMany({
       where: { labels: { has: targetLabel } },
       select: { jiraKey: true },
@@ -296,6 +402,15 @@ export async function POST(req: Request) {
       });
     }
   }
+
+  await audit({
+    actorId: userId,
+    actorEmail: session.user.email ?? null,
+    action: "release.create",
+    source: "web",
+    target: release.id,
+    after: { projectKey, version: body.version, jiraVersionId },
+  });
 
   return NextResponse.json({ release });
 }

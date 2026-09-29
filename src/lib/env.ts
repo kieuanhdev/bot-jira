@@ -45,6 +45,8 @@ export const env = {
   jiraSyncOverlapSeconds: int("JIRA_SYNC_OVERLAP_SECONDS", 300),
   // Cache freshness SLA surfaced by the Board and release gates.
   jiraFreshnessMinutes: int("JIRA_FRESHNESS_MINUTES", 5),
+  // Maximum Jira projects synced concurrently by one worker (bounded 1..4).
+  jiraPollConcurrency: Math.max(1, Math.min(4, int("JIRA_POLL_CONCURRENCY", 2))),
   // Board columns per project, matching the project's Jira board. Format:
   //   PROJECT_COLUMNS=EPM:Backlog|Selected for Development|In Progress|Waiting For Deploy|ToDo Test|Done,MR:...
   // Each entry is "KEY:col1|col2|...". Columns are raw workflow status names,

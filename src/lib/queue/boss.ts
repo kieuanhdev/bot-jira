@@ -5,7 +5,8 @@ import { runCheckBranches } from "./workers/check-branches";
 import { runAiScore } from "./workers/ai-score";
 import { runSentryImport } from "./workers/sentry-import";
 import { runStaleDetect } from "./workers/stale-detect";
-import { runPollJira, type PollJiraJobData } from "./workers/poll-jira";
+import { runPollJira, runPollJiraProject, type PollJiraJobData, type PollJiraProjectJobData, type JiraSyncSource } from "./workers/poll-jira";
+import { runPollJiraDispatch, type PollJiraDispatchJobData } from "./workers/poll-jira-dispatch";
 import { runBulkOperation } from "./workers/bulk-op";
 import { runProcessWebhook, type ProcessWebhookJobData } from "./workers/process-webhook";
 import { runDeliverNotifications } from "./workers/deliver-notifications";
@@ -19,6 +20,8 @@ const globalForBoss = globalThis as unknown as { boss?: PgBoss; bossStart?: Prom
 let watchTimer: ReturnType<typeof setInterval> | undefined;
 
 export const JOB_NAMES = [
+  "poll-jira-dispatch",
+  "poll-jira-project",
   "poll-jira",
   "poll-watched-issues",
   "check-branches",
@@ -125,15 +128,67 @@ async function recordRun(name: string, run: () => Promise<WorkerLog>): Promise<W
   }
 }
 
-export async function enqueueJiraSync(data: PollJiraJobData): Promise<string | null> {
+export async function enqueueJiraProjectSync(data: {
+  projectKey: string;
+  full?: boolean;
+  source?: JiraSyncSource;
+  requestedBy?: string;
+  requestedAt?: string;
+}): Promise<string | null> {
   const boss = await startBoss();
-  const key = data.projectKey?.toUpperCase() ?? "all";
-  return boss.send("poll-jira", data, {
-    singletonKey: key,
-    singletonSeconds: 30,
-    retryLimit: 3,
-    retryDelay: 15,
-    retryBackoff: true,
+  const normalizedKey = data.projectKey.trim().toUpperCase();
+  const source = data.source ?? (data.requestedBy ? "manual" : "schedule");
+  const priority = source === "manual" || source === "admin" ? 10 : source === "startup" ? 2 : 1;
+  const requestedAt = data.requestedAt ?? new Date().toISOString();
+
+  return boss.send(
+    "poll-jira-project",
+    {
+      projectKey: normalizedKey,
+      full: Boolean(data.full),
+      source,
+      requestedBy: data.requestedBy,
+      requestedAt,
+    },
+    {
+      singletonKey: normalizedKey,
+      singletonSeconds: 15,
+      priority,
+      retryLimit: 1,
+      retryDelay: 15,
+      expireInSeconds: 300,
+    }
+  );
+}
+
+export async function enqueueJiraDispatch(data: PollJiraDispatchJobData = {}): Promise<string | null> {
+  const boss = await startBoss();
+  const source = data.source ?? "schedule";
+  const priority = source === "admin" ? 5 : source === "startup" ? 2 : 1;
+  return boss.send("poll-jira-dispatch", data, {
+    singletonKey: "jira-dispatch",
+    singletonSeconds: 50,
+    priority,
+    retryLimit: 2,
+    retryDelay: 5,
+    expireInSeconds: 60,
+  });
+}
+
+export async function enqueueJiraSync(data: PollJiraJobData): Promise<string | null> {
+  if (data.projectKey) {
+    return enqueueJiraProjectSync({
+      projectKey: data.projectKey,
+      full: data.full,
+      source: data.source ?? (data.requestedBy ? "manual" : "schedule"),
+      requestedBy: data.requestedBy,
+      requestedAt: data.requestedAt,
+    });
+  }
+  return enqueueJiraDispatch({
+    full: data.full,
+    source: (data.source as "schedule" | "startup" | "admin" | undefined) ?? (data.requestedBy ? "admin" : "schedule"),
+    requestedBy: data.requestedBy,
   });
 }
 
@@ -197,6 +252,8 @@ export async function enqueueNotificationDelivery(startAfter?: Date): Promise<st
 }
 
 const QUEUE_EXPIRE_SECONDS: Record<string, number> = {
+  "poll-jira-dispatch": 60,
+  "poll-jira-project": 300,
   "poll-jira": 300,
   "poll-watched-issues": 30,
   "deliver-notifications": 60,
@@ -214,9 +271,14 @@ const QUEUE_EXPIRE_SECONDS: Record<string, number> = {
 /** Register schedules and consumers. Called only by the standalone worker. */
 export async function registerJobs(): Promise<PgBoss> {
   const boss = await startBoss();
+
+  await boss.createQueue("poll-jira-dispatch", { policy: "singleton" });
+  await boss.createQueue("poll-jira-project", { policy: "stately" });
   await boss.createQueue("poll-jira", { policy: "singleton" });
   await boss.createQueue("poll-watched-issues", { policy: "singleton" });
-  for (const name of JOB_NAMES.filter((item) => item !== "poll-jira" && item !== "poll-watched-issues")) {
+  for (const name of JOB_NAMES.filter(
+    (item) => item !== "poll-jira-dispatch" && item !== "poll-jira-project" && item !== "poll-jira" && item !== "poll-watched-issues"
+  )) {
     await boss.createQueue(name);
   }
   for (const name of JOB_NAMES) {
@@ -224,10 +286,14 @@ export async function registerJobs(): Promise<PgBoss> {
     await boss.updateQueue(name, { notify: true, expireInSeconds });
   }
 
-  await boss.schedule("poll-jira", pollCron(), null, { singletonSeconds: 55, expireInSeconds: 300, retryLimit: 3, retryDelay: 15, retryBackoff: true });
+  // Unschedule legacy all-projects poll-jira cron if present
+  await boss.unschedule("poll-jira").catch(() => null);
+  // Schedule dispatcher to fan out project sync jobs
+  await boss.schedule("poll-jira-dispatch", pollCron(), null, { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 2, retryDelay: 5 });
   await boss.schedule("check-branches", "*/5 * * * *", null, { singletonSeconds: 240, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 });
   await boss.schedule("parse-comment-branches", "*/5 * * * *", null, { singletonSeconds: 240, expireInSeconds: 120, retryLimit: 2, retryDelay: 30 });
-  await boss.schedule("poll-pr-comments", "*/2 * * * *", null, { singletonSeconds: 110, expireInSeconds: 180, retryLimit: 2, retryDelay: 30 });
+  // poll-pr-comments scans 80+ repos and takes ~10-15m; schedule every 15m to avoid queue bloat
+  await boss.schedule("poll-pr-comments", "*/15 * * * *", null, { singletonSeconds: 840, expireInSeconds: 900, retryLimit: 1, retryDelay: 30 });
   await boss.schedule("ai-score", "*/10 * * * *", null, { singletonSeconds: 540, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 });
   await boss.schedule("sentry-import", "*/5 * * * *", null, { singletonSeconds: 240, expireInSeconds: 120, retryLimit: 3, retryDelay: 30, retryBackoff: true });
   await boss.schedule("stale-detect", "*/30 * * * *", null, { singletonSeconds: 1740, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 });
@@ -235,12 +301,89 @@ export async function registerJobs(): Promise<PgBoss> {
   // OPS-03 — freshness/health alerting, deduped by the alert worker itself.
   await boss.schedule("health-alert", "*/5 * * * *", null, { singletonSeconds: 240, expireInSeconds: 120, retryLimit: 2, retryDelay: 30 });
 
-  await boss.work<PollJiraJobData>("poll-jira", async (jobs) => recordRun("poll-jira", () => runPollJira(jobs[0]?.data ?? {})));
+  await boss.work<PollJiraDispatchJobData>("poll-jira-dispatch", async (jobs) => {
+    const job = jobs[0];
+    return recordRun("poll-jira-dispatch", () => runPollJiraDispatch(job?.data ?? {}));
+  });
+
+  await boss.work<PollJiraProjectJobData>(
+    "poll-jira-project",
+    { localConcurrency: env.jiraPollConcurrency },
+    async (jobs) => {
+      const job = jobs[0];
+      const data = job?.data;
+      if (!data?.projectKey) {
+        throw new Error("Missing projectKey in poll-jira-project job");
+      }
+      const projectKey = data.projectKey.trim().toUpperCase();
+
+      // Anti-backlog safeguard: skip stale scheduled/startup jobs queued > 2m ago (manual jobs are not skipped)
+      const rawJob = job as unknown as { createdOn?: Date | string; created_on?: Date | string };
+      const createdTime = rawJob?.createdOn || rawJob?.created_on;
+      if (createdTime && data.source !== "manual") {
+        const ageMs = Date.now() - new Date(createdTime).getTime();
+        if (ageMs > 2 * 60_000) {
+          console.warn(
+            JSON.stringify({
+              level: "warn",
+              job: `poll-jira-project:${projectKey}`,
+              message: `Skipping stale scheduled poll-jira-project job for ${projectKey} (queued ${Math.round(ageMs / 1000)}s ago)`,
+            })
+          );
+          return { ok: true, skipped: true, reason: "Stale job skipped" };
+        }
+      }
+
+      return recordRun(`poll-jira-project:${projectKey}`, () => runPollJiraProject(data));
+    }
+  );
+
+  await boss.work<PollJiraJobData>("poll-jira", async (jobs) => {
+    const job = jobs[0];
+    const data = job?.data ?? {};
+    if (data.projectKey) {
+      return recordRun(`poll-jira-project:${data.projectKey.trim().toUpperCase()}`, () =>
+        runPollJiraProject({
+          projectKey: data.projectKey!,
+          full: Boolean(data.full),
+          source: data.source ?? (data.requestedBy ? "manual" : "schedule"),
+          requestedBy: data.requestedBy,
+          requestedAt: data.requestedAt ?? new Date().toISOString(),
+        })
+      );
+    }
+    return recordRun("poll-jira-dispatch", () =>
+      runPollJiraDispatch({
+        full: Boolean(data.full),
+        source: (data.source as "schedule" | "startup" | "admin" | undefined) ?? (data.requestedBy ? "admin" : "schedule"),
+        requestedBy: data.requestedBy,
+      })
+    );
+  });
+
   await boss.work("poll-watched-issues", { pollingIntervalSeconds: 0.5 },
     async () => recordRun("poll-watched-issues", runPollWatchedIssues));
   await boss.work("check-branches", async () => recordRun("check-branches", runCheckBranches));
   await boss.work("parse-comment-branches", async () => recordRun("parse-comment-branches", runParseCommentBranches));
-  await boss.work("poll-pr-comments", async () => recordRun("poll-pr-comments", runPollPrComments));
+  await boss.work("poll-pr-comments", async (jobs) => {
+    const job = jobs[0];
+    const rawJob = job as unknown as { createdOn?: Date | string; created_on?: Date | string };
+    const createdTime = rawJob?.createdOn || rawJob?.created_on;
+    if (createdTime) {
+      const ageMs = Date.now() - new Date(createdTime).getTime();
+      if (ageMs > 5 * 60_000) {
+        console.warn(
+          JSON.stringify({
+            level: "warn",
+            job: "poll-pr-comments",
+            message: `Skipping stale scheduled poll-pr-comments job (queued ${Math.round(ageMs / 1000)}s ago)`,
+          })
+        );
+        return { ok: true, skipped: true, reason: "Stale job skipped" };
+      }
+    }
+    return recordRun("poll-pr-comments", runPollPrComments);
+  });
   await boss.work("ai-score", async () => recordRun("ai-score", runAiScore));
   await boss.work("sentry-import", async () => recordRun("sentry-import", runSentryImport));
   await boss.work("stale-detect", async () => recordRun("stale-detect", runStaleDetect));
@@ -276,14 +419,20 @@ export async function registerJobs(): Promise<PgBoss> {
   });
   const pollWatches = () => boss.send("poll-watched-issues", {}, {
     singletonKey: "watched-issues",
-    singletonSeconds: 5,
+    singletonSeconds: 25,
     expireInSeconds: 30,
     retryLimit: 0,
   }).catch((error) => console.error("Watch sync enqueue failed", String(error)));
   await pollWatches();
   if (watchTimer) clearInterval(watchTimer);
-  watchTimer = setInterval(() => { void pollWatches(); }, 5000);
+  watchTimer = setInterval(() => { void pollWatches(); }, 30_000);
   watchTimer.unref();
+
+  // OPS: Immediately trigger fresh Jira dispatch on startup so all projects are reconciled
+  setTimeout(() => {
+    void enqueueJiraDispatch({ source: "startup", full: false }).catch(() => null);
+  }, 1000);
+
   return boss;
 }
 
