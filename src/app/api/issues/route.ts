@@ -25,18 +25,22 @@ export async function GET(req: Request) {
   });
   if (!user) return NextResponse.json({ error: "session_invalid" }, { status: 401 });
 
+  const userBoardProjects = user.boardProjects.map((p) => p.trim().toUpperCase());
+  const isAllowedProject = (k: string) =>
+    isKnownProject(k) || userBoardProjects.includes(k) || /^[A-Z][A-Z0-9_]{1,19}$/.test(k);
+
   const url = new URL(req.url);
   const project = (url.searchParams.get("project") ?? "").trim().toUpperCase();
   const requestedProjects = (url.searchParams.get("projectList") ?? "")
     .split(",")
     .map((value) => value.trim().toUpperCase())
-    .filter(isKnownProject);
-  const projects = project && isKnownProject(project)
+    .filter(isAllowedProject);
+  const projects = project && isAllowedProject(project)
     ? [project]
     : requestedProjects.length > 0
       ? requestedProjects
-      : user.boardProjects.length > 0
-        ? user.boardProjects.filter(isKnownProject)
+      : userBoardProjects.length > 0
+        ? userBoardProjects
         : jiraProjectList;
 
   const assigneeParam = (url.searchParams.get("assignee") ?? "me").trim();

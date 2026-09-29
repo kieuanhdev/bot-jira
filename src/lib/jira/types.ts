@@ -88,6 +88,29 @@ export type JiraProject = {
   id?: string;
 };
 
+export type JiraFieldDefinition = {
+  id: string;
+  name: string;
+  custom?: boolean;
+  schema?: {
+    type?: string;
+    system?: string;
+    custom?: string;
+    customId?: number;
+  };
+};
+
+export type JiraEditField = {
+  name: string;
+  required?: boolean;
+  operations?: string[];
+  schema?: JiraFieldDefinition["schema"];
+};
+
+export type JiraEditMeta = {
+  fields: Record<string, JiraEditField>;
+};
+
 /** A Jira Fix Version (release version) for a project. */
 export type JiraVersion = {
   id: string;

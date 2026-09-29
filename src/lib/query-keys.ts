@@ -105,4 +105,8 @@ export const branchesKeys = {
 export const bulkKeys = {
   /** `["bulk-op", <operationId>]`. */
   op: (id: string) => ["bulk-op", id] as const,
+  /** Existing Jira Fix Versions for the selected project scope. */
+  versions: (projects: string[]) => ["bulk-versions", [...projects].sort()] as const,
+  /** Available editable fields metadata for a project. */
+  fields: (project: string) => ["bulk-fields", project] as const,
 };

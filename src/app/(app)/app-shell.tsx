@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   LayoutGrid,
+  Trophy,
   Rocket,
   GitBranch,
   BarChart3,
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/board", label: "Bảng công việc", icon: LayoutGrid },
+  { href: "/leaderboard", label: "Bảng xếp hạng", icon: Trophy },
   { href: "/bulk", label: "Thao tác hàng loạt", icon: ListChecks },
   { href: "/release", label: "Phát hành", icon: Rocket },
   { href: "/branches", label: "Quản lý nhánh", icon: GitBranch },

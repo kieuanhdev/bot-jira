@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   description: "Internal task management web backed by Jira",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"

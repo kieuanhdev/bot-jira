@@ -54,7 +54,7 @@ export async function GET() {
   if (bbLinked && bbCreds && env.bitbucketBaseUrl && bitbucketRepoList[0]) {
     try {
       await bb.listBranches(bitbucketRepoList[0], bbCreds);
-      bbStatus = { ok: true, detail: bitbucketRepoList[0] };
+      bbStatus = { ok: true, detail: bbCreds.user };
     } catch (e) {
       bbStatus = { ok: false, detail: clean((e as Error).message) };
     }
@@ -66,5 +66,6 @@ export async function GET() {
     // System credentials may sync shared data, but are never a user fallback.
     syncAvailable: { jira: hasJiraConfig(), bitbucket: hasBitbucketConfig() },
     bitbucketRepo: bitbucketRepoList[0] ?? null,
+    bitbucketRepoCount: bitbucketRepoList.length,
   });
 }

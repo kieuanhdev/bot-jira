@@ -9,8 +9,11 @@ export async function POST(req: Request) {
 
   const body = (await req.json().catch(() => ({}))) as { projectKey?: string; full?: boolean };
   const projectKey = body.projectKey?.trim().toUpperCase();
-  if (projectKey && !isKnownProject(projectKey)) {
-    return NextResponse.json({ error: "unknown_project" }, { status: 400 });
+  if (projectKey) {
+    const isFormatValid = /^[A-Z][A-Z0-9_]{1,19}$/.test(projectKey);
+    if (!isKnownProject(projectKey) && !isFormatValid) {
+      return NextResponse.json({ error: "unknown_project" }, { status: 400 });
+    }
   }
   const full = Boolean(body.full && session.user.role === "admin");
   try {

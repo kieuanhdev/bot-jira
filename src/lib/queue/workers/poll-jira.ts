@@ -160,10 +160,10 @@ export async function runPollJira(data: PollJiraJobData = {}): Promise<WorkerLog
 
   const requestedProject = data.projectKey?.trim().toUpperCase();
   const projects = requestedProject
-    ? jiraProjectList.filter((key) => key === requestedProject)
+    ? [requestedProject]
     : jiraProjectList;
   if (projects.length === 0) {
-    return { ok: false, errors: [requestedProject ? `Unknown Jira project: ${requestedProject}` : "No Jira projects configured"] };
+    return { ok: false, errors: ["No Jira projects configured"] };
   }
 
   const results: ProjectStats[] = [];
@@ -187,5 +187,23 @@ export async function runPollJira(data: PollJiraJobData = {}): Promise<WorkerLog
     }),
     { projects: 0, created: 0, updated: 0, comments: 0, deleted: 0, issueErrors: 0 }
   );
-  return { ok: errors.length === 0, stats, errors: [...errors, ...results.flatMap((r) => r.errors)] };
+  const allErrors = [...errors, ...results.flatMap((r) => r.errors)];
+
+  // Partial failure resilience: if at least one project synced successfully,
+  // report ok so pg-boss does not retry the entire batch and enter a
+  // timeout→retry death spiral. The per-project errors are still recorded in
+  // the integration_cursor rows for health-alert to surface.
+  const totalProjects = projects.length;
+  const failedProjects = errors.length;
+  const allFailed = failedProjects >= totalProjects;
+
+  if (allFailed) {
+    return { ok: false, stats: { ...stats, failedProjects, totalProjects }, errors: allErrors };
+  }
+
+  return {
+    ok: true,
+    stats: { ...stats, failedProjects, totalProjects },
+    ...(allErrors.length > 0 ? { errors: allErrors } : {}),
+  };
 }

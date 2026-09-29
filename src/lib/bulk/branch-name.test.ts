@@ -235,6 +235,62 @@ describe("validateBulkRequest (BULK-004)", () => {
     if (r.ok) expect(r.action).toEqual({ kind: "set-points", value: null });
   });
 
+  it("validates estimate, worklog and due-date values", () => {
+    expect(validateBulkRequest({
+      keys: ["EPM-1"],
+      action: { kind: "set-estimate", value: "1d 4h" },
+    }).ok).toBe(true);
+    expect(validateBulkRequest({
+      keys: ["EPM-1"],
+      action: { kind: "set-estimate", value: "tomorrow" },
+    }).ok).toBe(false);
+
+    const worklog = validateBulkRequest({
+      keys: ["EPM-1"],
+      action: { kind: "log-work", value: { timeSpent: "2h 30m", started: "2026-09-29", comment: "Review" } },
+    });
+    expect(worklog.ok).toBe(true);
+    expect(validateBulkRequest({
+      keys: ["EPM-1"],
+      action: { kind: "log-work", value: { timeSpent: "2 hours", started: "2026-02-30" } },
+    }).ok).toBe(false);
+
+    expect(validateBulkRequest({
+      keys: ["EPM-1"],
+      action: { kind: "set-due-date", value: "2026-10-15" },
+    }).ok).toBe(true);
+    expect(validateBulkRequest({
+      keys: ["EPM-1"],
+      action: { kind: "set-due-date", value: null },
+    }).ok).toBe(true);
+  });
+
+  it("validates a multi-field project update", () => {
+    const result = validateBulkRequest({
+      keys: ["EPM-1", "EPM-2"],
+      action: {
+        kind: "update-fields",
+        value: {
+          assignee: "dev_user",
+          labels: ["frontend", "release-1.4"],
+          priority: "High",
+          points: 5,
+          dueDate: "2026-10-15",
+          fixVersions: ["1.4.0", "1.5.0"],
+        },
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.action.kind).toBe("update-fields");
+  });
+
+  it("rejects an empty multi-field project update", () => {
+    expect(validateBulkRequest({
+      keys: ["EPM-1"],
+      action: { kind: "update-fields", value: {} },
+    }).ok).toBe(false);
+  });
+
   it("requires a non-empty comment", () => {
     expect(validateBulkRequest({ keys: ["EPM-1"], action: { kind: "add-comment", value: "   " } }).ok).toBe(false);
   });

@@ -15,7 +15,9 @@ export async function GET() {
   });
   if (!user) return NextResponse.json({ error: "session_invalid" }, { status: 401 });
 
-  const selected = user.boardProjects.filter(isKnownProject);
+  const selected = user.boardProjects
+    .map((k) => k.trim().toUpperCase())
+    .filter((k) => isKnownProject(k) || /^[A-Z][A-Z0-9_]{1,19}$/.test(k));
   const projects = selected.length > 0 ? selected : jiraProjectList;
   const jiraUsername = userJiraUsername(user);
   const jiraUserAliases = jiraUsernameAliases(jiraUsername);

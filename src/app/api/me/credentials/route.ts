@@ -204,7 +204,7 @@ export async function verifyCreds(user: {
     try {
       await bb.listBranches(firstRepo, bbCreds);
       bbResult.ok = true;
-      bbResult.detail = firstRepo;
+      bbResult.detail = bbCreds.user;
     } catch (e) {
       bbResult.detail = cleanError((e as Error).message);
     }

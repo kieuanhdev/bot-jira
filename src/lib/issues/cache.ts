@@ -1,7 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { env } from "@/lib/env";
-import { parseJiraDate } from "@/lib/jira/client";
+import { jiraPointsFromFields, parseJiraDate } from "@/lib/jira/client";
 import type { JiraComment, JiraIssue } from "@/lib/jira/types";
 import { jiraIssueFields } from "@/lib/jira/client";
 import { notifyWatchersOfIssueChange } from "@/lib/issues/notify-watchers";
@@ -18,9 +17,7 @@ function descriptionText(value: unknown): string {
 
 export function issueCacheData(issue: JiraIssue) {
   const f = issue.fields;
-  const rawPoints = env.jiraPointsFieldId ? f[env.jiraPointsFieldId] : undefined;
-  const points =
-    rawPoints != null && Number.isFinite(Number(rawPoints)) ? Number(rawPoints) : null;
+  const { points, fieldId: storyField } = jiraPointsFromFields(f);
   const fixVersions = f.fixVersions ?? [];
 
   return {
@@ -36,6 +33,7 @@ export function issueCacheData(issue: JiraIssue) {
     fixVersionNames: fixVersions.flatMap((v) => (v.name ? [v.name] : [])),
     priority: f.priority?.name ?? "",
     points,
+    storyField,
     type: f.issuetype?.name ?? "",
     dueDate: parseJiraDate(f.duedate as string | undefined) ?? null,
     timeSpent: typeof f.timespent === "number" ? f.timespent : null,

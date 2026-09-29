@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { runPollPrComments } from "./poll-pr-comments";
+import { runPollPrComments, isPrCandidate } from "./poll-pr-comments";
 import { prisma } from "@/lib/prisma";
 import { bitbucket, type BbPullRequest, type BbPrActivity } from "@/lib/bitbucket/client";
 import { notifyPrComment } from "@/lib/bitbucket/notify-pr-comment";
@@ -27,6 +27,9 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: vi.fn(),
       upsert: vi.fn(),
     },
+    user: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   },
 }));
 
@@ -45,6 +48,43 @@ vi.mock("@/lib/bitbucket/notify-pr-comment", () => ({
   notifyPrComment: vi.fn().mockResolvedValue({ notifiedCount: 1, targetUserIds: ["user-1"] }),
 }));
 
+describe("isPrCandidate", () => {
+  it("always includes OPEN pull requests", () => {
+    const pr = { id: 1, state: "OPEN" } as BbPullRequest;
+    expect(isPrCandidate(pr, new Set(["user1"]))).toBe(true);
+  });
+
+  it("includes MERGED PRs if author matches registered user tokens", () => {
+    const pr = {
+      id: 2,
+      state: "MERGED",
+      author: { user: { name: "anhnk_mb" } },
+      updatedDate: Date.now() - 1000 * 3600,
+    } as unknown as BbPullRequest;
+    expect(isPrCandidate(pr, new Set(["anhnk_mb"]))).toBe(true);
+  });
+
+  it("excludes MERGED PRs if no matching user tokens", () => {
+    const pr = {
+      id: 3,
+      state: "MERGED",
+      author: { user: { name: "other_user" } },
+      updatedDate: Date.now() - 1000 * 3600,
+    } as unknown as BbPullRequest;
+    expect(isPrCandidate(pr, new Set(["anhnk_mb"]))).toBe(false);
+  });
+
+  it("excludes ancient MERGED PRs older than 180 days", () => {
+    const pr = {
+      id: 4,
+      state: "MERGED",
+      author: { user: { name: "anhnk_mb" } },
+      updatedDate: Date.now() - 200 * 24 * 3600 * 1000,
+    } as unknown as BbPullRequest;
+    expect(isPrCandidate(pr, new Set(["anhnk_mb"]))).toBe(false);
+  });
+});
+
 describe("runPollPrComments", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -54,7 +94,7 @@ describe("runPollPrComments", () => {
   it("skips notifications on initial run and sets baseline cursor", async () => {
     vi.mocked(bitbucket.repos).mockReturnValue(["EPM/easy_pos"]);
     vi.mocked(prisma.integrationCursor.findUnique).mockResolvedValue(null);
-    const mockPr = { id: 10, title: "Test PR", fromRef: { branch: "feat/1" } } satisfies BbPullRequest;
+    const mockPr = { id: 10, title: "Test PR", state: "OPEN", fromRef: { branch: "feat/1" } } satisfies BbPullRequest;
     vi.mocked(bitbucket.listPullRequests).mockResolvedValue([mockPr]);
     vi.mocked(bitbucket.listOpenPullRequests).mockResolvedValue([mockPr]);
     vi.mocked(bitbucket.listPullRequestActivities).mockResolvedValue([
@@ -81,31 +121,33 @@ describe("runPollPrComments", () => {
     });
   });
 
-  it("notifies for comments newer than the existing cursor", async () => {
+  it("notifies for comments newer than the existing cursor on OPEN and MERGED PRs", async () => {
     vi.mocked(bitbucket.repos).mockReturnValue(["EPM/easy_pos"]);
     vi.mocked(prisma.integrationCursor.findUnique).mockResolvedValue(cursorRow("10000"));
-    const mockPr = { id: 10, title: "Test PR", fromRef: { branch: "feat/1" } } satisfies BbPullRequest;
-    vi.mocked(bitbucket.listPullRequests).mockResolvedValue([mockPr]);
-    vi.mocked(bitbucket.listOpenPullRequests).mockResolvedValue([mockPr]);
+    vi.mocked(prisma.user.findMany).mockResolvedValue([
+      { id: "u1", jiraUsername: "anhnk_mb", email: "anhnk@intern.vn", bitbucketUserEnc: null },
+    ] as any);
+
+    const mergedPr = {
+      id: 21,
+      title: "fix EPM-3291",
+      state: "MERGED",
+      author: { user: { name: "anhnk_mb" } },
+      updatedDate: 8000, // merged long ago, older than cursor
+      fromRef: { branch: "feat/payment" },
+    } as unknown as BbPullRequest;
+
+    vi.mocked(bitbucket.listPullRequests).mockResolvedValue([mergedPr]);
+    vi.mocked(bitbucket.listOpenPullRequests).mockResolvedValue([mergedPr]);
     vi.mocked(bitbucket.listPullRequestActivities).mockResolvedValue([
-      {
-        id: 100,
-        action: "COMMENTED",
-        comment: {
-          id: 501,
-          text: "Old comment",
-          createdDate: 9000,
-          author: { name: "someone" },
-        },
-      } satisfies BbPrActivity,
       {
         id: 101,
         action: "COMMENTED",
         comment: {
-          id: 502,
-          text: "Brand new comment",
+          id: 352967,
+          text: ".",
           createdDate: 12000,
-          author: { name: "someone_else" },
+          author: { name: "duclm" },
         },
       } satisfies BbPrActivity,
     ]);
@@ -116,8 +158,8 @@ describe("runPollPrComments", () => {
     expect(notifyPrComment).toHaveBeenCalledTimes(1);
     expect(notifyPrComment).toHaveBeenCalledWith({
       repo: "EPM/easy_pos",
-      pr: expect.objectContaining({ id: 10 }),
-      comment: expect.objectContaining({ id: 502, text: "Brand new comment" }),
+      pr: expect.objectContaining({ id: 21 }),
+      comment: expect.objectContaining({ id: 352967, text: "." }),
     });
 
     expect(prisma.integrationCursor.upsert).toHaveBeenCalledWith({

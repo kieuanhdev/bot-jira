@@ -169,8 +169,8 @@ Xem đầy đủ + mô tả trong [`.env.example`](.env.example).
 xác nhận các mục sau và cập nhật `.env`:
 
 1. **Jira DC** — `JIRA_BASE_URL` + token đủ quyền **read/write** (update issue, transition, create issue).
-   `JIRA_PROJECT_KEY` = key dự án. **`JIRA_POINTS_FIELD_ID`** = id custom field story-points
-   (ví dụ `customfield_10016`) — cần để ghi points/AI điểm về Jira; để trống = không ghi points.
+   `JIRA_PROJECT_KEY` = key dự án. Ứng dụng tự dò field **Story Points/Task Points** có thể sửa
+   theo metadata từng task; `JIRA_POINTS_FIELD_ID` chỉ là field ưu tiên/fallback khi Jira không trả metadata.
 2. **Bitbucket Server DC** — version (5/6/7) ảnh hưởng endpoint. Code dùng `/rest/api/1.0/...`
    (branches, pull-requests). Nếu version khác thì sửa `src/lib/bitbucket/client.ts`.
  3. **LLM API (cty cấp)** — đặt `OPENAI_BASE_URL` + `OPENAI_API_KEY` + `OPENAI_MODEL` cho

@@ -35,10 +35,11 @@ export const env = {
   jiraProjectKeys: str("JIRA_PROJECT_KEYS", "CICM,EDM,EMA,EPM,ETM,MHRM,MR"),
   // Optional extra JQL filter applied to the default poll query.
   jiraJqlExtra: str("JIRA_JQL_EXTRA"),
-  // Jira custom field id used to store story points, e.g. "customfield_10016".
+  // Optional preferred/fallback points field. Normal writes resolve Story/Task Points
+  // from each issue's Jira edit metadata so projects may use different field ids.
   jiraPointsFieldId: str("JIRA_POINTS_FIELD_ID"),
   // Timeout for one Jira HTTP request.
-  jiraRequestTimeoutMs: int("JIRA_REQUEST_TIMEOUT_MS", 15000),
+  jiraRequestTimeoutMs: int("JIRA_REQUEST_TIMEOUT_MS", 60000),
   // Incremental sync overlaps its previous cursor to avoid losing updates that
   // share a timestamp or arrive while a page is being processed.
   jiraSyncOverlapSeconds: int("JIRA_SYNC_OVERLAP_SECONDS", 300),
@@ -193,10 +194,14 @@ export const bitbucketRepoList: string[] = env.bitbucketRepos
   .filter(Boolean);
 
 /** Jira project keys (mobile projects) to sync + show, in display order. */
-export const jiraProjectList: string[] = env.jiraProjectKeys
-  .split(",")
-  .map((s) => s.trim().toUpperCase())
-  .filter(Boolean);
+export const jiraProjectList: string[] = Array.from(
+  new Set(
+    env.jiraProjectKeys
+      .split(",")
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean)
+  )
+);
 
 /**
  * Manually configured board columns per project (matching the project's Jira

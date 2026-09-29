@@ -21,6 +21,7 @@ type Integrations = {
   bitbucket: { linked: boolean; status: Status; verifiedAt: string | null };
   syncAvailable: { jira: boolean; bitbucket: boolean };
   bitbucketRepo: string | null;
+  bitbucketRepoCount?: number;
 };
 
 type SaveResult = {
@@ -107,7 +108,7 @@ export function MyIntegrations() {
       const b = result.verify.bitbucket;
       const parts: string[] = [];
       parts.push(j.ok ? `Jira ✓ (${j.detail})` : `Jira ✗ ${j.detail ?? "chưa liên kết"}`);
-      if (b.detail) parts.push(b.ok ? `Bitbucket ✓` : `Bitbucket ✗ ${b.detail}`);
+      if (b.detail) parts.push(b.ok ? `Bitbucket ✓ (${b.detail})` : `Bitbucket ✗ ${b.detail}`);
       setSaveMsg({
         ok: j.ok && (!result.bitbucketLinked || b.ok),
         text: parts.join(" · "),
@@ -247,12 +248,16 @@ export function MyIntegrations() {
               />
             </div>
           </div>
-          {!data?.bitbucketRepo && (
+          {!data?.bitbucketRepo ? (
             <p className="text-xs text-muted-foreground">
               Bitbucket chưa được cấu hình trên máy chủ — token của bạn sẽ được lưu nhưng
               chưa thể xác minh cho đến khi quản trị viên cấu hình <code>BITBUCKET_BASE_URL</code> và kho lưu trữ.
             </p>
-          )}
+          ) : data.bitbucketRepoCount ? (
+            <p className="text-xs text-muted-foreground">
+              Hệ thống đang cấu hình đồng bộ <strong>{data.bitbucketRepoCount} repositories</strong>.
+            </p>
+          ) : null}
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}

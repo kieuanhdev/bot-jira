@@ -9,6 +9,8 @@ import type {
   JiraProjectStatus,
   JiraCommentPage,
   JiraVersion,
+  JiraFieldDefinition,
+  JiraEditMeta,
 } from "./types";
 
 const BASE_ISSUE_FIELDS = [
@@ -27,10 +29,55 @@ const BASE_ISSUE_FIELDS = [
   "updated",
   "duedate",
   "timespent",
+  "timeoriginalestimate",
+  "timeestimate",
+  "timetracking",
 ];
 
+const POINT_FIELD_NAMES = new Set(["story points", "task points"]);
+let knownPointFields: JiraFieldDefinition[] = [];
+
+function isPointField(field: Pick<JiraFieldDefinition, "name" | "schema">): boolean {
+  return POINT_FIELD_NAMES.has(field.name.trim().toLowerCase()) && field.schema?.type === "number";
+}
+
+function configuredPointField(): JiraFieldDefinition[] {
+  return env.jiraPointsFieldId
+    ? [{ id: env.jiraPointsFieldId, name: "Configured points", custom: true, schema: { type: "number" } }]
+    : [];
+}
+
+function rememberPointFields(fields: JiraFieldDefinition[]): JiraFieldDefinition[] {
+  knownPointFields = fields.filter(isPointField);
+  return knownPointFields;
+}
+
+function knownPointFieldIds(): string[] {
+  return [...configuredPointField(), ...knownPointFields].map((field) => field.id);
+}
+
 export function jiraIssueFields(): string {
-  return [...BASE_ISSUE_FIELDS, env.jiraPointsFieldId].filter(Boolean).join(",");
+  return [...BASE_ISSUE_FIELDS, ...knownPointFieldIds()]
+    .filter(Boolean)
+    .filter((field, index, fields) => fields.indexOf(field) === index)
+    .join(",");
+}
+
+/** Extract the active points value and field id from a Jira issue payload. */
+export function jiraPointsFromFields(fields: Record<string, unknown>): {
+  points: number | null;
+  fieldId: string | null;
+} {
+  const candidates = [...configuredPointField(), ...knownPointFields].filter(
+    (field, index, all) => all.findIndex((candidate) => candidate.id === field.id) === index
+  );
+  for (const field of candidates) {
+    const raw = fields[field.id];
+    if (raw != null && Number.isFinite(Number(raw))) {
+      return { points: Number(raw), fieldId: field.id };
+    }
+  }
+  return { points: null, fieldId: candidates[0]?.id ?? null };
 }
 
 export class JiraRequestError extends Error {
@@ -163,7 +210,7 @@ export async function probeJiraAuth(userAuth: JiraAuth | null): Promise<boolean>
   }
 }
 
-async function request<T>(
+async function requestOnce<T>(
   path: string,
   init: RequestInit = {},
   auth?: JiraAuth
@@ -222,14 +269,59 @@ async function request<T>(
   }
 }
 
+const MAX_RETRIES = 2;
+const RETRY_BASE_MS = 2000;
+
+/**
+ * Jira HTTP request with automatic retry for retryable errors (timeouts,
+ * 429 rate-limit, 5xx server errors). Retries up to MAX_RETRIES times with
+ * exponential backoff (2s → 4s) to absorb transient Jira slowdowns without
+ * failing entire poll-jira jobs.
+ */
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  auth?: JiraAuth
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await requestOnce<T>(path, init, auth);
+    } catch (error) {
+      lastError = error;
+      const isRetryable = error instanceof JiraRequestError && error.retryable;
+      if (!isRetryable || attempt >= MAX_RETRIES) break;
+      const delayMs = RETRY_BASE_MS * 2 ** attempt;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastError;
+}
+
 /**
  * Build a scoped Jira client that uses the explicitly supplied auth,
  * or dynamically falls back to the system/configured user auth.
  */
 export function jiraWith(auth?: JiraAuth) {
+  let pointFieldsPromise: Promise<JiraFieldDefinition[]> | null = null;
+  const getPointFields = async (): Promise<JiraFieldDefinition[]> => {
+    if (knownPointFields.length > 0) return knownPointFields;
+    if (!pointFieldsPromise) {
+      pointFieldsPromise = request<JiraFieldDefinition[]>("/rest/api/2/field", {}, auth)
+        .then(rememberPointFields)
+        .catch((error) => {
+          pointFieldsPromise = null;
+          if (env.jiraPointsFieldId) return configuredPointField();
+          throw error;
+        });
+    }
+    return pointFieldsPromise;
+  };
+
   return {
     me: () => request<JiraUser>("/rest/api/2/myself", {}, auth),
-    search: (jql: string, maxResults = 50, startAt = 0) => {
+    search: async (jql: string, maxResults = 50, startAt = 0) => {
+      await getPointFields().catch(() => configuredPointField());
       const params = new URLSearchParams({
         jql,
         fields: jiraIssueFields(),
@@ -238,11 +330,27 @@ export function jiraWith(auth?: JiraAuth) {
       });
       return request<JiraSearchResult>(`/rest/api/2/search?${params}`, {}, auth);
     },
-    getIssue: (key: string, extraFields?: string) => {
+    getIssue: async (key: string, extraFields?: string) => {
       const fields = new URLSearchParams();
-      if (extraFields) fields.set("fields", extraFields);
+      if (extraFields) {
+        await getPointFields().catch(() => configuredPointField());
+        const requested = [...extraFields.split(","), ...knownPointFieldIds()]
+          .filter(Boolean)
+          .filter((field, index, all) => all.indexOf(field) === index);
+        fields.set("fields", requested.join(","));
+      }
       const qs = fields.toString();
       return request<JiraIssue>(`/rest/api/2/issue/${encodeURIComponent(key)}${qs ? `?${qs}` : ""}`, {}, auth);
+    },
+    getEditMeta: (key: string) =>
+      request<JiraEditMeta>(`/rest/api/2/issue/${encodeURIComponent(key)}/editmeta`, {}, auth),
+    getFields: getPointFields,
+    resolvePointsField: async (key: string): Promise<JiraFieldDefinition | null> => {
+      const meta = await request<JiraEditMeta>(`/rest/api/2/issue/${encodeURIComponent(key)}/editmeta`, {}, auth);
+      const editable = Object.entries(meta.fields ?? {})
+        .map(([id, field]) => ({ id, name: field.name, schema: field.schema }))
+        .filter(isPointField);
+      return editable.find((field) => field.id === env.jiraPointsFieldId) ?? editable[0] ?? null;
     },
     getCommentsPage: (key: string, startAt = 0, maxResults = 100) =>
       request<JiraCommentPage>(
@@ -308,7 +416,7 @@ export function jiraWith(auth?: JiraAuth) {
       );
       return match?.id ?? null;
     },
-    updateIssue: (
+    updateIssue: async (
       key: string,
       patch: {
         summary?: string;
@@ -318,6 +426,8 @@ export function jiraWith(auth?: JiraAuth) {
         priority?: string;
         points?: number | null;
         fixVersions?: string[];
+        dueDate?: string | null;
+        originalEstimate?: string;
       }
     ) => {
       const fields: Record<string, unknown> = {};
@@ -327,17 +437,52 @@ export function jiraWith(auth?: JiraAuth) {
         fields.assignee = patch.assignee === null ? null : { name: patch.assignee };
       if (patch.labels !== undefined) fields.labels = patch.labels;
       if (patch.priority !== undefined) fields.priority = { name: patch.priority };
-      if (patch.points !== undefined && env.jiraPointsFieldId) {
-        fields[env.jiraPointsFieldId] = patch.points;
+      if (patch.points !== undefined) {
+        const pointField = await (async () => {
+          const meta = await request<JiraEditMeta>(
+            `/rest/api/2/issue/${encodeURIComponent(key)}/editmeta`,
+            {},
+            auth
+          );
+          const editable = Object.entries(meta.fields ?? {})
+            .map(([id, field]) => ({ id, name: field.name, schema: field.schema }))
+            .filter(isPointField);
+          return editable.find((field) => field.id === env.jiraPointsFieldId) ?? editable[0] ?? null;
+        })();
+        if (!pointField) {
+          throw new JiraRequestError("Jira issue has no editable Story Points/Task Points field", 400, false);
+        }
+        fields[pointField.id] = patch.points;
       }
       if (patch.fixVersions !== undefined)
         fields.fixVersions = patch.fixVersions.map((id) => ({ id }));
+      if (patch.dueDate !== undefined) fields.duedate = patch.dueDate;
+      if (patch.originalEstimate !== undefined) {
+        fields.timetracking = { originalEstimate: patch.originalEstimate };
+      }
       if (Object.keys(fields).length === 0) return undefined as unknown as void;
       return request(`/rest/api/2/issue/${encodeURIComponent(key)}`, {
         method: "PUT",
         body: JSON.stringify({ fields }),
       }, auth);
     },
+    addWorklog: (
+      key: string,
+      data: { timeSpent: string; started?: string; comment?: string },
+      adjustEstimate: "auto" | "leave" = "auto"
+    ) =>
+      request(
+        `/rest/api/2/issue/${encodeURIComponent(key)}/worklog?adjustEstimate=${adjustEstimate}`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            timeSpent: data.timeSpent,
+            ...(data.started ? { started: data.started } : {}),
+            ...(data.comment ? { comment: data.comment } : {}),
+          }),
+        },
+        auth
+      ),
     createIssue: (data: {
       projectKey: string;
       summary: string;
@@ -368,6 +513,8 @@ export function jiraWith(auth?: JiraAuth) {
       );
     },
     getProjects: () => request<JiraProject[]>("/rest/api/2/project", {}, auth),
+    getProject: (projectKey: string) =>
+      request<JiraProject>(`/rest/api/2/project/${encodeURIComponent(projectKey)}`, {}, auth),
     /**
      * The project's workflow: each issue type with its statuses in workflow
      * order (the order an issue moves through them). Backed by Jira REST v2

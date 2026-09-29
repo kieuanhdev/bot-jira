@@ -7,6 +7,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: { issueCache: { findUnique: mocks.cache
 vi.mock("@/lib/jira/client", () => ({
   jiraWith: () => ({ getIssue: mocks.issue, getComments: mocks.comments }),
   jiraIssueFields: () => "status,updated",
+  jiraPointsFromFields: () => ({ points: null, fieldId: null }),
   parseJiraDate: (value?: string) => value ? new Date(value) : null,
 }));
 vi.mock("@/lib/issues/cache", () => ({ upsertJiraIssue: mocks.upsert, upsertJiraComments: mocks.cacheComments }));

@@ -29,11 +29,25 @@ import { audit } from "@/lib/audit";
 
 export type DependencyScope = "none" | "direct" | "recursive";
 
+export type BulkFieldValues = {
+  assignee?: string | null;
+  labels?: string[];
+  priority?: string;
+  points?: number | null;
+  estimate?: string;
+  dueDate?: string | null;
+  fixVersions?: string[];
+};
+
 export type BulkAction =
+  | { kind: "update-fields"; value: BulkFieldValues }
   | { kind: "assign"; value: string | null }
   | { kind: "add-labels"; value: string[] }
   | { kind: "remove-labels"; value: string[] }
   | { kind: "set-points"; value: number | null }
+  | { kind: "set-estimate"; value: string }
+  | { kind: "log-work"; value: { timeSpent: string; started?: string; comment?: string } }
+  | { kind: "set-due-date"; value: string | null }
   | { kind: "set-priority"; value: string }
   | { kind: "transition"; value: string }
   | { kind: "add-fix-version"; value: string; dependencyScope?: DependencyScope }
@@ -69,15 +83,22 @@ type IssueRow = {
   fixVersionNames: string[];
   priority: string;
   points: number | null;
+  dueDate?: Date | null;
+  originalEstimateSeconds?: number | null;
+  timeSpentSeconds?: number | null;
   updatedAt: Date | null;
   lastSyncedAt: Date;
 };
 
 type ActionParams = {
+  fields?: BulkFieldValues;
   assignee?: string | null;
   labels?: string[];
   priority?: string;
   points?: number | null;
+  estimate?: string;
+  worklog?: { timeSpent: string; started?: string; comment?: string };
+  dueDate?: string | null;
   status?: string;
   fixVersion?: string;
   comment?: string;
@@ -86,6 +107,8 @@ type ActionParams = {
 
 export function actionParams(action: BulkAction): ActionParams {
   switch (action.kind) {
+    case "update-fields":
+      return { fields: action.value };
     case "assign":
       return { assignee: action.value };
     case "add-labels":
@@ -93,6 +116,12 @@ export function actionParams(action: BulkAction): ActionParams {
       return { labels: action.value };
     case "set-points":
       return { points: action.value };
+    case "set-estimate":
+      return { estimate: action.value };
+    case "log-work":
+      return { worklog: action.value };
+    case "set-due-date":
+      return { dueDate: action.value };
     case "set-priority":
       return { priority: action.value };
     case "transition":
@@ -117,10 +146,14 @@ export function actionParams(action: BulkAction): ActionParams {
 // ---------------------------------------------------------------------------
 
 const KNOWN_ACTION_KINDS = [
+  "update-fields",
   "assign",
   "add-labels",
   "remove-labels",
   "set-points",
+  "set-estimate",
+  "log-work",
+  "set-due-date",
   "set-priority",
   "transition",
   "add-fix-version",
@@ -134,6 +167,15 @@ const MAX_LABEL_LENGTH = 100;
 const MAX_COMMENT_LENGTH = 4000;
 const MAX_STRING_FIELD = 200;
 const MAX_BRANCH_TEMPLATE_LENGTH = 100;
+const MAX_WORKLOG_COMMENT_LENGTH = 4000;
+const JIRA_DURATION_RE = /^(?=.*\d)(?:\d+(?:w|d|h|m)\s*)+$/i;
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidIsoDate(value: string): boolean {
+  if (!ISO_DATE_RE.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
 
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.trim().length > 0;
@@ -179,6 +221,53 @@ export function validateBulkRequest(body: unknown): ValidationResult {
       errors.push(`unknown action kind: ${String(kind)}`);
     } else {
       switch (kind) {
+        case "update-fields": {
+          const v = rawAction.value;
+          if (!isPlainObject(v)) {
+            errors.push("update-fields.value must be an object");
+            break;
+          }
+          const projectKeys = new Set(uniqueKeys.map((k) => k.split("-")[0]));
+          if (projectKeys.size > 1) {
+            errors.push("all keys must belong to the same project");
+          }
+          const fields: BulkFieldValues = {};
+          if ("assignee" in v) {
+            if (v.assignee === null || (isNonEmptyString(v.assignee) && v.assignee.length <= MAX_STRING_FIELD)) fields.assignee = v.assignee as string | null;
+            else errors.push("update-fields.value.assignee must be a string or null");
+          }
+          if ("labels" in v) {
+            if (Array.isArray(v.labels) && v.labels.every((item) => typeof item === "string")) {
+              const values = Array.from(new Set(v.labels.map((item) => item.trim()).filter(Boolean)));
+              if (values.length > MAX_LABELS_PER_ACTION) errors.push("update-fields.value.labels has too many values");
+              else if (values.some((item) => item.length > MAX_LABEL_LENGTH)) errors.push("label too long");
+              else fields.labels = values;
+            } else errors.push("update-fields.value.labels must be an array of strings");
+          }
+          if ("priority" in v) {
+            if (isNonEmptyString(v.priority) && v.priority.length <= MAX_STRING_FIELD) fields.priority = v.priority.trim();
+            else errors.push("update-fields.value.priority must be a non-empty string");
+          }
+          if ("points" in v) {
+            if (v.points === null || (typeof v.points === "number" && Number.isInteger(v.points) && v.points >= 0)) fields.points = v.points as number | null;
+            else errors.push("update-fields.value.points must be a non-negative integer or null");
+          }
+          if ("estimate" in v) {
+            if (isNonEmptyString(v.estimate) && JIRA_DURATION_RE.test(v.estimate.trim())) fields.estimate = v.estimate.trim();
+            else errors.push("update-fields.value.estimate must be a Jira duration");
+          }
+          if ("dueDate" in v) {
+            if (v.dueDate === null || (typeof v.dueDate === "string" && isValidIsoDate(v.dueDate))) fields.dueDate = v.dueDate as string | null;
+            else errors.push("update-fields.value.dueDate must be an ISO date or null");
+          }
+          if ("fixVersions" in v) {
+            if (Array.isArray(v.fixVersions) && v.fixVersions.every((item) => isNonEmptyString(item))) fields.fixVersions = Array.from(new Set(v.fixVersions.map((item) => item.trim())));
+            else errors.push("update-fields.value.fixVersions must be an array of strings");
+          }
+          if (Object.keys(fields).length === 0) errors.push("update-fields.value must contain at least one field");
+          action = { kind, value: fields };
+          break;
+        }
         case "assign":
           if (rawAction.value == null || isNonEmptyString(rawAction.value)) {
             const v = rawAction.value as string | null;
@@ -214,6 +303,46 @@ export function validateBulkRequest(body: unknown): ValidationResult {
           } else {
             errors.push("set-points.value must be a non-negative integer or null");
           }
+          break;
+        }
+        case "set-estimate": {
+          const v = rawAction.value;
+          if (isNonEmptyString(v) && JIRA_DURATION_RE.test(v.trim())) {
+            action = { kind, value: v.trim() };
+          } else {
+            errors.push("set-estimate.value must be a Jira duration such as 2h or 1d 4h");
+          }
+          break;
+        }
+        case "set-due-date": {
+          const v = rawAction.value;
+          if (v === null || (typeof v === "string" && isValidIsoDate(v))) {
+            action = { kind, value: v };
+          } else {
+            errors.push("set-due-date.value must be an ISO date (YYYY-MM-DD) or null");
+          }
+          break;
+        }
+        case "log-work": {
+          const v = rawAction.value;
+          if (!isPlainObject(v) || !isNonEmptyString(v.timeSpent) || !JIRA_DURATION_RE.test(v.timeSpent.trim())) {
+            errors.push("log-work.value.timeSpent must be a Jira duration such as 30m or 2h");
+            break;
+          }
+          if (v.started !== undefined && (typeof v.started !== "string" || !isValidIsoDate(v.started))) {
+            errors.push("log-work.value.started must be an ISO date (YYYY-MM-DD)");
+          }
+          if (v.comment !== undefined && (typeof v.comment !== "string" || v.comment.length > MAX_WORKLOG_COMMENT_LENGTH)) {
+            errors.push("log-work.value.comment is invalid or too long");
+          }
+          action = {
+            kind,
+            value: {
+              timeSpent: v.timeSpent.trim(),
+              ...(typeof v.started === "string" ? { started: v.started } : {}),
+              ...(typeof v.comment === "string" && v.comment.trim() ? { comment: v.comment.trim() } : {}),
+            },
+          };
           break;
         }
         case "set-priority":
@@ -328,6 +457,8 @@ export type PreviewItem = {
   transitionName: string | null;
   transitionError: TransitionErrorKind | null;
   branchName: string | null;
+  targetField: { id: string; name: string } | null;
+  targetVersionId: string | null;
   exists: boolean; // for create-branches: branch already present
   relation?: "explicit" | "dependency";
   depth?: number;
@@ -394,10 +525,29 @@ export type PreviewClassification = "will_change" | "no_change" | "blocked" | "u
 export function classifyAction(
   action: BulkAction,
   issue: IssueRow,
-  ctx: { transitionName?: string | null; branchName?: string | null; branchExists?: boolean }
+  ctx: { transitionName?: string | null; branchName?: string | null; branchExists?: boolean; fieldAvailable?: boolean }
 ): PreviewClassification {
   const p = actionParams(action);
   switch (action.kind) {
+    case "update-fields": {
+      if (ctx.fieldAvailable === false) return "blocked";
+      const fields = action.value;
+      const unchanged =
+        (fields.assignee === undefined || fields.assignee === issue.assigneeJira) &&
+        (fields.labels === undefined || (
+          fields.labels.length === issue.labels.length &&
+          fields.labels.slice().sort().join(",") === issue.labels.slice().sort().join(",")
+        )) &&
+        (fields.priority === undefined || fields.priority === issue.priority) &&
+        (fields.points === undefined || fields.points === issue.points) &&
+        (fields.dueDate === undefined || fields.dueDate === (issue.dueDate?.toISOString().slice(0, 10) ?? null)) &&
+        (fields.estimate === undefined) &&
+        (fields.fixVersions === undefined || (
+          fields.fixVersions.length === issue.fixVersionNames.length &&
+          fields.fixVersions.slice().sort().join(",") === issue.fixVersionNames.slice().sort().join(",")
+        ));
+      return unchanged ? "no_change" : "will_change";
+    }
     case "assign":
       return (p.assignee ?? null) === issue.assigneeJira ? "no_change" : "will_change";
     case "add-labels":
@@ -405,7 +555,17 @@ export function classifyAction(
     case "remove-labels":
       return (p.labels ?? []).some((l) => issue.labels.includes(l)) ? "will_change" : "no_change";
     case "set-points":
+      if (ctx.fieldAvailable === false) return "blocked";
       return (p.points ?? null) === issue.points ? "no_change" : "will_change";
+    case "set-estimate":
+      return ctx.fieldAvailable === false ? "blocked" : "will_change";
+    case "log-work":
+      return "will_change";
+    case "set-due-date": {
+      if (ctx.fieldAvailable === false) return "blocked";
+      const current = issue.dueDate?.toISOString().slice(0, 10) ?? null;
+      return current === (p.dueDate ?? null) ? "no_change" : "will_change";
+    }
     case "set-priority":
       return p.priority === issue.priority ? "no_change" : "will_change";
     case "transition":
@@ -413,9 +573,11 @@ export function classifyAction(
       return p.status?.toLowerCase() === issue.status.toLowerCase() ? "no_change" : "will_change";
     case "add-fix-version":
       if (!p.fixVersion || issue.fixVersionNames.includes(p.fixVersion)) return "no_change";
+      if (ctx.fieldAvailable === false) return "blocked";
       return "will_change";
     case "remove-fix-version":
       if (!p.fixVersion || !issue.fixVersionNames.includes(p.fixVersion)) return "no_change";
+      if (ctx.fieldAvailable === false) return "blocked";
       return "will_change";
     case "add-comment":
       return "will_change";
@@ -434,7 +596,7 @@ export function classifyAction(
 export function computePreview(
   action: BulkAction,
   issue: IssueRow,
-  ctx: { transitionName?: string | null; branchName?: string | null; branchExists?: boolean }
+  ctx: { transitionName?: string | null; branchName?: string | null; branchExists?: boolean; fieldAvailable?: boolean }
 ): {
   before: Record<string, unknown>;
   after: Record<string, unknown>;
@@ -447,6 +609,9 @@ export function computePreview(
     labels: issue.labels,
     priority: issue.priority,
     points: issue.points,
+    estimateSeconds: issue.originalEstimateSeconds,
+    worklogSeconds: issue.timeSpentSeconds,
+    dueDate: issue.dueDate?.toISOString().slice(0, 10) ?? null,
     fixVersions: issue.fixVersionNames,
   };
   const after: Record<string, unknown> = { ...before };
@@ -455,6 +620,17 @@ export function computePreview(
 
   const p = actionParams(action);
   switch (action.kind) {
+    case "update-fields": {
+      const fields = action.value;
+      if (fields.assignee !== undefined) after.assignee = fields.assignee;
+      if (fields.labels !== undefined) after.labels = fields.labels;
+      if (fields.priority !== undefined) after.priority = fields.priority;
+      if (fields.points !== undefined) after.points = fields.points;
+      if (fields.estimate !== undefined) after.estimateSeconds = fields.estimate;
+      if (fields.dueDate !== undefined) after.dueDate = fields.dueDate;
+      if (fields.fixVersions !== undefined) after.fixVersions = fields.fixVersions;
+      break;
+    }
     case "assign":
       after.assignee = p.assignee;
       break;
@@ -468,6 +644,15 @@ export function computePreview(
     }
     case "set-points":
       after.points = p.points;
+      break;
+    case "set-estimate":
+      after.estimateSeconds = p.estimate;
+      break;
+    case "log-work":
+      after.worklog = p.worklog;
+      break;
+    case "set-due-date":
+      after.dueDate = p.dueDate;
       break;
     case "set-priority":
       after.priority = p.priority;
@@ -503,6 +688,9 @@ export function computePreview(
  */
 type TransitionGetter = {
   getTransitions: (key: string) => Promise<{ to?: { name?: string } }[]>;
+  getEditMeta?: (key: string) => Promise<{ fields: Record<string, { name: string }> }>;
+  resolvePointsField?: (key: string) => Promise<{ id: string; name: string } | null>;
+  resolveVersionId?: (projectKey: string, name: string) => Promise<string | null>;
 };
 
 export async function previewBulk(
@@ -558,6 +746,10 @@ export async function previewBulk(
     where: { jiraKey: { in: allTargetKeys }, deletedAt: null },
   });
   const byKey = new Map(issues.map((i) => [i.jiraKey, i]));
+  if (action.kind === "update-fields") {
+    const projects = new Set(issues.map((issue) => issue.projectKey));
+    if (projects.size > 1) throw new Error("bulk_field_update_requires_single_project");
+  }
 
   const items: (PreviewItem & { skipReason: string | null })[] = [];
   let actionable = 0;
@@ -588,6 +780,8 @@ export async function previewBulk(
         transitionName: null,
         transitionError: null,
         branchName: null,
+        targetField: null,
+        targetVersionId: null,
         exists: false,
         skipReason: "not_in_cache",
         relation: target.relation,
@@ -604,6 +798,110 @@ export async function previewBulk(
     let transitionError: TransitionErrorKind | null = null;
     let branchName: string | null = null;
     let branchExists: boolean | undefined;
+    let targetField: { id: string; name: string } | null = null;
+    let targetVersionId: string | null = null;
+    let fieldAvailable: boolean | undefined;
+    let fieldWarning: string | null = null;
+    let fieldSkipReason: string | null = null;
+
+    if (action.kind === "update-fields") {
+      const { value } = action;
+      if (value.points !== undefined) {
+        try {
+          targetField = (await jira.resolvePointsField?.(key)) ?? null;
+          if (!targetField) {
+            fieldAvailable = false;
+            fieldSkipReason = "field_unavailable";
+          }
+        } catch {
+          fieldAvailable = false;
+          fieldWarning = "field_metadata_unavailable";
+          fieldSkipReason = "field_unavailable";
+        }
+      }
+
+      if (
+        fieldAvailable !== false &&
+        jira.getEditMeta &&
+        (value.estimate !== undefined || value.dueDate !== undefined || value.fixVersions !== undefined)
+      ) {
+        try {
+          const meta = await jira.getEditMeta(key);
+          if (value.estimate !== undefined && !meta.fields?.timetracking) {
+            fieldAvailable = false;
+            fieldSkipReason = "field_unavailable";
+          }
+          if (value.dueDate !== undefined && !meta.fields?.duedate) {
+            fieldAvailable = false;
+            fieldSkipReason = "field_unavailable";
+          }
+          if (value.fixVersions !== undefined) {
+            if (!meta.fields?.fixVersions) {
+              fieldAvailable = false;
+              fieldSkipReason = "field_unavailable";
+            } else if (jira.resolveVersionId && value.fixVersions.length > 0) {
+              const ids = await Promise.all(
+                value.fixVersions.map((v) => jira.resolveVersionId!(issue.projectKey, v))
+              );
+              if (ids.some((id) => id == null)) {
+                fieldAvailable = false;
+                fieldSkipReason = "version_not_found";
+              }
+            }
+          }
+        } catch {
+          fieldAvailable = false;
+          fieldWarning = "field_metadata_unavailable";
+          fieldSkipReason = "field_unavailable";
+        }
+      }
+    }
+
+    if (action.kind === "set-points") {
+      try {
+        targetField = await jira.resolvePointsField?.(key) ?? null;
+        fieldAvailable = targetField != null;
+      } catch {
+        fieldAvailable = false;
+        fieldWarning = "field_metadata_unavailable";
+      }
+    }
+
+    if (action.kind === "set-estimate" || action.kind === "set-due-date") {
+      try {
+        const meta = await jira.getEditMeta?.(key);
+        const fieldId = action.kind === "set-estimate" ? "timetracking" : "duedate";
+        const field = meta?.fields?.[fieldId];
+        targetField = field ? { id: fieldId, name: field.name } : null;
+        fieldAvailable = targetField != null;
+      } catch {
+        fieldAvailable = false;
+        fieldWarning = "field_metadata_unavailable";
+      }
+    }
+
+    if (
+      (action.kind === "add-fix-version" || action.kind === "remove-fix-version") &&
+      jira.getEditMeta &&
+      jira.resolveVersionId
+    ) {
+      try {
+        const [meta, versionId] = await Promise.all([
+          jira.getEditMeta(key),
+          jira.resolveVersionId(issue.projectKey, action.value),
+        ]);
+        const field = meta.fields?.fixVersions;
+        targetField = field ? { id: "fixVersions", name: field.name } : null;
+        targetVersionId = versionId;
+        fieldAvailable = Boolean(field && versionId);
+        if (!field) fieldSkipReason = "field_unavailable";
+        else if (!versionId) fieldSkipReason = "version_not_found";
+      } catch {
+        fieldAvailable = false;
+        fieldWarning = "field_metadata_unavailable";
+        fieldSkipReason = "version_unverified";
+      }
+    }
 
     if (action.kind === "transition") {
       try {
@@ -641,19 +939,25 @@ export async function previewBulk(
       fixVersionNames: issue.fixVersionNames,
       priority: issue.priority,
       points: issue.points,
+      dueDate: issue.dueDate,
+      originalEstimateSeconds:
+        typeof (issue.raw as Record<string, unknown> | null)?.timeoriginalestimate === "number"
+          ? Number((issue.raw as Record<string, unknown>).timeoriginalestimate)
+          : null,
+      timeSpentSeconds: issue.timeSpent,
       updatedAt: issue.updatedAt,
       lastSyncedAt: issue.lastSyncedAt,
     };
-    const ctx = { transitionName, branchName, branchExists };
+    const ctx = { transitionName, branchName, branchExists, fieldAvailable };
     const preview = computePreview(action, issueRow, ctx);
 
     // BULK-005/009 — no-op and blocked/unverified items are skipped, not run.
     let skipReason: string | null = null;
-    let warning = preview.warning;
+    let warning = fieldWarning ?? preview.warning;
 
     if (preview.classification === "no_change") skipReason = "no_change";
     else if (preview.classification === "blocked")
-      skipReason = transitionError ?? "no_transition";
+      skipReason = fieldSkipReason ?? (fieldAvailable === false ? "field_unavailable" : transitionError ?? "no_transition");
     else if (preview.classification === "unverified") skipReason = "unverified";
 
     // Dependency specific rules (DEP-06, DEP-07, DEP-08)
@@ -703,6 +1007,8 @@ export async function previewBulk(
       transitionName,
       transitionError,
       branchName,
+      targetField,
+      targetVersionId,
       exists: branchExists === true,
       skipReason,
       relation: target.relation,
@@ -734,6 +1040,8 @@ export async function previewBulk(
         transitionName: item.transitionName,
         transitionError: item.transitionError,
         branchName: item.branchName,
+        targetField: item.targetField,
+        targetVersionId: item.targetVersionId,
         warning: item.warning,
         skipReason: item.skipReason,
         relation: item.relation,
@@ -851,6 +1159,31 @@ async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
 
   try {
     switch (a.kind) {
+      case "update-fields": {
+        const issue = await getIssue(jira, key);
+        const patch: {
+          assignee?: string | null; labels?: string[]; priority?: string; points?: number | null;
+          fixVersions?: string[]; dueDate?: string | null; originalEstimate?: string;
+        } = {};
+        if (a.value.assignee !== undefined) patch.assignee = a.value.assignee;
+        if (a.value.labels !== undefined) patch.labels = a.value.labels;
+        if (a.value.priority !== undefined) patch.priority = a.value.priority;
+        if (a.value.points !== undefined) patch.points = a.value.points;
+        if (a.value.dueDate !== undefined) patch.dueDate = a.value.dueDate;
+        if (a.value.estimate !== undefined) patch.originalEstimate = a.value.estimate;
+        if (a.value.fixVersions !== undefined) {
+          const projectKey = issue.fields.project?.key ?? key.split("-")[0] ?? "";
+          if (a.value.fixVersions.length === 0) {
+            patch.fixVersions = [];
+          } else {
+            const ids = await Promise.all(a.value.fixVersions.map((name) => jira.resolveVersionId(projectKey, name)));
+            if (ids.some((id) => id == null)) return { status: "failed", error: "One or more Fix Versions do not exist in this project", retryable: false };
+            patch.fixVersions = ids.filter((id): id is string => id != null);
+          }
+        }
+        await jira.updateIssue(key, patch);
+        break;
+      }
       case "assign": {
         await jira.updateIssue(key, { assignee: a.value });
         break;
@@ -869,10 +1202,38 @@ async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
         break;
       }
       case "set-points": {
-        if (!env.jiraPointsFieldId) {
-          return { status: "failed", error: "JIRA_POINTS_FIELD_ID not configured", retryable: false };
-        }
         await jira.updateIssue(key, { points: a.value });
+        break;
+      }
+      case "set-estimate": {
+        const meta = await jira.getEditMeta(key);
+        if (!meta.fields?.timetracking) {
+          return {
+            status: "failed",
+            error: "Time Tracking is not editable for this Jira issue. Add it to the issue edit screen.",
+            retryable: false,
+          };
+        }
+        await jira.updateIssue(key, { originalEstimate: a.value });
+        break;
+      }
+      case "log-work": {
+        const started = a.value.started
+          ? `${a.value.started}T09:00:00.000+0000`
+          : undefined;
+        await jira.addWorklog(
+          key,
+          { timeSpent: a.value.timeSpent, started, comment: a.value.comment },
+          "leave"
+        );
+        break;
+      }
+      case "set-due-date": {
+        const meta = await jira.getEditMeta(key);
+        if (!meta.fields?.duedate) {
+          return { status: "failed", error: "Due Date is not editable for this Jira issue", retryable: false };
+        }
+        await jira.updateIssue(key, { dueDate: a.value });
         break;
       }
       case "set-priority": {

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Loader2, Check } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -32,6 +33,11 @@ export function SetupJiraClient({ step, availableProjects, initialProjects }: Pr
 
   // Step: projects
   const [selected, setSelected] = useState<Set<string>>(new Set(initialProjects));
+  const [customProjects, setCustomProjects] = useState<string[]>([]);
+  const [newKey, setNewKey] = useState("");
+  const [validating, setValidating] = useState(false);
+  const [validateError, setValidateError] = useState<string | null>(null);
+  const [validateSuccess, setValidateSuccess] = useState<string | null>(null);
   const [savingProjects, setSavingProjects] = useState(false);
 
   async function connect(e: React.FormEvent) {
@@ -67,6 +73,38 @@ export function SetupJiraClient({ step, availableProjects, initialProjects }: Pr
     } catch {
       setError("Lỗi kết nối mạng");
       setBusy(false);
+    }
+  }
+
+  const allProjects = Array.from(new Set([...availableProjects, ...customProjects]));
+
+  async function handleAddProject(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    const key = newKey.trim().toUpperCase();
+    if (!key) return;
+    setValidating(true);
+    setValidateError(null);
+    setValidateSuccess(null);
+    try {
+      const res = await fetch("/api/projects/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string; project?: { key: string; name: string } };
+      if (!res.ok || !data.ok || !data.project) {
+        setValidateError(data.error ?? "Dự án không tồn tại trên Jira.");
+        return;
+      }
+      const verifiedKey = data.project.key;
+      setCustomProjects((prev) => (prev.includes(verifiedKey) ? prev : [...prev, verifiedKey]));
+      setSelected((prev) => new Set([...prev, verifiedKey]));
+      setValidateSuccess(`Đã tìm thấy dự án: ${data.project.name} (${verifiedKey})`);
+      setNewKey("");
+    } catch {
+      setValidateError("Lỗi kết nối khi kiểm tra dự án trên Jira.");
+    } finally {
+      setValidating(false);
     }
   }
 
@@ -146,21 +184,77 @@ export function SetupJiraClient({ step, availableProjects, initialProjects }: Pr
   // step === "projects"
   return (
     <div className="flex flex-col gap-4">
-      {availableProjects.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Không có dự án nào được cấu hình trên máy chủ.</p>
+      {allProjects.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Chưa có dự án nào. Vui lòng nhập mã dự án bên dưới.</p>
       ) : (
-        <div className="flex flex-col gap-1">
-          {availableProjects.map((p) => (
+        <div className="flex max-h-56 flex-col gap-1 overflow-y-auto pr-1">
+          {allProjects.map((p) => (
             <label
               key={p}
-              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors hover:bg-accent"
+              className="flex cursor-pointer items-center justify-between rounded-md px-2.5 py-2 text-sm transition-colors hover:bg-accent"
             >
-              <Checkbox checked={selected.has(p)} onCheckedChange={() => toggle(p)} />
-              <span>{p}</span>
+              <div className="flex items-center gap-2.5">
+                <Checkbox checked={selected.has(p)} onCheckedChange={() => toggle(p)} />
+                <span className="font-medium">{p}</span>
+              </div>
+              {customProjects.includes(p) && (
+                <span className="rounded bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-teal-600 dark:text-teal-400">
+                  Mới thêm
+                </span>
+              )}
             </label>
           ))}
         </div>
       )}
+
+      {/* Input to enter custom project */}
+      <div className="rounded-lg border border-border bg-muted/30 p-3">
+        <Label className="mb-1.5 block text-xs font-semibold text-foreground">
+          Nhập dự án muốn có (chưa có trong danh sách)
+        </Label>
+        <div className="flex gap-2">
+          <Input
+            value={newKey}
+            onChange={(e) => {
+              setNewKey(e.target.value.toUpperCase());
+              setValidateError(null);
+              setValidateSuccess(null);
+            }}
+            placeholder="VD: PROJ, MOBILE..."
+            className="h-9 font-mono text-xs uppercase"
+            disabled={validating}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void handleAddProject();
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={validating || !newKey.trim()}
+            onClick={() => void handleAddProject()}
+            className="h-9 shrink-0 cursor-pointer gap-1.5"
+          >
+            {validating ? (
+              <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            Kiểm tra
+          </Button>
+        </div>
+        {validateError && <p className="mt-2 text-xs font-medium text-destructive">{validateError}</p>}
+        {validateSuccess && (
+          <p className="mt-2 flex items-center gap-1 text-xs font-medium text-teal-600 dark:text-teal-400">
+            <Check className="h-3.5 w-3.5" />
+            {validateSuccess}
+          </p>
+        )}
+      </div>
+
       <p className="text-xs text-muted-foreground">
         {selected.size === 0
           ? "Chưa chọn dự án nào — bảng công việc sẽ trống cho đến khi bạn chọn."

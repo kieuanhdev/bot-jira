@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { jiraIssueFields, jiraWith, parseJiraDate } from "@/lib/jira/client";
+import { jiraIssueFields, jiraPointsFromFields, jiraWith, parseJiraDate } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
-import { env } from "@/lib/env";
 import type { JiraIssue } from "@/lib/jira/types";
 import { upsertJiraComments, upsertJiraIssue } from "@/lib/issues/cache";
 import { notifyWatchersOfIssueChange } from "@/lib/issues/notify-watchers";
@@ -86,9 +85,7 @@ export async function fetchLiveIssue(
       client.getComments(key),
     ]);
     const f = issueRes.fields;
-    const rawPoints = env.jiraPointsFieldId ? f[env.jiraPointsFieldId] : undefined;
-    const points =
-      rawPoints != null && Number.isFinite(Number(rawPoints)) ? Number(rawPoints) : null;
+    const { points } = jiraPointsFromFields(f);
     return {
       rawIssue: issueRes,
       summary: f.summary ?? "",

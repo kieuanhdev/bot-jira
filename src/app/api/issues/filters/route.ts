@@ -26,13 +26,17 @@ export async function GET(req: Request) {
     .map((s) => s.trim().toUpperCase())
     .filter(isKnownProject);
 
+  const userBoardProjects = (user?.boardProjects ?? []).map((p) => p.trim().toUpperCase());
+  const isAllowedProject = (k: string) =>
+    isKnownProject(k) || userBoardProjects.includes(k) || /^[A-Z][A-Z0-9_]{1,19}$/.test(k);
+
   let projects: string[];
-  if (project && isKnownProject(project)) {
+  if (project && isAllowedProject(project)) {
     projects = [project];
   } else if (projectList.length > 0) {
-    projects = projectList;
+    projects = projectList.filter(isAllowedProject);
   } else {
-    const selected = (user?.boardProjects ?? []).filter(isKnownProject);
+    const selected = userBoardProjects.filter(isAllowedProject);
     projects = selected.length > 0 ? selected : jiraProjectList;
   }
 

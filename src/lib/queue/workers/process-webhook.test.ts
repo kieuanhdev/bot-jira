@@ -63,6 +63,7 @@ vi.mock("@/lib/bitbucket/notify-pr-comment", () => ({
 
 vi.mock("@/lib/jira/client", () => ({
   jiraIssueFields: vi.fn(() => "summary,status,updated"),
+  jiraPointsFromFields: () => ({ points: null, fieldId: null }),
   parseJiraDate: vi.fn((value?: string) => value ? new Date(value) : null),
   jira: {
     getIssue: vi.fn().mockResolvedValue({

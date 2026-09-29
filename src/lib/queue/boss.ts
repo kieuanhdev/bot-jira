@@ -197,7 +197,7 @@ export async function enqueueNotificationDelivery(startAfter?: Date): Promise<st
 }
 
 const QUEUE_EXPIRE_SECONDS: Record<string, number> = {
-  "poll-jira": 120,
+  "poll-jira": 300,
   "poll-watched-issues": 30,
   "deliver-notifications": 60,
   "check-branches": 300,
@@ -224,7 +224,7 @@ export async function registerJobs(): Promise<PgBoss> {
     await boss.updateQueue(name, { notify: true, expireInSeconds });
   }
 
-  await boss.schedule("poll-jira", pollCron(), null, { singletonSeconds: 55, expireInSeconds: 120, retryLimit: 3, retryDelay: 15, retryBackoff: true });
+  await boss.schedule("poll-jira", pollCron(), null, { singletonSeconds: 55, expireInSeconds: 300, retryLimit: 3, retryDelay: 15, retryBackoff: true });
   await boss.schedule("check-branches", "*/5 * * * *", null, { singletonSeconds: 240, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 });
   await boss.schedule("parse-comment-branches", "*/5 * * * *", null, { singletonSeconds: 240, expireInSeconds: 120, retryLimit: 2, retryDelay: 30 });
   await boss.schedule("poll-pr-comments", "*/2 * * * *", null, { singletonSeconds: 110, expireInSeconds: 180, retryLimit: 2, retryDelay: 30 });

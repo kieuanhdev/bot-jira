@@ -24,6 +24,7 @@ import { issuesKeys, boardKeys, meKeys, transitionsKeys, branchesForKeys } from 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -125,7 +126,10 @@ function sortIssues(items: IssueItem[], mode: SortMode): IssueItem[] {
     arr.sort((a, b) => {
       const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
       const tb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-      return tb - ta;
+      if (tb !== ta) return tb - ta;
+      const ra = PRIORITY_RANK[a.priority] ?? 9;
+      const rb = PRIORITY_RANK[b.priority] ?? 9;
+      return ra - rb;
     });
   } else {
     arr.sort((a, b) => daysSince(b.updatedAt) - daysSince(a.updatedAt));
@@ -844,6 +848,9 @@ export function BoardClient() {
   const availableKeys = useMemo(() => prefs?.available ?? [], [prefs?.available]);
 
   const [project, setProject] = useState<string>("");
+  const [boardNewKey, setBoardNewKey] = useState("");
+  const [boardValidating, setBoardValidating] = useState(false);
+  const [boardValidateError, setBoardValidateError] = useState<string | null>(null);
 
   const savePrefs = useCallback(async (next: string[]) => {
     await api("/api/me/preferences", { method: "PUT", body: { projects: next } });
@@ -871,7 +878,7 @@ export function BoardClient() {
   const projectList = useMemo(
     () =>
       effectivePreferred
-        .filter((k) => availableKeys.includes(k))
+        .filter((k) => availableKeys.includes(k) || effectivePreferred.includes(k))
         .map((k) => ({ key: k, openCount: countMap.get(k) ?? 0 })),
     [effectivePreferred, countMap, availableKeys]
   );
@@ -882,12 +889,14 @@ export function BoardClient() {
 
   function openPicker() {
     setPickerSelection(effectivePreferred);
+    setBoardValidateError(null);
     setShowPicker(true);
   }
 
   function closePicker() {
     setShowPicker(false);
     setPickerSelection(null);
+    setBoardValidateError(null);
   }
 
   function commitPicker() {
@@ -901,12 +910,46 @@ export function BoardClient() {
       return base.includes(key) ? base.filter((k) => k !== key) : [...base, key];
     });
   }
+
+  async function handleAddProjectToBoard() {
+    const key = boardNewKey.trim().toUpperCase();
+    if (!key) return;
+    setBoardValidating(true);
+    setBoardValidateError(null);
+    try {
+      const res = await api<{ ok: boolean; error?: string; project?: { key: string; name: string } }>(
+        "/api/projects/validate",
+        { method: "POST", body: { key } }
+      );
+      if (!res.ok || !res.project) {
+        setBoardValidateError(res.error ?? "Dự án không tồn tại trên Jira.");
+        return;
+      }
+      const verifiedKey = res.project.key;
+      const nextProjects = Array.from(new Set([...effectivePreferred, verifiedKey]));
+      await savePrefs(nextProjects);
+      setProject(verifiedKey);
+      setBoardNewKey("");
+      closePicker();
+      setToast(`Đã thêm dự án ${res.project.name} (${verifiedKey}) và bắt đầu đồng bộ.`);
+      // Enqueue sync immediately
+      try {
+        await api("/api/sync/jira", { method: "POST", body: { projectKey: verifiedKey } });
+      } catch {
+        // queue failed or already queued
+      }
+    } catch (err: unknown) {
+      setBoardValidateError((err as Error).message || "Lỗi kiểm tra dự án trên Jira.");
+    } finally {
+      setBoardValidating(false);
+    }
+  }
   const [view, setView] = useState<ViewMode>("board");
   const [q, setQ] = useState("");
   const [label, setLabel] = useState("");
   const [priority, setPriority] = useState("");
   const [assignee, setAssignee] = useState<string>("me");
-  const [sortMode, setSortMode] = useState<SortMode>("priority");
+  const [sortMode, setSortMode] = useState<SortMode>("updated");
   const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set());
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQ, setPaletteQ] = useState("");
@@ -1648,17 +1691,61 @@ export function BoardClient() {
 
   if (effectivePreferred.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
           <ListFilter className="h-6 w-6 text-muted-foreground" />
         </div>
-        <p className="text-sm font-medium">No projects selected</p>
+        <p className="text-sm font-medium">Chưa chọn dự án nào</p>
         <p className="max-w-xs text-xs text-muted-foreground">
-          Choose which Jira projects to show on your board to get started.
+          Chọn các dự án Jira muốn hiển thị trên bảng, hoặc nhập mã dự án bên dưới để bắt đầu.
         </p>
-        <Button variant="outline" size="sm" onClick={() => setShowPicker(true)}>
-          <ListFilter className="h-4 w-4" /> Choose projects
-        </Button>
+
+        {/* Input trực tiếp trên Empty state */}
+        <div className="mt-2 flex w-full max-w-xs flex-col gap-2 rounded-lg border border-border bg-card p-3 shadow-xs">
+          <Label className="text-left text-xs font-semibold text-foreground">
+            Nhập mã dự án Jira muốn có
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              value={boardNewKey}
+              onChange={(e) => {
+                setBoardNewKey(e.target.value.toUpperCase());
+                setBoardValidateError(null);
+              }}
+              placeholder="VD: ABC, MOBILE..."
+              className="h-8 font-mono text-xs uppercase"
+              disabled={boardValidating}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleAddProjectToBoard();
+                }
+              }}
+            />
+            <Button
+              size="sm"
+              disabled={boardValidating || !boardNewKey.trim()}
+              onClick={() => void handleAddProjectToBoard()}
+              className="h-8 shrink-0 cursor-pointer text-xs gap-1.5"
+            >
+              {boardValidating ? (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+              ) : (
+                <Plus className="h-3.5 w-3.5" />
+              )}
+              Kiểm tra & Thêm
+            </Button>
+          </div>
+          {boardValidateError && (
+            <p className="text-left text-xs font-medium text-destructive">{boardValidateError}</p>
+          )}
+        </div>
+
+        {availableKeys.length > 0 && (
+          <Button variant="outline" size="sm" onClick={() => setShowPicker(true)} className="cursor-pointer gap-1.5">
+            <ListFilter className="h-4 w-4" /> Chọn từ danh sách có sẵn
+          </Button>
+        )}
       </div>
     );
   }
@@ -1709,34 +1796,77 @@ export function BoardClient() {
               }
             >
               <ListFilter className="h-4 w-4" />
-              {effectivePreferred.length > 0 ? `${effectivePreferred.length} selected` : "Choose projects"}
+              {effectivePreferred.length > 0 ? `${effectivePreferred.length} đã chọn` : "Chọn dự án"}
             </button>
             {showPicker && (
-              <Card className="absolute left-0 top-full z-20 mt-1 w-56 p-3 shadow-lg">
-                <p className="mb-2 text-xs font-medium text-muted-foreground">
-                  Show these projects on your board
+              <Card className="absolute left-0 top-full z-20 mt-1 w-72 p-3 shadow-lg">
+                <p className="mb-2 text-xs font-semibold text-muted-foreground">
+                  Hiển thị dự án trên bảng
                 </p>
-                <div className="flex max-h-64 flex-col gap-1 overflow-auto">
+                <div className="flex max-h-56 flex-col gap-1 overflow-auto">
                   {availableKeys.map((key) => (
                     <label
                       key={key}
                       className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
                     >
                       <Checkbox checked={pickerSet.has(key)} onCheckedChange={() => togglePicker(key)} />
-                      <span className="flex-1">{key}</span>
+                      <span className="flex-1 font-medium">{key}</span>
                       <span className="text-xs text-muted-foreground">{countMap.get(key) ?? 0}</span>
                     </label>
                   ))}
                 </div>
-                <div className="mt-2 flex items-center justify-between border-t pt-2">
+
+                {/* Nhập dự án muốn có */}
+                <div className="mt-2.5 border-t border-border pt-2.5">
+                  <p className="mb-1 text-[11px] font-semibold text-muted-foreground">
+                    Nhập dự án muốn có
+                  </p>
+                  <div className="flex gap-1.5">
+                    <Input
+                      value={boardNewKey}
+                      onChange={(e) => {
+                        setBoardNewKey(e.target.value.toUpperCase());
+                        setBoardValidateError(null);
+                      }}
+                      placeholder="Mã dự án (VD: ABC)"
+                      className="h-8 font-mono text-xs uppercase"
+                      disabled={boardValidating}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void handleAddProjectToBoard();
+                        }
+                      }}
+                    />
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={boardValidating || !boardNewKey.trim()}
+                      onClick={() => void handleAddProjectToBoard()}
+                      className="h-8 shrink-0 cursor-pointer px-2.5 text-xs gap-1"
+                    >
+                      {boardValidating ? (
+                        <RefreshCw className="h-3 w-3 animate-spin motion-reduce:animate-none" />
+                      ) : (
+                        <Plus className="h-3 w-3" />
+                      )}
+                      Thêm
+                    </Button>
+                  </div>
+                  {boardValidateError && (
+                    <p className="mt-1 text-[11px] font-medium text-destructive">{boardValidateError}</p>
+                  )}
+                </div>
+
+                <div className="mt-2.5 flex items-center justify-between border-t border-border pt-2">
                   <button
                     onClick={() => setPickerSelection(availableKeys)}
-                    className="text-xs text-muted-foreground underline underline-offset-2"
+                    className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
                   >
-                    Show all
+                    Chọn tất cả
                   </button>
                   <Button size="sm" variant="ghost" onClick={commitPicker}>
-                    Done
+                    Xong
                   </Button>
                 </div>
               </Card>
@@ -1977,12 +2107,6 @@ export function BoardClient() {
             const items = col.items;
             if (items.length === 0) return null;
             const done = col.category === "done";
-            const sorted = [...items].sort((a, b) => {
-              const ra = PRIORITY_RANK[a.priority] ?? 9;
-              const rb = PRIORITY_RANK[b.priority] ?? 9;
-              if (ra !== rb) return ra - rb;
-              return daysSince(b.updatedAt) - daysSince(a.updatedAt);
-            });
             return (
               <div key={col.id}>
                 <div className="mb-1.5 flex items-center gap-1.5 px-1">
@@ -1991,7 +2115,7 @@ export function BoardClient() {
                   <span className="text-xs tabular-nums text-muted-foreground">{items.length}</span>
                 </div>
                 <div className="flex flex-col gap-2">
-                  {sorted.map((issue) => (
+                  {items.map((issue) => (
                     <DraggableCard
                       key={issue.jiraKey}
                       issue={issue}
