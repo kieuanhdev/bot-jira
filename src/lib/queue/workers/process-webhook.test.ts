@@ -33,6 +33,8 @@ vi.mock("@/lib/prisma", () => ({
     issueCache: {
       findUnique: vi.fn(),
       upsert: vi.fn(),
+      create: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     issueLinkCache: {
       upsert: vi.fn(),
@@ -42,6 +44,7 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
   },
 }));

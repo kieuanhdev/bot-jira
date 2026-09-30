@@ -117,17 +117,72 @@ export async function syncIssueLinks(
   return normalizedLinks.length;
 }
 
-export async function upsertJiraIssue(issue: JiraIssue) {
+export async function upsertJiraIssue(
+  issue: JiraIssue
+): Promise<{ applied: boolean; data: ReturnType<typeof issueCacheData> }> {
   const data = issueCacheData(issue);
-  await prisma.issueCache.upsert({
-    where: { jiraKey: issue.key },
-    create: { jiraKey: issue.key, ...data },
-    update: data,
+  const incomingUpdatedAt = data.updatedAt;
+
+  // Conditional update: only update if stored updatedAt is null or <= incoming.updatedAt
+  const updateRes = await prisma.issueCache.updateMany({
+    where: {
+      jiraKey: issue.key,
+      OR: [
+        { updatedAt: null },
+        ...(incomingUpdatedAt ? [{ updatedAt: { lte: incomingUpdatedAt } }] : []),
+      ],
+    },
+    data,
   });
-  if (Array.isArray(issue.fields.issuelinks)) {
-    await syncIssueLinks(issue.key, issue.fields.issuelinks).catch(() => null);
+
+  if (updateRes.count > 0) {
+    if (Array.isArray(issue.fields.issuelinks)) {
+      await syncIssueLinks(issue.key, issue.fields.issuelinks).catch(() => null);
+    }
+    return { applied: true, data };
   }
-  return data;
+
+  // Count === 0: either the issue exists but stored is newer, OR it does not exist yet.
+  const existing = await prisma.issueCache.findUnique({
+    where: { jiraKey: issue.key },
+    select: { updatedAt: true },
+  });
+
+  if (existing) {
+    // Existing record is newer than incoming payload -> reject stale payload.
+    // Do not sync issue links and do not notify.
+    return { applied: false, data };
+  }
+
+  // Record does not exist: create it. Handle potential create race using jiraKey.
+  try {
+    await prisma.issueCache.create({
+      data: { jiraKey: issue.key, ...data },
+    });
+    if (Array.isArray(issue.fields.issuelinks)) {
+      await syncIssueLinks(issue.key, issue.fields.issuelinks).catch(() => null);
+    }
+    return { applied: true, data };
+  } catch {
+    // Unique constraint race: another worker created it concurrently.
+    // Retry conditional update once.
+    const retryRes = await prisma.issueCache.updateMany({
+      where: {
+        jiraKey: issue.key,
+        OR: [
+          { updatedAt: null },
+          ...(incomingUpdatedAt ? [{ updatedAt: { lte: incomingUpdatedAt } }] : []),
+        ],
+      },
+      data,
+    });
+
+    const applied = retryRes.count > 0;
+    if (applied && Array.isArray(issue.fields.issuelinks)) {
+      await syncIssueLinks(issue.key, issue.fields.issuelinks).catch(() => null);
+    }
+    return { applied, data };
+  }
 }
 
 export async function refreshJiraIssueCache(
@@ -137,25 +192,31 @@ export async function refreshJiraIssueCache(
 ): Promise<boolean> {
   try {
     const previous = await prisma.issueCache.findUnique({ where: { jiraKey: key } });
-    const current = await upsertJiraIssue(await client.getIssue(key, jiraIssueFields()));
-    await notifyWatchersOfIssueChange(previous, { jiraKey: key, ...current }, options)
-      .catch(() => null);
-    return true;
+    const { applied, data: current } = await upsertJiraIssue(await client.getIssue(key, jiraIssueFields()));
+    if (applied) {
+      await notifyWatchersOfIssueChange(previous, { jiraKey: key, ...current }, options)
+        .catch(() => null);
+    }
+    return applied;
   } catch {
     return false;
   }
 }
 
-export async function upsertJiraComments(jiraKey: string, comments: JiraComment[]) {
+export async function upsertJiraComments(jiraKey: string, comments: JiraComment[]): Promise<number> {
   let synced = 0;
   for (const comment of comments) {
     const body = descriptionText(comment.body).trim();
     if (!body || !comment.id) continue;
+    const author = comment.author?.displayName || comment.author?.name || "unknown";
+    const incomingCreatedAt = parseJiraDate(comment.created) ?? null;
+    const incomingUpdatedAt = parseJiraDate(comment.updated) ?? null;
+
     const legacy = await prisma.commentCache.findFirst({
       where: {
         jiraCommentId: null,
         jiraKey,
-        author: comment.author?.displayName || comment.author?.name || "unknown",
+        author,
         body,
       },
       select: { id: true },
@@ -165,35 +226,65 @@ export async function upsertJiraComments(jiraKey: string, comments: JiraComment[
         where: { id: legacy.id },
         data: {
           jiraCommentId: comment.id,
-          createdAt: parseJiraDate(comment.created) ?? null,
-          updatedAt: parseJiraDate(comment.updated) ?? null,
+          createdAt: incomingCreatedAt,
+          updatedAt: incomingUpdatedAt,
           syncedAt: new Date(),
         },
       });
       synced++;
       continue;
     }
-    await prisma.commentCache.upsert({
-      where: { jiraCommentId: comment.id },
-      create: {
+
+    // Conditional update: only update if stored updatedAt is null or <= incoming.updatedAt
+    const updateRes = await prisma.commentCache.updateMany({
+      where: {
         jiraCommentId: comment.id,
-        jiraKey,
-        author: comment.author?.displayName || comment.author?.name || "unknown",
-        body,
-        createdAt: parseJiraDate(comment.created) ?? null,
-        updatedAt: parseJiraDate(comment.updated) ?? null,
-        syncedAt: new Date(),
+        OR: [
+          { updatedAt: null },
+          ...(incomingUpdatedAt ? [{ updatedAt: { lte: incomingUpdatedAt } }] : []),
+        ],
       },
-      update: {
+      data: {
         jiraKey,
-        author: comment.author?.displayName || comment.author?.name || "unknown",
+        author,
         body,
-        createdAt: parseJiraDate(comment.created) ?? null,
-        updatedAt: parseJiraDate(comment.updated) ?? null,
+        createdAt: incomingCreatedAt,
+        updatedAt: incomingUpdatedAt,
         syncedAt: new Date(),
       },
     });
-    synced++;
+
+    if (updateRes.count > 0) {
+      synced++;
+      continue;
+    }
+
+    const existing = await prisma.commentCache.findUnique({
+      where: { jiraCommentId: comment.id },
+      select: { id: true },
+    });
+
+    if (existing) {
+      // Stored comment is newer; skip updating body with stale payload
+      continue;
+    }
+
+    try {
+      await prisma.commentCache.create({
+        data: {
+          jiraCommentId: comment.id,
+          jiraKey,
+          author,
+          body,
+          createdAt: incomingCreatedAt,
+          updatedAt: incomingUpdatedAt,
+          syncedAt: new Date(),
+        },
+      });
+      synced++;
+    } catch {
+      // Race: another worker created it concurrently
+    }
   }
   return synced;
 }
@@ -220,42 +311,61 @@ export async function upsertJiraCommentsWithNew(
     const body = descriptionText(comment.body).trim();
     if (!body || !comment.id) continue;
 
+    const author = comment.author?.displayName || comment.author?.name || "unknown";
+    const incomingCreatedAt = parseJiraDate(comment.created) ?? null;
+    const incomingUpdatedAt = parseJiraDate(comment.updated) ?? null;
+
+    // Conditional update: only update if stored updatedAt is null or <= incoming.updatedAt
+    const updateRes = await prisma.commentCache.updateMany({
+      where: {
+        jiraCommentId: comment.id,
+        OR: [
+          { updatedAt: null },
+          ...(incomingUpdatedAt ? [{ updatedAt: { lte: incomingUpdatedAt } }] : []),
+        ],
+      },
+      data: {
+        jiraKey,
+        author,
+        body,
+        createdAt: incomingCreatedAt,
+        updatedAt: incomingUpdatedAt,
+        syncedAt: new Date(),
+      },
+    });
+
+    if (updateRes.count > 0) {
+      synced++;
+      continue;
+    }
+
     const existing = await prisma.commentCache.findUnique({
       where: { jiraCommentId: comment.id },
       select: { id: true },
     });
 
-    const author = comment.author?.displayName || comment.author?.name || "unknown";
-
     if (existing) {
-      await prisma.commentCache.update({
-        where: { id: existing.id },
+      // Stored comment is newer; skip updating body with stale payload
+      continue;
+    }
+
+    try {
+      await prisma.commentCache.create({
         data: {
+          jiraCommentId: comment.id,
           jiraKey,
           author,
           body,
-          createdAt: parseJiraDate(comment.created) ?? null,
-          updatedAt: parseJiraDate(comment.updated) ?? null,
+          createdAt: incomingCreatedAt,
+          updatedAt: incomingUpdatedAt,
           syncedAt: new Date(),
         },
       });
       synced++;
-      continue;
+      newComments.push({ id: comment.id, jiraKey, author, body });
+    } catch {
+      // Race: another worker created it concurrently; not new to this instance
     }
-
-    await prisma.commentCache.create({
-      data: {
-        jiraCommentId: comment.id,
-        jiraKey,
-        author,
-        body,
-        createdAt: parseJiraDate(comment.created) ?? null,
-        updatedAt: parseJiraDate(comment.updated) ?? null,
-        syncedAt: new Date(),
-      },
-    });
-    synced++;
-    newComments.push({ id: comment.id, jiraKey, author, body });
   }
   return { synced, newComments };
 }

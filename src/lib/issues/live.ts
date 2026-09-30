@@ -155,8 +155,10 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
     // Live reads can see a change before reconciliation. Notify using the old
     // snapshot before its replacement hides that change from the worker.
     try {
-      const current = await upsertJiraIssue(live.rawIssue);
-      await notifyWatchersOfIssueChange(cached, { jiraKey: key, ...current });
+      const { applied, data: current } = await upsertJiraIssue(live.rawIssue);
+      if (applied) {
+        await notifyWatchersOfIssueChange(cached, { jiraKey: key, ...current });
+      }
     } catch { /* Live data remains usable if cache or notification delivery fails. */ }
     await upsertJiraComments(
       key,

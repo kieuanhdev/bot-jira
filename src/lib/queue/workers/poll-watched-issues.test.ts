@@ -20,7 +20,7 @@ describe("fast watch reconciliation", () => {
     mocks.watches.mockResolvedValue([{ jiraKey: "APP-1" }]);
     mocks.previous.mockResolvedValue({ status: "To Do" });
     mocks.issue.mockResolvedValue({ key: "APP-1" });
-    mocks.upsert.mockResolvedValue({ status: "Done" });
+    mocks.upsert.mockResolvedValue({ applied: true, data: { status: "Done" } });
     mocks.comments.mockResolvedValue([]);
     mocks.syncComments.mockResolvedValue({ newComments: [{ id: "c1", author: "alice", body: "Done" }] });
   });

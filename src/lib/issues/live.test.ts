@@ -20,7 +20,7 @@ describe("live task reads", () => {
     mocks.cached.mockResolvedValue({ jiraKey: "APP-1", status: "To Do" });
     mocks.issue.mockResolvedValue({ key: "APP-1", fields: { status: { name: "Done" } } });
     mocks.comments.mockResolvedValue([]);
-    mocks.upsert.mockResolvedValue({ status: "Done" });
+    mocks.upsert.mockResolvedValue({ applied: true, data: { status: "Done" } });
     mocks.cacheComments.mockResolvedValue(0);
     mocks.notify.mockResolvedValue(1);
   });

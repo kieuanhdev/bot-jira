@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { runPollPrComments, isPrCandidate } from "./poll-pr-comments";
 import { prisma } from "@/lib/prisma";
@@ -17,6 +18,9 @@ const cursorRow = (cursor: string) =>
     lastErrorAt: null,
     lastError: null,
     stats: null,
+    activeRunToken: null,
+    activeRunStartedAt: null,
+    activeRunExpiresAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   }) satisfies IntegrationCursor;
@@ -128,7 +132,7 @@ describe("runPollPrComments", () => {
     vi.mocked(prisma.integrationCursor.findUnique).mockResolvedValue(cursorRow(String(cursorTime)));
     vi.mocked(prisma.user.findMany).mockResolvedValue([
       { id: "u1", jiraUsername: "anhnk_mb", email: "anhnk@intern.vn", bitbucketUserEnc: null },
-    ] as any);
+    ] as unknown as Parameters<typeof prisma.user.findMany>[0] extends undefined ? never : any);
 
     const mergedPr = {
       id: 21,

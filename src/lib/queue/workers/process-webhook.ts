@@ -23,9 +23,11 @@ function safeError(error: unknown): string {
 async function refreshIssue(key: string, authorName?: string | null): Promise<string[]> {
   const previous = await prisma.issueCache.findUnique({ where: { jiraKey: key } });
   const issue = await jira.getIssue(key, jiraIssueFields());
-  const current = await upsertJiraIssue(issue);
-  await notifyWatchersOfIssueChange(previous, { jiraKey: key, ...current }, { authorName })
-    .catch(() => null);
+  const { applied, data: current } = await upsertJiraIssue(issue);
+  if (applied) {
+    await notifyWatchersOfIssueChange(previous, { jiraKey: key, ...current }, { authorName })
+      .catch(() => null);
+  }
   const { newComments } = await upsertJiraCommentsWithNew(key, await jira.getComments(key));
   for (const comment of newComments) {
     await notifyWatchersOfComment(key, comment.author, comment.body, comment.id);
@@ -81,9 +83,11 @@ async function handleJira(json: unknown): Promise<Record<string, unknown>> {
   if (eventName === "jira:issue_commented" || Boolean(j.comment?.id)) {
     const previous = await prisma.issueCache.findUnique({ where: { jiraKey: key } });
     const issue = await jira.getIssue(key, jiraIssueFields());
-    const current = await upsertJiraIssue(issue);
-    await notifyWatchersOfIssueChange(previous, { jiraKey: key, ...current }, { authorName })
-      .catch(() => null);
+    const { applied, data: current } = await upsertJiraIssue(issue);
+    if (applied) {
+      await notifyWatchersOfIssueChange(previous, { jiraKey: key, ...current }, { authorName })
+        .catch(() => null);
+    }
     const { newComments } = await upsertJiraCommentsWithNew(key, await jira.getComments(key));
     for (const nc of newComments) {
       // The comment id is the dedupe key, so the poll worker and this handler

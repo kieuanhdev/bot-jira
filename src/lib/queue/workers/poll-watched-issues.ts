@@ -15,8 +15,10 @@ export async function runPollWatchedIssues(): Promise<WorkerLog> {
       const { jiraKey } = watches[next++];
       try {
         const previous = await prisma.issueCache.findUnique({ where: { jiraKey } });
-        const current = await upsertJiraIssue(await jira.getIssue(jiraKey, jiraIssueFields()));
-        await notifyWatchersOfIssueChange(previous, { jiraKey, ...current });
+        const { applied, data: current } = await upsertJiraIssue(await jira.getIssue(jiraKey, jiraIssueFields()));
+        if (applied) {
+          await notifyWatchersOfIssueChange(previous, { jiraKey, ...current });
+        }
         const { newComments } = await upsertJiraCommentsWithNew(jiraKey, await jira.getComments(jiraKey));
         for (const comment of newComments) {
           await notifyWatchersOfComment(jiraKey, comment.author, comment.body, comment.id);
