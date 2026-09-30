@@ -31,31 +31,40 @@ model — it only stops refresh/delivery until it is started again.
 A healthy deployment shows: `worker.status = healthy`, `jiraFresh = true`,
 outbox `pending` near 0, no Sentry `failed`.
 
-## Alert semantics (OPS-03)
+## Alert & Watchdog semantics (OPS-03 & Self-Healing)
 
-The worker runs a `health-alert` job every 5 minutes. It raises **one** deduped
-alert per condition and one recovery alert when the condition clears:
+The worker runs a `health-alert` watchdog every **1 minute**. It performs both monitoring and self-healing:
+1. **Liveness & Freshness inspection:** reads each project's `IntegrationCursor`.
+2. **Auto-Recovery Enqueue:** detects projects that are stale (> `JIRA_FRESHNESS_MINUTES`) or have errors newer than their last success, and immediately enqueues a `source: "recovery"` sync job with elevated priority (5) and a 4-minute per-project deduplication window.
+3. **Alert conditions & Granular Recovery:**
+   - **Worker down** — liveness heartbeat missing or > 2 min.
+   - **Jira sync stale** — per-project stale alert (`jira-stale:<PROJECT>`).
+   - **Jira sync failed** — per-project failure alert (`jira-failed:<PROJECT>`).
+   - **Auto-Recovery announcement** — sends a recovery notification as soon as the project sync recovers (`Đồng bộ Jira đã phục hồi: <PROJECT>`).
+   - **Background job error** — a job's last error is newer than its last success.
+   - **Notification outbox backlog** — a pending push older than 10 minutes.
 
-- **Worker down** — liveness heartbeat missing or > 2 min.
-- **Jira sync stale** — no successful `poll-jira` within `JIRA_FRESHNESS_MINUTES`.
-- **Background job error** — a job's last error is newer than its last success.
-- **Notification outbox backlog** — a pending push older than 10 minutes.
-
-Alerts go to all users' in-app + push destinations. Users who configured a
-private Discord webhook or Discord User ID in Settings also receive the alert
-at that destination; alerts are not broadcast to the shared Discord channel.
+Alerts go to all users' in-app + push destinations, and private Discord webhooks.
 
 ## Incident: worker stopped or wedged
 
-**Symptom:** banner shows "worker down"; `/api/health` shows `worker.status: down`.
+**Symptom:** banner shows "worker down"; `/api/health` shows `worker.status: down`; container healthcheck fails.
 
-1. Confirm: `podman logs teamweb-worker --tail 50`.
-2. If the container is gone, start it: `podman compose up -d worker`.
-3. If it is running but stuck, restart it: `podman compose restart worker`.
-   On boot the worker runs `prisma migrate deploy` then registers all jobs;
-   pg-boss re-registers schedules automatically.
-4. Verify recovery: within ~1 minute `/api/freshness` should flip to `healthy`;
-   a single "Worker healthy (recovered)" alert is expected.
+### Container Healthcheck & Auto-Recovery
+The worker container has an active healthcheck running `node scripts/check-worker-health.mjs` every 30s (`start_period: 60s`, `timeout: 10s`, `retries: 3`). If the worker stops writing heartbeat for > 2 minutes:
+- Container status switches to `unhealthy`.
+- **Docker Compose**: Service `autoheal` (`willfarrell/autoheal:1.2.0`) is configured in `compose.yaml` to monitor containers labeled `autoheal: "true"`. Only `worker` has this label (database is excluded). Unhealthy worker containers are automatically restarted.
+- **Podman**: Configure `--health-on-failure=restart` on container run or pod definition.
+- **Kubernetes**: Configure container `livenessProbe` with `exec` running `node scripts/check-worker-health.mjs` (Compose autoheal is not needed in K8s).
+
+### Manual Recovery Steps
+1. Confirm logs: `podman logs teamweb-worker --tail 50` or `docker compose logs worker --tail 50`.
+2. If stopped or wedged: `podman compose restart worker` or `docker compose restart worker`.
+3. On restart:
+   - Worker boots, registers queues, then writes the initial liveness heartbeat and logs `worker ready`.
+   - pg-boss reclaims in-flight jobs; incomplete jobs are supervised by worker heartbeat and released after `expireInSeconds` (default 15m, configurable via `JIRA_SYNC_EXPIRE_SECONDS`) and automatically retried with exponential backoff (10s → 20s → 40s → 80s, up to 4 attempts).
+   - Startup reconciliation checks for stale/failing projects (and handles brand-new DB with zero cursors) and enqueues projects needing sync.
+4. Verify recovery: within 1–2 minutes, `/api/freshness` flips to `healthy` and a recovery notification is broadcast.
 
 **No data is lost** on restart. In-flight jobs are re-claimed by pg-boss
 (singletons are not double-run).

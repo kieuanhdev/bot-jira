@@ -49,6 +49,8 @@ services:
       context: .
       target: worker
     restart: unless-stopped
+    labels:
+      autoheal: "true"
     depends_on:
       db:
         condition: service_healthy
@@ -58,6 +60,22 @@ services:
       # Intra-cluster URL (service name on the teamweb network)
       DATABASE_URL: postgresql://teamweb:teamweb@db:5432/teamweb
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3100}
+    healthcheck:
+      test: ["CMD", "node", "scripts/check-worker-health.mjs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  autoheal:
+    image: docker.io/willfarrell/autoheal:1.2.0
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 10
+      AUTOHEAL_START_PERIOD: 60
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   pgdata:
