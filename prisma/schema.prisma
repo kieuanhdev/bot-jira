@@ -151,20 +151,24 @@ model FixVersionPropagation {
 }
 
 model IntegrationCursor {
-  id            String    @id @default(cuid())
-  integration   String
-  scope         String
-  cursor        String?
-  lastStartedAt DateTime?
-  lastSuccessAt DateTime?
-  lastErrorAt   DateTime?
-  lastError     String?
-  stats         Json?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  integration        String
+  scope              String
+  cursor             String?
+  lastStartedAt      DateTime?
+  lastSuccessAt      DateTime?
+  lastErrorAt        DateTime?
+  lastError          String?
+  stats              Json?
+  activeRunToken     String?
+  activeRunStartedAt DateTime?
+  activeRunExpiresAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@unique([integration, scope])
   @@index([integration, lastSuccessAt])
+  @@index([integration, activeRunExpiresAt])
 }
 
 model Watch {
