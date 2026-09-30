@@ -113,4 +113,67 @@ describe("getWorkerHealth with per-project Jira cursors", () => {
     // Clean up
     jiraProjectList.length = 0;
   });
+
+  it("marks all 8 projects stale when 8 projects are configured and zero Jira cursors exist", async () => {
+    const { jiraProjectList } = await import("@/lib/env");
+    const eightProjects = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"];
+    jiraProjectList.push(...eightProjects);
+
+    // Only worker liveness exists, zero Jira cursors in DB
+    rows([
+      { integration: "worker", scope: "liveness", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+    ]);
+
+    const h = await getWorkerHealth();
+    expect(h.staleProjects).toHaveLength(8);
+    expect(h.staleProjects).toEqual(eightProjects);
+    expect(h.status).toBe("degraded");
+    expect(isJiraFresh(h)).toBe(false);
+
+    jiraProjectList.length = 0;
+  });
+
+  it("marks exactly one project stale when one cursor is missing", async () => {
+    const { jiraProjectList } = await import("@/lib/env");
+    jiraProjectList.push("P1", "P2", "P3");
+
+    rows([
+      { integration: "worker", scope: "liveness", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+      { integration: "jira", scope: "P1", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+      { integration: "jira", scope: "P2", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+      // P3 has no cursor row
+    ]);
+
+    const h = await getWorkerHealth();
+    expect(h.staleProjects).toEqual(["P3"]);
+    expect(h.status).toBe("degraded");
+
+    jiraProjectList.length = 0;
+  });
+
+  it("marks project stale when cursor exists but lastSuccessAt is null", async () => {
+    const { jiraProjectList } = await import("@/lib/env");
+    jiraProjectList.push("P1");
+
+    rows([
+      { integration: "worker", scope: "liveness", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+      { integration: "jira", scope: "P1", lastStartedAt: ago(1000), lastSuccessAt: null, lastErrorAt: null, lastError: null, stats: null },
+    ]);
+
+    const h = await getWorkerHealth();
+    expect(h.staleProjects).toEqual(["P1"]);
+    expect(h.status).toBe("degraded");
+
+    jiraProjectList.length = 0;
+  });
+
+  it("does not report healthy when database query throws error", async () => {
+    prismaMock.integrationCursor.findMany.mockRejectedValueOnce(new Error("Connection refused"));
+
+    const h = await getWorkerHealth();
+    expect(h.status).toBe("down");
+    expect(h.hasErrors).toBe(true);
+    expect(h.databaseError).toContain("Connection refused");
+    expect(isJiraFresh(h)).toBe(false);
+  });
 });

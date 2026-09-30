@@ -36,6 +36,7 @@ export type WorkerHealth = {
   checkedAt: string;
   staleProjects?: string[];
   failingProjects?: string[];
+  databaseError?: string | null;
 };
 
 const SLA = {
@@ -69,7 +70,7 @@ export async function writeWorkerHeartbeat(): Promise<void> {
 /**
  * Classify worker + job liveness from the IntegrationCursor read model.
  *
- * - "down":    no liveness heartbeat, or it is older than `workerDownMs`.
+ * - "down":    no liveness heartbeat, it is older than `workerDownMs`, or database query failed.
  * - "degraded": a project's latest activity is stale, or a job/project reported an error
  *               more recently than it last succeeded.
  * - "unknown": liveness was never recorded (fresh install, worker not run yet).
@@ -77,23 +78,38 @@ export async function writeWorkerHeartbeat(): Promise<void> {
  */
 export async function getWorkerHealth(): Promise<WorkerHealth> {
   const now = Date.now();
-  const rows = await prisma.integrationCursor.findMany({
-    where: {
-      OR: [
-        { integration: HEARTBEAT_INTEGRATION },
-        { integration: "jira" },
-      ],
-    },
-    select: {
-      integration: true,
-      scope: true,
-      lastStartedAt: true,
-      lastSuccessAt: true,
-      lastErrorAt: true,
-      lastError: true,
-      stats: true,
-    },
-  }).catch(() => []);
+  let dbError: string | null = null;
+  let rows: Array<{
+    integration: string;
+    scope: string;
+    lastStartedAt: Date | null;
+    lastSuccessAt: Date | null;
+    lastErrorAt: Date | null;
+    lastError: string | null;
+    stats: unknown;
+  }> = [];
+
+  try {
+    rows = await prisma.integrationCursor.findMany({
+      where: {
+        OR: [
+          { integration: HEARTBEAT_INTEGRATION },
+          { integration: "jira" },
+        ],
+      },
+      select: {
+        integration: true,
+        scope: true,
+        lastStartedAt: true,
+        lastSuccessAt: true,
+        lastErrorAt: true,
+        lastError: true,
+        stats: true,
+      },
+    });
+  } catch (error) {
+    dbError = error instanceof Error ? error.message : String(error);
+  }
 
   const workerRows = rows.filter((r) => !r.integration || r.integration === HEARTBEAT_INTEGRATION);
   const jiraRows = rows.filter((r) => r.integration === "jira");
@@ -109,11 +125,12 @@ export async function getWorkerHealth(): Promise<WorkerHealth> {
   let jiraSyncAgeMs: number | null = null;
   let jiraStale = false;
 
-  if (jiraRows.length > 0 && configuredProjects.length > 0) {
+  if (configuredProjects.length > 0) {
     let maxAgeMs: number | null = 0;
     for (const pKey of configuredProjects) {
       const pRow = jiraRows.find((r) => r.scope.toUpperCase() === pKey.toUpperCase());
       if (!pRow || !pRow.lastSuccessAt) {
+        // Missing cursor row or no previous success -> project is always stale
         staleProjects.push(pKey);
         maxAgeMs = null;
       } else {
@@ -137,13 +154,13 @@ export async function getWorkerHealth(): Promise<WorkerHealth> {
     jiraSyncAgeMs = maxAgeMs;
     jiraStale = staleProjects.length > 0;
   } else {
-    // Fallback to legacy poll-jira row if no per-project cursors exist yet
+    // Fallback to legacy poll-jira row only when no projects are configured
     const jiraRow = jobs.find((r) => r.scope === "poll-jira");
     jiraSyncAgeMs = ageMs(jiraRow?.lastSuccessAt, now);
     jiraStale = jiraSyncAgeMs !== null && jiraSyncAgeMs > SLA.jiraStaleMs;
   }
 
-  let hasErrors = false;
+  let hasErrors = Boolean(dbError);
   let anyErrorRecent = false;
   for (const r of jobs) {
     if (r.lastErrorAt && r.lastSuccessAt) {
@@ -161,11 +178,14 @@ export async function getWorkerHealth(): Promise<WorkerHealth> {
     anyErrorRecent = true;
   }
 
-  const workerNeverSeen = liveness ? false : rows.length === 0;
+  const workerNeverSeen = liveness ? false : rows.length === 0 && !dbError;
   const workerDown = workerAgeMs === null ? !workerNeverSeen : workerAgeMs > SLA.workerDownMs;
 
   let status: WorkerHealth["status"];
-  if (workerNeverSeen) {
+  if (dbError) {
+    // Database errors must not be swallowed into a healthy or ambiguous state
+    status = "down";
+  } else if (workerNeverSeen) {
     status = "unknown";
   } else if (workerDown) {
     status = "down";
@@ -182,6 +202,7 @@ export async function getWorkerHealth(): Promise<WorkerHealth> {
     hasErrors,
     staleProjects,
     failingProjects,
+    databaseError: dbError,
     jobs: jobs.map((r) => ({
       job: r.scope,
       lastStartedAt: toIso(r.lastStartedAt),
@@ -196,6 +217,7 @@ export async function getWorkerHealth(): Promise<WorkerHealth> {
 
 /** Convenience for the public endpoint: is Jira sync fresh? */
 export function isJiraFresh(health: WorkerHealth): boolean {
+  if (health.databaseError || health.status === "down" || health.status === "unknown") return false;
   if (health.staleProjects && health.staleProjects.length > 0) return false;
   return health.jiraSyncAgeMs !== null && health.jiraSyncAgeMs <= SLA.jiraStaleMs;
 }
