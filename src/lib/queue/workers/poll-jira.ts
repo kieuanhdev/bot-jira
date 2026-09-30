@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { jira, parseJiraDate } from "@/lib/jira/client";
 import { buildProjectPollJql } from "@/lib/jira/jql";
@@ -9,6 +10,23 @@ import {
 import { jiraProjectList } from "@/lib/env";
 import { guard, env } from "../guard";
 import type { WorkerLog } from "../guard";
+import {
+  claimJiraSyncLease,
+  assertJiraSyncLease,
+  releaseJiraSyncLease,
+  SyncAlreadyRunningError,
+  SyncLeaseLostError,
+  JiraSyncAbortedError,
+} from "../jira-sync-lease";
+
+export {
+  claimJiraSyncLease,
+  assertJiraSyncLease,
+  releaseJiraSyncLease,
+  SyncAlreadyRunningError,
+  SyncLeaseLostError,
+  JiraSyncAbortedError,
+};
 
 const MAX_PAGES = 150;
 const PAGE_SIZE = 50;
@@ -52,16 +70,14 @@ export function safeError(error: unknown): string {
 export async function syncProject(
   projectKey: string,
   full: boolean,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; runToken?: string }
 ): Promise<ProjectStats> {
-  const startedAt = new Date();
-  const current = await prisma.integrationCursor.upsert({
-    where: { integration_scope: { integration: "jira", scope: projectKey } },
-    create: { integration: "jira", scope: projectKey, lastStartedAt: startedAt },
-    update: { lastStartedAt: startedAt, lastError: null },
-  });
+  const runToken = options?.runToken ?? randomUUID();
+  const expiresAt = new Date(Date.now() + env.jiraSyncExpireSeconds * 1000);
 
-  const initialCursor = current.cursor;
+  // Giai đoạn 1: Atomically claim project lease before any operation
+  const current = await claimJiraSyncLease(projectKey, runToken, expiresAt);
+
   const parsedCursor = current.cursor ? new Date(current.cursor) : null;
   const validCursor = parsedCursor && !Number.isNaN(parsedCursor.getTime()) ? parsedCursor : null;
   const since = !full && validCursor
@@ -86,9 +102,9 @@ export async function syncProject(
 
   try {
     for (let page = 0; page < MAX_PAGES; page++) {
-      if (options?.signal?.aborted) {
-        throw new Error(`Jira sync aborted for ${projectKey}`);
-      }
+      // Assert lease and abortion signal before each page
+      await assertJiraSyncLease(projectKey, runToken, options?.signal);
+
       const result = await jira.search(
         jql,
         PAGE_SIZE,
@@ -98,22 +114,26 @@ export async function syncProject(
       stats.pages++;
 
       for (const issue of result.issues) {
-        if (options?.signal?.aborted) {
-          throw new Error(`Jira sync aborted for ${projectKey}`);
-        }
+        // Assert lease and abortion signal before each issue
+        await assertJiraSyncLease(projectKey, runToken, options?.signal);
+
         seenKeys.add(issue.key);
         try {
           const previous = await prisma.issueCache.findUnique({
             where: { jiraKey: issue.key },
           });
-          const currentIssue = await upsertJiraIssue(issue);
-          if (previous) stats.updated++;
-          else stats.created++;
 
-          await notifyWatchersOfIssueChange(previous, {
-            jiraKey: issue.key,
-            ...currentIssue,
-          }).catch(() => null);
+          // Giai đoạn 2: Conditional upsert to reject stale issue payload
+          const { applied, data: currentIssue } = await upsertJiraIssue(issue);
+          if (applied) {
+            if (previous) stats.updated++;
+            else stats.created++;
+
+            await notifyWatchersOfIssueChange(previous, {
+              jiraKey: issue.key,
+              ...currentIssue,
+            }).catch(() => null);
+          }
 
           const issueUpdatedAt = parseJiraDate(issue.fields.updated);
           if (issueUpdatedAt && (!newestUpdatedAt || issueUpdatedAt > newestUpdatedAt)) {
@@ -149,6 +169,9 @@ export async function syncProject(
             stats.errors.push(`${issue.key} comments: ${safeError(error)}`);
           }
         } catch (error) {
+          if (error instanceof SyncLeaseLostError || error instanceof JiraSyncAbortedError) {
+            throw error;
+          }
           stats.errors.push(`${issue.key}: ${safeError(error)}`);
         }
       }
@@ -160,7 +183,7 @@ export async function syncProject(
     }
 
     if (options?.signal?.aborted) {
-      throw new Error(`Jira sync aborted for ${projectKey}`);
+      throw new JiraSyncAbortedError(`Jira sync aborted for ${projectKey}`);
     }
 
     if (!exhaustedAllPages) {
@@ -173,66 +196,70 @@ export async function syncProject(
     }
 
     // Advance cursor only if no item errors occurred and all pages were read and not aborted
-    const cursor = stats.errors.length === 0 && !options?.signal?.aborted
+    const hasErrors = stats.errors.length > 0;
+    const cursor = !hasErrors && !options?.signal?.aborted
       ? (newestUpdatedAt?.toISOString() ?? current.cursor)
       : current.cursor;
-    const cursorAdvanced = stats.errors.length === 0 && !options?.signal?.aborted && Boolean(cursor && cursor !== current.cursor);
+    const cursorAdvanced = !hasErrors && !options?.signal?.aborted && Boolean(cursor && cursor !== current.cursor);
     stats.cursor = cursor;
     stats.cursorAdvanced = cursorAdvanced;
 
-    // Full scan soft-delete only when all pages succeeded with 0 errors and not aborted
-    if (isFullScan && stats.errors.length === 0 && exhaustedAllPages && !options?.signal?.aborted) {
-      const deleted = await prisma.issueCache.updateMany({
-        where: {
-          projectKey,
-          deletedAt: null,
-          ...(seenKeys.size > 0 ? { jiraKey: { notIn: [...seenKeys] } } : {}),
-        },
-        data: { deletedAt: new Date() },
+    // Giai đoạn 3: Finalize cursor and soft-delete inside short atomic transaction under active lease
+    await prisma.$transaction(async (tx) => {
+      const currentCursor = await tx.integrationCursor.findUnique({
+        where: { id: current.id },
       });
-      stats.deleted = deleted.count;
-    }
 
-    if (options?.signal?.aborted) {
-      throw new Error(`Jira sync aborted for ${projectKey}`);
-    }
+      if (!currentCursor || currentCursor.activeRunToken !== runToken) {
+        throw new SyncLeaseLostError(
+          `Jira sync lease lost for ${projectKey}: active token changed`
+        );
+      }
 
-    const lastSuccessAt = stats.errors.length === 0 ? new Date() : current.lastSuccessAt;
-    const lastErrorText = stats.errors.length ? stats.errors.slice(0, 10).join("; ").slice(0, 2000) : null;
-    stats.lastSuccessAt = lastSuccessAt ? (lastSuccessAt instanceof Date ? lastSuccessAt.toISOString() : new Date(lastSuccessAt).toISOString()) : null;
-    stats.lastError = lastErrorText;
+      // Soft-delete unseen issues only on successful full scan with 0 errors
+      if (isFullScan && !hasErrors && exhaustedAllPages && !options?.signal?.aborted) {
+        const deleted = await tx.issueCache.updateMany({
+          where: {
+            projectKey,
+            deletedAt: null,
+            ...(seenKeys.size > 0 ? { jiraKey: { notIn: [...seenKeys] } } : {}),
+          },
+          data: { deletedAt: new Date() },
+        });
+        stats.deleted = deleted.count;
+      }
 
-    // Conditional update: guarantee current cursor still matches initialCursor read at start.
-    // Stale or expired jobs must never overwrite newer cursors.
-    const updateWhere = initialCursor === null
-      ? { id: current.id, cursor: null }
-      : { id: current.id, cursor: initialCursor };
+      const lastSuccessAt = !hasErrors ? new Date() : currentCursor.lastSuccessAt;
+      const lastErrorText = hasErrors ? stats.errors.slice(0, 10).join("; ").slice(0, 2000) : null;
+      stats.lastSuccessAt = lastSuccessAt ? (lastSuccessAt instanceof Date ? lastSuccessAt.toISOString() : new Date(lastSuccessAt).toISOString()) : null;
+      stats.lastError = lastErrorText;
 
-    const updateRes = await prisma.integrationCursor.updateMany({
-      where: updateWhere,
-      data: {
-        cursor,
-        lastSuccessAt,
-        lastErrorAt: stats.errors.length ? new Date() : null,
-        lastError: lastErrorText,
-        stats: {
-          ...stats,
-          cursorAdvanced,
+      const updateRes = await tx.integrationCursor.updateMany({
+        where: {
+          id: current.id,
+          activeRunToken: runToken,
         },
-      },
-    });
+        data: {
+          cursor,
+          lastSuccessAt,
+          lastErrorAt: hasErrors ? new Date() : null,
+          lastError: lastErrorText,
+          stats: {
+            ...stats,
+            cursorAdvanced,
+          },
+          activeRunToken: null,
+          activeRunStartedAt: null,
+          activeRunExpiresAt: null,
+        },
+      });
 
-    if (updateRes.count === 0) {
-      console.warn(
-        JSON.stringify({
-          level: "warn",
-          job: "poll-jira-project",
-          project: projectKey,
-          message: `Cursor concurrency collision for ${projectKey}: expected cursor "${initialCursor}", but cursor changed concurrently`,
-        })
-      );
-      throw new Error(`Concurrent sync conflict: cursor for ${projectKey} was updated by another process`);
-    }
+      if (updateRes.count === 0) {
+        throw new SyncLeaseLostError(
+          `Jira sync lease lost for ${projectKey} during finalize commit`
+        );
+      }
+    });
 
     return stats;
   } catch (error) {
@@ -245,12 +272,15 @@ export async function syncProject(
       }).catch(() => null);
     }
     throw error;
+  } finally {
+    // Only release our own lease
+    await releaseJiraSyncLease(projectKey, runToken).catch(() => null);
   }
 }
 
 export async function runPollJiraProject(
   data: PollJiraProjectJobData,
-  options?: { retryCount?: number; signal?: AbortSignal }
+  options?: { signal?: AbortSignal }
 ): Promise<WorkerLog> {
   const { getSystemJiraAuth } = await import("@/lib/jira/client");
   const auth = await getSystemJiraAuth();
@@ -264,7 +294,6 @@ export async function runPollJiraProject(
   const requestedAtMs = data.requestedAt ? new Date(data.requestedAt).getTime() : Date.now();
   const queueLagMs = Math.max(0, Date.now() - (Number.isNaN(requestedAtMs) ? Date.now() : requestedAtMs));
   const startedAt = Date.now();
-  const retryCount = options?.retryCount ?? 0;
 
   try {
     const stats = await syncProject(projectKey, Boolean(data.full), { signal: options?.signal });
@@ -281,7 +310,6 @@ export async function runPollJiraProject(
         requestedBy: data.requestedBy ?? null,
         queueLagMs,
         durationMs,
-        retryCount,
         lastSuccessAt: stats.lastSuccessAt ?? null,
         lastError: stats.lastError ?? null,
         pages: stats.pages,
@@ -301,7 +329,6 @@ export async function runPollJiraProject(
         ...stats,
         queueLagMs,
         durationMs,
-        retryCount,
         source: data.source,
         requestedBy: data.requestedBy ?? null,
         ok,
@@ -311,16 +338,18 @@ export async function runPollJiraProject(
   } catch (error) {
     const durationMs = Date.now() - startedAt;
     const errorMsg = safeError(error);
+    const isAlreadyRunning = error instanceof SyncAlreadyRunningError;
+    const isLeaseLost = error instanceof SyncLeaseLostError;
+
     console.error(
       JSON.stringify({
-        level: "error",
+        level: isAlreadyRunning ? "info" : isLeaseLost ? "warn" : "error",
         job: "poll-jira-project",
         project: projectKey,
         projectKey,
         source: data.source,
         queueLagMs,
         durationMs,
-        retryCount,
         lastError: errorMsg,
         error: errorMsg,
       })
@@ -332,7 +361,6 @@ export async function runPollJiraProject(
         projectKey,
         durationMs,
         queueLagMs,
-        retryCount,
         lastError: errorMsg,
         source: data.source,
         ok: false,

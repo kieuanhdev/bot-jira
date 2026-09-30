@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   cursorUpsert: vi.fn(),
   cursorUpdate: vi.fn(),
   cursorUpdateMany: vi.fn(),
+  cursorFindUnique: vi.fn(),
   issueFindUnique: vi.fn(),
   issueUpdateMany: vi.fn(),
   search: vi.fn(),
@@ -17,10 +19,20 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    $transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => cb({
+      integrationCursor: {
+        findUnique: mocks.cursorFindUnique,
+        updateMany: mocks.cursorUpdateMany,
+      },
+      issueCache: {
+        updateMany: mocks.issueUpdateMany,
+      },
+    })),
     integrationCursor: {
       upsert: mocks.cursorUpsert,
       update: mocks.cursorUpdate,
       updateMany: mocks.cursorUpdateMany,
+      findUnique: mocks.cursorFindUnique,
     },
     issueCache: {
       findUnique: mocks.issueFindUnique,
@@ -51,21 +63,42 @@ vi.mock("@/lib/issues/notify-watchers", () => ({
 import { syncProject, runPollJiraProject } from "./poll-jira";
 
 describe("syncProject", () => {
+  let currentCursorRow = {
+    id: "cur-1",
+    integration: "jira",
+    scope: "EPM",
+    cursor: "2026-09-29T08:00:00.000Z" as string | null,
+    lastSuccessAt: new Date("2026-09-29T08:00:00.000Z") as Date | null,
+    activeRunToken: null as string | null,
+    activeRunStartedAt: null as Date | null,
+    activeRunExpiresAt: null as Date | null,
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getSystemJiraAuth.mockResolvedValue({ user: "jira_user", token: "tok", authMode: "Bearer" });
-    mocks.cursorUpsert.mockResolvedValue({
+    currentCursorRow = {
       id: "cur-1",
       integration: "jira",
       scope: "EPM",
       cursor: "2026-09-29T08:00:00.000Z",
       lastSuccessAt: new Date("2026-09-29T08:00:00.000Z"),
-    });
+      activeRunToken: null,
+      activeRunStartedAt: null,
+      activeRunExpiresAt: null,
+    };
+    mocks.getSystemJiraAuth.mockResolvedValue({ user: "jira_user", token: "tok", authMode: "Bearer" });
+    mocks.cursorUpsert.mockImplementation(async () => currentCursorRow);
+    mocks.cursorFindUnique.mockImplementation(async () => currentCursorRow);
     mocks.cursorUpdate.mockResolvedValue({});
-    mocks.cursorUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.cursorUpdateMany.mockImplementation(async ({ data }: any) => {
+      if (data?.activeRunToken !== undefined) {
+        currentCursorRow.activeRunToken = data.activeRunToken;
+      }
+      return { count: 1 };
+    });
     mocks.issueFindUnique.mockResolvedValue(null);
     mocks.issueUpdateMany.mockResolvedValue({ count: 2 });
-    mocks.upsertJiraIssue.mockResolvedValue({ status: "In Progress" });
+    mocks.upsertJiraIssue.mockResolvedValue({ applied: true, data: { status: "In Progress" } });
     mocks.upsertJiraCommentsWithNew.mockResolvedValue({ synced: 1, newComments: [] });
     mocks.notifyIssue.mockResolvedValue(undefined);
     mocks.notifyComment.mockResolvedValue(undefined);
@@ -112,13 +145,10 @@ describe("syncProject", () => {
   });
 
   it("falls back to full scan safely when cursor is missing or invalid", async () => {
-    mocks.cursorUpsert.mockResolvedValue({
-      id: "cur-1",
-      integration: "jira",
-      scope: "EPM",
-      cursor: "invalid-not-a-date",
-      lastSuccessAt: null,
-    });
+    currentCursorRow.cursor = "invalid-not-a-date";
+    currentCursorRow.lastSuccessAt = null;
+    mocks.cursorUpsert.mockResolvedValue(currentCursorRow);
+    mocks.cursorFindUnique.mockResolvedValue(currentCursorRow);
     mocks.search.mockResolvedValue({
       total: 1,
       issues: [
@@ -297,19 +327,37 @@ describe("syncProject", () => {
 });
 
 describe("runPollJiraProject", () => {
+  let activeToken: string | null = null;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    activeToken = null;
     mocks.getSystemJiraAuth.mockResolvedValue({ user: "jira_user", token: "tok", authMode: "Bearer" });
-    mocks.cursorUpsert.mockResolvedValue({
+    mocks.cursorUpsert.mockImplementation(async () => ({
       id: "cur-1",
       integration: "jira",
       scope: "EPM",
       cursor: "2026-09-29T08:00:00.000Z",
       lastSuccessAt: new Date(),
-    });
+      activeRunToken: activeToken,
+    }));
+    mocks.cursorFindUnique.mockImplementation(async () => ({
+      id: "cur-1",
+      integration: "jira",
+      scope: "EPM",
+      cursor: "2026-09-29T08:00:00.000Z",
+      lastSuccessAt: new Date(),
+      activeRunToken: activeToken,
+    }));
     mocks.cursorUpdate.mockResolvedValue({});
-    mocks.cursorUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.cursorUpdateMany.mockImplementation(async ({ data }: any) => {
+      if (data?.activeRunToken !== undefined) {
+        activeToken = data.activeRunToken;
+      }
+      return { count: 1 };
+    });
     mocks.issueFindUnique.mockResolvedValue(null);
+    mocks.upsertJiraIssue.mockResolvedValue({ applied: true, data: { status: "In Progress" } });
     mocks.search.mockResolvedValue({ total: 0, issues: [] });
   });
 
@@ -377,7 +425,7 @@ describe("runPollJiraProject", () => {
 
     expect(res.ok).toBe(false);
     expect(res.errors?.[0]).toContain("aborted");
-    expect(mocks.cursorUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.issueUpdateMany).not.toHaveBeenCalled();
   });
 
   it("rejects cursor write if cursor was modified concurrently by another job", async () => {
@@ -390,7 +438,7 @@ describe("runPollJiraProject", () => {
         },
       ],
     });
-    // Another job updated cursor in the meantime -> updateMany matches 0 rows
+    // Another job holds the active lease -> updateMany matches 0 rows
     mocks.cursorUpdateMany.mockResolvedValue({ count: 0 });
 
     const res = await runPollJiraProject({
@@ -401,7 +449,7 @@ describe("runPollJiraProject", () => {
     });
 
     expect(res.ok).toBe(false);
-    expect(res.errors?.[0]).toContain("Concurrent sync conflict");
+    expect(res.errors?.[0]).toMatch(/already running|lease/i);
   });
 
   it("does not soft-delete issues when full sync is aborted", async () => {
@@ -419,7 +467,7 @@ describe("runPollJiraProject", () => {
     );
 
     expect(res.ok).toBe(false);
+    expect(res.errors?.[0]).toContain("aborted");
     expect(mocks.issueUpdateMany).not.toHaveBeenCalled();
-    expect(mocks.cursorUpdateMany).not.toHaveBeenCalled();
   });
 });
