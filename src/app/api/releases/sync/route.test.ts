@@ -34,10 +34,14 @@ describe("POST /api/releases/sync", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 403 when user lacks release.manage permission", async () => {
-    canMock.mockReturnValue(false);
-    const res = await POST(new Request("http://localhost/api/releases/sync", { method: "POST" }));
-    expect(res.status).toBe(403);
+  it("allows member to trigger sync", async () => {
+    sessionMock.mockResolvedValue({ user: { id: "u2", role: "member" } });
+    const res = await POST(new Request("http://localhost/api/releases/sync?projectKey=EPM", { method: "POST" }));
+    expect(res.status).toBe(200);
+    expect(syncReleasesFromJiraMock).toHaveBeenCalledWith({
+      userId: "u2",
+      projectKeys: ["EPM"],
+    });
   });
 
   it("calls sync and returns success for release manager", async () => {

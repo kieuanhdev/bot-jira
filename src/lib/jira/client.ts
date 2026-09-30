@@ -12,6 +12,7 @@ import type {
   JiraFieldDefinition,
   JiraEditMeta,
   JiraWorklog,
+  JiraMyPermissions,
 } from "./types";
 
 const BASE_ISSUE_FIELDS = [
@@ -100,6 +101,25 @@ export function parseJiraDate(s?: string | null): Date | undefined {
   const iso = s.replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+/**
+ * Check whether the user's Jira permissions grant rights to create/administer Fix Versions in a project.
+ * Jira project versions can be created by users with ADMINISTER_PROJECTS permission on the project,
+ * or global Jira administrators (ADMINISTER or SYSTEM_ADMIN).
+ */
+export function canCreateProjectVersion(response?: JiraMyPermissions | null): boolean {
+  if (!response || typeof response !== "object" || !response.permissions) {
+    return false;
+  }
+  const perms = response.permissions;
+  return Boolean(
+    perms.ADMINISTER_PROJECTS?.havePermission ||
+    perms.MANAGE_VERSIONS?.havePermission ||
+    perms.PROJECT_ADMIN?.havePermission ||
+    perms.ADMINISTER?.havePermission ||
+    perms.SYSTEM_ADMIN?.havePermission
+  );
 }
 
 /** Auth material for a single Jira caller. */
@@ -548,6 +568,25 @@ export function jiraWith(auth?: JiraAuth) {
     /** Get a single Fix Version by ID. */
     getVersion: (versionId: string) =>
       request<JiraVersion>(`/rest/api/2/version/${encodeURIComponent(versionId)}`, {}, auth),
+    /**
+     * Query effective permissions of the authenticated user for a specific project.
+     * Backed by Jira REST v2 `GET /rest/api/2/mypermissions?projectKey={key}`.
+     * Throws 401 if personal token is missing to prevent fallback to system auth.
+     */
+    getMyPermissions: async (projectKey: string): Promise<JiraMyPermissions> => {
+      if (!auth?.token) {
+        throw new JiraRequestError(
+          "Yêu cầu token Jira cá nhân để kiểm tra quyền dự án",
+          401,
+          false
+        );
+      }
+      return request<JiraMyPermissions>(
+        `/rest/api/2/mypermissions?projectKey=${encodeURIComponent(projectKey)}`,
+        {},
+        auth
+      );
+    },
     /** Create a new Fix Version on a project. */
     createVersion: (projectKey: string, name: string, description?: string) =>
       request<JiraVersion>(

@@ -10,10 +10,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  if (!can(session, "release.manage")) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
-
   const url = new URL(req.url);
   const projectKey = url.searchParams.get("projectKey")?.trim();
   const projectKeys = projectKey && projectKey !== "all" ? [projectKey] : undefined;

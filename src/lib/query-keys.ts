@@ -93,6 +93,8 @@ export const branchesForKeys = {
 
 export const releasesKeys = {
   all: ["releases"] as const,
+  permissions: (projectKey: string) => ["release-permissions", projectKey] as const,
+  permissionsAll: () => ["release-permissions"] as const,
 };
 
 export const branchesKeys = {

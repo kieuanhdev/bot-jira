@@ -154,3 +154,15 @@ export type JiraWorklog = {
   timeSpentSeconds?: number;
   issueId?: string;
 };
+
+export type JiraPermission = {
+  id: string;
+  name: string;
+  description?: string;
+  type?: string;
+  havePermission: boolean;
+};
+
+export type JiraMyPermissions = {
+  permissions: Record<string, JiraPermission>;
+};

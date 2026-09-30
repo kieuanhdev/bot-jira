@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
-import { jiraWith, JiraRequestError } from "@/lib/jira/client";
+import { jiraWith, canCreateProjectVersion, JiraRequestError } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 import { syncReleasesFromJira } from "@/lib/releases/sync";
 import {
@@ -224,9 +224,6 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (!can(session, "release.manage")) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
 
   const body = (await req.json()) as {
     projectKey?: string;
@@ -289,6 +286,18 @@ export async function POST(req: Request) {
         isReleased = Boolean(match.released);
         isArchived = Boolean(match.archived);
       } else {
+        // Pre-check Jira permissions for creating a Fix Version in the project
+        const permissions = await client.getMyPermissions(projectKey);
+        if (!canCreateProjectVersion(permissions)) {
+          return NextResponse.json(
+            {
+              error: "Bạn không có quyền tạo Fix Version trong dự án này.",
+              code: "jira_project_permission_required",
+            },
+            { status: 403 }
+          );
+        }
+
         // No version given: create a new Fix Version in Jira.
         const created = await client.createVersion(projectKey, body.version, body.description);
         if (!created?.id) {
@@ -303,8 +312,31 @@ export async function POST(req: Request) {
         isArchived = Boolean(created.archived);
       }
     } catch (e) {
+      if (e instanceof JiraRequestError) {
+        if (e.status === 403) {
+          return NextResponse.json(
+            {
+              error: "Bạn không có quyền tạo Fix Version trong dự án này.",
+              code: "jira_project_permission_required",
+            },
+            { status: 403 }
+          );
+        }
+        if (e.status === 401) {
+          return NextResponse.json(
+            {
+              error: "Jira token không hợp lệ hoặc đã hết hạn.",
+              code: "jira_auth_failed",
+            },
+            { status: 502 }
+          );
+        }
+      }
       const msg = e instanceof JiraRequestError ? e.message : (e as Error).message;
-      return NextResponse.json({ error: `Jira version lookup failed: ${msg}` }, { status: 502 });
+      return NextResponse.json(
+        { error: `Jira version lookup failed: ${msg}`, code: "jira_unavailable" },
+        { status: 502 }
+      );
     }
   }
 

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
+import { api, ApiError } from "@/lib/api-client";
 import { releasesKeys, boardKeys } from "@/lib/query-keys";
 import { can } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,26 @@ export function ReleaseClient() {
       const p = selectedProject !== "all" ? `?projectKey=${encodeURIComponent(selectedProject)}&includeArchived=true` : "?includeArchived=true";
       return api<{ summary: ReleaseSummary; items: ReleaseCardItem[] }>(`/api/releases${p}`);
     },
+  });
+
+  // Query Jira permissions for creating a version in the selected project
+  const {
+    data: permissionData,
+    isLoading: isPermissionLoading,
+    isFetching: isPermissionFetching,
+    error: permissionError,
+    refetch: refetchPermission,
+  } = useQuery<
+    { projectKey: string; hasToken: boolean; canCreateVersion: boolean; reason?: string },
+    ApiError
+  >({
+    queryKey: releasesKeys.permissions(selectedProject),
+    queryFn: () =>
+      api<{ projectKey: string; hasToken: boolean; canCreateVersion: boolean; reason?: string }>(
+        `/api/projects/${encodeURIComponent(selectedProject)}/release-permissions`
+      ),
+    enabled: selectedProject !== "all",
+    staleTime: 60_000,
   });
 
   const summary = data?.summary ?? {
@@ -191,11 +212,19 @@ export function ReleaseClient() {
 
       const json = await res.json();
       if (!res.ok) {
+        if (res.status === 403) {
+          queryClient.invalidateQueries({
+            queryKey: releasesKeys.permissions(createProject),
+          });
+        }
         setCreateError(json.error || "Không thể tạo bản phát hành");
         return;
       }
 
       await queryClient.invalidateQueries({ queryKey: ["releases"] });
+      await queryClient.invalidateQueries({
+        queryKey: releasesKeys.permissions(createProject),
+      });
       await refetch();
       setCreateOpen(false);
       setCreateVersion("");
@@ -227,36 +256,70 @@ export function ReleaseClient() {
           </div>
         </div>
 
-        {/* Action buttons (only visible if manager) */}
-        {canManage && (
-          <div className="flex items-center gap-2.5">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSync}
-              disabled={syncing || isRefetching}
-              className="gap-1.5 cursor-pointer text-xs"
-            >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${syncing || isRefetching ? "animate-spin" : ""}`}
-                aria-hidden="true"
-              />
-              Đồng bộ từ Jira
-            </Button>
+        {/* Action buttons */}
+        <div className="flex items-center gap-2.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={syncing || isRefetching}
+            className="gap-1.5 cursor-pointer text-xs"
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${syncing || isRefetching ? "animate-spin" : ""}`}
+              aria-hidden="true"
+            />
+            Đồng bộ từ Jira
+          </Button>
 
+          {selectedProject === "all" ? (
+            <span className="text-xs text-muted-foreground italic px-2 py-1 bg-muted/50 rounded border border-border/50">
+              Chọn một dự án để tạo bản phát hành
+            </span>
+          ) : isPermissionLoading || (isPermissionFetching && !permissionData) ? (
+            <Skeleton className="h-8 w-36 rounded-md" />
+          ) : permissionError ? (
+            permissionError.status === 428 ? (
+              <Link
+                href="/settings"
+                className="text-xs text-primary hover:underline flex items-center gap-1.5 px-2.5 py-1 rounded bg-primary/10 border border-primary/20 transition-colors cursor-pointer"
+              >
+                <AlertCircle className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
+                <span>Cấu hình Jira token trong Cài đặt</span>
+              </Link>
+            ) : (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <AlertCircle className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />
+                <span className="text-destructive font-medium">Lỗi kiểm tra quyền</span>
+                <button
+                  type="button"
+                  onClick={() => refetchPermission()}
+                  className="text-primary hover:underline cursor-pointer ml-1"
+                >
+                  Thử lại
+                </button>
+              </div>
+            )
+          ) : permissionData?.canCreateVersion ? (
             <Button
               size="sm"
               onClick={() => {
-                setCreateProject(selectedProject !== "all" ? selectedProject : projectList[0] || "");
+                setCreateProject(selectedProject);
                 setCreateOpen(true);
               }}
+              disabled={isPermissionFetching}
               className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 cursor-pointer text-xs"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               Tạo bản phát hành
             </Button>
-          </div>
-        )}
+          ) : (
+            <div className="text-xs text-muted-foreground flex items-center gap-1.5 px-2 py-1 rounded bg-muted/60 border border-border">
+              <AlertCircle className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
+              <span>Không có quyền tạo Version trong dự án {selectedProject}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Sync message banner */}
@@ -412,7 +475,7 @@ export function ReleaseClient() {
                 ? "Không có phiên bản nào khớp với từ khóa tìm kiếm của bạn."
                 : "Chưa có Fix Version nào trong phạm vi đã chọn hoặc cần đồng bộ từ Jira."}
             </p>
-            {canManage && !searchQuery && (
+            {!searchQuery && (
               <Button
                 variant="outline"
                 size="sm"
@@ -457,8 +520,8 @@ export function ReleaseClient() {
                 <Label htmlFor="create-project" className="text-xs font-semibold">
                   Dự án Jira <span className="text-destructive">*</span>
                 </Label>
-                <Select value={createProject} onValueChange={setCreateProject}>
-                  <SelectTrigger id="create-project" className="text-xs">
+                <Select value={createProject} onValueChange={setCreateProject} disabled>
+                  <SelectTrigger id="create-project" className="text-xs bg-muted/50 cursor-not-allowed">
                     <SelectValue placeholder="Chọn dự án" />
                   </SelectTrigger>
                   <SelectContent>
@@ -469,6 +532,9 @@ export function ReleaseClient() {
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Được khóa theo dự án đang chọn ({selectedProject}).
+                </p>
               </div>
 
               <div className="space-y-1.5">

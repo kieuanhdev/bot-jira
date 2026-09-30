@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Unplug } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { releasesKeys } from "@/lib/query-keys";
 
 type Status = { ok: boolean; detail?: string };
 type Integrations = {
@@ -35,6 +37,7 @@ type SaveResult = {
 };
 
 export function MyIntegrations() {
+  const queryClient = useQueryClient();
   const [data, setData] = useState<Integrations | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -58,6 +61,9 @@ export function MyIntegrations() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(service === "jira" ? { disconnectJira: true } : { disconnectBitbucket: true }),
       });
+      if (service === "jira") {
+        queryClient.invalidateQueries({ queryKey: releasesKeys.permissionsAll() });
+      }
       await load();
       setSaveMsg({ ok: true, text: `Đã ngắt kết nối ${service === "jira" ? "Jira" : "Bitbucket"}.` });
     } finally {
@@ -114,6 +120,9 @@ export function MyIntegrations() {
         text: parts.join(" · "),
       });
       // Clear token fields so the user doesn't re-send them next time.
+      if (jiraToken) {
+        queryClient.invalidateQueries({ queryKey: releasesKeys.permissionsAll() });
+      }
       setJiraToken("");
       setBbToken("");
       await load();
