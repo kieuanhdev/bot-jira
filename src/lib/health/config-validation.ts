@@ -1,4 +1,4 @@
-import { env } from "@/lib/env";
+
 
 /**
  * OPS-02 — Startup fail-fast configuration validation.
@@ -10,14 +10,18 @@ import { env } from "@/lib/env";
  * All validation returns only variable names and descriptive errors (never secret values).
  */
 
-/** Variables the standalone worker cannot operate without (database connection). */
+/**
+ * Variables the standalone worker cannot operate without (database connection).
+ *
+ * Accepts an envSource so that tests and startup code can pass a custom
+ * environment record without depending on process.env at import time.
+ */
 export const WORKER_REQUIRED = ["DATABASE_URL"] as const;
 
-export function missingWorkerRequired(): string[] {
-  const map: Record<string, string> = {
-    DATABASE_URL: env.databaseUrl,
-  };
-  return WORKER_REQUIRED.filter((name) => !map[name]);
+export function missingWorkerRequired(
+  envSource: Record<string, string | undefined> = process.env
+): string[] {
+  return WORKER_REQUIRED.filter((name) => !envSource[name]);
 }
 
 export type TimingValidationResult = {
@@ -81,7 +85,7 @@ export function validateJiraSyncTiming(
 export function validateWorkerStartup(
   envSource: Record<string, string | undefined> = process.env
 ): string[] {
-  const missing = missingWorkerRequired();
+  const missing = missingWorkerRequired(envSource);
   const timing = validateJiraSyncTiming(envSource);
   return [...missing, ...timing.errors];
 }

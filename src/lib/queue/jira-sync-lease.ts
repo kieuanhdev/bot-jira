@@ -1,5 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import type { IntegrationCursor } from "@prisma/client";
+import { env } from "@/lib/env";
+
+/** Minimum lease TTL for full syncs (seconds). */
+const FULL_SYNC_MIN_LEASE_TTL = 900;
+
+/**
+ * Compute the lease TTL for a sync run.
+ * - Incremental: JIRA_SYNC_EXPIRE_SECONDS
+ * - Full sync: max(JIRA_SYNC_EXPIRE_SECONDS, 900)
+ *
+ * This is separate from the pg-boss heartbeat interval
+ * (JIRA_HEARTBEAT_SECONDS) which detects crashed workers.
+ */
+export function computeLeaseTtlSeconds(isFullSync: boolean): number {
+  return isFullSync
+    ? Math.max(env.jiraSyncExpireSeconds, FULL_SYNC_MIN_LEASE_TTL)
+    : env.jiraSyncExpireSeconds;
+}
 
 export class SyncAlreadyRunningError extends Error {
   constructor(message: string) {
@@ -114,6 +132,42 @@ export async function assertJiraSyncLease(
   if (!cursor || cursor.activeRunToken !== runToken) {
     throw new SyncLeaseLostError(
       `Jira sync lease lost for project ${projectKey}: expected token ${runToken}, found ${cursor?.activeRunToken ?? "none"}`
+    );
+  }
+}
+
+/**
+ * Renews (extends) the Jira sync lease for a running job.
+ *
+ * Succeeds only when the activeRunToken still matches `runToken`,
+ * proving this job still owns the lease. If 0 rows are updated,
+ * another job has claimed the lease — throw SyncLeaseLostError so
+ * the caller stops writing to cache.
+ *
+ * Call this:
+ *  - Before each Jira API page request
+ *  - After Jira responds, before writing to cache
+ *  - Before finalize
+ */
+export async function renewJiraSyncLease(
+  projectKey: string,
+  runToken: string,
+  expiresAt: Date
+): Promise<void> {
+  const res = await prisma.integrationCursor.updateMany({
+    where: {
+      integration: "jira",
+      scope: projectKey,
+      activeRunToken: runToken,
+    },
+    data: {
+      activeRunExpiresAt: expiresAt,
+    },
+  });
+
+  if (res.count === 0) {
+    throw new SyncLeaseLostError(
+      `Jira sync lease lost for project ${projectKey}: renewal failed for token ${runToken}`
     );
   }
 }

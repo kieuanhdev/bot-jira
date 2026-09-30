@@ -13,7 +13,9 @@ import type { WorkerLog } from "../guard";
 import {
   claimJiraSyncLease,
   assertJiraSyncLease,
+  renewJiraSyncLease,
   releaseJiraSyncLease,
+  computeLeaseTtlSeconds,
   SyncAlreadyRunningError,
   SyncLeaseLostError,
   JiraSyncAbortedError,
@@ -22,7 +24,9 @@ import {
 export {
   claimJiraSyncLease,
   assertJiraSyncLease,
+  renewJiraSyncLease,
   releaseJiraSyncLease,
+  computeLeaseTtlSeconds,
   SyncAlreadyRunningError,
   SyncLeaseLostError,
   JiraSyncAbortedError,
@@ -73,7 +77,22 @@ export async function syncProject(
   options?: { signal?: AbortSignal; runToken?: string }
 ): Promise<ProjectStats> {
   const runToken = options?.runToken ?? randomUUID();
-  const expiresAt = new Date(Date.now() + env.jiraSyncExpireSeconds * 1000);
+  const isFullScan_precomputed = full; // may adjust after cursor check
+  const leaseTtlSeconds = computeLeaseTtlSeconds(isFullScan_precomputed);
+  const expiresAt = new Date(Date.now() + leaseTtlSeconds * 1000);
+
+  /**
+   * Renew the lease and check abort signal in one call.
+   * Called before each Jira API request, after each response
+   * before cache writes, and before finalize.
+   */
+  async function renewAndAssert(): Promise<void> {
+    if (options?.signal?.aborted) {
+      throw new JiraSyncAbortedError(`Jira sync aborted for ${projectKey}`);
+    }
+    const newExpiry = new Date(Date.now() + leaseTtlSeconds * 1000);
+    await renewJiraSyncLease(projectKey, runToken, newExpiry);
+  }
 
   // Giai đoạn 1: Atomically claim project lease before any operation
   const current = await claimJiraSyncLease(projectKey, runToken, expiresAt);
@@ -102,8 +121,8 @@ export async function syncProject(
 
   try {
     for (let page = 0; page < MAX_PAGES; page++) {
-      // Assert lease and abortion signal before each page
-      await assertJiraSyncLease(projectKey, runToken, options?.signal);
+      // Renew lease + check abort before each page fetch
+      await renewAndAssert();
 
       const result = await jira.search(
         jql,
@@ -113,9 +132,10 @@ export async function syncProject(
       );
       stats.pages++;
 
+      // Renew lease after Jira response, before writing cache
+      await renewAndAssert();
+
       for (const issue of result.issues) {
-        // Assert lease and abortion signal before each issue
-        await assertJiraSyncLease(projectKey, runToken, options?.signal);
 
         seenKeys.add(issue.key);
         try {
@@ -123,12 +143,15 @@ export async function syncProject(
             where: { jiraKey: issue.key },
           });
 
-          // Giai đoạn 2: Conditional upsert to reject stale issue payload
+          // Giai đoạn 2: Conditional upsert + link sync inside transaction.
+          // Notifications are deferred until after commit succeeds.
           const { applied, data: currentIssue } = await upsertJiraIssue(issue);
           if (applied) {
             if (previous) stats.updated++;
             else stats.created++;
 
+            // Notification fires AFTER transaction commit.
+            // Notification failure must not affect sync correctness.
             await notifyWatchersOfIssueChange(previous, {
               jiraKey: issue.key,
               ...currentIssue,
@@ -161,11 +184,13 @@ export async function syncProject(
                 commentsToSync
               );
               stats.comments += synced;
+              // Notify only after comment cache write succeeds
               for (const nc of newComments) {
                 await notifyWatchersOfComment(nc.jiraKey, nc.author, nc.body, nc.id).catch(() => null);
               }
             }
           } catch (error) {
+            // Comment/link sync errors are tracked and prevent cursor advancement.
             stats.errors.push(`${issue.key} comments: ${safeError(error)}`);
           }
         } catch (error) {
@@ -203,6 +228,9 @@ export async function syncProject(
     const cursorAdvanced = !hasErrors && !options?.signal?.aborted && Boolean(cursor && cursor !== current.cursor);
     stats.cursor = cursor;
     stats.cursorAdvanced = cursorAdvanced;
+
+    // Renew lease before finalize
+    await renewAndAssert();
 
     // Giai đoạn 3: Finalize cursor and soft-delete inside short atomic transaction under active lease
     await prisma.$transaction(async (tx) => {

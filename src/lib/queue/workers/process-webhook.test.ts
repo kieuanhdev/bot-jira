@@ -23,6 +23,10 @@ const eventRow = (payload: Prisma.JsonValue, source = "bitbucket") =>
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    $transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
+      const self = (await import("@/lib/prisma")).prisma;
+      return cb(self);
+    }),
     integrationEvent: {
       findUnique: vi.fn(),
       update: vi.fn(),
