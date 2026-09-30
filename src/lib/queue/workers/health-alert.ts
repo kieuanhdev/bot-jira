@@ -2,8 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { getWorkerHealth } from "@/lib/health/worker-health";
 import type { WorkerLog } from "../guard";
+import { enqueueJiraRecoveries } from "../jira-recovery";
 
 const ALERT_KEY = "worker";
+export type HealthAlertOptions = {
+  enqueueJiraRecovery?: (projectKey: string) => Promise<string | null>;
+};
+
 
 /**
  * OPS-03 — Worker/freshness alerting.
@@ -22,9 +27,27 @@ const ALERT_KEY = "worker";
  * Notifications go to all users via the existing outbox. That unified path
  * fans out to in-app, push, and each user's private Discord destination.
  */
-export async function runHealthAlert(): Promise<WorkerLog> {
+export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<WorkerLog> {
   const health = await getWorkerHealth();
   const now = new Date();
+
+  // The watchdog is also a repair loop: stale and failed projects get an
+  // elevated-priority, deduped reconciliation job while the worker is alive.
+  const recoveryProjects = health.status === "down" || health.status === "unknown"
+    ? []
+    : [...(health.staleProjects ?? []), ...(health.failingProjects ?? [])];
+  const recovery = options.enqueueJiraRecovery
+    ? await enqueueJiraRecoveries(recoveryProjects, options.enqueueJiraRecovery)
+    : { requested: 0, queued: 0, coalesced: 0, failed: 0, errors: [] };
+
+  if (recovery.failed > 0) {
+    console.error(JSON.stringify({
+      level: "error",
+      job: "health-alert",
+      message: "Failed to enqueue one or more Jira recovery jobs",
+      errors: recovery.errors,
+    }));
+  }
 
   const conditions: { key: string; title: string; body: string }[] = [];
 
@@ -38,12 +61,13 @@ export async function runHealthAlert(): Promise<WorkerLog> {
   }
 
   if (health.staleProjects && health.staleProjects.length > 0) {
-    const sorted = [...health.staleProjects].sort();
-    conditions.push({
-      key: `jira-stale:${sorted.join(",")}`,
-      title: `Jira sync stale: ${sorted.join(", ")}`,
-      body: `Dự án chưa được đồng bộ mới (> ${env.jiraFreshnessMinutes} phút): ${sorted.join(", ")}.`,
-    });
+    for (const projectKey of [...health.staleProjects].sort()) {
+      conditions.push({
+        key: `jira-stale:${projectKey}`,
+        title: `Jira sync stale: ${projectKey}`,
+        body: `Dự án chưa được đồng bộ mới (> ${env.jiraFreshnessMinutes} phút): ${projectKey}. Đang kích hoạt tự phục hồi.`,
+      });
+    }
   } else if (health.jiraSyncAgeMs !== null && health.jiraSyncAgeMs > env.jiraFreshnessMinutes * 60_000) {
     conditions.push({
       key: "jira-stale",
@@ -53,12 +77,13 @@ export async function runHealthAlert(): Promise<WorkerLog> {
   }
 
   if (health.failingProjects && health.failingProjects.length > 0 && health.status !== "down") {
-    const sorted = [...health.failingProjects].sort();
-    conditions.push({
-      key: `jira-failed:${sorted.join(",")}`,
-      title: `Jira sync failed: ${sorted.join(", ")}`,
-      body: `Đồng bộ Jira thất bại cho dự án: ${sorted.join(", ")}.`,
-    });
+    for (const projectKey of [...health.failingProjects].sort()) {
+      conditions.push({
+        key: `jira-failed:${projectKey}`,
+        title: `Jira sync failed: ${projectKey}`,
+        body: `Đồng bộ Jira thất bại cho dự án: ${projectKey}. Đang kích hoạt tự phục hồi.`,
+      });
+    }
   }
 
   if (health.hasErrors && health.status !== "down" && (!health.failingProjects || health.failingProjects.length === 0)) {
@@ -84,22 +109,23 @@ export async function runHealthAlert(): Promise<WorkerLog> {
     });
   }
 
-  const activeKeys = conditions.map((c) => c.key).sort().join(",");
+  const activeKeyList = conditions.map((c) => c.key).sort();
+  const activeKeys = activeKeyList.join(",");
 
   // Compare with previously active keys to decide what to (re)announce.
   const prev = await prisma.integrationCursor.findUnique({
     where: { integration_scope: { integration: ALERT_KEY, scope: "state" } },
   });
   const prevKeys = String((prev?.stats as { activeKeys?: string } | null)?.activeKeys ?? "");
+  const prevKeyList = prevKeys ? prevKeys.split(",") : [];
   const prevHadKeys = prevKeys.length > 0;
 
   let alerted = 0;
   let recovered = 0;
 
-  // Dedupe: only announce keys that are new this cycle; when everything
-  // clears, announce one recovery if there had been any alert.
+  // Dedupe alerts: announce keys that are new this cycle
   if (conditions.length > 0) {
-    const newKeys = conditions.filter((c) => !prevKeys.split(",").includes(c.key));
+    const newKeys = conditions.filter((c) => !prevKeyList.includes(c.key));
     for (const c of newKeys) {
       const { notifyAll } = await import("@/lib/notify");
       await notifyAll({
@@ -111,7 +137,46 @@ export async function runHealthAlert(): Promise<WorkerLog> {
       }).catch(() => null);
       alerted++;
     }
-  } else if (prevHadKeys) {
+  }
+
+  // Recovery notifications: announce keys that cleared this cycle
+  const resolvedKeys = prevKeyList.filter((k) => k && !activeKeyList.includes(k));
+  for (const key of resolvedKeys) {
+    const { notifyAll } = await import("@/lib/notify");
+    if (key.startsWith("jira-stale:")) {
+      const projectKey = key.slice("jira-stale:".length);
+      await notifyAll({
+        type: "system",
+        title: `Đồng bộ Jira đã phục hồi: ${projectKey}`,
+        body: `Dự án ${projectKey} đã đồng bộ thành công trở lại.`,
+        severity: "success",
+        eventKey: `health:${key}:${now.toISOString().slice(0, 10)}:recovered`,
+      }).catch(() => null);
+      recovered++;
+    } else if (key.startsWith("jira-failed:")) {
+      const projectKey = key.slice("jira-failed:".length);
+      await notifyAll({
+        type: "system",
+        title: `Đồng bộ Jira đã phục hồi: ${projectKey}`,
+        body: `Dự án ${projectKey} đã đồng bộ thành công và không còn lỗi.`,
+        severity: "success",
+        eventKey: `health:${key}:${now.toISOString().slice(0, 10)}:recovered`,
+      }).catch(() => null);
+      recovered++;
+    } else if (key === "worker-down") {
+      await notifyAll({
+        type: "system",
+        title: "Worker đã hoạt động trở lại",
+        body: "Tiến trình worker nền đã ghi nhận liveness heartbeat.",
+        severity: "success",
+        eventKey: `health:worker-down:${now.toISOString().slice(0, 10)}:recovered`,
+      }).catch(() => null);
+      recovered++;
+    }
+  }
+
+  // If everything cleared and there were unresolved keys before, send overall recovery
+  if (conditions.length === 0 && prevHadKeys && recovered === 0) {
     const { notifyAll } = await import("@/lib/notify");
     await notifyAll({
       type: "system",
@@ -120,7 +185,7 @@ export async function runHealthAlert(): Promise<WorkerLog> {
       severity: "success",
       eventKey: `health:system:${now.toISOString().slice(0, 10)}:recovered`,
     }).catch(() => null);
-    recovered = 1;
+    recovered++;
   }
 
   // Persist the new active-key set for next cycle's dedupe comparison.
@@ -141,13 +206,32 @@ export async function runHealthAlert(): Promise<WorkerLog> {
     },
   }).catch(() => null);
 
+  console.info(JSON.stringify({
+    level: recovery.failed > 0 ? "warn" : "info",
+    job: "health-alert",
+    status: health.status,
+    recoveryRequested: recovery.requested,
+    recoveryQueued: recovery.queued,
+    recoveryCoalesced: recovery.coalesced,
+    recoveryFailed: recovery.failed,
+    alerted,
+    recovered,
+    activeKeys,
+  }));
+
   return {
-    ok: true,
+    ok: recovery.failed === 0,
     stats: {
       status: health.status,
       activeKeys,
       alerted,
       recovered,
+      recoveryRequested: recovery.requested,
+      recoveryQueued: recovery.queued,
+      recoveryCoalesced: recovery.coalesced,
+      recoveryFailed: recovery.failed,
+      ...(recovery.errors.length > 0 ? { recoveryErrors: recovery.errors } : {}),
     } as unknown as Record<string, unknown>,
+    ...(recovery.errors.length > 0 ? { errors: recovery.errors } : {}),
   };
 }

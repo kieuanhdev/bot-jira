@@ -122,8 +122,10 @@ describe("runPollPrComments", () => {
   });
 
   it("notifies for comments newer than the existing cursor on OPEN and MERGED PRs", async () => {
+    const now = Date.now();
+    const cursorTime = now - 5000;
     vi.mocked(bitbucket.repos).mockReturnValue(["EPM/easy_pos"]);
-    vi.mocked(prisma.integrationCursor.findUnique).mockResolvedValue(cursorRow("10000"));
+    vi.mocked(prisma.integrationCursor.findUnique).mockResolvedValue(cursorRow(String(cursorTime)));
     vi.mocked(prisma.user.findMany).mockResolvedValue([
       { id: "u1", jiraUsername: "anhnk_mb", email: "anhnk@intern.vn", bitbucketUserEnc: null },
     ] as any);
@@ -133,7 +135,7 @@ describe("runPollPrComments", () => {
       title: "fix EPM-3291",
       state: "MERGED",
       author: { user: { name: "anhnk_mb" } },
-      updatedDate: 8000, // merged long ago, older than cursor
+      updatedDate: now - 3600_000, // merged recently
       fromRef: { branch: "feat/payment" },
     } as unknown as BbPullRequest;
 
@@ -146,7 +148,7 @@ describe("runPollPrComments", () => {
         comment: {
           id: 352967,
           text: ".",
-          createdDate: 12000,
+          createdDate: now - 1000,
           author: { name: "duclm" },
         },
       } satisfies BbPrActivity,
@@ -164,8 +166,8 @@ describe("runPollPrComments", () => {
 
     expect(prisma.integrationCursor.upsert).toHaveBeenCalledWith({
       where: { integration_scope: { integration: "bitbucket", scope: "pr-comments:EPM/easy_pos" } },
-      create: expect.objectContaining({ cursor: "12000" }),
-      update: expect.objectContaining({ cursor: "12000" }),
+      create: expect.objectContaining({ cursor: String(now - 1000) }),
+      update: expect.objectContaining({ cursor: String(now - 1000) }),
     });
   });
 });

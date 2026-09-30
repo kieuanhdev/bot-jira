@@ -1,45 +1,54 @@
 import type { PollJiraProjectJobData } from "./workers/poll-jira";
 
-export const STALE_SCHEDULED_JIRA_JOB_MS = 2 * 60_000;
+export type JobMetadata = unknown;
 
-type JobTimestamps = {
-  createdOn?: Date | string;
-  created_on?: Date | string;
-};
-
-function timestampMs(value: Date | string | undefined): number | null {
+function timestampMs(value: unknown): number | null {
   if (!value) return null;
-  const parsed = value instanceof Date ? value.getTime() : new Date(value).getTime();
-  return Number.isNaN(parsed) ? null : parsed;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.getTime();
+  if (typeof value === "string") {
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
 }
 
 /**
- * Scheduled/startup polls are reconciliation hints, so an old one should not
- * consume Jira capacity after a newer poll is already queued. Manual/admin and
- * recovery requests are intentional and must never be discarded as backlog.
+ * Calculate age of scheduled/startup Jira poll job.
  */
 export function scheduledJiraJobAgeMs(
   data: PollJiraProjectJobData,
-  job: JobTimestamps,
+  job?: unknown,
   nowMs = Date.now()
 ): number | null {
   if (data.source !== "schedule" && data.source !== "startup") return null;
 
-  // requestedAt is created by our server and is present in every current Jira
-  // job. pg-boss does not expose createdOn consistently across versions, so
-  // keep its metadata only as a fallback for legacy jobs.
+  const jobObj = typeof job === "object" && job !== null ? (job as Record<string, unknown>) : undefined;
   const queuedAt = timestampMs(data.requestedAt)
-    ?? timestampMs(job.createdOn)
-    ?? timestampMs(job.created_on);
+    ?? timestampMs(jobObj?.createdOn)
+    ?? timestampMs(jobObj?.created_on);
 
   return queuedAt === null ? null : Math.max(0, nowMs - queuedAt);
 }
 
+/**
+ * Anti-backlog policy:
+ * Scheduled polls rely on pg-boss queue policy ('stately') and singletonKey
+ * deduplication/coalescing to prevent unbounded queue growth.
+ *
+ * Jobs are NOT skipped merely due to requestedAt age so retrying jobs are
+ * preserved and never falsely marked as successful.
+ * Manual, admin, and recovery jobs are always executed.
+ */
 export function shouldSkipStaleJiraJob(
   data: PollJiraProjectJobData,
-  job: JobTimestamps,
-  nowMs = Date.now()
+  ..._args: unknown[]
 ): boolean {
-  const ageMs = scheduledJiraJobAgeMs(data, job, nowMs);
-  return ageMs !== null && ageMs > STALE_SCHEDULED_JIRA_JOB_MS;
+  void _args;
+  // Manual, admin, and recovery requests are always executed
+  if (data.source !== "schedule" && data.source !== "startup") {
+    return false;
+  }
+  // Rely on stately queue + singletonKey deduplication.
+  // Retrying jobs and scheduled reconciliation are preserved.
+  return false;
 }

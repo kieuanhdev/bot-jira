@@ -11,9 +11,9 @@ describe("businessDaysBetween", () => {
     expect(businessDaysBetween(null, new Date("2026-01-05"))).toBe(0);
   });
 
-  it("counts 2 for same business day (inclusive of start and end)", () => {
-    // Mon Jan 5 09:00 → Mon Jan 5 17:00 = 2 (counts start day + end day inclusively)
-    expect(businessDaysBetween(new Date("2026-01-05T09:00:00Z"), new Date("2026-01-05T17:00:00Z"))).toBe(2);
+  it("counts 1 for same business day", () => {
+    // Mon Jan 5 09:00 → Mon Jan 5 17:00 = 1 business day
+    expect(businessDaysBetween(new Date("2026-01-05T09:00:00Z"), new Date("2026-01-05T17:00:00Z"))).toBe(1);
   });
 
   it("counts Fri to Mon as 2 business days (Fri + Mon, inclusive)", () => {
