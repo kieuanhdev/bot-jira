@@ -62,12 +62,22 @@ The worker container has an active healthcheck running `node scripts/check-worke
 2. If stopped or wedged: `podman compose restart worker` or `docker compose restart worker`.
 3. On restart:
    - Worker boots, registers queues, then writes the initial liveness heartbeat and logs `worker ready`.
-   - pg-boss reclaims in-flight jobs; incomplete jobs are supervised by worker heartbeat and released after `expireInSeconds` (default 15m, configurable via `JIRA_SYNC_EXPIRE_SECONDS`) and automatically retried with exponential backoff (10s → 20s → 40s → 80s, up to 4 attempts).
+   - pg-boss reclaims in-flight jobs; incomplete jobs are supervised by worker heartbeat (`JIRA_HEARTBEAT_SECONDS`, default 60s, min 10s) and released after `expireInSeconds` (`JIRA_SYNC_EXPIRE_SECONDS`, default 15m / 900s, min 120s). Jobs are retried with exponential backoff (10s → 20s → 40s → 80s, up to 4 attempts).
+   - Startup timing validation fail-fast guards against invalid configurations (e.g. non-integers, `heartbeat >= expire`, or values below thresholds).
    - Startup reconciliation checks for stale/failing projects (and handles brand-new DB with zero cursors) and enqueues projects needing sync.
 4. Verify recovery: within 1–2 minutes, `/api/freshness` flips to `healthy` and a recovery notification is broadcast.
 
 **No data is lost** on restart. In-flight jobs are re-claimed by pg-boss
 (singletons are not double-run).
+
+### Jira Sync Fencing Tokens & Concurrency Control
+To prevent overlapping or zombie sync jobs from overwriting newer data:
+- **Per-Project Lease & Fencing Token:** Every sync job generates a UUID `runToken` and claims `IntegrationCursor.activeRunToken` using atomic CAS (`claimJiraSyncLease`). A job can only claim if no active lease exists or the previous lease has expired (`activeRunExpiresAt <= now`).
+- **Heartbeat & Expiry:** While running, the worker refreshes lease expiry. If a worker dies or gets stuck, the lease naturally expires after `activeRunExpiresAt` and a new job can take over without deadlock.
+- **Assertion Guard:** Before each page and issue batch, `assertJiraSyncLease` validates token ownership and abort signals.
+- **Transactional Finalize:** Cursor advancement, `lastSuccessAt`, stats update, and full-scan soft-deletes are committed in a single short Prisma transaction under verified token ownership (`SyncLeaseLostError` thrown if superseded).
+- **Conditional Cache Write:** `upsertJiraIssue` and `upsertJiraComments` only apply updates if incoming `updatedAt >= stored.updatedAt`. Stale issue payloads never trigger issue link sync or duplicate notifications.
+- **Safe Error Reporting:** Errors only record to `lastErrorAt` if the failing job still owns the active lease, preventing superseded jobs from marking a healthy project as failing.
 
 ## Incident: Jira unavailable
 

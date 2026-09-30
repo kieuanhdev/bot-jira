@@ -12,7 +12,6 @@ let heartbeat: NodeJS.Timeout | null = null;
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
 function startHeartbeat() {
-  void writeWorkerHeartbeat().catch(() => null);
   heartbeat = setInterval(() => {
     void writeWorkerHeartbeat().catch(() => null);
   }, HEARTBEAT_INTERVAL_MS);
@@ -35,16 +34,16 @@ async function shutdown(signal: string) {
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
 
-// OPS-02 — fail fast when the worker's required config (database, Jira) is
-// missing. We log only the *names* of the missing variables, never values, so
-// the process exits non-zero and the orchestrator can alert on the crash.
-const missing = validateWorkerStartup();
-if (missing.length > 0) {
+// OPS-02 — fail fast when the worker's required config or Jira timing config is
+// invalid/missing. We log only the names of the missing variables / error messages,
+// never values, so the process exits non-zero and the orchestrator can alert on the crash.
+const configErrors = validateWorkerStartup();
+if (configErrors.length > 0) {
   console.error(
     JSON.stringify({
       level: "error",
-      message: "worker missing required configuration",
-      missing: missing,
+      message: "worker configuration validation failed",
+      errors: configErrors,
     })
   );
   process.exit(1);

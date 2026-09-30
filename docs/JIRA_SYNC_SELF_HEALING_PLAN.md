@@ -112,7 +112,6 @@
 
 - **Structured Log & Metrics:**
   - `recoveryRequested`, `recoveryQueued`, `recoveryCoalesced`, `recoveryFailed`.
-  - `retryCount` theo project job.
   - `queueLagMs` thời gian chờ trong queue.
   - `lastSuccessAt` thời điểm đồng bộ thành công gần nhất.
   - `lastError` lỗi gần nhất của dự án.
@@ -127,13 +126,46 @@
 
 ---
 
-## 8. Kết quả Kiểm thử (Test Suite Results)
+## 8. Cơ chế Fencing Token, Conditional Cache & Transactional Finalize
 
-- **Toàn bộ 84 test suites (672 tests) đều PASS 100%.**
+### 8.1. Fencing Token & Lease per-Project (`jira-sync-lease.ts`)
+- Mỗi lượt đồng bộ sinh `runToken = randomUUID()`.
+- Atomically claim quyền chạy project bằng `updateMany` với điều kiện:
+  - Chưa có active run (`activeRunToken: null` hoặc `activeRunExpiresAt: null`).
+  - Hoặc lease trước đã hết hạn (`activeRunExpiresAt <= now`).
+- Nếu claim thất bại: ném `SyncAlreadyRunningError` (không ghi đè trạng thái hay lỗi).
+- Trước mỗi trang và mỗi issue: kiểm tra `assertJiraSyncLease` (bảo đảm signal chưa abort và `activeRunToken === runToken`). Nếu mất lease, ném `SyncLeaseLostError`.
+- Khi kết thúc: chỉ release lease nếu token trong DB vẫn bằng `runToken` của chính nó (không release token của job mới).
+
+### 8.2. Ngăn Payload cũ ghi đè Cache mới (Conditional Cache Writes)
+- `upsertJiraIssue`: Sử dụng conditional `updateMany` (`where: { jiraKey, OR: [{ updatedAt: null }, { updatedAt: { lte: incomingUpdatedAt } }] }`).
+  - Nếu payload cũ hơn dữ liệu trong cache: trả `applied: false`, bỏ qua link sync và không gửi thông báo watcher.
+- `upsertJiraComments`: Chỉ cập nhật comment khi `incoming.updatedAt >= stored.updatedAt`. Comment cũ không được ghi đè body mới.
+
+### 8.3. Transactional Finalize an toàn
+- Sau khi đọc hết Jira, bước finalize được bọc trong một transaction ngắn:
+  1. Kiểm tra `activeRunToken === runToken`. Nếu mất lease: ném `SyncLeaseLostError`, hủy toàn bộ thay đổi.
+  2. Soft-delete các issue không xuất hiện (chỉ với full scan không lỗi).
+  3. Cập nhật `cursor`, `lastSuccessAt`, `stats` và giải phóng lease (`activeRunToken = null`).
+
+### 8.4. Kiểm tra cấu hình Timing (Config Validation)
+- `JIRA_SYNC_EXPIRE_SECONDS >= 120`, `JIRA_HEARTBEAT_SECONDS >= 10`.
+- Ép kiểu số nguyên; cấm số âm và số thập phân.
+- `heartbeatSeconds < expireInSeconds` (khuyến nghị `<= expireInSeconds / 3`).
+- Fail-fast khi khởi động worker, thông báo tên biến và không làm lộ thông tin nhạy cảm.
+
+---
+
+## 9. Kết quả Kiểm thử (Test Suite Results)
+
+- **Toàn bộ 85 test suites (710 tests) đều PASS 100%.**
 - TypeScript typecheck sạch (`tsc --noEmit --incremental false` exit 0).
 - Các unit test chuyên biệt:
+  - `src/lib/queue/jira-sync-race.test.ts`: Kiểm tra đầy đủ 10 kịch bản race condition, fencing token, conditional cache update, stale comments, link preservation và process crash recovery.
+  - `src/lib/health/config-validation.test.ts`: Kiểm tra validate số nguyên, số thập phân, số âm, ngưỡng min và quan hệ heartbeat/expiry.
   - `src/lib/queue/jira-job-policy.test.ts`: Kiểm tra chống backlog, skip schedule/startup quá 2 phút, không skip manual/admin/recovery.
   - `src/lib/queue/jira-queue.test.ts`: Kiểm tra priority (10, 5, 2, 1), retryLimit (4), backoff, expireInSeconds (120/900), startup reconciliation chỉ enqueue project stale/failing.
   - `src/lib/queue/jira-recovery.test.ts`: Kiểm tra dedupe stale/failing projects, xử lý lỗi từng project độc lập.
   - `src/lib/queue/workers/health-alert.test.ts`: Kiểm tra watchdog tự phục hồi, cảnh báo per-project và thông báo phục hồi khi project chuyển sang healthy.
   - `src/lib/health/check-worker-health.test.ts`: Kiểm tra logic heartbeat timeout 120s của container healthcheck.
+
