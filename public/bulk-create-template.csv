@@ -1,0 +1,3 @@
+﻿clientRef,summary,issueType,description,assignee,priority,labels,points,originalEstimate,dueDate,fixVersions
+TASK-001,Thiết kế API,Task,"Mô tả có dấu phẩy",user.name,High,"backend,api",3,1d 4h,2026-10-10,"Release 1"
+TASK-002,Sửa lỗi đăng nhập,Bug,Không đăng nhập được,user.name,Highest,"bug,login",5,30m,2026-10-12,"Release 1,Release 2"

@@ -2,13 +2,26 @@ import {
   type BulkCreateRowInput,
   MAX_BULK_CREATE_ITEMS,
 } from "./create-types";
+import { generateUniqueClientRef } from "./client-ref";
+
+export type ParsedCsvRowError = {
+  line: number;
+  field?: string;
+  message: string;
+};
 
 export type ParsedCsvResult = {
   items: BulkCreateRowInput[];
   headers: string[];
   recognizedHeaders: Record<string, string>; // rawHeader -> canonicalField
   unrecognizedHeaders: string[];
+  duplicateCanonicalHeaders: string[];
   totalRows: number;
+  validCount: number;
+  errorCount: number;
+  skippedEmptyCount: number;
+  overflowCount: number;
+  errors: ParsedCsvRowError[];
   warnings: string[];
 };
 
@@ -89,12 +102,48 @@ const CANONICAL_FIELD_MAP: Record<string, keyof BulkCreateRowInput> = {
 };
 
 /**
- * Standard CSV and TSV tokenizer that handles quotes, escaped quotes (""), and newlines.
+ * Validates strictly that date string is YYYY-MM-DD and exists in calendar (handles leap years, month lengths).
  */
-export function parseDelimitedText(
+export function isValidIsoDate(dateStr: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  const [y, m, d] = dateStr.split("-").map((v) => parseInt(v, 10));
+  if (m < 1 || m > 12) return false;
+  if (d < 1) return false;
+  const isLeap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const daysInMonth = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return d <= daysInMonth[m - 1];
+}
+
+/**
+ * Parses points strictly as a non-negative whole integer.
+ * Rejects floats ("3.5"), suffixes ("3abc"), and negatives ("-1").
+ */
+export function parseStrictPoints(str: string): { ok: true; points: number } | { ok: false; error: string } {
+  const trimmed = str.trim();
+  if (!trimmed) return { ok: false, error: "Giá trị trống" };
+  if (!/^\d+$/.test(trimmed)) {
+    return { ok: false, error: `Story Points phải là số nguyên không âm (nhận: "${trimmed}")` };
+  }
+  const val = parseInt(trimmed, 10);
+  return { ok: true, points: val };
+}
+
+export type TokenizeResult = {
+  rows: Array<{
+    cells: string[];
+    line: number;
+  }>;
+  hasUnclosedQuote: boolean;
+  unclosedQuoteLine?: number;
+};
+
+/**
+ * Tokenize CSV/TSV text into rows of string cells with line tracking and quote handling.
+ */
+export function tokenizeDelimitedText(
   rawText: string,
   preferredDelimiter?: "," | "\t" | ";"
-): string[][] {
+): TokenizeResult {
   let text = rawText;
   // Strip UTF-8 BOM if present
   if (text.charCodeAt(0) === 0xfeff) {
@@ -102,7 +151,7 @@ export function parseDelimitedText(
   }
   text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-  // Autodetect delimiter if not specified: count occurrences in first line
+  // Autodetect delimiter if not specified
   const firstLine = text.split("\n")[0] || "";
   let delimiter = preferredDelimiter;
   if (!delimiter) {
@@ -118,12 +167,15 @@ export function parseDelimitedText(
     }
   }
 
-  const rows: string[][] = [];
+  const rows: Array<{ cells: string[]; line: number }> = [];
   let currentRow: string[] = [];
   let currentField = "";
   let insideQuotes = false;
-  let i = 0;
+  let currentLine = 1;
+  let rowStartLine = 1;
+  let quoteStartLine = 1;
 
+  let i = 0;
   while (i < text.length) {
     const char = text[i];
 
@@ -139,6 +191,9 @@ export function parseDelimitedText(
           continue;
         }
       } else {
+        if (char === "\n") {
+          currentLine++;
+        }
         currentField += char;
         i++;
         continue;
@@ -146,6 +201,7 @@ export function parseDelimitedText(
     } else {
       if (char === '"') {
         insideQuotes = true;
+        quoteStartLine = currentLine;
         i++;
         continue;
       }
@@ -157,9 +213,11 @@ export function parseDelimitedText(
       }
       if (char === "\n") {
         currentRow.push(currentField);
-        rows.push(currentRow);
+        rows.push({ cells: currentRow, line: rowStartLine });
         currentRow = [];
         currentField = "";
+        currentLine++;
+        rowStartLine = currentLine;
         i++;
         continue;
       }
@@ -170,11 +228,25 @@ export function parseDelimitedText(
 
   if (currentField.length > 0 || currentRow.length > 0) {
     currentRow.push(currentField);
-    rows.push(currentRow);
+    rows.push({ cells: currentRow, line: rowStartLine });
   }
 
-  // Filter out trailing empty rows
-  return rows.filter((r) => r.some((c) => c.trim().length > 0));
+  return {
+    rows,
+    hasUnclosedQuote: insideQuotes,
+    unclosedQuoteLine: insideQuotes ? quoteStartLine : undefined,
+  };
+}
+
+/**
+ * Standard CSV and TSV tokenizer helper that returns string[][] for backwards compatibility.
+ */
+export function parseDelimitedText(
+  rawText: string,
+  preferredDelimiter?: "," | "\t" | ";"
+): string[][] {
+  const result = tokenizeDelimitedText(rawText, preferredDelimiter);
+  return result.rows.map((r) => r.cells);
 }
 
 /**
@@ -185,29 +257,51 @@ function normalizeHeaderName(header: string): string {
 }
 
 /**
- * Parses CSV/TSV input into BulkCreateRowInput array with mapped headers and generated clientRef.
+ * Parses CSV/TSV input into BulkCreateRowInput array with mapped headers,
+ * strict validation, comprehensive statistics, and unique clientRef generation.
  */
 export function parseBulkCreateCsv(
   csvContent: string,
-  preferredDelimiter?: "," | "\t" | ";"
+  preferredDelimiter?: "," | "\t" | ";",
+  maxItems: number = MAX_BULK_CREATE_ITEMS
 ): ParsedCsvResult {
-  const rows = parseDelimitedText(csvContent, preferredDelimiter);
+  const tokenized = tokenizeDelimitedText(csvContent, preferredDelimiter);
   const warnings: string[] = [];
+  const errors: ParsedCsvRowError[] = [];
 
-  if (rows.length === 0) {
+  if (tokenized.hasUnclosedQuote) {
+    warnings.push(
+      `Phát hiện dấu ngoặc kép (quote) chưa được đóng ở dòng ${tokenized.unclosedQuoteLine ?? "cuối"}. Dữ liệu có thể bị gộp dòng.`
+    );
+  }
+
+  const hasAnyContent = tokenized.rows.some((r) =>
+    r.cells.some((c) => c.trim().length > 0)
+  );
+
+  if (tokenized.rows.length === 0 || !hasAnyContent) {
     return {
       items: [],
       headers: [],
       recognizedHeaders: {},
       unrecognizedHeaders: [],
+      duplicateCanonicalHeaders: [],
       totalRows: 0,
+      validCount: 0,
+      errorCount: 0,
+      skippedEmptyCount: tokenized.rows.length,
+      overflowCount: 0,
+      errors: [],
       warnings: ["Tệp hoặc dữ liệu trống"],
     };
   }
 
-  const rawHeaders = rows[0].map((h) => h.trim());
+  const headerRow = tokenized.rows[0];
+  const rawHeaders = headerRow.cells.map((h) => h.trim());
   const recognizedHeaders: Record<string, string> = {};
   const unrecognizedHeaders: string[] = [];
+  const duplicateCanonicalHeaders: string[] = [];
+  const canonicalToHeaderMap: Map<keyof BulkCreateRowInput, string> = new Map();
   const columnIndexMap: Map<number, keyof BulkCreateRowInput> = new Map();
 
   let hasSummaryHeader = false;
@@ -215,6 +309,14 @@ export function parseBulkCreateCsv(
     const norm = normalizeHeaderName(header);
     const mapped = CANONICAL_FIELD_MAP[norm];
     if (mapped) {
+      if (canonicalToHeaderMap.has(mapped)) {
+        const prev = canonicalToHeaderMap.get(mapped);
+        duplicateCanonicalHeaders.push(header);
+        warnings.push(
+          `Cột "${header}" bị trùng với cột "${prev}" cho trường "${mapped}". Cột "${header}" sẽ được ưu tiên.`
+        );
+      }
+      canonicalToHeaderMap.set(mapped, header);
       recognizedHeaders[header] = mapped;
       columnIndexMap.set(idx, mapped);
       if (mapped === "summary") hasSummaryHeader = true;
@@ -223,22 +325,57 @@ export function parseBulkCreateCsv(
     }
   });
 
-  // If no recognized headers found (e.g. user pasted raw table without header),
-  // treat row 0 as data if row 0 has content and doesn't look like header
-  let dataRows = rows.slice(1);
-  if (!hasSummaryHeader && columnIndexMap.size === 0) {
-    // Check if column 0 might be summary
-    warnings.push("Không tìm thấy hàng tiêu đề nhận diện được. Cột 1 sẽ được coi là Tiêu đề (Summary).");
-    columnIndexMap.set(0, "summary");
-    dataRows = rows;
+  // Check if header is missing summary when other headers are recognized
+  let dataRowsWithLine = tokenized.rows.slice(1);
+  if (!hasSummaryHeader) {
+    if (columnIndexMap.size > 0) {
+      // Missing mandatory summary header while having other recognized headers
+      errors.push({
+        line: 1,
+        field: "summary",
+        message: 'Tệp thiếu cột bắt buộc "summary" (Tiêu đề). Không thể nhập dữ liệu.',
+      });
+      return {
+        items: [],
+        headers: rawHeaders,
+        recognizedHeaders,
+        unrecognizedHeaders,
+        duplicateCanonicalHeaders,
+        totalRows: dataRowsWithLine.length,
+        validCount: 0,
+        errorCount: dataRowsWithLine.length,
+        skippedEmptyCount: 0,
+        overflowCount: 0,
+        errors,
+        warnings,
+      };
+    } else {
+      // No recognized headers at all (e.g. user pasted raw table without header)
+      warnings.push("Không tìm thấy hàng tiêu đề nhận diện được. Cột 1 sẽ được coi là Tiêu đề (Summary).");
+      columnIndexMap.set(0, "summary");
+      dataRowsWithLine = tokenized.rows;
+    }
   }
 
   const items: BulkCreateRowInput[] = [];
+  const seenRefs = new Set<string>();
+  let validCount = 0;
+  let errorCount = 0;
+  let skippedEmptyCount = 0;
+  let overflowCount = 0;
 
-  dataRows.forEach((row, rowIdx) => {
-    if (items.length >= MAX_BULK_CREATE_ITEMS) return;
+  dataRowsWithLine.forEach((rowObj) => {
+    const row = rowObj.cells;
+    const rowLine = rowObj.line;
 
-    let clientRef = `row-${rowIdx + 1}`;
+    // Check if entire row is empty
+    const isRowEmpty = row.every((c) => c.trim().length === 0);
+    if (isRowEmpty) {
+      skippedEmptyCount++;
+      return;
+    }
+
+    let clientRef = "";
     let summary = "";
     let issueTypeId: string | undefined;
     let description: string | undefined;
@@ -249,6 +386,7 @@ export function parseBulkCreateCsv(
     let originalEstimate: string | undefined;
     let dueDate: string | null | undefined;
     let fixVersionIds: string[] | undefined;
+    const rowErrors: string[] = [];
 
     row.forEach((cell, colIdx) => {
       const field = columnIndexMap.get(colIdx);
@@ -284,15 +422,25 @@ export function parseBulkCreateCsv(
           break;
         case "points":
           if (trimmed) {
-            const p = parseFloat(trimmed);
-            if (!Number.isNaN(p)) points = Math.round(p);
+            const parsed = parseStrictPoints(trimmed);
+            if (parsed.ok) {
+              points = parsed.points;
+            } else {
+              rowErrors.push(`Points "${trimmed}" không hợp lệ (phải là số nguyên không âm)`);
+            }
           }
           break;
         case "originalEstimate":
           if (trimmed) originalEstimate = trimmed;
           break;
         case "dueDate":
-          if (trimmed) dueDate = trimmed;
+          if (trimmed) {
+            if (isValidIsoDate(trimmed)) {
+              dueDate = trimmed;
+            } else {
+              rowErrors.push(`Hạn chót "${trimmed}" không đúng định dạng YYYY-MM-DD hoặc ngày không tồn tại`);
+            }
+          }
           break;
         case "fixVersionIds":
           if (trimmed) {
@@ -305,25 +453,62 @@ export function parseBulkCreateCsv(
       }
     });
 
-    if (summary || description || issueTypeId) {
-      items.push({
-        clientRef,
-        summary,
-        issueTypeId,
-        description,
-        assignee,
-        priorityId,
-        labels,
-        points,
-        originalEstimate,
-        dueDate,
-        fixVersionIds,
-      });
+    // Check mandatory summary
+    if (!summary) {
+      rowErrors.push("Thiếu tiêu đề (Summary)");
     }
+
+    if (rowErrors.length > 0) {
+      errorCount++;
+      for (const err of rowErrors) {
+        errors.push({ line: rowLine, message: `Dòng ${rowLine}: ${err}` });
+      }
+      return;
+    }
+
+    // Resolve or generate unique clientRef
+    if (!clientRef) {
+      clientRef = generateUniqueClientRef(seenRefs, "row");
+    } else if (seenRefs.has(clientRef)) {
+      warnings.push(`Dòng ${rowLine}: clientRef "${clientRef}" bị trùng lặp, đã tự động đổi tên.`);
+      let dupIndex = 2;
+      let newRef = `${clientRef}-${dupIndex}`;
+      while (seenRefs.has(newRef)) {
+        dupIndex++;
+        newRef = `${clientRef}-${dupIndex}`;
+      }
+      clientRef = newRef;
+      seenRefs.add(clientRef);
+    } else {
+      seenRefs.add(clientRef);
+    }
+
+    // Check capacity limit
+    if (items.length >= maxItems) {
+      overflowCount++;
+      return;
+    }
+
+    items.push({
+      clientRef,
+      summary,
+      issueTypeId,
+      description,
+      assignee,
+      priorityId,
+      labels,
+      points,
+      originalEstimate,
+      dueDate,
+      fixVersionIds,
+    });
+    validCount++;
   });
 
-  if (dataRows.length > MAX_BULK_CREATE_ITEMS) {
-    warnings.push(`Dữ liệu gồm ${dataRows.length} dòng, chỉ ${MAX_BULK_CREATE_ITEMS} dòng đầu tiên được nhập.`);
+  if (overflowCount > 0) {
+    warnings.push(
+      `Có ${overflowCount} dòng vượt quá giới hạn tối đa ${maxItems} task và đã bị bỏ qua.`
+    );
   }
 
   return {
@@ -331,7 +516,13 @@ export function parseBulkCreateCsv(
     headers: rawHeaders,
     recognizedHeaders,
     unrecognizedHeaders,
-    totalRows: items.length,
+    duplicateCanonicalHeaders,
+    totalRows: dataRowsWithLine.length,
+    validCount,
+    errorCount,
+    skippedEmptyCount,
+    overflowCount,
+    errors,
     warnings,
   };
 }

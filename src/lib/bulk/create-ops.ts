@@ -8,7 +8,6 @@ import {
   type JiraAuth,
 } from "@/lib/jira/client";
 import type {
-  JiraIssue,
   JiraCreateMetaResponse,
   JiraCreateMetaField,
 } from "@/lib/jira/types";
@@ -16,7 +15,6 @@ import { refreshJiraIssueCache } from "@/lib/issues/cache";
 import { audit } from "@/lib/audit";
 import { userJiraAuth } from "@/lib/user-creds";
 import {
-  type BulkCreateRequest,
   type BulkCreatePreviewResult,
   type BulkCreatePreviewItem,
   type BulkCreateProjectMetadata,

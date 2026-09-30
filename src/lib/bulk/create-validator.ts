@@ -14,6 +14,7 @@ import {
   MAX_LABELS_COUNT,
 } from "./create-types";
 import { parseJiraDuration } from "@/lib/worklogs/schema";
+import { isValidIsoDate } from "./csv-parser";
 
 export type BatchValidationResult =
   | { ok: true; data: BulkCreateRequest }
@@ -290,23 +291,14 @@ export function validateAndNormalizeItem(
   let dueDate: string | null | undefined = undefined;
   if (merged.dueDate) {
     const dTrim = merged.dueDate.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dTrim)) {
+    if (!isValidIsoDate(dTrim)) {
       errors.push({
         field: "dueDate",
         code: "INVALID_DUEDATE",
-        message: "Hạn hoàn thành phải có định dạng YYYY-MM-DD",
+        message: "Hạn hoàn thành phải có định dạng YYYY-MM-DD và ngày phải tồn tại trên lịch",
       });
     } else {
-      const d = new Date(dTrim + "T00:00:00Z");
-      if (Number.isNaN(d.getTime())) {
-        errors.push({
-          field: "dueDate",
-          code: "INVALID_DUEDATE_VALUE",
-          message: "Ngày hết hạn không hợp lệ",
-        });
-      } else {
-        dueDate = dTrim;
-      }
+      dueDate = dTrim;
     }
   }
 

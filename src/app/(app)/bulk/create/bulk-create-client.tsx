@@ -1,25 +1,31 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useSession } from "next-auth/react";
 import { api } from "@/lib/api-client";
 import {
   type BulkCreateRowInput,
   type BulkCreateFieldDefaults,
   type BulkCreatePreviewResult,
   type BulkCreateProjectMetadata,
-  MAX_BULK_CREATE_ITEMS,
 } from "@/lib/bulk/create-types";
 import { CreateDefaultsForm } from "./create-defaults-form";
 import { CreateTaskGrid } from "./create-task-grid";
 import { CreatePreview } from "./create-preview";
 import { CreateProgress } from "./create-progress";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -29,24 +35,21 @@ import {
 } from "@/components/ui/select";
 import {
   PlusCircle,
-  Eye,
   CheckCheck,
   RotateCcw,
-  Sparkles,
-  Layers,
   FolderKanban,
   AlertCircle,
   ArrowRight,
   ListPlus,
   Edit3,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Step = "input" | "preview" | "progress";
 
 export function BulkCreateClient() {
-  const { data: session } = useSession();
-  const [projectKey, setProjectKey] = useState<string>("");
+  const [userSelectedProject, setUserSelectedProject] = useState<string>("");
   const [step, setStep] = useState<Step>("input");
   const [defaults, setDefaults] = useState<BulkCreateFieldDefaults>({});
   const [items, setItems] = useState<BulkCreateRowInput[]>([
@@ -60,6 +63,10 @@ export function BulkCreateClient() {
   const [previewData, setPreviewData] = useState<BulkCreatePreviewResult | null>(null);
   const [activeOperationId, setActiveOperationId] = useState<string | null>(null);
 
+  // Project change confirmation state
+  const [pendingProjectKey, setPendingProjectKey] = useState<string | null>(null);
+  const [confirmProjectDialogOpen, setConfirmProjectDialogOpen] = useState(false);
+
   // Query user available projects
   const { data: projectsData } = useQuery({
     queryKey: ["projects"],
@@ -72,11 +79,8 @@ export function BulkCreateClient() {
     return list.length > 0 ? list : ["EPM", "CICM", "MR", "EDM", "EMA", "ETM", "MHRM", "ECM"];
   }, [projectsData?.items]);
 
-  useEffect(() => {
-    if (!projectKey && availableProjects.length > 0) {
-      setProjectKey(availableProjects[0]);
-    }
-  }, [projectKey, availableProjects]);
+  // Derive projectKey: use userSelectedProject if explicitly set, else fall back to first available project
+  const projectKey = userSelectedProject || availableProjects[0] || "";
 
   // Query metadata for selected project
   const {
@@ -91,18 +95,18 @@ export function BulkCreateClient() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Preview mutation
+  // Preview mutation: pass object directly without double JSON.stringify
   const previewMutation = useMutation({
     mutationFn: () =>
       api<BulkCreatePreviewResult>("/api/bulk/create", {
         method: "POST",
-        body: JSON.stringify({
+        body: {
           projectKey,
           defaults,
           items: items.filter((i) => i.summary.trim().length > 0),
           metadataFingerprint: metadata?.fingerprint,
           source,
-        }),
+        },
       }),
     onSuccess: (data) => {
       setPreviewData(data);
@@ -110,15 +114,15 @@ export function BulkCreateClient() {
     },
   });
 
-  // Confirm mutation
+  // Confirm mutation: pass object directly without double JSON.stringify
   const confirmMutation = useMutation({
     mutationFn: () =>
       api<{ operationId: string; queued: boolean }>("/api/bulk/create", {
         method: "POST",
-        body: JSON.stringify({
+        body: {
           confirm: true,
           operationId: previewData?.operationId,
-        }),
+        },
       }),
     onSuccess: (data) => {
       setActiveOperationId(data.operationId);
@@ -138,6 +142,41 @@ export function BulkCreateClient() {
       { clientRef: "row-3", summary: "" },
     ]);
     setDefaults({});
+  }
+
+  function handleProjectSelect(newKey: string) {
+    if (newKey === projectKey) return;
+    const hasData =
+      items.some((i) => Boolean(i.summary.trim())) || Object.keys(defaults).length > 0;
+    if (hasData) {
+      setPendingProjectKey(newKey);
+      setConfirmProjectDialogOpen(true);
+    } else {
+      setUserSelectedProject(newKey);
+    }
+  }
+
+  function applyProjectChange(newKey: string) {
+    setUserSelectedProject(newKey);
+    setDefaults({});
+    // Preserve general text content, reset project-specific options
+    setItems((prev) =>
+      prev.map((item) => ({
+        clientRef: item.clientRef,
+        summary: item.summary,
+        description: item.description,
+        assignee: item.assignee,
+        originalEstimate: item.originalEstimate,
+        dueDate: item.dueDate,
+        points: item.points,
+        labels: item.labels,
+        issueTypeId: undefined,
+        priorityId: undefined,
+        fixVersionIds: undefined,
+      }))
+    );
+    setPreviewData(null);
+    setActiveOperationId(null);
   }
 
   return (
@@ -242,7 +281,7 @@ export function BulkCreateClient() {
               </div>
 
               <div className="w-full sm:w-64">
-                <Select value={projectKey} onValueChange={(val) => setProjectKey(val)}>
+                <Select value={projectKey} onValueChange={handleProjectSelect}>
                   <SelectTrigger className="h-9 text-xs cursor-pointer">
                     <SelectValue placeholder="Chọn một dự án..." />
                   </SelectTrigger>
@@ -380,19 +419,6 @@ export function BulkCreateClient() {
               )}
             </div>
           )}
-
-          {/* Empty State before project selection */}
-          {!projectKey && !metadataLoading && (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border/80 p-12 text-center">
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <FolderKanban className="h-6 w-6" aria-hidden="true" />
-              </div>
-              <h3 className="text-sm font-semibold text-foreground">Chưa chọn dự án Jira</h3>
-              <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-                Vui lòng chọn một dự án Jira ở trên để bắt đầu nhập và tạo các task hàng loạt.
-              </p>
-            </div>
-          )}
         </div>
       )}
 
@@ -404,6 +430,8 @@ export function BulkCreateClient() {
           onBack={() => setStep("input")}
           onConfirm={() => confirmMutation.mutate()}
           isConfirming={confirmMutation.isPending}
+          confirmError={confirmMutation.isError ? confirmMutation.error.message : null}
+          onResetConfirmError={() => confirmMutation.reset()}
         />
       )}
 
@@ -414,6 +442,54 @@ export function BulkCreateClient() {
           onReset={handleResetAll}
         />
       )}
+
+      {/* Project Change Confirmation Dialog */}
+      <Dialog open={confirmProjectDialogOpen} onOpenChange={setConfirmProjectDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+              Xác nhận thay đổi dự án Jira
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Bảng hiện tại đang có dữ liệu task hoặc cài đặt mặc định.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground leading-relaxed">
+            Dự án sẽ chuyển sang <strong>{pendingProjectKey}</strong>. Các giá trị phụ thuộc vào dự án cũ (Loại task, Mức ưu tiên, Phiên bản) và các giá trị mặc định sẽ được đặt lại. Tiêu đề và mô tả công việc sẽ được giữ nguyên.
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setPendingProjectKey(null);
+                setConfirmProjectDialogOpen(false);
+              }}
+              className="cursor-pointer text-xs"
+            >
+              Huỷ bỏ
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                if (pendingProjectKey) {
+                  applyProjectChange(pendingProjectKey);
+                }
+                setPendingProjectKey(null);
+                setConfirmProjectDialogOpen(false);
+              }}
+              className="cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold"
+            >
+              Đồng ý chuyển dự án
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

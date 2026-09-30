@@ -76,7 +76,7 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
         `/api/bulk/operations/${operationId}/retry`,
         {
           method: "POST",
-          body: JSON.stringify(itemIds && itemIds.length > 0 ? { itemIds } : {}),
+          body: itemIds && itemIds.length > 0 ? { itemIds } : {},
         }
       ),
     onSuccess: () => {
@@ -271,6 +271,12 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
             </div>
           )}
         </CardHeader>
+
+        {retryMutation.isError && (
+          <div className="mx-6 mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-400">
+            Lỗi khi thử lại: {retryMutation.error.message}
+          </div>
+        )}
 
         <CardContent className="p-0">
           <div className="overflow-x-auto">

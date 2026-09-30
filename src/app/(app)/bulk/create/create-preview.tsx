@@ -29,6 +29,8 @@ interface CreatePreviewProps {
   onBack: () => void;
   onConfirm: () => void;
   isConfirming: boolean;
+  confirmError?: string | null;
+  onResetConfirmError?: () => void;
 }
 
 export function CreatePreview({
@@ -37,6 +39,8 @@ export function CreatePreview({
   onBack,
   onConfirm,
   isConfirming,
+  confirmError,
+  onResetConfirmError,
 }: CreatePreviewProps) {
   const [filterTab, setFilterTab] = useState<"all" | "ready" | "warning" | "blocked">("all");
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -248,6 +252,29 @@ export function CreatePreview({
           </div>
         </CardContent>
       </Card>
+
+      {confirmError && (
+        <div className="flex flex-col gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-700 dark:text-red-400">
+          <div className="flex items-center justify-between font-semibold">
+            <span className="flex items-center gap-1.5">
+              <ShieldAlert className="h-4 w-4" aria-hidden="true" />
+              Lỗi khi xác nhận tạo task: {confirmError}
+            </span>
+            {onResetConfirmError && (
+              <button
+                type="button"
+                onClick={onResetConfirmError}
+                className="text-[11px] underline hover:no-underline cursor-pointer"
+              >
+                Đóng
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Dữ liệu xem trước vẫn được lưu giữ an toàn. Bạn có thể kiểm tra lại kết nối/token Jira rồi bấm xác nhận lại, hoặc quay lại chỉnh sửa dữ liệu.
+          </p>
+        </div>
+      )}
 
       {/* Navigation Footer */}
       <div className="flex items-center justify-between border-t border-border pt-4">

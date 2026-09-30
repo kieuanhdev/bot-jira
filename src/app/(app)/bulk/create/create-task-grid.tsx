@@ -23,9 +23,13 @@ import {
   Copy,
   Upload,
   RotateCcw,
-  Sparkles,
 } from "lucide-react";
 import { CsvImportDialog } from "./csv-import-dialog";
+import {
+  generateUniqueClientRef,
+  ensureUniqueClientRefs,
+  filterBlankPlaceholderItems,
+} from "@/lib/bulk/client-ref";
 
 interface CreateTaskGridProps {
   metadata: BulkCreateProjectMetadata;
@@ -46,11 +50,12 @@ export function CreateTaskGrid({
 
   function handleAddRow() {
     if (items.length >= MAX_BULK_CREATE_ITEMS) return;
-    const nextIdx = items.length + 1;
+    const existingRefs = new Set(items.map((i) => i.clientRef).filter(Boolean));
+    const newRef = generateUniqueClientRef(existingRefs, "row");
     onChange([
       ...items,
       {
-        clientRef: `row-${nextIdx}`,
+        clientRef: newRef,
         summary: "",
       },
     ]);
@@ -60,9 +65,11 @@ export function CreateTaskGrid({
     if (items.length >= MAX_BULK_CREATE_ITEMS) return;
     const target = items[idx];
     if (!target) return;
+    const existingRefs = new Set(items.map((i) => i.clientRef).filter(Boolean));
+    const newRef = generateUniqueClientRef(existingRefs, target.clientRef || "row");
     const duplicated: BulkCreateRowInput = {
       ...target,
-      clientRef: `row-${items.length + 1}`,
+      clientRef: newRef,
       summary: target.summary ? `${target.summary} (bản sao)` : "",
     };
     const next = [...items];
@@ -92,14 +99,15 @@ export function CreateTaskGrid({
 
   function handleImportItems(
     imported: BulkCreateRowInput[],
-    source: { type: "csv" | "paste"; fileName?: string | null }
+    source: { type: "csv" | "paste"; fileName?: string | null },
+    mode: "replace" | "append"
   ) {
-    // If the only existing item is empty, replace it; otherwise append
-    if (items.length === 1 && !items[0].summary.trim()) {
-      onChange(imported);
+    if (mode === "replace") {
+      onChange(ensureUniqueClientRefs(imported));
     } else {
-      const merged = [...items, ...imported].slice(0, MAX_BULK_CREATE_ITEMS);
-      onChange(merged);
+      const nonBlank = filterBlankPlaceholderItems(items);
+      const merged = ensureUniqueClientRefs([...nonBlank, ...imported]);
+      onChange(merged.slice(0, MAX_BULK_CREATE_ITEMS));
     }
     if (onSourceChange) {
       onSourceChange(source);
@@ -390,7 +398,7 @@ export function CreateTaskGrid({
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}
         onImport={handleImportItems}
-        currentCount={items.length}
+        existingFilledCount={items.filter((i) => Boolean(i.summary.trim())).length}
       />
     </div>
   );

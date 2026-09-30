@@ -5,7 +5,7 @@ import {
   validateAndNormalizeItem,
   generateBulkCreateMarker,
 } from "./create-validator";
-import { parseBulkCreateCsv, parseDelimitedText } from "./csv-parser";
+import { parseBulkCreateCsv } from "./csv-parser";
 import type { BulkCreateProjectMetadata } from "./create-types";
 
 describe("Bulk Create - CSV and TSV Parser", () => {
