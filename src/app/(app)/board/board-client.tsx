@@ -21,6 +21,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { api, ApiError } from "@/lib/api-client";
 import { useIssues, fetchIssuesPage, type IssueItem } from "@/hooks/use-issues";
 import { issuesKeys, boardKeys, meKeys, transitionsKeys, branchesForKeys, freshnessKeys } from "@/lib/query-keys";
+import { AssigneeMultiSelect } from "@/components/assignee-multi-select";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -948,7 +949,7 @@ export function BoardClient() {
   const [q, setQ] = useState("");
   const [label, setLabel] = useState("");
   const [priority, setPriority] = useState("");
-  const [assignee, setAssignee] = useState<string>("me");
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>(["me"]);
   const [sortMode, setSortMode] = useState<SortMode>("updated");
   const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set());
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -981,12 +982,14 @@ export function BoardClient() {
   const effectiveView: ViewMode = width === "narrow" ? "list" : view;
 
   const enabled = effectivePreferred.length > 0;
+  const isAssigneeAll =
+    selectedAssignees.length === 0 || selectedAssignees.includes("ALL");
   const boardFilters: import("@/hooks/use-issues").BoardFilters = {
     ...(selectedProject ? { project: selectedProject } : {}),
     q: q || undefined,
     label: label || undefined,
     priority: priority || undefined,
-    assignee,
+    assignee: isAssigneeAll ? "ALL" : selectedAssignees,
     includeDone: true,
     limit: 1000,
   };
@@ -995,7 +998,13 @@ export function BoardClient() {
   // Extra pages loaded on demand for projects larger than the first page. The
   // filter signature is the key that resets them: when it changes, the loaded
   // pages no longer match, so we only render the first page until reloaded.
-  const filterSig = JSON.stringify({ p: selectedProject, q, label, priority, assignee });
+  const filterSig = JSON.stringify({
+    p: selectedProject,
+    q,
+    label,
+    priority,
+    assignee: isAssigneeAll ? "ALL" : [...selectedAssignees].sort(),
+  });
   const [extraPages, setExtraPages] = useState<{ sig: string; items: IssueItem[] }>({ sig: "", items: [] });
   const [loadingMore, setLoadingMore] = useState(false);
   const loadedTotal = data?.total ?? 0;
@@ -2090,20 +2099,12 @@ export function BoardClient() {
             className="pl-8"
           />
         </div>
-        <Select value={assignee} onValueChange={setAssignee}>
-          <SelectTrigger className="w-44"><SelectValue placeholder="Người phụ trách" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="me">Bạn{myName ? ` (${myName})` : ""}</SelectItem>
-            <SelectItem value="ALL">Tất cả người phụ trách</SelectItem>
-            {assignees
-              .filter((a) => a !== myName)
-              .map((a) => (
-                <SelectItem key={a} value={a}>
-                  {a}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
+        <AssigneeMultiSelect
+          value={selectedAssignees}
+          onChange={setSelectedAssignees}
+          assignees={assignees}
+          myName={myName}
+        />
         <Select value={label || ""} onValueChange={(v) => setLabel(v === "ALL" ? "" : v)}>
           <SelectTrigger className="w-40"><SelectValue placeholder="Nhãn" /></SelectTrigger>
           <SelectContent>

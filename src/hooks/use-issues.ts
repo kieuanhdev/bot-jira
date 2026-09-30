@@ -53,7 +53,7 @@ export type BoardFilters = {
   project?: string;
   /** Comma-separated project keys to scope the query to (e.g. "MR,EPM"). */
   projectList?: string;
-  assignee?: string;
+  assignee?: string | string[];
   label?: string;
   priority?: string;
   status?: string;
@@ -72,6 +72,12 @@ export function useIssues(
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([k, v]) => {
     if (v === undefined || v === "") return;
+    if (Array.isArray(v)) {
+      if (v.length > 0) {
+        params.set(k, v.join(","));
+      }
+      return;
+    }
     // Booleans become "1"/"0" (we want to send includeDone=0 explicitly too).
     params.set(k, v === true ? "1" : v === false ? "0" : String(v));
   });
@@ -98,6 +104,12 @@ export async function fetchIssuesPage(
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([k, v]) => {
     if (v === undefined || v === "") return;
+    if (Array.isArray(v)) {
+      if (v.length > 0) {
+        params.set(k, v.join(","));
+      }
+      return;
+    }
     params.set(k, v === true ? "1" : v === false ? "0" : String(v));
   });
   params.set("offset", String(offset));

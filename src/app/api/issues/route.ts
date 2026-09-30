@@ -43,7 +43,14 @@ export async function GET(req: Request) {
         ? userBoardProjects
         : jiraProjectList;
 
-  const assigneeParam = (url.searchParams.get("assignee") ?? "me").trim();
+  const rawAssignees = url.searchParams.getAll("assignee");
+  const assigneeTokens = (rawAssignees.length > 0 ? rawAssignees : ["me"])
+    .flatMap((s) => s.split(","))
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const isAllAssignees =
+    assigneeTokens.length === 0 || assigneeTokens.some((a) => a.toLowerCase() === "all");
+
   const jiraUsername = userJiraUsername(user);
   const includeDone = url.searchParams.get("includeDone") === "1";
   const q = (url.searchParams.get("q") ?? "").trim();
@@ -67,16 +74,48 @@ export async function GET(req: Request) {
   if (label) where.labels = { has: label };
   if (releaseLabel) where.labels = { has: releaseLabel };
   if (fixVersion) where.fixVersionNames = { has: fixVersion };
-  if (assigneeParam.toLowerCase() !== "all") {
-    const assignee = assigneeParam.toLowerCase() === "me" ? jiraUsername : assigneeParam;
-    const aliases = jiraUsernameAliases(assignee);
-    where.assigneeJira = aliases.length > 0 ? { in: aliases } : "__unresolved_current_user__";
+
+  const andConditions: Prisma.IssueCacheWhereInput[] = [];
+
+  if (!isAllAssignees) {
+    const hasUnassigned = assigneeTokens.some(
+      (a) => a.toLowerCase() === "unassigned" || a.toLowerCase() === "none"
+    );
+    const namedTokens = assigneeTokens.filter(
+      (a) => a.toLowerCase() !== "unassigned" && a.toLowerCase() !== "none"
+    );
+
+    const aliases = Array.from(
+      new Set(
+        namedTokens.flatMap((a) => {
+          const name = a.toLowerCase() === "me" ? jiraUsername : a;
+          return jiraUsernameAliases(name);
+        })
+      )
+    );
+
+    if (hasUnassigned && aliases.length > 0) {
+      andConditions.push({
+        OR: [{ assigneeJira: { in: aliases } }, { assigneeJira: null }],
+      });
+    } else if (hasUnassigned) {
+      where.assigneeJira = null;
+    } else {
+      where.assigneeJira = aliases.length > 0 ? { in: aliases } : "__unresolved_current_user__";
+    }
   }
+
   if (q) {
-    where.OR = [
-      { jiraKey: { contains: q, mode: "insensitive" } },
-      { summary: { contains: q, mode: "insensitive" } },
-    ];
+    andConditions.push({
+      OR: [
+        { jiraKey: { contains: q, mode: "insensitive" } },
+        { summary: { contains: q, mode: "insensitive" } },
+      ],
+    });
+  }
+
+  if (andConditions.length > 0) {
+    where.AND = andConditions;
   }
 
   const [items, total, cursors] = await prisma.$transaction([
