@@ -54,7 +54,7 @@ export const REQUIREMENT_ACTIONS: Record<RequirementCode, string> = {
  */
 export const REQUIREMENT_BULK_FIELDS: Record<RequirementCode, string[]> = {
   ESTIMATION: ["points", "estimate"],
-  WORKLOG: [],
+  WORKLOG: ["worklog"],
   FIX_VERSION: ["fixVersions"],
   DUE_DATE: ["dueDate"],
 };

@@ -11,6 +11,7 @@ import type {
   JiraVersion,
   JiraFieldDefinition,
   JiraEditMeta,
+  JiraWorklog,
 } from "./types";
 
 const BASE_ISSUE_FIELDS = [
@@ -470,9 +471,9 @@ export function jiraWith(auth?: JiraAuth) {
     addWorklog: (
       key: string,
       data: { timeSpent: string; started?: string; comment?: string },
-      adjustEstimate: "auto" | "leave" = "auto"
-    ) =>
-      request(
+      adjustEstimate: "auto" | "leave" = "leave"
+    ): Promise<JiraWorklog> =>
+      requestOnce<JiraWorklog>(
         `/rest/api/2/issue/${encodeURIComponent(key)}/worklog?adjustEstimate=${adjustEstimate}`,
         {
           method: "POST",
@@ -482,6 +483,14 @@ export function jiraWith(auth?: JiraAuth) {
             ...(data.comment ? { comment: data.comment } : {}),
           }),
         },
+        auth
+      ),
+    getWorklogs: (
+      key: string
+    ): Promise<{ startAt?: number; maxResults?: number; total?: number; worklogs?: JiraWorklog[] }> =>
+      request(
+        `/rest/api/2/issue/${encodeURIComponent(key)}/worklog`,
+        { method: "GET" },
         auth
       ),
     createIssue: (data: {

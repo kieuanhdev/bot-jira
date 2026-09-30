@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api-client";
@@ -29,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
 import {
   CheckCheck,
   CheckCircle2,
@@ -38,6 +40,7 @@ import {
   Loader2,
   Eye,
   ArrowRight,
+  ArrowLeft,
   History,
   ListChecks,
   Search,
@@ -46,7 +49,9 @@ import {
   TriangleAlert,
   PackageOpen,
   ExternalLink,
+  Clock,
 } from "lucide-react";
+import { parseJiraDuration, formatJiraDuration } from "@/lib/worklogs/schema";
 
 export type BulkFieldValues = {
   assignee?: string | null;
@@ -58,10 +63,15 @@ export type BulkFieldValues = {
   fixVersions?: string[];
 };
 
-type BulkAction = {
-  kind: "update-fields";
-  value: BulkFieldValues;
-};
+type BulkAction =
+  | {
+      kind: "update-fields";
+      value: BulkFieldValues;
+    }
+  | {
+      kind: "log-work";
+      value: { timeSpent: string; started?: string; comment?: string };
+    };
 
 type PreviewItem = {
   jiraKey: string;
@@ -442,6 +452,18 @@ export function BulkClient() {
   const [fixVersions, setFixVersions] = useState<string[]>([]);
   const [clearFixVersions, setClearFixVersions] = useState(false);
 
+  // Operation Kind: "update-fields" | "log-work"
+  const [operationKind, setOperationKind] = useState<"update-fields" | "log-work">(() =>
+    searchParams?.get("action") === "log-work" ? "log-work" : "update-fields"
+  );
+  const [worklogDuration, setWorklogDuration] = useState("");
+  const [worklogStarted, setWorklogStarted] = useState(() => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  });
+  const [worklogComment, setWorklogComment] = useState("");
+
   // Preview & operation states
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -578,9 +600,23 @@ export function BulkClient() {
   }
 
   const isEstimateValid = !estimate.trim() || /^(?=.*\d)(?:\d+[wdhm]\s*)+$/i.test(estimate.trim());
+  const isWorklogDurationValid = Boolean(worklogDuration.trim() && parseJiraDuration(worklogDuration.trim()));
 
   function buildAction(): BulkAction | null {
     if (!filterProject) return null;
+
+    if (operationKind === "log-work") {
+      if (!worklogDuration.trim() || !isWorklogDurationValid) return null;
+      return {
+        kind: "log-work",
+        value: {
+          timeSpent: worklogDuration.trim(),
+          ...(worklogStarted ? { started: worklogStarted } : {}),
+          ...(worklogComment.trim() ? { comment: worklogComment.trim() } : {}),
+        },
+      };
+    }
+
     const value: BulkFieldValues = {};
 
     if (enabledFields.has("assignee")) {
@@ -721,8 +757,11 @@ export function BulkClient() {
   ) ?? { changes: 0, unchanged: 0, warnings: 0, blocked: 0 };
 
   const visiblePreviewItems = preview?.items.filter((item) => previewBucket(item) === previewView) ?? [];
+  const isLogWorkOp = buildAction()?.kind === "log-work" || preview?.type === "log-work";
   const confirmLabel = preview
-    ? `Cập nhật ${preview.actionable} task`
+    ? isLogWorkOp
+      ? `Ghi worklog ${preview.actionable} task`
+      : `Cập nhật ${preview.actionable} task`
     : "Xác nhận thay đổi";
 
   return (
@@ -1034,7 +1073,7 @@ export function BulkClient() {
           <CardTitle className="text-base flex items-center justify-between">
             <span className="flex items-center gap-2">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">2</span>
-              Chọn các trường cần sửa
+              {operationKind === "log-work" ? "Thiết lập Ghi Worklog" : "Chọn các trường cần sửa"}
             </span>
             {filterProject && (
               <Badge variant="outline" className="font-normal text-xs">
@@ -1044,11 +1083,44 @@ export function BulkClient() {
           </CardTitle>
           <CardDescription>
             {filterProject
-              ? `Bật một hoặc nhiều trường có sẵn của dự án ${filterProject}, nhập giá trị mới rồi xem trước trên ${effectiveCount} task đã chọn.`
-              : "Vui lòng chọn dự án ở Bước 1 trước khi cấu hình trường."}
+              ? operationKind === "log-work"
+                ? `Nhập thời lượng thực hiện để ghi nhận cộng dồn lên ${effectiveCount} task đã chọn.`
+                : `Bật một hoặc nhiều trường có sẵn của dự án ${filterProject}, nhập giá trị mới rồi xem trước trên ${effectiveCount} task đã chọn.`
+              : "Vui lòng chọn dự án ở Bước 1 trước khi cấu hình thao tác."}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 px-4 pb-4 sm:px-5 sm:pb-5">
+          {filterProject && (
+            <div className="flex items-center gap-2 border-b pb-3">
+              <span className="text-xs font-semibold text-muted-foreground mr-1">Chế độ:</span>
+              <Button
+                type="button"
+                size="sm"
+                variant={operationKind === "update-fields" ? "default" : "outline"}
+                onClick={() => {
+                  setOperationKind("update-fields");
+                  resetPreview();
+                }}
+                className="text-xs h-7 cursor-pointer"
+              >
+                Cập nhật trường
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={operationKind === "log-work" ? "default" : "outline"}
+                onClick={() => {
+                  setOperationKind("log-work");
+                  resetPreview();
+                }}
+                className="gap-1.5 text-xs h-7 cursor-pointer"
+              >
+                <Clock className="h-3.5 w-3.5" />
+                Ghi Worklog
+              </Button>
+            </div>
+          )}
+
           {!filterProject ? (
             <div className="flex items-center gap-3 rounded-lg border border-dashed p-6 text-muted-foreground">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
@@ -1057,6 +1129,87 @@ export function BulkClient() {
               <div>
                 <p className="text-sm font-medium text-foreground">Chưa có dự án nào được chọn</p>
                 <p className="text-xs text-muted-foreground">Chọn dự án ở Bước 1 để tải cấu hình các trường có thể chỉnh sửa.</p>
+              </div>
+            </div>
+          ) : operationKind === "log-work" ? (
+            <div className="flex flex-col gap-4 rounded-lg border bg-card/60 p-4">
+              <div className="rounded-lg border border-teal-500/30 bg-teal-500/10 p-3 text-xs text-teal-800 dark:text-teal-200">
+                <div className="font-semibold text-sm mb-1 flex items-center gap-1.5">
+                  <Clock className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                  Chế độ Ghi Worklog hàng loạt
+                </div>
+                <div>
+                  Mỗi task đã chọn ({effectiveCount} task) sẽ được cộng thêm thời lượng này vào thời gian đã ghi trên Jira.
+                  {isWorklogDurationValid && (
+                    <div className="mt-1 font-semibold text-teal-900 dark:text-teal-100">
+                      Tổng thời gian dự kiến ghi nhận: {effectiveCount} × {worklogDuration} ={" "}
+                      {formatJiraDuration(effectiveCount * (parseJiraDuration(worklogDuration) ?? 0))}
+                    </div>
+                  )}
+                </div>
+                <div className="mt-1 text-muted-foreground text-[11px]">
+                  * Không thay đổi Remaining Estimate (adjustEstimate = leave).
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-foreground">
+                    Thời lượng mỗi task <span className="text-destructive">*</span>
+                  </label>
+                  <Input
+                    placeholder="Ví dụ: 30m, 2h, 1d 4h..."
+                    value={worklogDuration}
+                    onChange={(e) => {
+                      setWorklogDuration(e.target.value);
+                      resetPreview();
+                    }}
+                    className={cn(
+                      "h-9 text-sm font-mono",
+                      worklogDuration.trim() && !isWorklogDurationValid && "border-destructive focus-visible:ring-destructive"
+                    )}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Cú pháp Jira: <strong>m</strong> (phút), <strong>h</strong> (giờ), <strong>d</strong> (ngày = 8h), <strong>w</strong> (tuần = 5d).
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-foreground">
+                    Thời điểm bắt đầu <span className="text-destructive">*</span>
+                  </label>
+                  <Input
+                    type="datetime-local"
+                    value={worklogStarted}
+                    onChange={(e) => {
+                      setWorklogStarted(e.target.value);
+                      resetPreview();
+                    }}
+                    className="h-9 text-sm"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Thời điểm ghi nhận theo giờ địa phương.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-foreground">Ghi chú (Tùy chọn)</span>
+                  <span className={cn("text-[11px]", worklogComment.length > 4000 ? "text-destructive font-semibold" : "text-muted-foreground")}>
+                    {worklogComment.length} / 4000
+                  </span>
+                </div>
+                <Textarea
+                  rows={2}
+                  placeholder="Mô tả công việc chung cho các task này..."
+                  value={worklogComment}
+                  onChange={(e) => {
+                    setWorklogComment(e.target.value);
+                    resetPreview();
+                  }}
+                  className="text-sm resize-y"
+                />
               </div>
             </div>
           ) : fieldsLoading ? (
@@ -1386,6 +1539,26 @@ export function BulkClient() {
               </div>
             )}
 
+            {isLogWorkOp && (
+              <div className="rounded-lg border border-teal-500/30 bg-teal-500/10 p-4 text-xs text-teal-800 dark:text-teal-200">
+                <div className="font-semibold text-sm mb-1 flex items-center gap-1.5">
+                  <Clock className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                  Ghi nhận thời gian hàng loạt
+                </div>
+                <div>
+                  Mỗi task sẽ được cộng <strong>{worklogDuration}</strong>; tổng thời gian dự kiến ghi là{" "}
+                  <strong>
+                    {preview.actionable} × {worklogDuration} ={" "}
+                    {formatJiraDuration(preview.actionable * (parseJiraDuration(worklogDuration) ?? 0))}
+                  </strong>{" "}
+                  trên {preview.actionable} task.
+                </div>
+                <div className="mt-1 text-muted-foreground text-[11px]">
+                  * Remaining Estimate của các task được giữ nguyên (adjustEstimate = leave).
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
               {([
                 ["changes", "Sẽ thay đổi", previewCounts.changes, CheckCircle2, "text-emerald-700 dark:text-emerald-400"],
@@ -1455,6 +1628,17 @@ export function BulkClient() {
                       {fieldRow("Due date", item.before, item.after, "dueDate")}
                       {fieldRow("Nhãn (Labels)", item.before, item.after, "labels")}
                       {fieldRow("Fix Versions", item.before, item.after, "fixVersions")}
+                      {Boolean(item.after.worklog) ? (
+                        <div className="flex items-center justify-between text-xs py-0.5 border-t mt-0.5">
+                          <span className="text-muted-foreground font-medium">Ghi Worklog:</span>
+                          <span className="font-semibold text-primary font-mono">
+                            +{String((item.after.worklog as { timeSpent?: string })?.timeSpent ?? "")}
+                            {(item.after.worklog as { comment?: string })?.comment
+                              ? ` ("${(item.after.worklog as { comment?: string }).comment}")`
+                              : ""}
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
                   )}
                 </div>
@@ -1544,19 +1728,38 @@ export function BulkClient() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CheckCheck className="h-5 w-5 text-primary" aria-hidden="true" />
-              Xác nhận cập nhật nhiều trường
+              {isLogWorkOp ? (
+                <Clock className="h-5 w-5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+              ) : (
+                <CheckCheck className="h-5 w-5 text-primary" aria-hidden="true" />
+              )}
+              {isLogWorkOp ? "Xác nhận ghi Worklog hàng loạt" : "Xác nhận cập nhật nhiều trường"}
             </DialogTitle>
             <DialogDescription>
-              Bạn sắp cập nhật các trường đã chọn cho {preview?.actionable ?? 0} task thuộc dự án {filterProject}.
+              {isLogWorkOp
+                ? `Bạn sắp ghi ${worklogDuration} cho mỗi task. Tổng cộng ${formatJiraDuration(
+                    (preview?.actionable ?? 0) * (parseJiraDuration(worklogDuration) ?? 0)
+                  )} sẽ được ghi lên ${preview?.actionable ?? 0} task thuộc dự án ${filterProject}.`
+                : `Bạn sắp cập nhật các trường đã chọn cho ${preview?.actionable ?? 0} task thuộc dự án ${filterProject}.`}
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-md border bg-muted/40 p-3 text-sm">
             <p className="font-medium">Lưu ý trước khi thực thi</p>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
-              <li>Hệ thống sẽ cập nhật từng task trên Jira và cập nhật lại cache.</li>
-              <li>Nếu một task gặp lỗi, các task còn lại vẫn tiếp tục được thực hiện.</li>
-              <li>Bạn có thể theo dõi tiến trình trực tiếp bên dưới.</li>
+              {isLogWorkOp ? (
+                <>
+                  <li>Mỗi task sẽ được tạo một worklog mới với danh tính Jira của bạn.</li>
+                  <li>Remaining Estimate sẽ được giữ nguyên (adjustEstimate = leave).</li>
+                  <li>Nếu một task gặp lỗi, các task còn lại vẫn tiếp tục được thực hiện.</li>
+                  <li>Dữ liệu chuẩn hóa và thời gian đã ghi sẽ tự động được làm mới khi hoàn tất.</li>
+                </>
+              ) : (
+                <>
+                  <li>Hệ thống sẽ cập nhật từng task trên Jira và cập nhật lại cache.</li>
+                  <li>Nếu một task gặp lỗi, các task còn lại vẫn tiếp tục được thực hiện.</li>
+                  <li>Bạn có thể theo dõi tiến trình trực tiếp bên dưới.</li>
+                </>
+              )}
             </ul>
           </div>
           <DialogFooter className="gap-2">
@@ -1566,7 +1769,8 @@ export function BulkClient() {
                 setConfirmOpen(false);
                 void doConfirm();
               }}
-              disabled={confirming}
+              disabled={confirming || (preview?.actionable ?? 0) === 0}
+              className={cn(isLogWorkOp && "bg-teal-600 hover:bg-teal-700 text-white")}
             >
               {confirmLabel}
             </Button>
@@ -1665,6 +1869,15 @@ function AssigneeInput({
 
 function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: string }) {
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams?.get("returnTo");
+  const returnToTarget =
+    returnTo === "standardization"
+      ? "/stale?view=my-work&tab=standardization"
+      : returnTo?.startsWith("/")
+        ? returnTo
+        : null;
+
   const { data, isFetching, refetch } = useQuery({
     queryKey: bulkKeys.op(id),
     queryFn: () => api<OpDetail>(`/api/bulk/operations/${id}`),
@@ -1675,7 +1888,7 @@ function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: string 
 
   const opState = op?.state;
   useEffect(() => {
-    if (opState && ["completed", "partially_failed", "failed"].includes(opState)) {
+    if (opState && ["completed", "partially_failed", "failed", "cancelled"].includes(opState)) {
       qc.invalidateQueries({ queryKey: issuesKeys.all });
       qc.invalidateQueries({ queryKey: staleKeys.all });
     }
@@ -1692,6 +1905,7 @@ function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: string 
 
   const done = op.succeeded + op.failed;
   const pct = op.total > 0 ? Math.round((done / op.total) * 100) : 0;
+  const isTerminal = ["completed", "partially_failed", "failed", "cancelled"].includes(op.state);
 
   return (
     <div className="mb-4 rounded-md border border-border p-3">
@@ -1731,7 +1945,17 @@ function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: string 
           </li>
         ))}
       </ul>
-      <div className="mt-2 flex justify-end">
+      <div className="mt-3 flex items-center justify-between border-t pt-2.5">
+        {returnToTarget && isTerminal ? (
+          <Button asChild size="sm" variant="default" className="cursor-pointer gap-1.5 text-xs">
+            <Link href={returnToTarget}>
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+              {returnTo === "standardization" ? "Quay lại danh sách chuẩn hóa" : "Quay lại"}
+            </Link>
+          </Button>
+        ) : (
+          <div />
+        )}
         <Button size="sm" variant="ghost" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} aria-hidden /> Làm mới
         </Button>

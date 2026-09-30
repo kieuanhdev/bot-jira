@@ -667,3 +667,20 @@ model ChatMessageConfirmation {
   @@index([userId, status])
 }
 
+model WorklogIdempotency {
+  key              String    @id
+  userId           String
+  jiraKey          String
+  requestHash      String
+  status           String    @default("in_progress")
+  jiraWorklogId    String?
+  timeSpentSeconds Int?
+  response         Json?
+  error            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([jiraKey, createdAt])
+  @@index([userId, createdAt])
+}
+

@@ -140,3 +140,17 @@ export type JiraProjectStatus = {
   /** Workflow states in the order an issue moves through them. */
   statuses: JiraStatus[];
 };
+
+export type JiraWorklog = {
+  id?: string;
+  self?: string;
+  author?: JiraUser;
+  updateAuthor?: JiraUser;
+  comment?: string;
+  created?: string;
+  updated?: string;
+  started?: string;
+  timeSpent?: string;
+  timeSpentSeconds?: number;
+  issueId?: string;
+};

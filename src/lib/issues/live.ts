@@ -23,6 +23,8 @@ export type LiveIssue = {
   priority: string;
   points: number | null;
   type: string;
+  timeSpentSeconds: number | null;
+  originalEstimateSeconds: number | null;
   createdAt: string | null;
   updatedAt: string | null;
   comments: LiveComment[];
@@ -39,6 +41,8 @@ export type IssueView = {
   priority: string;
   points: number | null;
   type: string;
+  timeSpentSeconds: number | null;
+  originalEstimateSeconds: number | null;
   createdAt: string | null;
   updatedAt: string | null;
   lastSyncedAt: string;
@@ -86,6 +90,23 @@ export async function fetchLiveIssue(
     ]);
     const f = issueRes.fields;
     const { points } = jiraPointsFromFields(f);
+    const timeSpentSeconds =
+      typeof f.timespent === "number" && Number.isFinite(f.timespent)
+        ? Math.round(f.timespent)
+        : f.timetracking &&
+          typeof (f.timetracking as Record<string, unknown>).timeSpentSeconds === "number" &&
+          Number.isFinite((f.timetracking as Record<string, unknown>).timeSpentSeconds)
+        ? Math.round((f.timetracking as Record<string, unknown>).timeSpentSeconds as number)
+        : null;
+    const originalEstimateSeconds =
+      typeof f.timeoriginalestimate === "number" && Number.isFinite(f.timeoriginalestimate)
+        ? Math.round(f.timeoriginalestimate)
+        : f.timetracking &&
+          typeof (f.timetracking as Record<string, unknown>).originalEstimateSeconds === "number" &&
+          Number.isFinite((f.timetracking as Record<string, unknown>).originalEstimateSeconds)
+        ? Math.round((f.timetracking as Record<string, unknown>).originalEstimateSeconds as number)
+        : null;
+
     return {
       rawIssue: issueRes,
       summary: f.summary ?? "",
@@ -97,6 +118,8 @@ export async function fetchLiveIssue(
       priority: f.priority?.name ?? "",
       points,
       type: f.issuetype?.name ?? "",
+      timeSpentSeconds,
+      originalEstimateSeconds,
       createdAt: f.created ?? null,
       updatedAt: f.updated ?? null,
       comments: commentsRes.map((c) => ({
@@ -156,6 +179,8 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
       priority: live.priority,
       points: live.points,
       type: live.type,
+      timeSpentSeconds: live.timeSpentSeconds ?? cached?.timeSpent ?? null,
+      originalEstimateSeconds: live.originalEstimateSeconds ?? cached?.originalEstimateSeconds ?? null,
       createdAt: parseJiraDate(live.createdAt)?.toISOString() ?? null,
       updatedAt: parseJiraDate(live.updatedAt)?.toISOString() ?? null,
       lastSyncedAt: new Date().toISOString(),
@@ -179,6 +204,8 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
     priority: cached.priority,
     points: cached.points,
     type: cached.type,
+    timeSpentSeconds: cached.timeSpent ?? null,
+    originalEstimateSeconds: cached.originalEstimateSeconds ?? null,
     createdAt: cached.createdAt?.toISOString() ?? null,
     updatedAt: cached.updatedAt?.toISOString() ?? null,
     lastSyncedAt: cached.lastSyncedAt.toISOString(),

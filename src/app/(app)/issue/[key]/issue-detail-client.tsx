@@ -1,13 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import { transitionsKeys, branchesForKeys, meKeys, issuesKeys } from "@/lib/query-keys";
+import { transitionsKeys, branchesForKeys, meKeys, issuesKeys, staleKeys } from "@/lib/query-keys";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,7 +41,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { formatDateTime, timeAgo } from "@/lib/utils";
+import { formatDateTime, timeAgo, cn } from "@/lib/utils";
 import { wikiToHtml } from "@/lib/wiki";
 import {
   Bot,
@@ -54,7 +63,15 @@ import {
   ChevronDown,
   CornerDownLeft,
   ExternalLink,
+  Clock,
+  Loader2,
 } from "lucide-react";
+import {
+  parseJiraDuration,
+  formatJiraDuration,
+  isSafeReturnUrl,
+  type CreateWorklogResult,
+} from "@/lib/worklogs/schema";
 
 import { IssueDependencies } from "@/components/issue-dependencies";
 
@@ -69,6 +86,8 @@ type IssueDetail = {
   priority: string;
   points: number | null;
   type: string;
+  timeSpentSeconds?: number | null;
+  originalEstimateSeconds?: number | null;
   createdAt: string | null;
   updatedAt: string | null;
   lastSyncedAt: string;
@@ -131,6 +150,31 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
   const [showAddLabel, setShowAddLabel] = useState(false);
   const [newVersionInput, setNewVersionInput] = useState("");
   const [showAddVersion, setShowAddVersion] = useState(false);
+
+  // Log Work dialog state
+  const [logWorkOpen, setLogWorkOpen] = useState(false);
+  const [logTimeSpent, setLogTimeSpent] = useState("");
+  const [logStartedAt, setLogStartedAt] = useState(() => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  });
+  const [logComment, setLogComment] = useState("");
+  const [submittingWorklog, setSubmittingWorklog] = useState(false);
+  const [worklogError, setWorklogError] = useState<string | null>(null);
+  const [worklogIdempotencyKey, setWorklogIdempotencyKey] = useState(() => crypto.randomUUID());
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const actionParam = searchParams?.get("action");
+  const returnToParam = searchParams?.get("returnTo");
+
+  useEffect(() => {
+    if (actionParam === "log-work") {
+      setLogWorkOpen(true);
+    }
+  }, [actionParam]);
+
   const priorities = ["Blocker", "Highest", "High", "Medium", "Low", "Lowest"];
   const projectKey = issue.jiraKey.split("-")[0];
 
@@ -196,6 +240,74 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
       setMsg("Đã từ chối gợi ý liên kết");
     } catch (e) {
       setMsg(`Lỗi: ${(e as Error).message}`);
+    }
+  }
+
+  async function handleSubmitWorklog() {
+    const trimmedDuration = logTimeSpent.trim();
+    const parsed = parseJiraDuration(trimmedDuration);
+    if (!parsed || parsed <= 0) {
+      setWorklogError("Thời lượng không hợp lệ. Vui lòng nhập đúng cú pháp Jira (ví dụ: 30m, 2h, 1d 4h).");
+      return;
+    }
+
+    if (!logStartedAt) {
+      setWorklogError("Thời điểm bắt đầu là bắt buộc.");
+      return;
+    }
+
+    const startedDate = new Date(logStartedAt);
+    if (isNaN(startedDate.getTime())) {
+      setWorklogError("Thời điểm bắt đầu không hợp lệ.");
+      return;
+    }
+
+    if (startedDate.getTime() - Date.now() > 5 * 60 * 1000) {
+      setWorklogError("Thời điểm bắt đầu không được lớn hơn hiện tại quá 5 phút.");
+      return;
+    }
+
+    setSubmittingWorklog(true);
+    setWorklogError(null);
+
+    try {
+      const res = await api<CreateWorklogResult>(`/api/issues/${issue.jiraKey}/worklogs`, {
+        method: "POST",
+        body: {
+          timeSpent: trimmedDuration,
+          startedAt: startedDate.toISOString(),
+          comment: logComment.trim() || undefined,
+          adjustEstimate: "leave",
+          idempotencyKey: worklogIdempotencyKey,
+        },
+      });
+
+      const addedSeconds = res.timeSpentSeconds ?? parsed;
+      setIssue((prev) => ({
+        ...prev,
+        timeSpentSeconds: (prev.timeSpentSeconds ?? 0) + addedSeconds,
+      }));
+
+      const syncNote = res.cacheSynced === false
+        ? " (Jira đã ghi nhận, dữ liệu tổng hợp đang chờ đồng bộ)"
+        : "";
+      setMsg(`Đã ghi nhận ${trimmedDuration} lên Jira thành công!${syncNote}`);
+
+      queryClient.invalidateQueries({ queryKey: issuesKeys.all });
+      queryClient.invalidateQueries({ queryKey: staleKeys.all });
+
+      setLogWorkOpen(false);
+      setLogTimeSpent("");
+      setLogComment("");
+      setWorklogIdempotencyKey(crypto.randomUUID());
+
+      if (returnToParam && isSafeReturnUrl(returnToParam)) {
+        router.push(returnToParam);
+      }
+    } catch (err) {
+      setWorklogError((err as Error).message || "Có lỗi xảy ra khi ghi worklog lên Jira.");
+    } finally {
+      setSubmittingWorklog(false);
     }
   }
 
@@ -369,6 +481,12 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
             <span className="font-mono text-sm text-muted-foreground">{issue.jiraKey}</span>
             <Badge>{issue.status}</Badge>
             {issue.points != null && <Badge variant="secondary">{issue.points} điểm</Badge>}
+            {issue.timeSpentSeconds != null && issue.timeSpentSeconds > 0 && (
+              <Badge variant="outline" className="gap-1 text-xs font-mono">
+                <Clock className="h-3 w-3 text-teal-600 dark:text-teal-400" />
+                {formatJiraDuration(issue.timeSpentSeconds)}
+              </Badge>
+            )}
             {stale && (
               <Badge variant={stale.severity === "high" ? "danger" : stale.severity === "info" ? "info" : "warning"}>
                 {stale.staleReason.replace(/_/g, " ")} · {stale.stateAgeDays} ngày
@@ -512,6 +630,26 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Log Work Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setWorklogError(null);
+            setLogWorkOpen(true);
+          }}
+          className="gap-1.5 text-xs cursor-pointer border-teal-500/30 text-teal-700 dark:text-teal-300 hover:bg-teal-500/10"
+          title="Ghi thời gian làm việc (Worklog) lên Jira"
+        >
+          <Clock className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+          <span>Ghi thời gian</span>
+          {issue.timeSpentSeconds != null && issue.timeSpentSeconds > 0 && (
+            <Badge variant="secondary" className="h-4 px-1 text-[10px] ml-0.5 font-mono">
+              {formatJiraDuration(issue.timeSpentSeconds)}
+            </Badge>
+          )}
+        </Button>
 
         {/* Create Bitbucket Branch */}
         <Button
@@ -688,6 +826,22 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
                 <div><span className="font-medium">Đã tạo:</span> {formatDateTime(issue.createdAt)}</div>
                 <div><span className="font-medium">Cập nhật:</span> {formatDateTime(issue.updatedAt)}</div>
                 <div><span className="font-medium">Đồng bộ lần cuối:</span> {timeAgo(issue.lastSyncedAt)}</div>
+                {issue.timeSpentSeconds != null && issue.timeSpentSeconds > 0 && (
+                  <div>
+                    <span className="font-medium">Thời gian đã ghi:</span>{" "}
+                    <span className="font-semibold text-foreground font-mono">
+                      {formatJiraDuration(issue.timeSpentSeconds)}
+                    </span>
+                  </div>
+                )}
+                {issue.originalEstimateSeconds != null && issue.originalEstimateSeconds > 0 && (
+                  <div>
+                    <span className="font-medium">Estimate ban đầu:</span>{" "}
+                    <span className="font-semibold text-foreground font-mono">
+                      {formatJiraDuration(issue.originalEstimateSeconds)}
+                    </span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1003,6 +1157,127 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Log Work Dialog */}
+      <Dialog open={logWorkOpen} onOpenChange={setLogWorkOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+              Ghi thời gian (Worklog)
+            </DialogTitle>
+            <DialogDescription>
+              Ghi nhận thời gian thực tế đã làm cho task <span className="font-mono font-semibold text-foreground">{issue.jiraKey}</span> lên Jira.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4 py-2 text-sm">
+            <div className="rounded-lg border bg-muted/40 p-3 space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Thời gian đã ghi trên task:</span>
+                <span className="font-semibold font-mono">
+                  {issue.timeSpentSeconds && issue.timeSpentSeconds > 0
+                    ? formatJiraDuration(issue.timeSpentSeconds)
+                    : "Chưa ghi nhận (0m)"}
+                </span>
+              </div>
+              <div className="text-[11px] text-muted-foreground pt-1 border-t">
+                * Không thay đổi Remaining Estimate (adjustEstimate = leave).
+              </div>
+            </div>
+
+            {worklogError && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{worklogError}</span>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">
+                Thời lượng <span className="text-destructive">*</span>
+              </label>
+              <Input
+                placeholder="Ví dụ: 30m, 2h, 1d 4h..."
+                value={logTimeSpent}
+                onChange={(e) => {
+                  setLogTimeSpent(e.target.value);
+                  setWorklogError(null);
+                }}
+                disabled={submittingWorklog}
+                className="h-9 text-sm font-mono"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Cú pháp Jira: <strong>m</strong> (phút), <strong>h</strong> (giờ), <strong>d</strong> (ngày = 8h), <strong>w</strong> (tuần = 5d).
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">
+                Thời điểm bắt đầu <span className="text-destructive">*</span>
+              </label>
+              <Input
+                type="datetime-local"
+                value={logStartedAt}
+                onChange={(e) => setLogStartedAt(e.target.value)}
+                disabled={submittingWorklog}
+                className="h-9 text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Theo giờ địa phương trình duyệt. Không chọn tương lai quá 5 phút.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-foreground">Ghi chú (Tùy chọn)</span>
+                <span className={cn("text-[11px]", logComment.length > 4000 ? "text-destructive font-semibold" : "text-muted-foreground")}>
+                  {logComment.length} / 4000
+                </span>
+              </div>
+              <Textarea
+                rows={3}
+                placeholder="Mô tả công việc đã làm..."
+                value={logComment}
+                onChange={(e) => setLogComment(e.target.value)}
+                disabled={submittingWorklog}
+                className="text-sm resize-y"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={submittingWorklog}
+              onClick={() => setLogWorkOpen(false)}
+            >
+              Hủy
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={submittingWorklog || !logTimeSpent.trim()}
+              onClick={handleSubmitWorklog}
+              className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white"
+            >
+              {submittingWorklog ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Đang ghi...
+                </>
+              ) : (
+                <>
+                  <Check className="h-4 w-4" />
+                  Ghi worklog
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -11,6 +11,7 @@ import { renderBranchName } from "./branch-name";
 import { recordExplicitBranchLink } from "@/lib/bitbucket/link-service";
 import { expandDependencies } from "@/lib/issues/dependencies";
 import { audit } from "@/lib/audit";
+import { formatJiraStartedAt } from "@/lib/worklogs/schema";
 
 /**
  * M4 — Bulk operations.
@@ -329,8 +330,8 @@ export function validateBulkRequest(body: unknown): ValidationResult {
             errors.push("log-work.value.timeSpent must be a Jira duration such as 30m or 2h");
             break;
           }
-          if (v.started !== undefined && (typeof v.started !== "string" || !isValidIsoDate(v.started))) {
-            errors.push("log-work.value.started must be an ISO date (YYYY-MM-DD)");
+          if (v.started !== undefined && (typeof v.started !== "string" || isNaN(new Date(v.started).getTime()))) {
+            errors.push("log-work.value.started must be a valid ISO date or datetime");
           }
           if (v.comment !== undefined && (typeof v.comment !== "string" || v.comment.length > MAX_WORKLOG_COMMENT_LENGTH)) {
             errors.push("log-work.value.comment is invalid or too long");
@@ -1219,7 +1220,7 @@ async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
       }
       case "log-work": {
         const started = a.value.started
-          ? `${a.value.started}T09:00:00.000+0000`
+          ? formatJiraStartedAt(a.value.started)
           : undefined;
         await jira.addWorklog(
           key,
@@ -1366,6 +1367,17 @@ async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
 
     return { status: "succeeded" };
   } catch (e) {
+    if (a.kind === "log-work") {
+      const isTimeout =
+        e instanceof JiraRequestError && (e.status === null || e.status === 408 || e.status === 504);
+      if (isTimeout) {
+        return {
+          status: "failed",
+          error: "Jira timeout: outcome_unknown to prevent duplicate worklog",
+          retryable: false,
+        };
+      }
+    }
     const retryable = e instanceof JiraRequestError ? e.retryable : false;
     return { status: "failed", error: (e as Error).message.slice(0, 400), retryable };
   }
