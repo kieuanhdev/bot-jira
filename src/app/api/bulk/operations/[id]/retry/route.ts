@@ -57,15 +57,42 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     );
   }
 
-  // BULK-003 — only items that failed with a retryable error are re-driven.
-  // Succeeded and skipped items are never re-run, and the succeeded counter is
-  // preserved so the final tally (aggregated from the DB) stays correct.
-  const retried = await prisma.bulkOperationItem.updateMany({
-    where: { operationId: id, status: "failed", retryable: true },
-    data: { status: "pending", error: null, retryable: true },
-  });
+  const rawBody = (await _req.json().catch(() => ({}))) as { itemIds?: string[] };
 
-  if (retried.count === 0) {
+  let retriedCount = 0;
+  if (op.type === "create-issues") {
+    const whereClause: {
+      operationId: string;
+      status: string;
+      id?: { in: string[] };
+      retryable?: boolean;
+    } = {
+      operationId: id,
+      status: "failed",
+    };
+    if (Array.isArray(rawBody.itemIds) && rawBody.itemIds.length > 0) {
+      whereClause.id = { in: rawBody.itemIds };
+    } else {
+      whereClause.retryable = true;
+    }
+
+    const retried = await prisma.bulkCreateItem.updateMany({
+      where: whereClause,
+      data: { status: "pending", error: null, retryable: true },
+    });
+    retriedCount = retried.count;
+  } else {
+    // BULK-003 — only items that failed with a retryable error are re-driven.
+    // Succeeded and skipped items are never re-run, and the succeeded counter is
+    // preserved so the final tally (aggregated from the DB) stays correct.
+    const retried = await prisma.bulkOperationItem.updateMany({
+      where: { operationId: id, status: "failed", retryable: true },
+      data: { status: "pending", error: null, retryable: true },
+    });
+    retriedCount = retried.count;
+  }
+
+  if (retriedCount === 0) {
     return NextResponse.json({ error: "no retryable items", queued: false, operationId: id });
   }
 
@@ -75,5 +102,5 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   });
 
   const jobId = await enqueueBulkOperation(id);
-  return NextResponse.json({ queued: Boolean(jobId), operationId: id, retried: retried.count });
+  return NextResponse.json({ queued: Boolean(jobId), operationId: id, retried: retriedCount });
 }

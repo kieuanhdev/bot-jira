@@ -15,6 +15,7 @@ import { runHealthAlert } from "./workers/health-alert";
 import { runPollPrComments } from "./workers/poll-pr-comments";
 import { runPollWatchedIssues } from "./workers/poll-watched-issues";
 import type { WorkerLog } from "./guard";
+import { scheduledJiraJobAgeMs, shouldSkipStaleJiraJob } from "./jira-job-policy";
 
 const globalForBoss = globalThis as unknown as { boss?: PgBoss; bossStart?: Promise<PgBoss> };
 let watchTimer: ReturnType<typeof setInterval> | undefined;
@@ -138,7 +139,7 @@ export async function enqueueJiraProjectSync(data: {
   const boss = await startBoss();
   const normalizedKey = data.projectKey.trim().toUpperCase();
   const source = data.source ?? (data.requestedBy ? "manual" : "schedule");
-  const priority = source === "manual" || source === "admin" ? 10 : source === "startup" ? 2 : 1;
+  const priority = source === "manual" || source === "admin" ? 10 : source === "recovery" ? 5 : source === "startup" ? 2 : 1;
   const requestedAt = data.requestedAt ?? new Date().toISOString();
 
   return boss.send(
@@ -152,11 +153,14 @@ export async function enqueueJiraProjectSync(data: {
     },
     {
       singletonKey: normalizedKey,
-      singletonSeconds: 15,
+      singletonSeconds: source === "recovery" ? 240 : 55,
       priority,
-      retryLimit: 1,
-      retryDelay: 15,
-      expireInSeconds: 300,
+      retryLimit: 4,
+      retryDelay: 10,
+      retryBackoff: true,
+      // Interrupted incremental polls are released quickly for retry. Full
+      // scans retain the longer window because they legitimately take longer.
+      expireInSeconds: data.full ? 900 : 120,
     }
   );
 }
@@ -317,21 +321,19 @@ export async function registerJobs(): Promise<PgBoss> {
       }
       const projectKey = data.projectKey.trim().toUpperCase();
 
-      // Anti-backlog safeguard: skip stale scheduled/startup jobs queued > 2m ago (manual jobs are not skipped)
+      // Anti-backlog safeguard: skip stale reconciliation hints. requestedAt
+      // is reliable across pg-boss versions; createdOn is only a legacy fallback.
       const rawJob = job as unknown as { createdOn?: Date | string; created_on?: Date | string };
-      const createdTime = rawJob?.createdOn || rawJob?.created_on;
-      if (createdTime && data.source !== "manual") {
-        const ageMs = Date.now() - new Date(createdTime).getTime();
-        if (ageMs > 2 * 60_000) {
-          console.warn(
-            JSON.stringify({
-              level: "warn",
-              job: `poll-jira-project:${projectKey}`,
-              message: `Skipping stale scheduled poll-jira-project job for ${projectKey} (queued ${Math.round(ageMs / 1000)}s ago)`,
-            })
-          );
-          return { ok: true, skipped: true, reason: "Stale job skipped" };
-        }
+      if (shouldSkipStaleJiraJob(data, rawJob)) {
+        const ageMs = scheduledJiraJobAgeMs(data, rawJob) ?? 0;
+        console.warn(
+          JSON.stringify({
+            level: "warn",
+            job: `poll-jira-project:${projectKey}`,
+            message: `Skipping stale scheduled poll-jira-project job for ${projectKey} (queued ${Math.round(ageMs / 1000)}s ago)`,
+          })
+        );
+        return { ok: true, skipped: true, reason: "Stale job skipped" };
       }
 
       return recordRun(`poll-jira-project:${projectKey}`, () => runPollJiraProject(data));
@@ -387,7 +389,12 @@ export async function registerJobs(): Promise<PgBoss> {
   await boss.work("ai-score", async () => recordRun("ai-score", runAiScore));
   await boss.work("sentry-import", async () => recordRun("sentry-import", runSentryImport));
   await boss.work("stale-detect", async () => recordRun("stale-detect", runStaleDetect));
-  await boss.work("health-alert", async () => recordRun("health-alert", runHealthAlert));
+  await boss.work("health-alert", async () => recordRun("health-alert", () => runHealthAlert({
+    enqueueJiraRecovery: (projectKey) => enqueueJiraProjectSync({
+      projectKey,
+      source: "recovery",
+    }),
+  })));
   // M5 — webhook processing: one-off jobs enqueued by the webhook endpoints.
   await boss.work<ProcessWebhookJobData>("process-webhook", { pollingIntervalSeconds: 0.5 }, async (jobs) => {
     const data = jobs[0]?.data ?? { source: "jira", eventId: "" };

@@ -50,6 +50,8 @@ import {
   PackageOpen,
   ExternalLink,
   Clock,
+  Edit3,
+  ListPlus,
 } from "lucide-react";
 import { parseJiraDuration, formatJiraDuration } from "@/lib/worklogs/schema";
 
@@ -766,6 +768,24 @@ export function BulkClient() {
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
+      {/* Top Navigation Switcher */}
+      <div className="flex border-b border-border">
+        <Link
+          href="/bulk"
+          className="flex items-center gap-2 border-b-2 border-primary px-4 py-2.5 text-xs font-semibold text-primary cursor-pointer transition-colors"
+        >
+          <Edit3 className="h-4 w-4" aria-hidden="true" />
+          Cập nhật task hàng loạt
+        </Link>
+        <Link
+          href="/bulk/create"
+          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+        >
+          <ListPlus className="h-4 w-4" aria-hidden="true" />
+          Tạo task mới hàng loạt
+        </Link>
+      </div>
+
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="mb-1 flex items-center gap-2 text-primary">

@@ -13,6 +13,12 @@ import type {
   JiraEditMeta,
   JiraWorklog,
   JiraMyPermissions,
+  JiraCreateMetaResponse,
+  JiraCreateMetaField,
+  JiraCreateMetaIssueTypesResponse,
+  JiraCreateMetaFieldsResponse,
+  CreateIssueInput,
+  CreateIssueResult,
 } from "./types";
 
 const BASE_ISSUE_FIELDS = [
@@ -513,34 +519,149 @@ export function jiraWith(auth?: JiraAuth) {
         { method: "GET" },
         auth
       ),
-    createIssue: (data: {
-      projectKey: string;
-      summary: string;
-      description?: string;
-      issueType?: string;
-      assignee?: string;
-      labels?: string[];
-      priority?: string;
-    }) => {
-      const fields: Record<string, unknown> = {
+    createIssue: (data: CreateIssueInput) => {
+      const issueFields: Record<string, unknown> = {
+        project: { key: data.projectKey },
         summary: data.summary,
-        description: data.description,
-        issuetype: { name: data.issueType ?? "Bug" },
-        labels: data.labels ?? [],
+        issuetype: data.issueTypeId ? { id: data.issueTypeId } : { name: data.issueType ?? "Bug" },
+        ...(data.fields ?? {}),
       };
-      if (data.assignee) fields.assignee = { name: data.assignee };
-      if (data.priority) fields.priority = { name: data.priority };
-      return request<{ key: string; id: string; self: string }>(
+      if (data.description !== undefined) {
+        issueFields.description = data.description;
+      }
+      if (data.assignee !== undefined) {
+        issueFields.assignee = data.assignee ? { name: data.assignee } : null;
+      }
+      if (data.priorityId) {
+        issueFields.priority = { id: data.priorityId };
+      } else if (data.priority) {
+        issueFields.priority = { name: data.priority };
+      }
+
+      const labels = new Set<string>(data.labels ?? []);
+      if (data.idempotencyMarker) {
+        labels.add(data.idempotencyMarker);
+      }
+      if (labels.size > 0 || data.labels !== undefined || data.idempotencyMarker) {
+        issueFields.labels = Array.from(labels);
+      }
+
+      return request<CreateIssueResult>(
         "/rest/api/2/issue",
         {
           method: "POST",
           body: JSON.stringify({
-            project: { key: data.projectKey },
-            fields,
+            fields: issueFields,
           }),
         },
         auth
       );
+    },
+    getCreateMetaIssueTypes: (
+      projectKey: string
+    ): Promise<JiraCreateMetaIssueTypesResponse> =>
+      request<JiraCreateMetaIssueTypesResponse>(
+        `/rest/api/2/issue/createmeta/${encodeURIComponent(projectKey)}/issuetypes`,
+        {},
+        auth
+      ),
+    getCreateMetaFields: (
+      projectKey: string,
+      issueTypeId: string
+    ): Promise<JiraCreateMetaFieldsResponse> =>
+      request<JiraCreateMetaFieldsResponse>(
+        `/rest/api/2/issue/createmeta/${encodeURIComponent(projectKey)}/issuetypes/${encodeURIComponent(issueTypeId)}`,
+        {},
+        auth
+      ),
+    getCreateMetadata: async (
+      projectKey: string,
+      issueTypeId?: string
+    ): Promise<JiraCreateMetaResponse> => {
+      try {
+        let url = `/rest/api/2/issue/createmeta?projectKeys=${encodeURIComponent(projectKey)}&expand=projects.issuetypes.fields`;
+        if (issueTypeId) {
+          url += `&issuetypeIds=${encodeURIComponent(issueTypeId)}`;
+        }
+        return await request<JiraCreateMetaResponse>(url, {}, auth);
+      } catch (err: unknown) {
+        if ((err as JiraRequestError)?.status !== 404) {
+          throw err;
+        }
+        // Jira 9.0+ removed the monolithic createmeta endpoint. Fallback to subresource endpoints.
+        const project = await request<JiraProject>(
+          `/rest/api/2/project/${encodeURIComponent(projectKey)}`,
+          {},
+          auth
+        );
+        const typesRes = await request<JiraCreateMetaIssueTypesResponse>(
+          `/rest/api/2/issue/createmeta/${encodeURIComponent(projectKey)}/issuetypes`,
+          {},
+          auth
+        );
+        const filteredTypes = issueTypeId
+          ? (typesRes.values || []).filter((t) => t.id === issueTypeId)
+          : typesRes.values || [];
+
+        const issueTypesWithFields = await Promise.all(
+          filteredTypes.map(async (t) => {
+            try {
+              const fieldsRes = await request<JiraCreateMetaFieldsResponse>(
+                `/rest/api/2/issue/createmeta/${encodeURIComponent(projectKey)}/issuetypes/${encodeURIComponent(t.id)}`,
+                {},
+                auth
+              );
+              const fieldsRecord: Record<string, JiraCreateMetaField> = {};
+              for (const f of fieldsRes.values || []) {
+                const id = f.fieldId || (f as any).key || (f as any).id;
+                if (id) {
+                  fieldsRecord[id] = f;
+                }
+              }
+              return {
+                ...t,
+                fields: fieldsRecord,
+              };
+            } catch {
+              return {
+                ...t,
+                fields: {},
+              };
+            }
+          })
+        );
+
+        return {
+          projects: [
+            {
+              id: project.id || "",
+              key: project.key,
+              name: project.name,
+              issuetypes: issueTypesWithFields,
+            },
+          ],
+        };
+      }
+    },
+    findIssueByBulkMarker: async (
+      projectKey: string,
+      marker: string
+    ): Promise<JiraIssue | null> => {
+      const jql = `project = "${projectKey.replace(/"/g, '\\"')}" AND labels = "${marker.replace(/"/g, '\\"')}"`;
+      const res = await request<JiraSearchResult>(
+        `/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=5&fields=id,key,summary,status`,
+        {},
+        auth
+      );
+      if (!res.issues || res.issues.length === 0) return null;
+      if (res.issues.length > 1) {
+        throw new JiraRequestError(
+          `Tìm thấy nhiều hơn một issue cho marker ${marker}`,
+          409,
+          false
+        );
+      }
+      return res.issues[0];
     },
     getProjects: () => request<JiraProject[]>("/rest/api/2/project", {}, auth),
     getProject: (projectKey: string) =>

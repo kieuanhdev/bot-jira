@@ -47,8 +47,10 @@ describe("Jira Queue Enqueueing", () => {
       expect.objectContaining({
         singletonKey: "EPM",
         priority: 10,
-        retryLimit: 1,
-        expireInSeconds: 300,
+        retryLimit: 4,
+        retryDelay: 10,
+        retryBackoff: true,
+        expireInSeconds: 120,
       })
     );
   });

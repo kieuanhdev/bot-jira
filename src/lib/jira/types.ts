@@ -166,3 +166,90 @@ export type JiraPermission = {
 export type JiraMyPermissions = {
   permissions: Record<string, JiraPermission>;
 };
+
+export type JiraCreateMetaField = {
+  required: boolean;
+  name: string;
+  fieldId?: string;
+  schema?: {
+    type?: string;
+    system?: string;
+    custom?: string;
+    customId?: number;
+    items?: string;
+  };
+  allowedValues?: Array<{
+    id: string;
+    name?: string;
+    value?: string;
+    archived?: boolean;
+    released?: boolean;
+    [key: string]: unknown;
+  }>;
+  autoCompleteUrl?: string;
+  hasDefaultValue?: boolean;
+};
+
+export type JiraCreateMetaIssueType = {
+  id: string;
+  name: string;
+  description?: string;
+  subtask: boolean;
+  iconUrl?: string;
+  fields?: Record<string, JiraCreateMetaField>;
+};
+
+export type JiraCreateMetaProject = {
+  id: string;
+  key: string;
+  name: string;
+  issuetypes: JiraCreateMetaIssueType[];
+};
+
+export type JiraCreateMetaResponse = {
+  expand?: string;
+  projects: JiraCreateMetaProject[];
+};
+
+export type JiraCreateMetaIssueTypesResponse = {
+  startAt?: number;
+  maxResults?: number;
+  total?: number;
+  isLast?: boolean;
+  values: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    subtask: boolean;
+    iconUrl?: string;
+  }>;
+};
+
+export type JiraCreateMetaFieldsResponse = {
+  startAt?: number;
+  maxResults?: number;
+  total?: number;
+  isLast?: boolean;
+  values: JiraCreateMetaField[];
+};
+
+export type CreateIssueInput = {
+  projectKey: string;
+  issueTypeId?: string;
+  summary: string;
+  description?: string;
+  issueType?: string; // backwards compatibility
+  assignee?: string | null;
+  labels?: string[];
+  priority?: string;
+  priorityId?: string;
+  fields?: Record<string, unknown>;
+  idempotencyMarker?: string;
+};
+
+export type CreateIssueResult = {
+  id: string;
+  key: string;
+  self: string;
+};
+

@@ -15,6 +15,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     where: { id },
     include: {
       items: { orderBy: { jiraKey: "asc" } },
+      createItems: { orderBy: { rowIndex: "asc" } },
     },
   });
 

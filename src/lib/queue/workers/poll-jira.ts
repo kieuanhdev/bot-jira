@@ -13,7 +13,7 @@ import type { WorkerLog } from "../guard";
 const MAX_PAGES = 150;
 const PAGE_SIZE = 50;
 
-export type JiraSyncSource = "schedule" | "manual" | "startup" | "admin";
+export type JiraSyncSource = "schedule" | "manual" | "startup" | "admin" | "recovery";
 
 export type PollJiraProjectJobData = {
   projectKey: string;
