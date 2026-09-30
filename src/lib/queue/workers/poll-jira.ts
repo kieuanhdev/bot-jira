@@ -263,14 +263,25 @@ export async function syncProject(
 
     return stats;
   } catch (error) {
+    if (error instanceof SyncAlreadyRunningError || error instanceof SyncLeaseLostError) {
+      throw error;
+    }
     const message = safeError(error);
     stats.lastError = message;
-    if (!options?.signal?.aborted) {
-      await prisma.integrationCursor.update({
-        where: { id: current.id },
-        data: { lastErrorAt: new Date(), lastError: message, stats },
-      }).catch(() => null);
-    }
+
+    // Only record error if activeRunToken is still owned by this run
+    await prisma.integrationCursor.updateMany({
+      where: {
+        id: current?.id,
+        activeRunToken: runToken,
+      },
+      data: {
+        lastErrorAt: new Date(),
+        lastError: message,
+        stats,
+      },
+    }).catch(() => null);
+
     throw error;
   } finally {
     // Only release our own lease
