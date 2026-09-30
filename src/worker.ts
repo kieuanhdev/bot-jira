@@ -50,13 +50,20 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
+// OPS-01 / Healthcheck: Do not start heartbeat before registerJobs finishes.
+// Starting heartbeat early creates false-positives if pg-boss or migrations hang.
 registerJobs()
-  .then(() => {
-    console.info(JSON.stringify({ level: "info", message: "worker started" }));
+  .then(async () => {
+    // 1. Record first heartbeat
+    await writeWorkerHeartbeat().catch(() => null);
+    // 2. Start heartbeat interval
     startHeartbeat();
+    // 3. Log worker ready
+    console.info(JSON.stringify({ level: "info", message: "worker ready" }));
   })
   .catch(async (error) => {
     console.error(JSON.stringify({ level: "error", message: "worker failed to start", error: String(error) }));
+    if (heartbeat) clearInterval(heartbeat);
     await prisma.$disconnect().catch(() => null);
     process.exit(1);
   });
