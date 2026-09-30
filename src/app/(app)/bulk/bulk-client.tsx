@@ -52,6 +52,8 @@ import {
   Clock,
   Edit3,
   ListPlus,
+  Sparkles,
+  Filter,
 } from "lucide-react";
 import { parseJiraDuration, formatJiraDuration } from "@/lib/worklogs/schema";
 
@@ -364,6 +366,8 @@ export function BulkClient() {
     retry: 0,
   });
 
+  const returnTo = searchParams?.get("returnTo");
+
   const initialKeys = useMemo(() => {
     const raw = searchParams?.get("keys");
     if (!raw) return [];
@@ -372,6 +376,12 @@ export function BulkClient() {
       .map((k) => k.trim().toUpperCase())
       .filter(Boolean);
   }, [searchParams]);
+
+  const initialKeysSet = useMemo(() => new Set(initialKeys), [initialKeys]);
+  const initialKeyIndexMap = useMemo(
+    () => new Map(initialKeys.map((k, idx) => [k, idx])),
+    [initialKeys]
+  );
 
   const initialFields = useMemo(() => {
     const raw = searchParams?.get("fields");
@@ -437,8 +447,22 @@ export function BulkClient() {
   // Selected task keys
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initialKeys));
 
+  // Sync selected and project when keys change in URL (e.g. navigating from standardization)
+  useEffect(() => {
+    if (initialKeys.length > 0) {
+      setSelected(new Set(initialKeys));
+      const proj = searchParams?.get("project")?.trim().toUpperCase() || initialKeys[0]?.split("-")[0];
+      if (proj) setFilterProject(proj);
+    }
+  }, [initialKeys, searchParams]);
+
   // Enabled fields toggle
   const [enabledFields, setEnabledFields] = useState<Set<string>>(() => new Set(initialFields));
+  useEffect(() => {
+    if (initialFields.length > 0) {
+      setEnabledFields(new Set(initialFields));
+    }
+  }, [initialFields]);
 
   // Field values
   const [assignee, setAssignee] = useState("");
@@ -458,6 +482,12 @@ export function BulkClient() {
   const [operationKind, setOperationKind] = useState<"update-fields" | "log-work">(() =>
     searchParams?.get("action") === "log-work" ? "log-work" : "update-fields"
   );
+  useEffect(() => {
+    const act = searchParams?.get("action");
+    if (act === "log-work") setOperationKind("log-work");
+    else if (act) setOperationKind("update-fields");
+  }, [searchParams]);
+
   const [worklogDuration, setWorklogDuration] = useState("");
   const [worklogStarted, setWorklogStarted] = useState(() => {
     const now = new Date();
@@ -527,10 +557,13 @@ export function BulkClient() {
   });
   const versionOptions = bulkVersions?.items ?? [];
 
+  const [filterOnlySelected, setFilterOnlySelected] = useState(false);
+
   // Reset when changing project
   function handleProjectChange(newProject: string) {
     setFilterProject(newProject);
     setSelected(new Set());
+    setFilterOnlySelected(false);
     resetPreview();
     setEnabledFields(new Set());
     setAssignee("");
@@ -552,12 +585,42 @@ export function BulkClient() {
     [projectIssues]
   );
 
+  // Guarantee placeholder for any initial keys if not already present in the loaded issues list
+  const displayProjectIssues = useMemo(() => {
+    if (!filterProject) return [];
+    const existing = new Set(projectIssues.map((i) => i.jiraKey));
+    const placeholders: IssueItem[] = initialKeys
+      .filter((k) => !existing.has(k) && k.startsWith(filterProject + "-"))
+      .map((k) => ({
+        jiraKey: k,
+        projectKey: filterProject,
+        summary: `Task ${k} (Đang chuẩn hóa)`,
+        description: "",
+        status: "To Do",
+        statusCategory: "To Do",
+        statusChangedAt: null,
+        assigneeJira: null,
+        labels: [],
+        fixVersionIds: [],
+        fixVersionNames: [],
+        priority: "Medium",
+        points: null,
+        type: "Task",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastSyncedAt: new Date().toISOString(),
+        aiScore: null,
+        aiDecision: null,
+      }));
+    return [...placeholders, ...projectIssues];
+  }, [filterProject, initialKeys, projectIssues]);
+
   const filteredIssues = useMemo(() => {
     if (!filterProject) return [];
     const query = taskSearch.trim().toLowerCase();
     const myUsername = session?.user?.jiraUsername?.toLowerCase();
 
-    return projectIssues
+    let list = displayProjectIssues
       .filter((issue) => (filterStatus ? issue.status === filterStatus : true))
       .filter((issue) => {
         if (!filterAssignee || filterAssignee === "ALL") return true;
@@ -572,7 +635,37 @@ export function BulkClient() {
       .filter((issue) =>
         query ? issue.jiraKey.toLowerCase().includes(query) || issue.summary.toLowerCase().includes(query) : true
       );
-  }, [filterProject, filterStatus, filterAssignee, projectIssues, taskSearch, session?.user?.jiraUsername]);
+
+    if (filterOnlySelected) {
+      list = list.filter((issue) => selected.has(issue.jiraKey));
+    }
+
+    // Prioritize tasks being standardized (from initialKeys) to the top in their specified order
+    if (initialKeyIndexMap.size > 0) {
+      list = [...list].sort((a, b) => {
+        const aIndex = initialKeyIndexMap.get(a.jiraKey);
+        const bIndex = initialKeyIndexMap.get(b.jiraKey);
+        if (aIndex !== undefined && bIndex !== undefined) {
+          return aIndex - bIndex;
+        }
+        if (aIndex !== undefined) return -1;
+        if (bIndex !== undefined) return 1;
+        return 0;
+      });
+    }
+
+    return list;
+  }, [
+    filterProject,
+    displayProjectIssues,
+    filterStatus,
+    filterAssignee,
+    taskSearch,
+    session?.user?.jiraUsername,
+    filterOnlySelected,
+    selected,
+    initialKeyIndexMap,
+  ]);
 
   const allSelected = filteredIssues.length > 0 && filteredIssues.every((i) => selected.has(i.jiraKey));
 
@@ -841,6 +934,28 @@ export function BulkClient() {
         ))}
       </ol>
 
+      {/* Standardization Banner */}
+      {returnTo === "standardization" && initialKeys.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3.5 text-xs text-primary shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+            <div>
+              <p className="font-semibold text-foreground">
+                Đang chuẩn hóa {initialKeys.length} task từ danh sách chuẩn hóa
+              </p>
+              <p className="text-muted-foreground mt-0.5">
+                Các task này đã được chọn sẵn và đưa lên đầu danh sách để bạn dễ quan sát và thực hiện thao tác.
+              </p>
+            </div>
+          </div>
+          <Button asChild size="sm" variant="outline" className="cursor-pointer gap-1.5 shrink-0 self-start sm:self-auto text-xs bg-background">
+            <Link href="/stale?view=my-work&tab=standardization">
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> Quay lại chuẩn hóa
+            </Link>
+          </Button>
+        </div>
+      )}
+
       {/* Step 1 — Project Scope & Task Selection */}
       <Card className="overflow-hidden">
         <CardHeader className="border-b p-4 sm:p-5">
@@ -988,11 +1103,28 @@ export function BulkClient() {
               </div>
 
               {selectionMode === "pick" && (
-                <div className="flex items-center justify-between border-b px-3 py-2 bg-muted/10">
-                  <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
-                    <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
-                    Chọn tất cả task đang hiển thị
-                  </label>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 bg-muted/10">
+                  <div className="flex items-center gap-3">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                      <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
+                      Chọn tất cả task đang hiển thị
+                    </label>
+                    {selected.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setFilterOnlySelected(!filterOnlySelected)}
+                        className={cn(
+                          "cursor-pointer inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition-colors border",
+                          filterOnlySelected
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background text-muted-foreground hover:text-foreground border-border"
+                        )}
+                      >
+                        <Filter className="h-3 w-3" aria-hidden />
+                        {filterOnlySelected ? "Đang lọc: Chỉ hiện đã chọn" : "Chỉ hiện đã chọn"}
+                      </button>
+                    )}
+                  </div>
                   <span className="text-xs text-muted-foreground font-medium">
                     Đã chọn {selected.size} / {filteredIssues.length}
                   </span>
@@ -1017,6 +1149,7 @@ export function BulkClient() {
                   const cat = categoryOf(i.status, i.statusCategory);
                   const dot = statusDot(i.status, cat);
                   const isChecked = selectionMode === "filter" || selected.has(i.jiraKey);
+                  const isStandardizing = initialKeysSet.has(i.jiraKey);
                   return (
                     <label
                       key={i.jiraKey}
@@ -1025,7 +1158,8 @@ export function BulkClient() {
                         cat === "new" && "border-l-sky-500/60",
                         cat === "indeterminate" && "border-l-primary/60",
                         cat === "done" && "border-l-emerald-500/60",
-                        isChecked && "bg-accent/40"
+                        isChecked && "bg-accent/40",
+                        isStandardizing && "bg-primary/5 dark:bg-primary/10"
                       )}
                     >
                       <Checkbox
@@ -1048,6 +1182,14 @@ export function BulkClient() {
                         </a>
                       ) : (
                         <span className="w-24 shrink-0 font-mono text-xs text-muted-foreground">{i.jiraKey}</span>
+                      )}
+                      {isStandardizing && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] py-0 px-1.5 h-4 shrink-0 font-medium bg-primary/15 text-primary border-primary/20"
+                        >
+                          Chuẩn hóa
+                        </Badge>
                       )}
                       <span className="min-w-0 flex-1 truncate">{i.summary}</span>
                       <span
