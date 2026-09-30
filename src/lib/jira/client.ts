@@ -259,7 +259,11 @@ async function requestOnce<T>(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), env.jiraRequestTimeoutMs);
   const abortFromCaller = () => controller.abort();
-  init.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  if (init.signal?.aborted) {
+    controller.abort(init.signal.reason);
+  } else {
+    init.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  }
   try {
     const res = await fetch(url, {
       ...init,
@@ -348,7 +352,7 @@ export function jiraWith(auth?: JiraAuth) {
 
   return {
     me: () => request<JiraUser>("/rest/api/2/myself", {}, auth),
-    search: async (jql: string, maxResults = 50, startAt = 0) => {
+    search: async (jql: string, maxResults = 50, startAt = 0, signal?: AbortSignal) => {
       await getPointFields().catch(() => configuredPointField());
       const params = new URLSearchParams({
         jql,
@@ -356,7 +360,7 @@ export function jiraWith(auth?: JiraAuth) {
         maxResults: String(maxResults),
         startAt: String(startAt),
       });
-      return request<JiraSearchResult>(`/rest/api/2/search?${params}`, {}, auth);
+      return request<JiraSearchResult>(`/rest/api/2/search?${params}`, { signal }, auth);
     },
     getIssue: async (key: string, extraFields?: string) => {
       const fields = new URLSearchParams();
@@ -380,20 +384,23 @@ export function jiraWith(auth?: JiraAuth) {
         .filter(isPointField);
       return editable.find((field) => field.id === env.jiraPointsFieldId) ?? editable[0] ?? null;
     },
-    getCommentsPage: (key: string, startAt = 0, maxResults = 100) =>
+    getCommentsPage: (key: string, startAt = 0, maxResults = 100, signal?: AbortSignal) =>
       request<JiraCommentPage>(
         `/rest/api/2/issue/${encodeURIComponent(key)}/comment?orderBy=created&startAt=${startAt}&maxResults=${maxResults}`,
-        {},
+        { signal },
         auth
       ),
-    getComments: async (key: string) => {
+    getComments: async (key: string, signal?: AbortSignal) => {
       const out: JiraComment[] = [];
       const pageSize = 100;
       for (let page = 0; page < 100; page++) {
+        if (signal?.aborted) {
+          throw new JiraRequestError(`Jira comments fetch aborted for ${key}`, null, false);
+        }
         const startAt = page * pageSize;
         const res = await request<JiraCommentPage>(
           `/rest/api/2/issue/${encodeURIComponent(key)}/comment?orderBy=created&startAt=${startAt}&maxResults=${pageSize}`,
-          {},
+          { signal },
           auth
         );
         const rows = res.comments ?? res.issues ?? [];
@@ -613,7 +620,8 @@ export function jiraWith(auth?: JiraAuth) {
               );
               const fieldsRecord: Record<string, JiraCreateMetaField> = {};
               for (const f of fieldsRes.values || []) {
-                const id = f.fieldId || (f as any).key || (f as any).id;
+                const legacy = f as { key?: string; id?: string };
+                const id = f.fieldId || legacy.key || legacy.id;
                 if (id) {
                   fieldsRecord[id] = f;
                 }

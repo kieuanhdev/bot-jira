@@ -17,12 +17,14 @@ describe("escapeJql", () => {
   });
 });
 
+import { jiraProjectList } from "@/lib/env";
+
 describe("projectClause", () => {
   it("single project", () => {
     expect(projectClause("CICM")).toBe("project = CICM");
   });
   it("no arg uses all configured (in clause)", () => {
-    expect(projectClause()).toBe("project in (CICM, EDM, EMA, EPM, ETM, MHRM, MR)");
+    expect(projectClause()).toBe(`project in (${jiraProjectList.join(", ")})`);
   });
 });
 

@@ -1,11 +1,12 @@
 import { PgBoss } from "pg-boss";
 import { prisma } from "@/lib/prisma";
-import { env } from "@/lib/env";
+import { env, jiraProjectList } from "@/lib/env";
+import { getWorkerHealth } from "@/lib/health/worker-health";
 import { runCheckBranches } from "./workers/check-branches";
 import { runAiScore } from "./workers/ai-score";
 import { runSentryImport } from "./workers/sentry-import";
 import { runStaleDetect } from "./workers/stale-detect";
-import { runPollJira, runPollJiraProject, type PollJiraJobData, type PollJiraProjectJobData, type JiraSyncSource } from "./workers/poll-jira";
+import { runPollJiraProject, type PollJiraJobData, type PollJiraProjectJobData, type JiraSyncSource } from "./workers/poll-jira";
 import { runPollJiraDispatch, type PollJiraDispatchJobData } from "./workers/poll-jira-dispatch";
 import { runBulkOperation } from "./workers/bulk-op";
 import { runProcessWebhook, type ProcessWebhookJobData } from "./workers/process-webhook";
@@ -61,7 +62,7 @@ function pollCron(): string {
   return minutes === 1 ? "* * * * *" : `*/${minutes} * * * *`;
 }
 
-async function recordRun(name: string, run: () => Promise<WorkerLog>): Promise<WorkerLog> {
+export async function recordRun(name: string, run: () => Promise<WorkerLog>): Promise<WorkerLog> {
   const startedAt = Date.now();
   if (name !== "poll-watched-issues") {
     console.info(JSON.stringify({ level: "info", job: name, message: `job ${name} started` }));
@@ -78,7 +79,7 @@ async function recordRun(name: string, run: () => Promise<WorkerLog>): Promise<W
     await prisma.integrationCursor.update({
       where: { id: cursor.id },
       data: {
-        lastSuccessAt: result.ok ? new Date() : cursor.lastSuccessAt,
+        lastSuccessAt: (result.ok && !result.skipped) ? new Date() : cursor.lastSuccessAt,
         lastErrorAt: result.ok ? null : new Date(),
         lastError: errorText,
         stats: { ...(result.stats ?? {}), skipped: Boolean(result.skipped), reason: result.reason ?? null },
@@ -158,9 +159,10 @@ export async function enqueueJiraProjectSync(data: {
       retryLimit: 4,
       retryDelay: 10,
       retryBackoff: true,
-      // Interrupted incremental polls are released quickly for retry. Full
-      // scans retain the longer window because they legitimately take longer.
-      expireInSeconds: data.full ? 900 : 120,
+      // Incremental sync expires after configured timeout (default 15m).
+      // pg-boss worker heartbeat detects dead workers before expiration.
+      expireInSeconds: data.full ? Math.max(env.jiraSyncExpireSeconds, 900) : env.jiraSyncExpireSeconds,
+      heartbeatSeconds: env.jiraHeartbeatSeconds,
     }
   );
 }
@@ -257,7 +259,7 @@ export async function enqueueNotificationDelivery(startAfter?: Date): Promise<st
 
 const QUEUE_EXPIRE_SECONDS: Record<string, number> = {
   "poll-jira-dispatch": 60,
-  "poll-jira-project": 300,
+  "poll-jira-project": env.jiraSyncExpireSeconds,
   "poll-jira": 300,
   "poll-watched-issues": 30,
   "deliver-notifications": 60,
@@ -267,7 +269,7 @@ const QUEUE_EXPIRE_SECONDS: Record<string, number> = {
   "ai-score": 300,
   "sentry-import": 120,
   "stale-detect": 300,
-  "health-alert": 120,
+  "health-alert": 60,
   "process-webhook": 120,
   "bulk-op": 3600,
 };
@@ -287,7 +289,12 @@ export async function registerJobs(): Promise<PgBoss> {
   }
   for (const name of JOB_NAMES) {
     const expireInSeconds = QUEUE_EXPIRE_SECONDS[name] ?? 300;
-    await boss.updateQueue(name, { notify: true, expireInSeconds });
+    const heartbeatSeconds = name === "poll-jira-project" ? env.jiraHeartbeatSeconds : undefined;
+    await boss.updateQueue(name, {
+      notify: true,
+      expireInSeconds,
+      ...(heartbeatSeconds ? { heartbeatSeconds } : {}),
+    });
   }
 
   // Unschedule legacy all-projects poll-jira cron if present
@@ -302,8 +309,8 @@ export async function registerJobs(): Promise<PgBoss> {
   await boss.schedule("sentry-import", "*/5 * * * *", null, { singletonSeconds: 240, expireInSeconds: 120, retryLimit: 3, retryDelay: 30, retryBackoff: true });
   await boss.schedule("stale-detect", "*/30 * * * *", null, { singletonSeconds: 1740, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 });
   await boss.schedule("deliver-notifications", "* * * * *", null, { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 3, retryDelay: 15, retryBackoff: true });
-  // OPS-03 — freshness/health alerting, deduped by the alert worker itself.
-  await boss.schedule("health-alert", "*/5 * * * *", null, { singletonSeconds: 240, expireInSeconds: 120, retryLimit: 2, retryDelay: 30 });
+  // OPS-03 / Watchdog — freshness/health alerting and self-healing recovery, runs every minute.
+  await boss.schedule("health-alert", "* * * * *", null, { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 2, retryDelay: 10 });
 
   await boss.work<PollJiraDispatchJobData>("poll-jira-dispatch", async (jobs) => {
     const job = jobs[0];
@@ -321,22 +328,28 @@ export async function registerJobs(): Promise<PgBoss> {
       }
       const projectKey = data.projectKey.trim().toUpperCase();
 
-      // Anti-backlog safeguard: skip stale reconciliation hints. requestedAt
-      // is reliable across pg-boss versions; createdOn is only a legacy fallback.
-      const rawJob = job as unknown as { createdOn?: Date | string; created_on?: Date | string };
-      if (shouldSkipStaleJiraJob(data, rawJob)) {
-        const ageMs = scheduledJiraJobAgeMs(data, rawJob) ?? 0;
+      if (shouldSkipStaleJiraJob(data, job)) {
+        const ageMs = scheduledJiraJobAgeMs(data, job) ?? 0;
         console.warn(
           JSON.stringify({
             level: "warn",
-            job: `poll-jira-project:${projectKey}`,
-            message: `Skipping stale scheduled poll-jira-project job for ${projectKey} (queued ${Math.round(ageMs / 1000)}s ago)`,
+            job: "poll-jira-project",
+            project: projectKey,
+            projectKey,
+            ageMs,
+            ageSeconds: Math.round(ageMs / 1000),
+            source: data.source,
+            requestedAt: data.requestedAt,
+            reason: "Stale scheduled/startup job skipped",
+            message: `Skipping stale scheduled poll-jira-project job for ${projectKey}`,
           })
         );
         return { ok: true, skipped: true, reason: "Stale job skipped" };
       }
 
-      return recordRun(`poll-jira-project:${projectKey}`, () => runPollJiraProject(data));
+      return recordRun(`poll-jira-project:${projectKey}`, () =>
+        runPollJiraProject(data, { signal: job?.signal })
+      );
     }
   );
 
@@ -351,7 +364,7 @@ export async function registerJobs(): Promise<PgBoss> {
           source: data.source ?? (data.requestedBy ? "manual" : "schedule"),
           requestedBy: data.requestedBy,
           requestedAt: data.requestedAt ?? new Date().toISOString(),
-        })
+        }, { signal: job?.signal })
       );
     }
     return recordRun("poll-jira-dispatch", () =>
@@ -435,12 +448,75 @@ export async function registerJobs(): Promise<PgBoss> {
   watchTimer = setInterval(() => { void pollWatches(); }, 30_000);
   watchTimer.unref();
 
-  // OPS: Immediately trigger fresh Jira dispatch on startup so all projects are reconciled
+  // OPS: Reconcile only stale or failing Jira projects on startup (avoid blind full queue flood)
   setTimeout(() => {
-    void enqueueJiraDispatch({ source: "startup", full: false }).catch(() => null);
+    void reconcileStartupJiraProjects().catch((error) => {
+      console.error(JSON.stringify({
+        level: "error",
+        job: "startup-reconciliation",
+        message: "Startup Jira reconciliation failed",
+        error: String(error),
+      }));
+    });
   }, 1000);
 
   return boss;
+}
+
+/**
+ * On worker startup, inspect each project's cursor and enqueue only projects
+ * that are stale (> JIRA_FRESHNESS_MINUTES) or currently failing. Healthy
+ * projects are untouched to prevent unnecessary queue spikes.
+ */
+export async function reconcileStartupJiraProjects(): Promise<{
+  checked: number;
+  staleCount: number;
+  queued: number;
+  coalesced: number;
+  errors: string[];
+}> {
+  const health = await getWorkerHealth();
+  const targetProjects = [...new Set([
+    ...(health.staleProjects ?? []),
+    ...(health.failingProjects ?? []),
+  ])];
+
+  console.info(JSON.stringify({
+    level: "info",
+    job: "startup-reconciliation",
+    message: `Worker startup: checked ${jiraProjectList.length} projects, found ${targetProjects.length} stale/failing`,
+    targetProjects,
+  }));
+
+  if (targetProjects.length === 0) {
+    return { checked: jiraProjectList.length, staleCount: 0, queued: 0, coalesced: 0, errors: [] };
+  }
+
+  let queued = 0;
+  let coalesced = 0;
+  const errors: string[] = [];
+
+  for (const projectKey of targetProjects) {
+    try {
+      const jobId = await enqueueJiraProjectSync({
+        projectKey,
+        full: false,
+        source: "startup",
+      });
+      if (jobId) queued++;
+      else coalesced++;
+    } catch (err) {
+      errors.push(`${projectKey}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return {
+    checked: jiraProjectList.length,
+    staleCount: targetProjects.length,
+    queued,
+    coalesced,
+    errors,
+  };
 }
 
 export async function stopBoss(): Promise<void> {

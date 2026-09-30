@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   cursorUpsert: vi.fn(),
   cursorUpdate: vi.fn(),
+  cursorUpdateMany: vi.fn(),
   issueFindUnique: vi.fn(),
   issueUpdateMany: vi.fn(),
   search: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock("@/lib/prisma", () => ({
     integrationCursor: {
       upsert: mocks.cursorUpsert,
       update: mocks.cursorUpdate,
+      updateMany: mocks.cursorUpdateMany,
     },
     issueCache: {
       findUnique: mocks.issueFindUnique,
@@ -60,6 +62,7 @@ describe("syncProject", () => {
       lastSuccessAt: new Date("2026-09-29T08:00:00.000Z"),
     });
     mocks.cursorUpdate.mockResolvedValue({});
+    mocks.cursorUpdateMany.mockResolvedValue({ count: 1 });
     mocks.issueFindUnique.mockResolvedValue(null);
     mocks.issueUpdateMany.mockResolvedValue({ count: 2 });
     mocks.upsertJiraIssue.mockResolvedValue({ status: "In Progress" });
@@ -98,7 +101,7 @@ describe("syncProject", () => {
       50,
       0
     );
-    expect(mocks.cursorUpdate).toHaveBeenCalledWith(
+    expect(mocks.cursorUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           cursor: "2026-09-29T08:10:00.000Z",
@@ -241,7 +244,7 @@ describe("syncProject", () => {
     expect(stats.errors).toHaveLength(1);
     expect(stats.errors[0]).toContain("DB constraint violation");
     expect(stats.cursor).toBe("2026-09-29T08:00:00.000Z"); // unchanged
-    expect(mocks.cursorUpdate).toHaveBeenCalledWith(
+    expect(mocks.cursorUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           cursor: "2026-09-29T08:00:00.000Z",
@@ -305,6 +308,7 @@ describe("runPollJiraProject", () => {
       lastSuccessAt: new Date(),
     });
     mocks.cursorUpdate.mockResolvedValue({});
+    mocks.cursorUpdateMany.mockResolvedValue({ count: 1 });
     mocks.issueFindUnique.mockResolvedValue(null);
     mocks.search.mockResolvedValue({ total: 0, issues: [] });
   });
@@ -344,5 +348,78 @@ describe("runPollJiraProject", () => {
     expect(res.stats?.queueLagMs).toBeGreaterThanOrEqual(400);
     expect(res.stats?.projectKey).toBe("EPM");
     expect(res.stats?.source).toBe("manual");
+  });
+
+  it("stops pagination and does not update cursor if signal is aborted mid-sync", async () => {
+    const controller = new AbortController();
+    mocks.search.mockImplementation(async () => {
+      controller.abort();
+      return {
+        total: 100,
+        issues: [
+          {
+            key: "EPM-200",
+            fields: { updated: "2026-09-29T09:00:00.000Z", comment: { total: 0, comments: [] } },
+          },
+        ],
+      };
+    });
+
+    const res = await runPollJiraProject(
+      {
+        projectKey: "EPM",
+        full: false,
+        source: "manual",
+        requestedAt: new Date().toISOString(),
+      },
+      { signal: controller.signal }
+    );
+
+    expect(res.ok).toBe(false);
+    expect(res.errors?.[0]).toContain("aborted");
+    expect(mocks.cursorUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects cursor write if cursor was modified concurrently by another job", async () => {
+    mocks.search.mockResolvedValue({
+      total: 1,
+      issues: [
+        {
+          key: "EPM-201",
+          fields: { updated: "2026-09-29T09:30:00.000Z", comment: { total: 0, comments: [] } },
+        },
+      ],
+    });
+    // Another job updated cursor in the meantime -> updateMany matches 0 rows
+    mocks.cursorUpdateMany.mockResolvedValue({ count: 0 });
+
+    const res = await runPollJiraProject({
+      projectKey: "EPM",
+      full: false,
+      source: "manual",
+      requestedAt: new Date().toISOString(),
+    });
+
+    expect(res.ok).toBe(false);
+    expect(res.errors?.[0]).toContain("Concurrent sync conflict");
+  });
+
+  it("does not soft-delete issues when full sync is aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const res = await runPollJiraProject(
+      {
+        projectKey: "EPM",
+        full: true,
+        source: "manual",
+        requestedAt: new Date().toISOString(),
+      },
+      { signal: controller.signal }
+    );
+
+    expect(res.ok).toBe(false);
+    expect(mocks.issueUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.cursorUpdateMany).not.toHaveBeenCalled();
   });
 });

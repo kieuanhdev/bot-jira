@@ -7,7 +7,7 @@ import {
   notifyWatchersOfIssueChange,
 } from "@/lib/issues/notify-watchers";
 import { jiraProjectList } from "@/lib/env";
-import { guard, hasJiraConfig, env } from "../guard";
+import { guard, env } from "../guard";
 import type { WorkerLog } from "../guard";
 
 const MAX_PAGES = 150;
@@ -41,13 +41,19 @@ export type ProjectStats = {
   cursor: string | null;
   errors: string[];
   cursorAdvanced?: boolean;
+  lastSuccessAt?: string | null;
+  lastError?: string | null;
 };
 
 export function safeError(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 300);
 }
 
-export async function syncProject(projectKey: string, full: boolean): Promise<ProjectStats> {
+export async function syncProject(
+  projectKey: string,
+  full: boolean,
+  options?: { signal?: AbortSignal }
+): Promise<ProjectStats> {
   const startedAt = new Date();
   const current = await prisma.integrationCursor.upsert({
     where: { integration_scope: { integration: "jira", scope: projectKey } },
@@ -55,6 +61,7 @@ export async function syncProject(projectKey: string, full: boolean): Promise<Pr
     update: { lastStartedAt: startedAt, lastError: null },
   });
 
+  const initialCursor = current.cursor;
   const parsedCursor = current.cursor ? new Date(current.cursor) : null;
   const validCursor = parsedCursor && !Number.isNaN(parsedCursor.getTime()) ? parsedCursor : null;
   const since = !full && validCursor
@@ -79,10 +86,21 @@ export async function syncProject(projectKey: string, full: boolean): Promise<Pr
 
   try {
     for (let page = 0; page < MAX_PAGES; page++) {
-      const result = await jira.search(jql, PAGE_SIZE, page * PAGE_SIZE);
+      if (options?.signal?.aborted) {
+        throw new Error(`Jira sync aborted for ${projectKey}`);
+      }
+      const result = await jira.search(
+        jql,
+        PAGE_SIZE,
+        page * PAGE_SIZE,
+        ...(options?.signal ? [options.signal] : [])
+      );
       stats.pages++;
 
       for (const issue of result.issues) {
+        if (options?.signal?.aborted) {
+          throw new Error(`Jira sync aborted for ${projectKey}`);
+        }
         seenKeys.add(issue.key);
         try {
           const previous = await prisma.issueCache.findUnique({
@@ -111,7 +129,10 @@ export async function syncProject(projectKey: string, full: boolean): Promise<Pr
             if (availableComments.length > 0 && totalComments <= availableComments.length) {
               commentsToSync = availableComments;
             } else if (totalComments > 0) {
-              commentsToSync = await jira.getComments(issue.key);
+              commentsToSync = await jira.getComments(
+                issue.key,
+                ...(options?.signal ? [options.signal] : [])
+              );
             }
 
             if (commentsToSync.length > 0) {
@@ -138,6 +159,10 @@ export async function syncProject(projectKey: string, full: boolean): Promise<Pr
       }
     }
 
+    if (options?.signal?.aborted) {
+      throw new Error(`Jira sync aborted for ${projectKey}`);
+    }
+
     if (!exhaustedAllPages) {
       throw new Error(`Jira sync exceeded ${MAX_PAGES * PAGE_SIZE} issues for ${projectKey}; cursor was not advanced`);
     }
@@ -147,16 +172,16 @@ export async function syncProject(projectKey: string, full: boolean): Promise<Pr
       newestUpdatedAt = validCursor;
     }
 
-    // Advance cursor only if no item errors occurred and all pages were read
-    const cursor = stats.errors.length === 0
+    // Advance cursor only if no item errors occurred and all pages were read and not aborted
+    const cursor = stats.errors.length === 0 && !options?.signal?.aborted
       ? (newestUpdatedAt?.toISOString() ?? current.cursor)
       : current.cursor;
-    const cursorAdvanced = stats.errors.length === 0 && Boolean(cursor && cursor !== current.cursor);
+    const cursorAdvanced = stats.errors.length === 0 && !options?.signal?.aborted && Boolean(cursor && cursor !== current.cursor);
     stats.cursor = cursor;
     stats.cursorAdvanced = cursorAdvanced;
 
-    // Full scan soft-delete only when all pages succeeded with 0 errors
-    if (isFullScan && stats.errors.length === 0 && exhaustedAllPages) {
+    // Full scan soft-delete only when all pages succeeded with 0 errors and not aborted
+    if (isFullScan && stats.errors.length === 0 && exhaustedAllPages && !options?.signal?.aborted) {
       const deleted = await prisma.issueCache.updateMany({
         where: {
           projectKey,
@@ -168,31 +193,65 @@ export async function syncProject(projectKey: string, full: boolean): Promise<Pr
       stats.deleted = deleted.count;
     }
 
-    await prisma.integrationCursor.update({
-      where: { id: current.id },
+    if (options?.signal?.aborted) {
+      throw new Error(`Jira sync aborted for ${projectKey}`);
+    }
+
+    const lastSuccessAt = stats.errors.length === 0 ? new Date() : current.lastSuccessAt;
+    const lastErrorText = stats.errors.length ? stats.errors.slice(0, 10).join("; ").slice(0, 2000) : null;
+    stats.lastSuccessAt = lastSuccessAt ? (lastSuccessAt instanceof Date ? lastSuccessAt.toISOString() : new Date(lastSuccessAt).toISOString()) : null;
+    stats.lastError = lastErrorText;
+
+    // Conditional update: guarantee current cursor still matches initialCursor read at start.
+    // Stale or expired jobs must never overwrite newer cursors.
+    const updateWhere = initialCursor === null
+      ? { id: current.id, cursor: null }
+      : { id: current.id, cursor: initialCursor };
+
+    const updateRes = await prisma.integrationCursor.updateMany({
+      where: updateWhere,
       data: {
         cursor,
-        lastSuccessAt: stats.errors.length === 0 ? new Date() : current.lastSuccessAt,
+        lastSuccessAt,
         lastErrorAt: stats.errors.length ? new Date() : null,
-        lastError: stats.errors.length ? stats.errors.slice(0, 10).join("; ").slice(0, 2000) : null,
+        lastError: lastErrorText,
         stats: {
           ...stats,
           cursorAdvanced,
         },
       },
     });
+
+    if (updateRes.count === 0) {
+      console.warn(
+        JSON.stringify({
+          level: "warn",
+          job: "poll-jira-project",
+          project: projectKey,
+          message: `Cursor concurrency collision for ${projectKey}: expected cursor "${initialCursor}", but cursor changed concurrently`,
+        })
+      );
+      throw new Error(`Concurrent sync conflict: cursor for ${projectKey} was updated by another process`);
+    }
+
     return stats;
   } catch (error) {
     const message = safeError(error);
-    await prisma.integrationCursor.update({
-      where: { id: current.id },
-      data: { lastErrorAt: new Date(), lastError: message, stats },
-    }).catch(() => null);
+    stats.lastError = message;
+    if (!options?.signal?.aborted) {
+      await prisma.integrationCursor.update({
+        where: { id: current.id },
+        data: { lastErrorAt: new Date(), lastError: message, stats },
+      }).catch(() => null);
+    }
     throw error;
   }
 }
 
-export async function runPollJiraProject(data: PollJiraProjectJobData): Promise<WorkerLog> {
+export async function runPollJiraProject(
+  data: PollJiraProjectJobData,
+  options?: { retryCount?: number; signal?: AbortSignal }
+): Promise<WorkerLog> {
   const { getSystemJiraAuth } = await import("@/lib/jira/client");
   const auth = await getSystemJiraAuth();
   if (!auth) return guard(false, "Jira not configured in env or user settings");
@@ -205,9 +264,10 @@ export async function runPollJiraProject(data: PollJiraProjectJobData): Promise<
   const requestedAtMs = data.requestedAt ? new Date(data.requestedAt).getTime() : Date.now();
   const queueLagMs = Math.max(0, Date.now() - (Number.isNaN(requestedAtMs) ? Date.now() : requestedAtMs));
   const startedAt = Date.now();
+  const retryCount = options?.retryCount ?? 0;
 
   try {
-    const stats = await syncProject(projectKey, Boolean(data.full));
+    const stats = await syncProject(projectKey, Boolean(data.full), { signal: options?.signal });
     const durationMs = Date.now() - startedAt;
     const ok = stats.errors.length === 0;
 
@@ -215,11 +275,15 @@ export async function runPollJiraProject(data: PollJiraProjectJobData): Promise<
       JSON.stringify({
         level: ok ? "info" : "warn",
         job: "poll-jira-project",
+        project: projectKey,
         projectKey,
         source: data.source,
         requestedBy: data.requestedBy ?? null,
         queueLagMs,
         durationMs,
+        retryCount,
+        lastSuccessAt: stats.lastSuccessAt ?? null,
+        lastError: stats.lastError ?? null,
         pages: stats.pages,
         created: stats.created,
         updated: stats.updated,
@@ -237,6 +301,7 @@ export async function runPollJiraProject(data: PollJiraProjectJobData): Promise<
         ...stats,
         queueLagMs,
         durationMs,
+        retryCount,
         source: data.source,
         requestedBy: data.requestedBy ?? null,
         ok,
@@ -250,10 +315,13 @@ export async function runPollJiraProject(data: PollJiraProjectJobData): Promise<
       JSON.stringify({
         level: "error",
         job: "poll-jira-project",
+        project: projectKey,
         projectKey,
         source: data.source,
         queueLagMs,
         durationMs,
+        retryCount,
+        lastError: errorMsg,
         error: errorMsg,
       })
     );
@@ -264,6 +332,8 @@ export async function runPollJiraProject(data: PollJiraProjectJobData): Promise<
         projectKey,
         durationMs,
         queueLagMs,
+        retryCount,
+        lastError: errorMsg,
         source: data.source,
         ok: false,
       },
