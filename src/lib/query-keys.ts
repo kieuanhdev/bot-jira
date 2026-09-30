@@ -58,6 +58,7 @@ export const watchKeys = {
 };
 
 export const staleKeys = {
+  all: ["stale"] as const,
   /** `["stale", project, assignee, status, reason, severity]`. */
   list: (
     project: string,

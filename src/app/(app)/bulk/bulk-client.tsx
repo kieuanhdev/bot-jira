@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api-client";
 import { useIssues, type IssueItem } from "@/hooks/use-issues";
-import { issuesKeys, boardKeys, bulkKeys, meKeys } from "@/lib/query-keys";
+import { issuesKeys, boardKeys, bulkKeys, meKeys, staleKeys } from "@/lib/query-keys";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -320,6 +321,7 @@ function fieldRow(label: string, before: Record<string, unknown> | null, after: 
 
 export function BulkClient() {
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
 
   // Load issues from cache
@@ -341,7 +343,7 @@ export function BulkClient() {
     staleTime: 5 * 60_000,
     retry: 0,
   });
-  const projectOptions = projectsData?.items ?? [];
+  const projectOptions = useMemo(() => projectsData?.items ?? [], [projectsData?.items]);
 
   // User preferences (to pre-select the active project)
   const { data: prefs } = useQuery({
@@ -350,8 +352,35 @@ export function BulkClient() {
     retry: 0,
   });
 
+  const initialKeys = useMemo(() => {
+    const raw = searchParams?.get("keys");
+    if (!raw) return [];
+    return raw
+      .split(",")
+      .map((k) => k.trim().toUpperCase())
+      .filter(Boolean);
+  }, [searchParams]);
+
+  const initialFields = useMemo(() => {
+    const raw = searchParams?.get("fields");
+    if (!raw) return [];
+    return raw
+      .split(",")
+      .map((f) => f.trim())
+      .filter(Boolean);
+  }, [searchParams]);
+
+  const initialProjectFromUrl = useMemo(() => {
+    const p = searchParams?.get("project");
+    if (p) return p.trim().toUpperCase();
+    if (initialKeys.length > 0) {
+      return initialKeys[0].split("-")[0] ?? "";
+    }
+    return "";
+  }, [searchParams, initialKeys]);
+
   // Project scope (MANDATORY)
-  const [filterProject, setFilterProject] = useState("");
+  const [filterProject, setFilterProject] = useState(initialProjectFromUrl);
 
   // Auto-select the first preferred project (or the first available project)
   useEffect(() => {
@@ -365,6 +394,7 @@ export function BulkClient() {
       available.find((k) => projectKeys.includes(k)) ??
       projectKeys[0] ??
       "";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (pick) setFilterProject(pick);
   }, [prefs, projectOptions, filterProject]);
 
@@ -393,10 +423,10 @@ export function BulkClient() {
   }, [projectIssues]);
 
   // Selected task keys
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialKeys));
 
   // Enabled fields toggle
-  const [enabledFields, setEnabledFields] = useState<Set<string>>(new Set());
+  const [enabledFields, setEnabledFields] = useState<Set<string>>(() => new Set(initialFields));
 
   // Field values
   const [assignee, setAssignee] = useState("");
@@ -648,9 +678,9 @@ export function BulkClient() {
         },
       });
       if (selectionMode === "pick") setSelected(new Set());
-      setPreview(null);
       setActiveOp(r.operationId);
       qc.invalidateQueries({ queryKey: issuesKeys.all });
+      qc.invalidateQueries({ queryKey: staleKeys.all });
       loadOps();
     } catch (e) {
       setPreviewError((e as Error).message);
@@ -1634,6 +1664,7 @@ function AssigneeInput({
 }
 
 function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: string }) {
+  const qc = useQueryClient();
   const { data, isFetching, refetch } = useQuery({
     queryKey: bulkKeys.op(id),
     queryFn: () => api<OpDetail>(`/api/bulk/operations/${id}`),
@@ -1641,6 +1672,14 @@ function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: string 
       ["running", "queued"].includes(query.state.data?.operation.state ?? "") ? 2000 : false,
   });
   const op = data?.operation;
+
+  const opState = op?.state;
+  useEffect(() => {
+    if (opState && ["completed", "partially_failed", "failed"].includes(opState)) {
+      qc.invalidateQueries({ queryKey: issuesKeys.all });
+      qc.invalidateQueries({ queryKey: staleKeys.all });
+    }
+  }, [opState, qc]);
 
   if (!op) {
     return (

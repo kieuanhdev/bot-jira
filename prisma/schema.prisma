@@ -79,6 +79,7 @@ model IssueCache {
   type           String        @default("")
   dueDate        DateTime?
   timeSpent      Int?
+  originalEstimateSeconds Int?
   createdAt      DateTime?
   updatedAt      DateTime?
   lastSyncedAt   DateTime      @default(now())

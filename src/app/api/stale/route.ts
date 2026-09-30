@@ -8,6 +8,54 @@ import { classifyStale, STALE_REASON_LABELS, type StaleReason } from "@/lib/stal
 import { slaForStatus, slaExceeded, isBlockedStatus } from "@/lib/stale/sla";
 import { compareWithBaseline, type PointAlertLevel } from "@/lib/stale/baseline";
 import { overdueBusinessDays } from "@/lib/stale/business-days";
+import {
+  evaluateStandardization,
+  type RequirementCode,
+  type StandardizationStatus,
+  type PolicyId,
+} from "@/lib/issues/standardization";
+
+export interface StandardizationTask {
+  jiraKey: string;
+  projectKey: string;
+  summary: string;
+  status: string;
+  statusCategory: string;
+  statusGroup: string;
+  assigneeJira: string | null;
+  type: string;
+  priority: string;
+  points: number | null;
+  originalEstimateSeconds: number | null;
+  timeSpent: number | null;
+  fixVersionNames: string[];
+  dueDate: string | null;
+  labels: string[];
+  policyId: PolicyId;
+  policyVersion: string;
+  statusResult: StandardizationStatus;
+  required: RequirementCode[];
+  missing: RequirementCode[];
+  satisfied: RequirementCode[];
+  unknown: RequirementCode[];
+  warnings: string[];
+  isStale: boolean;
+  stateAgeDays: number;
+  slaDays: number;
+  overdueDays: number;
+  isBlocked: boolean;
+  blockedDays: number;
+  updatedAt: Date | null;
+  lastSyncedAt: Date | null;
+}
+
+export interface StandardizationSummary {
+  complete: number;
+  incomplete: number;
+  unknown: number;
+  missingCounts: Record<RequirementCode, number>;
+  tasks: StandardizationTask[];
+}
 
 interface StaleTask {
   jiraKey: string;
@@ -357,6 +405,109 @@ export async function GET(req: Request) {
     return g === "In Progress" || g === "In Review";
   });
 
+  // Evaluate standardization across all of user's active issues
+  let stdComplete = 0;
+  let stdIncomplete = 0;
+  let stdUnknown = 0;
+  const missingCounts: Record<RequirementCode, number> = {
+    ESTIMATION: 0,
+    WORKLOG: 0,
+    FIX_VERSION: 0,
+    DUE_DATE: 0,
+  };
+  const standardizationTasks: StandardizationTask[] = [];
+
+  for (const issue of myIssues) {
+    const ages = computeAges(
+      {
+        createdAt: issue.createdAt,
+        statusChangedAt: issue.statusChangedAt,
+        updatedAt: issue.updatedAt,
+        status: issue.status,
+      },
+      now,
+    );
+    const sla = slaForStatus(issue.status, issue.statusCategory);
+    const { exceeded } = slaExceeded(ages.stateAgeDays, sla);
+    const overdue = overdueBusinessDays(issue.dueDate, now);
+    const isBlocked = isBlockedStatus(issue.status) || ages.blockedDays > 0;
+
+    const stdRes = evaluateStandardization({
+      points: issue.points,
+      originalEstimateSeconds: issue.originalEstimateSeconds,
+      timeSpent: issue.timeSpent,
+      fixVersionIds: issue.fixVersionIds,
+      fixVersionNames: issue.fixVersionNames,
+      dueDate: issue.dueDate,
+      labels: issue.labels,
+    });
+
+    if (stdRes.status === "complete") {
+      stdComplete++;
+    } else if (stdRes.status === "incomplete") {
+      stdIncomplete++;
+    } else {
+      stdUnknown++;
+    }
+
+    for (const m of stdRes.missing) {
+      missingCounts[m] = (missingCounts[m] ?? 0) + 1;
+    }
+
+    // Only incomplete and unknown tasks enter the actionable queue
+    if (stdRes.status !== "complete") {
+      standardizationTasks.push({
+        jiraKey: issue.jiraKey,
+        projectKey: issue.projectKey,
+        summary: issue.summary,
+        status: issue.status,
+        statusCategory: issue.statusCategory,
+        statusGroup: statusGroup(issue.status),
+        assigneeJira: issue.assigneeJira,
+        type: issue.type,
+        priority: issue.priority,
+        points: issue.points,
+        originalEstimateSeconds: issue.originalEstimateSeconds,
+        timeSpent: issue.timeSpent,
+        fixVersionNames: issue.fixVersionNames,
+        dueDate: issue.dueDate ? issue.dueDate.toISOString().slice(0, 10) : null,
+        labels: issue.labels,
+        policyId: stdRes.policyId,
+        policyVersion: stdRes.policyVersion,
+        statusResult: stdRes.status,
+        required: stdRes.required,
+        missing: stdRes.missing,
+        satisfied: stdRes.satisfied,
+        unknown: stdRes.unknown,
+        warnings: stdRes.warnings,
+        isStale: exceeded,
+        stateAgeDays: ages.stateAgeDays,
+        slaDays: sla.days,
+        overdueDays: overdue,
+        isBlocked,
+        blockedDays: ages.blockedDays,
+        updatedAt: issue.updatedAt,
+        lastSyncedAt: issue.lastSyncedAt,
+      });
+    }
+  }
+
+  // Sort standardization tasks: most missing first, then longest stateAge, then jiraKey
+  standardizationTasks.sort((a, b) => {
+    if (b.missing.length !== a.missing.length) {
+      return b.missing.length - a.missing.length;
+    }
+    if (b.stateAgeDays !== a.stateAgeDays) {
+      return b.stateAgeDays - a.stateAgeDays;
+    }
+    return a.jiraKey.localeCompare(b.jiraKey);
+  });
+
+  const lastSyncedAt = myIssues.reduce<Date | null>(
+    (latest, i) => (!latest || (i.lastSyncedAt && i.lastSyncedAt > latest) ? i.lastSyncedAt : latest),
+    null,
+  );
+
   const summary: Summary = {
     totalActive: scopedIssues.length,
     totalStale: filtered.length,
@@ -388,6 +539,14 @@ export async function GET(req: Request) {
       totalActive: myIssues.length,
       totalStale: myStaleTasks.length,
       wipCount: myWipTasks.length,
+      lastSyncedAt,
+      standardization: {
+        complete: stdComplete,
+        incomplete: stdIncomplete,
+        unknown: stdUnknown,
+        missingCounts,
+        tasks: standardizationTasks,
+      },
       tasks: myIssues.map((i) => ({
         jiraKey: i.jiraKey,
         summary: i.summary,

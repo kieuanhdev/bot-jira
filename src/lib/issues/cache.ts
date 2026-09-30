@@ -37,6 +37,18 @@ export function issueCacheData(issue: JiraIssue) {
     type: f.issuetype?.name ?? "",
     dueDate: parseJiraDate(f.duedate as string | undefined) ?? null,
     timeSpent: typeof f.timespent === "number" ? f.timespent : null,
+    originalEstimateSeconds:
+      typeof f.timeoriginalestimate === "number" && Number.isFinite(f.timeoriginalestimate)
+        ? Math.round(f.timeoriginalestimate)
+        : f.timetracking &&
+          typeof (f.timetracking as Record<string, unknown>).originalEstimateSeconds === "number" &&
+          Number.isFinite((f.timetracking as Record<string, unknown>).originalEstimateSeconds)
+        ? Math.round((f.timetracking as Record<string, unknown>).originalEstimateSeconds as number)
+        : typeof f.timeoriginalestimate === "string" &&
+          f.timeoriginalestimate.trim() !== "" &&
+          !isNaN(Number(f.timeoriginalestimate))
+        ? Math.round(Number(f.timeoriginalestimate))
+        : null,
     createdAt: parseJiraDate(f.created) ?? null,
     updatedAt: parseJiraDate(f.updated) ?? null,
     lastSyncedAt: new Date(),

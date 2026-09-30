@@ -60,4 +60,22 @@ describe("issueCacheData", () => {
     expect(data.statusCategory).toBe("unknown");
     expect(data.projectKey).toBe("EPM");
   });
+
+  it("parses originalEstimateSeconds from timeoriginalestimate or timetracking", () => {
+    const numData = issueCacheData(issue({ project: { key: "EPM" }, timeoriginalestimate: 14400 }));
+    expect(numData.originalEstimateSeconds).toBe(14400);
+
+    const trackingData = issueCacheData(issue({
+      project: { key: "EPM" },
+      timetracking: { originalEstimateSeconds: 28800 } as Record<string, unknown>,
+    }));
+    expect(trackingData.originalEstimateSeconds).toBe(28800);
+
+    const strData = issueCacheData(issue({ project: { key: "EPM" }, timeoriginalestimate: "3600" as unknown as number }));
+    expect(strData.originalEstimateSeconds).toBe(3600);
+
+    const emptyData = issueCacheData(issue({ project: { key: "EPM" } }));
+    expect(emptyData.originalEstimateSeconds).toBeNull();
+  });
 });
+
