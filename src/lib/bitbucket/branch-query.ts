@@ -85,6 +85,8 @@ export type BranchesQueryResult = {
     stale: boolean;
     lastError: string | null;
   };
+  bitbucketBaseUrl?: string | null;
+  jiraBaseUrl?: string | null;
 };
 
 export async function queryBranches(params: BranchQueryParams): Promise<BranchesQueryResult> {

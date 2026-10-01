@@ -236,6 +236,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     summary,
     items,
+    jiraBaseUrl: env.jiraBaseUrl || null,
     sync: {
       state: syncState,
       lastAttemptAt: cursor?.lastStartedAt?.toISOString() ?? null,

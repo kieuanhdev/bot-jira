@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiError, getErrorMessage } from "@/lib/api-client";
-import { releasesKeys, boardKeys } from "@/lib/query-keys";
+import { releasesKeys, boardKeys, meKeys } from "@/lib/query-keys";
 import { useReleaseSync, useCreateRelease } from "@/hooks/use-releases";
 import { can } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
@@ -55,10 +55,18 @@ export function ReleaseClient() {
     queryFn: () => api<{ items: Array<{ key: string; openCount: number }> }>("/api/projects"),
   });
 
+  // Query Jira base URL and me status for deep links
+  const { data: meStatus } = useQuery({
+    queryKey: meKeys.status,
+    queryFn: () => api<{ jiraName: string | null; jiraBaseUrl?: string }>("/api/me/status"),
+    staleTime: 60_000,
+  });
+
   // Query releases with summary and sync metadata
   const { data, isLoading, refetch, isRefetching } = useQuery<{
     summary: ReleaseSummary;
     items: ReleaseCardItem[];
+    jiraBaseUrl?: string | null;
     sync?: {
       state: "never_synced" | "synced" | "empty" | "forbidden" | "auth_required" | "failed";
       lastAttemptAt: string | null;
@@ -74,6 +82,7 @@ export function ReleaseClient() {
       return api<{
         summary: ReleaseSummary;
         items: ReleaseCardItem[];
+        jiraBaseUrl?: string | null;
         sync?: {
           state: "never_synced" | "synced" | "empty" | "forbidden" | "auth_required" | "failed";
           lastAttemptAt: string | null;
@@ -85,6 +94,8 @@ export function ReleaseClient() {
       }>(`/api/releases${p}`);
     },
   });
+
+  const jiraBaseUrl = data?.jiraBaseUrl || meStatus?.jiraBaseUrl || "";
 
   const syncMeta = data?.sync;
   const isSyncPending = syncMutation.isPending;
@@ -543,6 +554,7 @@ export function ReleaseClient() {
               release={release}
               canManage={canManage}
               canPublish={canPublish}
+              jiraBaseUrl={jiraBaseUrl}
               onRefresh={refetch}
             />
           ))

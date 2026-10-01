@@ -53,7 +53,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { formatDateTime, timeAgo, cn } from "@/lib/utils";
+import { formatDateTime, timeAgo, cn, getJiraIssueUrl, getBitbucketBranchUrl } from "@/lib/utils";
 import { wikiToHtml } from "@/lib/wiki";
 import {
   Bot,
@@ -75,6 +75,7 @@ import {
   ChevronDown,
   Clock,
   Loader2,
+  ExternalLink,
 } from "lucide-react";
 import {
   parseJiraDuration,
@@ -142,6 +143,7 @@ type BranchRow = {
   prDestinationBranch?: string | null;
   linkSource?: string | null;
   linkConfidence?: number | null;
+  linkState?: string;
   checkedAt?: string;
 };
 
@@ -208,7 +210,7 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
 
   const { data: me } = useQuery({
     queryKey: meKeys.status,
-    queryFn: () => api<{ jiraName: string | null; jiraBaseUrl?: string }>("/api/me/status"),
+    queryFn: () => api<{ jiraName: string | null; jiraBaseUrl?: string; bitbucketBaseUrl?: string }>("/api/me/status"),
     staleTime: 60_000,
   });
 
@@ -227,11 +229,14 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
   const { data: branches } = useQuery({
     queryKey: branchesForKeys.forIssue(issue.jiraKey),
     queryFn: () =>
-      api<{ items: BranchRow[]; suggestedItems?: (BranchRow & { id: string })[] }>(
+      api<{ items: BranchRow[]; suggestedItems?: (BranchRow & { id: string })[]; bitbucketBaseUrl?: string | null }>(
         `/api/issues/${issue.jiraKey}/branches`
       ),
     staleTime: 15_000,
   });
+
+  const jiraBaseUrl = me?.jiraBaseUrl ?? "";
+  const bitbucketBaseUrl = branches?.bitbucketBaseUrl || me?.bitbucketBaseUrl || "";
 
   async function refreshIssue() {
     const fresh = await api<{ issue: IssueDetail }>(`/api/issues/${issue.jiraKey}`);
@@ -482,13 +487,31 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
   }
 
   const stale = issue.staleSnapshots[0];
+  const jiraUrl = getJiraIssueUrl(jiraBaseUrl, issue.jiraKey);
+  const primaryBranch = branches?.items?.find((b) => b.linkState === "confirmed") || branches?.items?.[0];
+  const primaryBranchUrl = primaryBranch
+    ? getBitbucketBranchUrl(primaryBranch.repo, primaryBranch.branch, bitbucketBaseUrl, primaryBranch.prUrl)
+    : null;
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="font-mono text-sm text-muted-foreground">{issue.jiraKey}</span>
+            {jiraUrl ? (
+              <a
+                href={jiraUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-sm font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer"
+                title="Mở xem trên Jira"
+              >
+                <span>{issue.jiraKey}</span>
+                <ExternalLink className="h-3 w-3 opacity-60" aria-hidden="true" />
+              </a>
+            ) : (
+              <span className="font-mono text-sm text-muted-foreground">{issue.jiraKey}</span>
+            )}
             <Badge>{issue.status}</Badge>
             {issue.points != null && <Badge variant="secondary">{issue.points} điểm</Badge>}
             {issue.timeSpentSeconds != null && issue.timeSpentSeconds > 0 && (
@@ -512,6 +535,35 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {jiraUrl && (
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="gap-1.5 cursor-pointer text-xs font-semibold"
+              title="Mở xem trên Jira"
+            >
+              <a href={jiraUrl} target="_blank" rel="noreferrer">
+                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                <span>Xem trên Jira</span>
+              </a>
+            </Button>
+          )}
+          {primaryBranchUrl && (
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="gap-1.5 cursor-pointer text-xs font-semibold border-teal-500/30 text-teal-600 dark:text-teal-400 bg-teal-500/5 hover:bg-teal-500/10"
+              title={`Mở nhánh ${primaryBranch?.branch} trên Git`}
+            >
+              <a href={primaryBranchUrl} target="_blank" rel="noreferrer">
+                <GitBranch className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="max-w-[130px] truncate">{primaryBranch?.branch}</span>
+                <ExternalLink className="h-3 w-3 opacity-60" aria-hidden="true" />
+              </a>
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -1050,58 +1102,80 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {branches.items.map((b, i) => (
-                        <tr key={i} className="last:border-0 hover:bg-muted/30">
-                          <td className="py-2 pl-1 font-mono text-xs font-semibold text-foreground">
-                            {b.branch}
-                          </td>
-                          <td className="text-xs text-muted-foreground">{b.repo}</td>
-                          <td className="text-xs">
-                            {b.prState ? (
-                              <div className="flex items-center gap-1.5">
-                                {b.prUrl ? (
-                                  <a
-                                    href={b.prUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="font-medium text-primary hover:underline"
-                                  >
-                                    #{b.prId}
-                                  </a>
-                                ) : (
-                                  <span>#{b.prId}</span>
-                                )}
-                                <Badge
-                                  variant={
-                                    b.prState === "OPEN"
-                                      ? "info"
-                                      : b.prState === "MERGED"
-                                      ? "success"
-                                      : b.prState === "DECLINED"
-                                      ? "danger"
-                                      : "outline"
-                                  }
-                                  className="h-4 px-1 text-[10px]"
+                      {branches.items.map((b, i) => {
+                        const branchUrl = getBitbucketBranchUrl(b.repo, b.branch, bitbucketBaseUrl, b.prUrl);
+                        return (
+                          <tr key={i} className="last:border-0 hover:bg-muted/30">
+                            <td className="py-2 pl-1 font-mono text-xs font-semibold">
+                              {branchUrl ? (
+                                <a
+                                  href={branchUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-primary hover:underline inline-flex items-center gap-1.5 cursor-pointer font-semibold"
+                                  title={`Xem nhánh ${b.branch} trên Git`}
                                 >
-                                  {b.prState}
-                                </Badge>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">Chưa có PR</span>
-                            )}
-                          </td>
-                          <td>
-                            {b.merged ? (
-                              <Badge variant="success">đã merge</Badge>
-                            ) : (
-                              <Badge variant="outline">đang hoạt động</Badge>
-                            )}
-                          </td>
-                          <td className="text-xs text-muted-foreground">
-                            {timeAgo(b.lastCommitAt ?? b.checkedAt ?? null)}
-                          </td>
-                        </tr>
-                      ))}
+                                  <GitBranch className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
+                                  <span>{b.branch}</span>
+                                  <ExternalLink className="h-3 w-3 opacity-60 shrink-0" aria-hidden="true" />
+                                </a>
+                              ) : (
+                                <div className="flex items-center gap-1.5 text-foreground">
+                                  <GitBranch className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
+                                  <span>{b.branch}</span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="text-xs text-muted-foreground">{b.repo}</td>
+                            <td className="text-xs">
+                              {b.prState ? (
+                                <div className="flex items-center gap-1.5">
+                                  {b.prUrl ? (
+                                    <a
+                                      href={b.prUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="font-medium text-primary hover:underline inline-flex items-center gap-1"
+                                      title="Mở Pull Request trên Git"
+                                    >
+                                      <span>#{b.prId}</span>
+                                      <ExternalLink className="h-3 w-3 opacity-60" aria-hidden="true" />
+                                    </a>
+                                  ) : (
+                                    <span>#{b.prId}</span>
+                                  )}
+                                  <Badge
+                                    variant={
+                                      b.prState === "OPEN"
+                                        ? "info"
+                                        : b.prState === "MERGED"
+                                        ? "success"
+                                        : b.prState === "DECLINED"
+                                        ? "danger"
+                                        : "outline"
+                                    }
+                                    className="h-4 px-1 text-[10px]"
+                                  >
+                                    {b.prState}
+                                  </Badge>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">Chưa có PR</span>
+                              )}
+                            </td>
+                            <td>
+                              {b.merged ? (
+                                <Badge variant="success">đã merge</Badge>
+                              ) : (
+                                <Badge variant="outline">đang hoạt động</Badge>
+                              )}
+                            </td>
+                            <td className="text-xs text-muted-foreground">
+                              {timeAgo(b.lastCommitAt ?? b.checkedAt ?? null)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1131,13 +1205,28 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
                     </Button>
                   </div>
                   <div className="divide-y divide-amber-500/20 text-xs">
-                    {branches.suggestedItems.map((sb, idx) => (
-                      <div key={idx} className="flex items-center justify-between py-2 gap-2">
-                        <div className="flex flex-col gap-0.5 font-mono">
-                          <span className="font-semibold text-foreground">{sb.branch}</span>
-                          <span className="text-[11px] text-muted-foreground">{sb.repo}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
+                    {branches.suggestedItems.map((sb, idx) => {
+                      const sbUrl = getBitbucketBranchUrl(sb.repo, sb.branch, bitbucketBaseUrl, sb.prUrl);
+                      return (
+                        <div key={idx} className="flex items-center justify-between py-2 gap-2">
+                          <div className="flex flex-col gap-0.5 font-mono">
+                            {sbUrl ? (
+                              <a
+                                href={sbUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer"
+                                title={`Xem nhánh ${sb.branch} trên Git`}
+                              >
+                                <span>{sb.branch}</span>
+                                <ExternalLink className="h-3 w-3 opacity-60" aria-hidden="true" />
+                              </a>
+                            ) : (
+                              <span className="font-semibold text-foreground">{sb.branch}</span>
+                            )}
+                            <span className="text-[11px] text-muted-foreground">{sb.repo}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
                           <Badge variant="warning">Chờ xác nhận</Badge>
                           {sb.id && (
                             <>
@@ -1161,7 +1250,8 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
                           )}
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
                   </div>
                 </div>
               )}

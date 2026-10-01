@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { userJiraUsername, jiraUsernameAliases } from "@/lib/user-creds";
 import { queryDeliveryTasks, type TaskDeliveryQueryParams } from "@/lib/bitbucket/task-delivery-query";
+import { env } from "@/lib/env";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -43,5 +44,9 @@ export async function GET(req: Request) {
     pageSize: isNaN(pageSize) ? 20 : pageSize,
   });
 
-  return NextResponse.json(result);
+  return NextResponse.json({
+    ...result,
+    bitbucketBaseUrl: env.bitbucketBaseUrl || null,
+    jiraBaseUrl: env.jiraBaseUrl || null,
+  });
 }

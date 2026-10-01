@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { timeAgo } from "@/lib/utils";
+import { timeAgo, getBitbucketBranchUrl, getJiraIssueUrl } from "@/lib/utils";
 import type { DeliveryTaskRow } from "@/lib/bitbucket/task-delivery-query";
 import {
   GitBranch,
@@ -19,10 +19,12 @@ import {
 
 type TaskDeliveryListProps = {
   tasks: DeliveryTaskRow[];
+  bitbucketBaseUrl?: string | null;
+  jiraBaseUrl?: string | null;
   onOpenRelink?: (jiraKey: string) => void;
 };
 
-export function TaskDeliveryList({ tasks }: TaskDeliveryListProps) {
+export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl }: TaskDeliveryListProps) {
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
     () => new Set(tasks.slice(0, 5).map((t) => t.jiraKey))
   );
@@ -82,6 +84,7 @@ export function TaskDeliveryList({ tasks }: TaskDeliveryListProps) {
       {tasks.map((task) => {
         const isExpanded = expandedKeys.has(task.jiraKey);
         const hasAttention = task.attention.length > 0;
+        const jiraUrl = getJiraIssueUrl(jiraBaseUrl, task.jiraKey);
 
         return (
           <div
@@ -118,8 +121,19 @@ export function TaskDeliveryList({ tasks }: TaskDeliveryListProps) {
                       className="font-mono font-semibold text-teal-400 hover:underline flex items-center gap-1 text-sm"
                     >
                       {task.jiraKey}
-                      <ExternalLink className="w-3 h-3 opacity-60" />
                     </Link>
+                    {jiraUrl && (
+                      <a
+                        href={jiraUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-muted-foreground hover:text-teal-400 inline-flex items-center"
+                        title="Xem trên Jira"
+                      >
+                        <ExternalLink className="w-3 h-3 opacity-60 hover:opacity-100" />
+                      </a>
+                    )}
                     {getStatusBadge(task.statusCategory, task.status)}
                     {task.assigneeJira && (
                       <span className="text-xs text-muted-foreground">
@@ -204,50 +218,80 @@ export function TaskDeliveryList({ tasks }: TaskDeliveryListProps) {
                   <div className="text-xs font-semibold text-muted-foreground px-1 uppercase tracking-wider">
                     Các nhánh liên kết ({task.branches.length})
                   </div>
-                  {task.branches.map((b) => (
-                    <div
-                      key={b.id}
-                      className="p-2.5 rounded-lg bg-card border border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                          {b.repo}
-                        </span>
-                        <span className="font-mono font-medium text-foreground truncate">
-                          {b.branch}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-3 shrink-0">
-                        {b.prTitle && (
-                          <span className="text-muted-foreground truncate max-w-[200px]" title={b.prTitle}>
-                            {b.prTitle}
+                  {task.branches.map((b) => {
+                    const branchGitUrl = getBitbucketBranchUrl(b.repo, b.branch, bitbucketBaseUrl, b.prUrl);
+                    return (
+                      <div
+                        key={b.id}
+                        className="p-2.5 rounded-lg bg-card border border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                            {b.repo}
                           </span>
-                        )}
+                          {branchGitUrl ? (
+                            <a
+                              href={branchGitUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group/branch font-mono font-medium text-foreground hover:text-teal-400 hover:underline truncate inline-flex items-center gap-1"
+                              title={`Xem nhánh ${b.branch} trên Git`}
+                            >
+                              <GitBranch className="w-3 h-3 text-muted-foreground group-hover/branch:text-teal-400 shrink-0" />
+                              <span className="truncate">{b.branch}</span>
+                              <ExternalLink className="w-2.5 h-2.5 shrink-0 opacity-50 group-hover/branch:opacity-100" />
+                            </a>
+                          ) : (
+                            <span className="font-mono font-medium text-foreground truncate">
+                              {b.branch}
+                            </span>
+                          )}
+                        </div>
 
-                        {getPrStateBadge(b.prState, b.merged)}
+                        <div className="flex items-center gap-3 shrink-0">
+                          {b.prTitle && (
+                            <span className="text-muted-foreground truncate max-w-[200px]" title={b.prTitle}>
+                              {b.prTitle}
+                            </span>
+                          )}
 
-                        {b.prUrl && (
-                          <a
-                            href={b.prUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-teal-400 hover:underline flex items-center gap-1"
-                          >
-                            PR #{b.prId}
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
+                          {getPrStateBadge(b.prState, b.merged)}
 
-                        {b.lastCommitAt && (
-                          <span className="text-muted-foreground flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {timeAgo(b.lastCommitAt)}
-                          </span>
-                        )}
+                          {b.prUrl && (
+                            <a
+                              href={b.prUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-teal-400 hover:underline flex items-center gap-1"
+                            >
+                              PR #{b.prId}
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+
+                          {branchGitUrl && (
+                            <a
+                              href={branchGitUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-teal-400 hover:underline flex items-center gap-1"
+                              title="Mở nhánh trên Git"
+                            >
+                              Xem Git
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+
+                          {b.lastCommitAt && (
+                            <span className="text-muted-foreground flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {timeAgo(b.lastCommitAt)}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Footer action link to detail */}

@@ -20,11 +20,29 @@ import {
   Loader2,
   FileText,
   ListTodo,
+  ExternalLink,
 } from "lucide-react";
 import { useSaveReleaseNotes } from "@/hooks/use-releases";
 import { ReleaseTaskList } from "./release-task-list";
 import { ReleasePublishDialog } from "./release-publish-dialog";
 import type { TaskReadinessResult, ReleaseReadinessState } from "@/lib/releases/release-readiness";
+
+export function getJiraVersionUrl(
+  jiraBaseUrl?: string | null,
+  projectKey?: string,
+  jiraVersionId?: string | null,
+  versionName?: string
+): string | null {
+  if (!jiraBaseUrl || !projectKey) return null;
+  const base = jiraBaseUrl.replace(/\/$/, "");
+  if (jiraVersionId) {
+    return `${base}/projects/${encodeURIComponent(projectKey)}/versions/${encodeURIComponent(jiraVersionId)}`;
+  }
+  if (versionName) {
+    return `${base}/issues/?jql=project%20%3D%20%22${encodeURIComponent(projectKey)}%22%20AND%20fixVersion%20%3D%20%22${encodeURIComponent(versionName)}%22`;
+  }
+  return null;
+}
 
 export interface ReleaseCardItem {
   id: string;
@@ -74,6 +92,13 @@ export function ReleaseCard({
   const jiraPct = release.taskCount > 0 ? Math.round((release.doneCount / release.taskCount) * 100) : 0;
   const deliveryPct = release.taskCount > 0 ? Math.round((release.deliveryReadyCount / release.taskCount) * 100) : 0;
 
+  const versionUrl = getJiraVersionUrl(
+    jiraBaseUrl,
+    release.projectKey,
+    release.jiraVersionId,
+    release.version
+  );
+
   const handleSaveNotes = () => {
     notesMutation.mutate({ id: release.id, notes }, { onSuccess: onRefresh });
   };
@@ -103,9 +128,24 @@ export function ReleaseCard({
                   <Badge variant="outline" className="font-mono text-xs px-2 py-0.5">
                     {release.projectKey}
                   </Badge>
-                  <CardTitle className="text-base font-bold text-foreground truncate">
-                    {release.version}
-                  </CardTitle>
+                  {versionUrl ? (
+                    <a
+                      href={versionUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 group text-foreground hover:text-primary transition-colors cursor-pointer"
+                      title={`Mở phiên bản ${release.version} trên Jira`}
+                    >
+                      <CardTitle className="text-base font-bold text-inherit truncate group-hover:underline">
+                        {release.version}
+                      </CardTitle>
+                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" aria-hidden="true" />
+                    </a>
+                  ) : (
+                    <CardTitle className="text-base font-bold text-foreground truncate">
+                      {release.version}
+                    </CardTitle>
+                  )}
                   {renderStatusBadge(release)}
                 </div>
 
@@ -276,6 +316,8 @@ export function ReleaseCard({
         releaseId={release.id}
         version={release.version}
         projectKey={release.projectKey}
+        jiraVersionId={release.jiraVersionId}
+        jiraBaseUrl={jiraBaseUrl}
         taskCount={release.taskCount}
         doneCount={release.doneCount}
         gitCompleteCount={release.gitCompleteCount}

@@ -4,23 +4,27 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { timeAgo } from "@/lib/utils";
+import { timeAgo, getBitbucketBranchUrl, getJiraIssueUrl } from "@/lib/utils";
 import {
   GitPullRequest,
+  GitBranch,
   ChevronRight,
   User,
   AlertTriangle,
   Link2,
+  ExternalLink,
 } from "lucide-react";
 import type { BranchRowItem } from "./branch-types";
 
 type BranchCardListProps = {
   items: BranchRowItem[];
+  bitbucketBaseUrl?: string | null;
+  jiraBaseUrl?: string | null;
   onSelectBranch: (branch: BranchRowItem) => void;
   onOpenLinkDialog: (branch: BranchRowItem) => void;
 };
 
-export function BranchCardList({ items, onSelectBranch, onOpenLinkDialog }: BranchCardListProps) {
+export function BranchCardList({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectBranch, onOpenLinkDialog }: BranchCardListProps) {
   return (
     <div className="flex flex-col gap-2.5">
       {items.map((row) => {
@@ -29,6 +33,8 @@ export function BranchCardList({ items, onSelectBranch, onOpenLinkDialog }: Bran
         const highRiskSignal = row.attentionSignals.find((s) => s.severity === "high");
         const mediumRiskSignal = row.attentionSignals.find((s) => s.severity === "medium");
         const primarySignal = highRiskSignal ?? mediumRiskSignal ?? row.attentionSignals[0];
+        const gitUrl = getBitbucketBranchUrl(row.repo, row.branch, bitbucketBaseUrl, row.prUrl);
+        const jiraUrl = row.task ? getJiraIssueUrl(jiraBaseUrl, row.task.jiraKey) : null;
 
         return (
           <Card
@@ -56,6 +62,18 @@ export function BranchCardList({ items, onSelectBranch, onOpenLinkDialog }: Bran
                     >
                       {row.task.jiraKey}
                     </Link>
+                    {jiraUrl && (
+                      <a
+                        href={jiraUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-muted-foreground hover:text-foreground inline-flex items-center"
+                        title="Xem trên Jira"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
                     <Badge
                       variant={
                         row.task.statusCategory === "done"
@@ -95,23 +113,55 @@ export function BranchCardList({ items, onSelectBranch, onOpenLinkDialog }: Bran
                 <span className="text-xs italic text-muted-foreground">Chưa gắn task</span>
               )}
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectBranch(row);
-                }}
-                className="h-7 w-7 p-0 text-muted-foreground"
-                aria-label="Chi tiết nhánh"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-1">
+                {gitUrl && (
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-primary cursor-pointer"
+                    title="Xem nhánh trên Git"
+                    aria-label="Xem nhánh trên Git"
+                  >
+                    <a href={gitUrl} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectBranch(row);
+                  }}
+                  className="h-7 w-7 p-0 text-muted-foreground"
+                  aria-label="Chi tiết nhánh"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             {/* Middle: Branch & Repo */}
             <div className="mt-2.5 flex flex-col gap-0.5 rounded bg-muted/40 p-2 font-mono text-xs">
-              <span className="truncate font-medium text-foreground">{row.branch}</span>
+              {gitUrl ? (
+                <a
+                  href={gitUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="group/branch inline-flex items-center gap-1 font-medium text-foreground hover:text-primary hover:underline transition-colors"
+                  title={`Xem nhánh ${row.branch} trên Git`}
+                >
+                  <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground group-hover/branch:text-primary" />
+                  <span className="truncate">{row.branch}</span>
+                  <ExternalLink className="h-2.5 w-2.5 shrink-0 opacity-50 group-hover/branch:opacity-100" />
+                </a>
+              ) : (
+                <span className="truncate font-medium text-foreground">{row.branch}</span>
+              )}
               <span className="truncate text-[11px] text-muted-foreground">
                 {row.repo}
                 {row.prDestinationBranch ? ` → ${row.prDestinationBranch}` : ""}

@@ -12,13 +12,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { AlertCircle, Link2, Unlink } from "lucide-react";
+import { AlertCircle, Link2, Unlink, ExternalLink } from "lucide-react";
 import { getErrorMessage } from "@/lib/api-client";
 import { useBranchLink } from "@/hooks/use-branches";
+import { getBitbucketBranchUrl } from "@/lib/utils";
 import type { BranchRowItem } from "./branch-types";
 
 type BranchLinkDialogProps = {
   branch: BranchRowItem | null;
+  bitbucketBaseUrl?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
@@ -26,6 +28,7 @@ type BranchLinkDialogProps = {
 
 export function BranchLinkDialog({
   branch,
+  bitbucketBaseUrl,
   open,
   onOpenChange,
   onSuccess,
@@ -36,6 +39,7 @@ export function BranchLinkDialog({
 
   if (!branch) return null;
 
+  const gitUrl = getBitbucketBranchUrl(branch.repo, branch.branch, bitbucketBaseUrl, branch.prUrl);
   const error = linkMutation.error ? getErrorMessage(linkMutation.error) : null;
 
   const handleSave = (unlink = false) => {
@@ -65,7 +69,21 @@ export function BranchLinkDialog({
             Liên kết Jira Task
           </DialogTitle>
           <DialogDescription className="font-mono text-xs">
-            Nhánh: <span className="font-semibold text-foreground">{branch.branch}</span>
+            Nhánh:{" "}
+            {gitUrl ? (
+              <a
+                href={gitUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-primary hover:underline inline-flex items-center gap-1"
+                title="Xem trên Git"
+              >
+                <span>{branch.branch}</span>
+                <ExternalLink className="h-3 w-3 opacity-60" />
+              </a>
+            ) : (
+              <span className="font-semibold text-foreground">{branch.branch}</span>
+            )}
           </DialogDescription>
         </DialogHeader>
 

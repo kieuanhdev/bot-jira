@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import { userJiraAuth, userBitbucketCreds } from "@/lib/user-creds";
 import { jiraWith } from "@/lib/jira/client";
 import { createBranchForIssue, type BranchParams } from "@/lib/bulk/ops";
+import { env } from "@/lib/env";
 
 /**
  * Branches linked to this issue via confirmed `BranchInfo.jiraKey`,
@@ -44,6 +45,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ key: string }>
   return NextResponse.json({
     items: rows,
     suggestedItems: suggestedRows,
+    bitbucketBaseUrl: env.bitbucketBaseUrl || null,
   });
 }
 

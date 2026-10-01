@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { timeAgo } from "@/lib/utils";
+import { timeAgo, getBitbucketBranchUrl, getJiraIssueUrl } from "@/lib/utils";
 import {
   X,
   GitBranch,
@@ -23,6 +23,8 @@ import type { BranchRowItem } from "./branch-types";
 
 type BranchDetailSheetProps = {
   branch: BranchRowItem | null;
+  bitbucketBaseUrl?: string | null;
+  jiraBaseUrl?: string | null;
   onClose: () => void;
   onOpenLinkDialog: (branch: BranchRowItem) => void;
   onConfirmSuggestion?: (branch: BranchRowItem) => void;
@@ -31,6 +33,8 @@ type BranchDetailSheetProps = {
 
 export function BranchDetailSheet({
   branch,
+  bitbucketBaseUrl,
+  jiraBaseUrl,
   onClose,
   onOpenLinkDialog,
   onConfirmSuggestion,
@@ -39,6 +43,9 @@ export function BranchDetailSheet({
   const [copied, setCopied] = useState(false);
 
   if (!branch) return null;
+
+  const gitUrl = getBitbucketBranchUrl(branch.repo, branch.branch, bitbucketBaseUrl, branch.prUrl);
+  const jiraUrl = branch.task ? getJiraIssueUrl(jiraBaseUrl, branch.task.jiraKey) : null;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(branch.branch);
@@ -66,7 +73,20 @@ export function BranchDetailSheet({
               <div className="flex items-center gap-2">
                 <GitBranch className="h-4 w-4 text-primary" aria-hidden="true" />
                 <DialogPrimitive.Title className="font-mono text-base font-bold text-foreground">
-                  {branch.branch}
+                  {gitUrl ? (
+                    <a
+                      href={gitUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:text-primary hover:underline inline-flex items-center gap-1.5"
+                      title="Mở nhánh trên Git"
+                    >
+                      <span>{branch.branch}</span>
+                      <ExternalLink className="h-3.5 w-3.5 opacity-60" />
+                    </a>
+                  ) : (
+                    branch.branch
+                  )}
                 </DialogPrimitive.Title>
               </div>
               <p id="branch-detail-description" className="text-xs text-muted-foreground">
@@ -193,12 +213,19 @@ export function BranchDetailSheet({
                     )}
                   </div>
 
-                  <div className="pt-2">
-                    <Button asChild variant="outline" size="sm" className="h-7 w-full text-xs">
+                  <div className="pt-2 flex items-center gap-2">
+                    <Button asChild variant="outline" size="sm" className="h-7 flex-1 text-xs">
                       <Link href={`/issue/${branch.task.jiraKey}`}>
                         <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Mở task trong ứng dụng
                       </Link>
                     </Button>
+                    {jiraUrl && (
+                      <Button asChild variant="outline" size="sm" className="h-7 text-xs border-primary/30 text-primary hover:bg-primary/10">
+                        <a href={jiraUrl} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Xem trên Jira
+                        </a>
+                      </Button>
+                    )}
                   </div>
                 </div>
               ) : isSuggested ? (
@@ -333,10 +360,20 @@ export function BranchDetailSheet({
 
           {/* Sticky Drawer Footer Actions */}
           <div className="flex items-center justify-between border-t border-border bg-card p-4 gap-2">
-            <Button variant="outline" size="sm" onClick={handleCopy} className="h-8 gap-1.5 text-xs cursor-pointer">
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-              {copied ? "Đã chép" : "Sao chép tên nhánh"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleCopy} className="h-8 gap-1.5 text-xs cursor-pointer">
+                {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? "Đã chép" : "Sao chép tên nhánh"}
+              </Button>
+              {gitUrl && (
+                <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 text-xs cursor-pointer border-teal-500/30 text-teal-400 hover:bg-teal-500/10">
+                  <a href={gitUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    <span>Mở trên Git</span>
+                  </a>
+                </Button>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {branch.jiraKey && onUnlinkBranch && (
                 <Button

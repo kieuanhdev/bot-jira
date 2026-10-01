@@ -38,6 +38,7 @@ export async function GET() {
       jiraName: null,
       jiraVerifiedAt: user?.jiraVerifiedAt ?? null,
       jiraBaseUrl: env.jiraBaseUrl,
+      bitbucketBaseUrl: env.bitbucketBaseUrl || null,
     });
   }
 
@@ -47,5 +48,6 @@ export async function GET() {
     jiraName: userJiraUsername(user),
     jiraVerifiedAt: user?.jiraVerifiedAt ?? null,
     jiraBaseUrl: env.jiraBaseUrl,
+    bitbucketBaseUrl: env.bitbucketBaseUrl || null,
   });
 }

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { timeAgo } from "@/lib/utils";
+import { timeAgo, getBitbucketBranchUrl, getJiraIssueUrl } from "@/lib/utils";
 import type { ReviewSuggestionItem } from "@/lib/bitbucket/task-delivery-query";
 import {
   Check,
@@ -19,6 +19,8 @@ import {
 
 type ReviewInboxViewProps = {
   items: ReviewSuggestionItem[];
+  bitbucketBaseUrl?: string | null;
+  jiraBaseUrl?: string | null;
   onConfirm: (branchId: string) => Promise<void>;
   onReject: (branchId: string) => Promise<void>;
   onRelink: (item: ReviewSuggestionItem) => void;
@@ -26,6 +28,8 @@ type ReviewInboxViewProps = {
 
 export function ReviewInboxView({
   items,
+  bitbucketBaseUrl,
+  jiraBaseUrl,
   onConfirm,
   onReject,
   onRelink,
@@ -62,6 +66,8 @@ export function ReviewInboxView({
 
       {items.map((item) => {
         const isLoading = loadingId === item.id;
+        const gitUrl = getBitbucketBranchUrl(item.repo, item.branch, bitbucketBaseUrl, item.prUrl);
+        const jiraUrl = getJiraIssueUrl(jiraBaseUrl, item.suggestedJiraKey);
 
         return (
           <div
@@ -74,10 +80,24 @@ export function ReviewInboxView({
                 <span className="font-mono text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">
                   {item.repo}
                 </span>
-                <span className="font-mono text-sm font-semibold text-foreground flex items-center gap-1.5">
-                  <GitBranch className="w-3.5 h-3.5 text-teal-400" />
-                  {item.branch}
-                </span>
+                {gitUrl ? (
+                  <a
+                    href={gitUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-sm font-semibold text-foreground hover:text-teal-400 hover:underline flex items-center gap-1.5"
+                    title={`Mở nhánh ${item.branch} trên Git`}
+                  >
+                    <GitBranch className="w-3.5 h-3.5 text-teal-400" />
+                    <span>{item.branch}</span>
+                    <ExternalLink className="w-3 h-3 opacity-60" />
+                  </a>
+                ) : (
+                  <span className="font-mono text-sm font-semibold text-foreground flex items-center gap-1.5">
+                    <GitBranch className="w-3.5 h-3.5 text-teal-400" />
+                    {item.branch}
+                  </span>
+                )}
                 {item.linkConfidence !== null && (
                   <Badge variant="outline" className="text-xs text-teal-400 border-teal-500/30">
                     Độ tin cậy: {item.linkConfidence}%
@@ -99,8 +119,18 @@ export function ReviewInboxView({
                       className="font-mono font-bold text-teal-400 hover:underline flex items-center gap-1 text-sm"
                     >
                       {item.suggestedJiraKey}
-                      <ExternalLink className="w-3 h-3 opacity-60" />
                     </Link>
+                    {jiraUrl && (
+                      <a
+                        href={jiraUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-teal-400 inline-flex items-center"
+                        title="Xem trên Jira"
+                      >
+                        <ExternalLink className="w-3 h-3 opacity-60 hover:opacity-100" />
+                      </a>
+                    )}
                     {item.task?.status && (
                       <Badge variant="secondary" className="text-xs">
                         {item.task.status}
@@ -123,6 +153,19 @@ export function ReviewInboxView({
 
             {/* Right: Actions */}
             <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+              {gitUrl && (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs cursor-pointer hover:bg-muted"
+                >
+                  <a href={gitUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span>Xem Git</span>
+                  </a>
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"

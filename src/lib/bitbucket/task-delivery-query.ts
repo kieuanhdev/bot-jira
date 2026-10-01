@@ -102,6 +102,8 @@ export type TaskDeliveryQueryResult = {
     unlinked: number;
     allBranches: number;
   };
+  bitbucketBaseUrl?: string | null;
+  jiraBaseUrl?: string | null;
 };
 
 export async function queryDeliveryTasks(

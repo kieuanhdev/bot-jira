@@ -25,6 +25,8 @@ interface ReleasePublishDialogProps {
   releaseId: string;
   version: string;
   projectKey: string;
+  jiraVersionId?: string | null;
+  jiraBaseUrl?: string;
   taskCount: number;
   doneCount: number;
   gitCompleteCount: number;
@@ -39,6 +41,8 @@ export function ReleasePublishDialog({
   releaseId,
   version,
   projectKey,
+  jiraVersionId,
+  jiraBaseUrl,
   taskCount,
   doneCount,
   gitCompleteCount,
@@ -46,6 +50,12 @@ export function ReleasePublishDialog({
   onSuccess,
 }: ReleasePublishDialogProps) {
   const publishMutation = usePublishRelease();
+
+  const versionUrl = jiraBaseUrl && projectKey
+    ? (jiraVersionId
+        ? `${jiraBaseUrl.replace(/\/$/, "")}/projects/${encodeURIComponent(projectKey)}/versions/${encodeURIComponent(jiraVersionId)}`
+        : `${jiraBaseUrl.replace(/\/$/, "")}/issues/?jql=project%20%3D%20%22${encodeURIComponent(projectKey)}%22%20AND%20fixVersion%20%3D%20%22${encodeURIComponent(version)}%22`)
+    : null;
 
   const errorMsg = publishMutation.error
     ? getErrorMessage(publishMutation.error)
@@ -73,8 +83,22 @@ export function ReleasePublishDialog({
             Phát hành Fix Version trên Jira
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Xác nhận phát hành phiên bản <span className="font-semibold text-foreground">{version}</span> thuộc dự án{" "}
-            <span className="font-semibold text-foreground">{projectKey}</span>.
+            Xác nhận phát hành phiên bản{" "}
+            {versionUrl ? (
+              <a
+                href={versionUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer"
+                title={`Xem phiên bản ${version} trên Jira`}
+              >
+                <span>{version}</span>
+                <ExternalLink className="h-3 w-3 inline" aria-hidden="true" />
+              </a>
+            ) : (
+              <span className="font-semibold text-foreground">{version}</span>
+            )}{" "}
+            thuộc dự án <span className="font-semibold text-foreground">{projectKey}</span>.
           </DialogDescription>
         </DialogHeader>
 

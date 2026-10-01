@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { queryBranches, type BranchQueryParams } from "@/lib/bitbucket/branch-query";
+import { env } from "@/lib/env";
 
 /**
  * List tracked branches with search, filters, pagination, summary, facets, and task context.
@@ -41,5 +42,9 @@ export async function GET(req: Request) {
     pageSize: isNaN(pageSize) ? 25 : pageSize,
   });
 
-  return NextResponse.json(result);
+  return NextResponse.json({
+    ...result,
+    bitbucketBaseUrl: env.bitbucketBaseUrl || null,
+    jiraBaseUrl: env.jiraBaseUrl || null,
+  });
 }

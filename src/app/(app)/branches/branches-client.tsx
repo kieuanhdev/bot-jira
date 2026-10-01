@@ -196,6 +196,24 @@ export function BranchesClient() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: meStatus } = useQuery({
+    queryKey: ["me-status"],
+    queryFn: () => api<{ jiraName: string | null; jiraBaseUrl?: string; bitbucketBaseUrl?: string }>("/api/me/status"),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const bitbucketBaseUrl =
+    branchQueryResult.data?.bitbucketBaseUrl ??
+    taskQueryResult.data?.bitbucketBaseUrl ??
+    meStatus?.bitbucketBaseUrl ??
+    null;
+
+  const jiraBaseUrl =
+    branchQueryResult.data?.jiraBaseUrl ??
+    taskQueryResult.data?.jiraBaseUrl ??
+    meStatus?.jiraBaseUrl ??
+    null;
+
   const isLoading = isTechnicalView ? branchQueryResult.isLoading : taskQueryResult.isLoading;
   const isError = isTechnicalView ? branchQueryResult.isError : taskQueryResult.isError;
   const error = isTechnicalView ? branchQueryResult.error : taskQueryResult.error;
@@ -344,6 +362,8 @@ export function BranchesClient() {
               ) : taskQueryResult.data?.tasks && taskQueryResult.data.tasks.length > 0 ? (
                 <TaskDeliveryList
                   tasks={taskQueryResult.data.tasks}
+                  bitbucketBaseUrl={bitbucketBaseUrl}
+                  jiraBaseUrl={jiraBaseUrl}
                   onOpenRelink={(jiraKey) => setSelectedBranchForLink(toBranchRow({ id: "", repo: "", branch: "", jiraKey }))}
                 />
               ) : (
@@ -361,6 +381,8 @@ export function BranchesClient() {
               {taskQueryResult.data?.reviewItems && taskQueryResult.data.reviewItems.length > 0 ? (
                 <ReviewInboxView
                   items={taskQueryResult.data.reviewItems}
+                  bitbucketBaseUrl={bitbucketBaseUrl}
+                  jiraBaseUrl={jiraBaseUrl}
                   onConfirm={handleConfirmSuggestion}
                   onReject={handleRejectSuggestion}
                   onRelink={(item: ReviewSuggestionItem) =>
@@ -383,6 +405,7 @@ export function BranchesClient() {
               {taskQueryResult.data?.unlinkedItems && taskQueryResult.data.unlinkedItems.length > 0 ? (
                 <UnlinkedBranchView
                   items={taskQueryResult.data.unlinkedItems}
+                  bitbucketBaseUrl={bitbucketBaseUrl}
                   onLink={(item: UnlinkedBranchItem) =>
                     setSelectedBranchForLink(toBranchRow(item))
                   }
@@ -405,6 +428,8 @@ export function BranchesClient() {
                   <div className="hidden md:block">
                     <BranchTable
                       items={branchQueryResult.data.items}
+                      bitbucketBaseUrl={bitbucketBaseUrl}
+                      jiraBaseUrl={jiraBaseUrl}
                       onSelectBranch={(b) => setSelectedBranchForDrawer(b)}
                       onOpenLinkDialog={(b) => setSelectedBranchForLink(b)}
                     />
@@ -412,6 +437,8 @@ export function BranchesClient() {
                   <div className="md:hidden">
                     <BranchCardList
                       items={branchQueryResult.data.items}
+                      bitbucketBaseUrl={bitbucketBaseUrl}
+                      jiraBaseUrl={jiraBaseUrl}
                       onSelectBranch={(b) => setSelectedBranchForDrawer(b)}
                       onOpenLinkDialog={(b) => setSelectedBranchForLink(b)}
                     />
@@ -466,6 +493,7 @@ export function BranchesClient() {
       {selectedBranchForLink && (
         <BranchLinkDialog
           branch={selectedBranchForLink}
+          bitbucketBaseUrl={bitbucketBaseUrl}
           open={Boolean(selectedBranchForLink)}
           onOpenChange={(open) => {
             if (!open) setSelectedBranchForLink(null);
@@ -481,6 +509,8 @@ export function BranchesClient() {
       {selectedBranchForDrawer && (
         <BranchDetailSheet
           branch={selectedBranchForDrawer}
+          bitbucketBaseUrl={bitbucketBaseUrl}
+          jiraBaseUrl={jiraBaseUrl}
           onClose={() => setSelectedBranchForDrawer(null)}
           onOpenLinkDialog={(b: BranchRowItem) => {
             setSelectedBranchForDrawer(null);

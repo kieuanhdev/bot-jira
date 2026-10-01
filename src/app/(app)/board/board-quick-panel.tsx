@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import { cn, timeAgo, formatDateTime } from "@/lib/utils";
+import { cn, timeAgo, formatDateTime, getJiraIssueUrl, getBitbucketBranchUrl } from "@/lib/utils";
 import { wikiToHtml } from "@/lib/wiki";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -100,7 +100,7 @@ export function QuickPanel({
 
   const { data: me } = useQuery({
     queryKey: meKeys.status,
-    queryFn: () => api<{ jiraName: string | null }>("/api/me/status"),
+    queryFn: () => api<{ jiraName: string | null; jiraBaseUrl?: string; bitbucketBaseUrl?: string }>("/api/me/status"),
     staleTime: 60_000,
   });
 
@@ -123,11 +123,14 @@ export function QuickPanel({
   const { data: branchesData, refetch: refetchBranches } = useQuery({
     queryKey: branchesForKeys.forIssue(issue.jiraKey),
     queryFn: () =>
-      api<{ items: { repo: string; branch: string; prUrl?: string | null }[] }>(
+      api<{ items: { repo: string; branch: string; prUrl?: string | null }[]; bitbucketBaseUrl?: string | null }>(
         `/api/issues/${issue.jiraKey}/branches`
       ),
     staleTime: 15_000,
   });
+
+  const bitbucketBaseUrl = branchesData?.bitbucketBaseUrl || me?.bitbucketBaseUrl || "";
+  const jiraUrl = getJiraIssueUrl(jiraBaseUrl || me?.jiraBaseUrl, issue.jiraKey);
 
   const { data: projectVersions } = useQuery({
     queryKey: issuesKeys.versions(issue.jiraKey),
@@ -333,7 +336,20 @@ export function QuickPanel({
         {/* Header */}
         <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
           <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dotClass)} aria-hidden />
-          <span className="font-mono text-sm font-semibold text-primary">{issue.jiraKey}</span>
+          {jiraUrl ? (
+            <a
+              href={jiraUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-sm font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer"
+              title="Mở xem trên Jira"
+            >
+              <span>{issue.jiraKey}</span>
+              <ExternalLink className="h-3 w-3 opacity-60" aria-hidden="true" />
+            </a>
+          ) : (
+            <span className="font-mono text-sm font-semibold text-primary">{issue.jiraKey}</span>
+          )}
           <Badge variant="secondary" className="text-[11px]">{status}</Badge>
           {priority && (
             <Badge variant="outline" className="text-[11px]">{priority}</Badge>
@@ -357,6 +373,18 @@ export function QuickPanel({
             </Badge>
           )}
           <div className="ml-auto flex items-center gap-0.5">
+            {jiraUrl && (
+              <a
+                href={jiraUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground inline-flex items-center"
+                title="Mở xem trên Jira"
+                aria-label="Mở xem trên Jira"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            )}
             <button
               onClick={() => { navigator.clipboard.writeText(issue.jiraKey).catch(() => {}); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }}
               className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -824,27 +852,44 @@ export function QuickPanel({
                 Nhánh Bitbucket liên kết
               </span>
               <div className="flex flex-col gap-1.5">
-                {branchesData!.items.map((b) => (
-                  <div
-                    key={`${b.repo}-${b.branch}`}
-                    className="flex items-center justify-between rounded-md border bg-muted/20 px-2.5 py-1.5 text-xs font-mono"
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <GitBranch className="h-3.5 w-3.5 text-primary shrink-0" />
-                      <span className="truncate">{b.branch}</span>
+                {branchesData!.items.map((b) => {
+                  const branchUrl = getBitbucketBranchUrl(b.repo, b.branch, bitbucketBaseUrl, b.prUrl);
+                  return (
+                    <div
+                      key={`${b.repo}-${b.branch}`}
+                      className="flex items-center justify-between rounded-md border bg-muted/20 px-2.5 py-1.5 text-xs font-mono"
+                    >
+                      <div className="flex items-center gap-2 truncate min-w-0">
+                        <GitBranch className="h-3.5 w-3.5 text-primary shrink-0" />
+                        {branchUrl ? (
+                          <a
+                            href={branchUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="truncate font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer"
+                            title={`Xem nhánh ${b.branch} trên Git`}
+                          >
+                            <span className="truncate">{b.branch}</span>
+                            <ExternalLink className="h-3 w-3 opacity-60 shrink-0" aria-hidden="true" />
+                          </a>
+                        ) : (
+                          <span className="truncate">{b.branch}</span>
+                        )}
+                      </div>
+                      {b.prUrl && (
+                        <a
+                          href={b.prUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline flex items-center gap-1 shrink-0 ml-2 font-sans font-medium"
+                          title="Xem Pull Request trên Git"
+                        >
+                          PR <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
                     </div>
-                    {b.prUrl && (
-                      <a
-                        href={b.prUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline flex items-center gap-1 shrink-0 ml-2"
-                      >
-                        PR <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -919,13 +964,13 @@ export function QuickPanel({
             variant="outline"
             size="sm"
             onClick={() => {
-              const base = jiraBaseUrl.replace(/\/$/, "");
+              const base = (jiraBaseUrl || me?.jiraBaseUrl || "").replace(/\/$/, "");
               if (base) window.open(`${base}/browse/${issue.jiraKey}`, "_blank", "noopener");
             }}
-            className="gap-1.5"
-            title="Open in Jira"
+            className="gap-1.5 cursor-pointer text-xs"
+            title="Mở xem trên Jira"
           >
-            <ExternalLink className="h-4 w-4" /> Jira
+            <ExternalLink className="h-4 w-4" /> Xem trên Jira
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

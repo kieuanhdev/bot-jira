@@ -3,23 +3,27 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { timeAgo } from "@/lib/utils";
+import { timeAgo, getBitbucketBranchUrl, getJiraIssueUrl } from "@/lib/utils";
 import {
   GitPullRequest,
+  GitBranch,
   ChevronRight,
   User,
   AlertTriangle,
   Link2,
+  ExternalLink,
 } from "lucide-react";
 import type { BranchRowItem } from "./branch-types";
 
 type BranchTableProps = {
   items: BranchRowItem[];
+  bitbucketBaseUrl?: string | null;
+  jiraBaseUrl?: string | null;
   onSelectBranch: (branch: BranchRowItem) => void;
   onOpenLinkDialog: (branch: BranchRowItem) => void;
 };
 
-export function BranchTable({ items, onSelectBranch, onOpenLinkDialog }: BranchTableProps) {
+export function BranchTable({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectBranch, onOpenLinkDialog }: BranchTableProps) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-card">
       <table className="w-full text-left text-xs">
@@ -40,6 +44,8 @@ export function BranchTable({ items, onSelectBranch, onOpenLinkDialog }: BranchT
             const highRiskSignal = row.attentionSignals.find((s) => s.severity === "high");
             const mediumRiskSignal = row.attentionSignals.find((s) => s.severity === "medium");
             const primarySignal = highRiskSignal ?? mediumRiskSignal ?? row.attentionSignals[0];
+            const gitUrl = getBitbucketBranchUrl(row.repo, row.branch, bitbucketBaseUrl, row.prUrl);
+            const jiraUrl = row.task ? getJiraIssueUrl(jiraBaseUrl, row.task.jiraKey) : null;
 
             return (
               <tr
@@ -67,6 +73,18 @@ export function BranchTable({ items, onSelectBranch, onOpenLinkDialog }: BranchT
                         >
                           {row.task.jiraKey}
                         </Link>
+                        {jiraUrl && (
+                          <a
+                            href={jiraUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-muted-foreground hover:text-foreground inline-flex items-center"
+                            title="Xem trên Jira"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
                         <Badge
                           variant={
                             row.task.statusCategory === "done"
@@ -108,9 +126,24 @@ export function BranchTable({ items, onSelectBranch, onOpenLinkDialog }: BranchT
                 {/* 2. Branch / Repository */}
                 <td className="max-w-[240px] px-3 py-3 align-top">
                   <div className="flex flex-col gap-0.5">
-                    <span className="truncate font-mono font-medium text-foreground" title={row.branch}>
-                      {row.branch}
-                    </span>
+                    {gitUrl ? (
+                      <a
+                        href={gitUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="group/branch inline-flex items-center gap-1 font-mono font-medium text-foreground hover:text-primary hover:underline transition-colors max-w-full"
+                        title={`Xem nhánh ${row.branch} trên Git`}
+                      >
+                        <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground group-hover/branch:text-primary" />
+                        <span className="truncate">{row.branch}</span>
+                        <ExternalLink className="h-2.5 w-2.5 shrink-0 opacity-50 group-hover/branch:opacity-100" />
+                      </a>
+                    ) : (
+                      <span className="truncate font-mono font-medium text-foreground" title={row.branch}>
+                        {row.branch}
+                      </span>
+                    )}
                     <span className="truncate text-[11px] text-muted-foreground" title={row.repo}>
                       {row.repo}
                       {row.prDestinationBranch ? ` → ${row.prDestinationBranch}` : ""}
@@ -207,6 +240,21 @@ export function BranchTable({ items, onSelectBranch, onOpenLinkDialog }: BranchT
                 {/* 6. Actions */}
                 <td className="py-3 pl-3 pr-4 text-right align-middle whitespace-nowrap">
                   <div className="flex items-center justify-end gap-1.5">
+                    {gitUrl && (
+                      <Button
+                        asChild
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-primary cursor-pointer"
+                        title="Xem nhánh trên Git"
+                        aria-label="Xem nhánh trên Git"
+                      >
+                        <a href={gitUrl} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
                     {isSuggested && (
                       <Button
                         size="sm"
