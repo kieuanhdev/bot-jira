@@ -38,12 +38,16 @@ import {
   ChevronRight,
   ArrowUpRight,
   Inbox,
+  Flame,
+  Shield,
+  BookOpen,
 } from "lucide-react";
-import type {
-  LeaderboardResponse,
-  LeaderboardMember,
-  LeaderboardTimeframe,
-  LeaderboardTier,
+import {
+  type LeaderboardResponse,
+  type LeaderboardMember,
+  type LeaderboardTimeframe,
+  type LeaderboardTier,
+  LEADERBOARD_TIERS,
 } from "@/lib/leaderboard/types";
 
 const ALL_PROJECTS = "ALL";
@@ -59,16 +63,20 @@ function getInitials(name: string): string {
 // Tier icon resolver
 function TierIcon({ iconName, className }: { iconName: LeaderboardTier["iconName"]; className?: string }) {
   switch (iconName) {
+    case "Crown":
+      return <Crown className={className} aria-hidden="true" />;
     case "Sparkles":
       return <Sparkles className={className} aria-hidden="true" />;
     case "Zap":
       return <Zap className={className} aria-hidden="true" />;
+    case "Flame":
+      return <Flame className={className} aria-hidden="true" />;
     case "Trophy":
       return <Trophy className={className} aria-hidden="true" />;
+    case "Shield":
+      return <Shield className={className} aria-hidden="true" />;
     case "Medal":
       return <Medal className={className} aria-hidden="true" />;
-    case "Award":
-      return <Award className={className} aria-hidden="true" />;
     case "Star":
     default:
       return <Star className={className} aria-hidden="true" />;
@@ -86,15 +94,15 @@ function RankBadge({ rank }: { rank: number }) {
   }
   if (rank === 2) {
     return (
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-400/20 text-slate-300 ring-2 ring-slate-400/40 font-bold text-sm">
-        <Medal className="h-4 w-4" aria-hidden="true" />
+      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700/50 text-slate-700 dark:text-slate-200 ring-2 ring-slate-400/50 font-bold text-sm">
+        <Zap className="h-4 w-4 text-sky-600 dark:text-sky-400" aria-hidden="true" />
       </div>
     );
   }
   if (rank === 3) {
     return (
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-700/20 text-amber-600 ring-2 ring-amber-700/40 font-bold text-sm">
-        <Award className="h-4 w-4" aria-hidden="true" />
+      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/15 dark:bg-amber-800/30 text-amber-700 dark:text-amber-300 ring-2 ring-amber-600/40 font-bold text-sm">
+        <Flame className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden="true" />
       </div>
     );
   }
@@ -123,6 +131,21 @@ export function LeaderboardClient() {
   // Selected member for detail modal
   const [activeMemberModal, setActiveMemberModal] = useState<LeaderboardMember | null>(null);
   const [taskSearch, setTaskSearch] = useState("");
+  const [showRealmsModal, setShowRealmsModal] = useState(false);
+
+  // Group tiers by realm for cultivation guide modal
+  const realmGroups = useMemo(() => {
+    const groups: { realm: string; tiers: typeof LEADERBOARD_TIERS }[] = [];
+    for (const tier of LEADERBOARD_TIERS) {
+      let g = groups.find((grp) => grp.realm === tier.realm);
+      if (!g) {
+        g = { realm: tier.realm, tiers: [] };
+        groups.push(g);
+      }
+      g.tiers.push(tier);
+    }
+    return groups;
+  }, []);
 
   // Query URL builder
   const queryUrl = useMemo(() => {
@@ -190,19 +213,30 @@ export function LeaderboardClient() {
       {/* ── Page Header ────────────────────────────────────────── */}
       <PageHeader
         icon={Trophy}
-        title="Bảng Xếp Hạng Năng Suất"
-        description="Tích lũy Story Point, vinh danh cá nhân và tiếp thêm động lực cho toàn đội ngũ."
+        title="Bảng Phong Thần - Xếp Hạng Tu Tiên"
+        description="Tích lũy Story Point tu vi, đột phá cảnh giới và lưu danh vạn cổ trên bảng vàng tông môn."
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="cursor-pointer gap-2 text-xs"
-          >
-            <RotateCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
-            <span>Làm mới</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowRealmsModal(true)}
+              className="cursor-pointer gap-1.5 text-xs border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20"
+            >
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Sổ Cảnh Giới Tu Tiên</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="cursor-pointer gap-2 text-xs"
+            >
+              <RotateCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
+              <span>Làm mới</span>
+            </Button>
+          </div>
         }
       />
 
@@ -390,26 +424,26 @@ export function LeaderboardClient() {
 
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-base font-bold text-foreground">Thành tích của bạn</span>
+                  <span className="text-base font-bold text-foreground">Tu vi của bạn</span>
                   <Badge variant="outline" className={cn("text-xs font-semibold gap-1", myPerformance.tier.badgeClass)}>
                     <TierIcon iconName={myPerformance.tier.iconName} className="h-3 w-3" />
-                    <span>Cấp bậc: {myPerformance.tier.name}</span>
+                    <span>Cảnh giới: {myPerformance.tier.name}</span>
                   </Badge>
                   <Badge variant="secondary" className="text-xs font-medium">
-                    Hạng #{myPerformance.rank} toàn đội
+                    Hạng #{myPerformance.rank} tông môn
                   </Badge>
                 </div>
 
                 <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
                   <span>
-                    Đã tích lũy:{" "}
+                    Tu vi tích lũy:{" "}
                     <strong className="text-foreground text-sm font-bold text-primary">
                       {myPerformance.completedPoints} pts
                     </strong>
                   </span>
                   {myPerformance.inProgressPoints > 0 && (
                     <span>
-                      • Đang làm:{" "}
+                      • Đang bế quan:{" "}
                       <strong className="text-foreground font-semibold">{myPerformance.inProgressPoints} pts</strong>
                     </span>
                   )}
@@ -422,7 +456,7 @@ export function LeaderboardClient() {
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                  <span>Tiến độ cấp {myPerformance.nextTier?.name ?? "Tối đa"}</span>
+                  <span>Tiến độ đột phá {myPerformance.nextTier?.name ?? "Đỉnh Phong"}</span>
                 </span>
                 <span className="font-semibold tabular-nums text-foreground">
                   {myPerformance.tierProgressPercent}%
@@ -454,7 +488,7 @@ export function LeaderboardClient() {
                 }}
                 className="cursor-pointer gap-2 border-primary/40 text-primary hover:bg-primary/10 text-xs font-semibold"
               >
-                <span>Xem task của bạn</span>
+                <span>Xem nhiệm vụ của tôi</span>
                 <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
             </div>
@@ -471,7 +505,7 @@ export function LeaderboardClient() {
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-amber-500" aria-hidden="true" />
               <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">
-                Bục Vinh Quang (Top 3)
+                Bảng Phong Thần (Top 3 Tu Vi Đỉnh Phong)
               </h2>
             </div>
             <span className="text-xs text-muted-foreground">{data?.periodLabel}</span>
@@ -479,16 +513,16 @@ export function LeaderboardClient() {
 
           <CardContent className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end max-w-4xl mx-auto pt-4 pb-2">
-              {/* Rank 2 (Silver) - Left Column on desktop */}
+              {/* Rank 2 (Tiên Tôn) - Left Column on desktop */}
               {top2 ? (
                 <div className="flex flex-col items-center order-2 md:order-1">
-                  <div className="relative mb-3 flex flex-col items-center">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-300/20 text-slate-300 font-bold text-xl ring-4 ring-slate-400/40 shadow-md">
+                  <div className="relative mb-5 flex flex-col items-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-bold text-xl ring-4 ring-slate-300 dark:ring-slate-600 shadow-md">
                       {getInitials(top2.displayName)}
                     </div>
-                    <div className="absolute -bottom-2.5 flex h-7 items-center gap-1 rounded-full bg-slate-200 dark:bg-slate-700 px-2 text-[11px] font-bold text-slate-800 dark:text-slate-200 shadow-sm">
-                      <Medal className="h-3.5 w-3.5 text-slate-500 dark:text-slate-300" aria-hidden="true" />
-                      <span>Á Quân 1</span>
+                    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-6.5 items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 px-2.5 text-[11px] font-bold text-slate-800 dark:text-slate-200 shadow-sm whitespace-nowrap">
+                      <Zap className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400 shrink-0" aria-hidden="true" />
+                      <span>TIÊN TÔN #2</span>
                     </div>
                   </div>
 
@@ -505,9 +539,9 @@ export function LeaderboardClient() {
                     <div className="text-2xl font-black text-foreground tabular-nums">
                       {top2.completedPoints}
                     </div>
-                    <div className="text-[11px] font-medium text-muted-foreground">Story Points</div>
+                    <div className="text-[11px] font-medium text-muted-foreground">Tu Vi Tích Lũy</div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
-                      {top2.completedTasks} task hoàn thành
+                      {top2.completedTasks} nhiệm vụ hoàn thành
                     </div>
                     <Button
                       variant="ghost"
@@ -515,26 +549,26 @@ export function LeaderboardClient() {
                       onClick={() => setActiveMemberModal(top2)}
                       className="mt-2 h-7 cursor-pointer text-xs text-primary hover:text-primary hover:bg-primary/10"
                     >
-                      Chi tiết task
+                      Chi tiết nhiệm vụ
                     </Button>
                   </div>
                 </div>
               ) : (
                 <div className="hidden md:flex flex-col items-center order-2 md:order-1 text-muted-foreground text-xs italic">
-                  Chưa có Á Quân 1
+                  Chưa có Tiên Tôn #2
                 </div>
               )}
 
-              {/* Rank 1 (Gold / MVP) - Elevated Center Column */}
+              {/* Rank 1 (Đạo Tổ / Chí Tôn) - Elevated Center Column */}
               <div className="flex flex-col items-center order-1 md:order-2">
-                <div className="relative mb-3 flex flex-col items-center">
+                <div className="relative mb-5 flex flex-col items-center">
                   <Crown className="h-7 w-7 text-amber-500 animate-bounce mb-1" aria-hidden="true" />
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 font-black text-2xl ring-4 ring-amber-400/50 shadow-xl shadow-amber-500/30">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-slate-950 font-black text-2xl ring-4 ring-amber-300 dark:ring-amber-500/60 shadow-xl shadow-amber-500/25">
                     {getInitials(top1.displayName)}
                   </div>
-                  <div className="absolute -bottom-2.5 flex h-7 items-center gap-1 rounded-full bg-amber-500 px-3 text-[11px] font-black text-slate-950 shadow-md">
-                    <Crown className="h-3.5 w-3.5 text-slate-950" aria-hidden="true" />
-                    <span>QUÁN QUÂN #1</span>
+                  <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-7 items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-500 border border-amber-300 dark:border-amber-400 px-3 text-[11px] font-black text-slate-950 shadow-md whitespace-nowrap">
+                    <Crown className="h-3.5 w-3.5 text-slate-950 shrink-0" aria-hidden="true" />
+                    <span>ĐẠO TỔ #1</span>
                   </div>
                 </div>
 
@@ -552,9 +586,9 @@ export function LeaderboardClient() {
                   <div className="text-3xl font-black text-amber-500 tabular-nums">
                     {top1.completedPoints}
                   </div>
-                  <div className="text-xs font-semibold text-foreground">Story Points</div>
+                  <div className="text-xs font-semibold text-foreground">Tu Vi Đỉnh Phong</div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {top1.completedTasks} task hoàn thành • {top1.sharePercentage}% tổng điểm
+                    {top1.completedTasks} nhiệm vụ chốt • {top1.sharePercentage}% tu vi tông môn
                   </div>
                   <Button
                     variant="outline"
@@ -562,21 +596,21 @@ export function LeaderboardClient() {
                     onClick={() => setActiveMemberModal(top1)}
                     className="mt-3 h-8 cursor-pointer border-amber-500/50 bg-amber-500/10 text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-500/20"
                   >
-                    Xem task đóng góp
+                    Xem nhiệm vụ đóng góp
                   </Button>
                 </div>
               </div>
 
-              {/* Rank 3 (Bronze) - Right Column */}
+              {/* Rank 3 (Chân Quân) - Right Column */}
               {top3 ? (
                 <div className="flex flex-col items-center order-3 md:order-3">
-                  <div className="relative mb-3 flex flex-col items-center">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-800/20 text-amber-600 font-bold text-xl ring-4 ring-amber-700/40 shadow-md">
+                  <div className="relative mb-5 flex flex-col items-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 font-bold text-xl ring-4 ring-amber-300 dark:ring-amber-700/60 shadow-md">
                       {getInitials(top3.displayName)}
                     </div>
-                    <div className="absolute -bottom-2.5 flex h-7 items-center gap-1 rounded-full bg-amber-700 text-white px-2 text-[11px] font-bold shadow-sm">
-                      <Award className="h-3.5 w-3.5 text-white" aria-hidden="true" />
-                      <span>Á Quân 2</span>
+                    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-6.5 items-center gap-1 rounded-full bg-amber-700 dark:bg-amber-800 border border-amber-600 px-2.5 text-[11px] font-bold text-white shadow-sm whitespace-nowrap">
+                      <Flame className="h-3.5 w-3.5 text-amber-300 shrink-0" aria-hidden="true" />
+                      <span>CHÂN QUÂN #3</span>
                     </div>
                   </div>
 
@@ -593,9 +627,9 @@ export function LeaderboardClient() {
                     <div className="text-2xl font-black text-foreground tabular-nums">
                       {top3.completedPoints}
                     </div>
-                    <div className="text-[11px] font-medium text-muted-foreground">Story Points</div>
+                    <div className="text-[11px] font-medium text-muted-foreground">Tu Vi Tích Lũy</div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
-                      {top3.completedTasks} task hoàn thành
+                      {top3.completedTasks} nhiệm vụ hoàn thành
                     </div>
                     <Button
                       variant="ghost"
@@ -603,13 +637,13 @@ export function LeaderboardClient() {
                       onClick={() => setActiveMemberModal(top3)}
                       className="mt-2 h-7 cursor-pointer text-xs text-primary hover:text-primary hover:bg-primary/10"
                     >
-                      Chi tiết task
+                      Chi tiết nhiệm vụ
                     </Button>
                   </div>
                 </div>
               ) : (
                 <div className="hidden md:flex flex-col items-center order-3 md:order-3 text-muted-foreground text-xs italic">
-                  Chưa có Á Quân 2
+                  Chưa có Chân Quân #3
                 </div>
               )}
             </div>
@@ -622,9 +656,9 @@ export function LeaderboardClient() {
         <div className="p-4 sm:p-5 border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-primary" aria-hidden="true" />
-            <h2 className="text-base font-bold text-foreground">Bảng Tổng Sắp Toàn Đội</h2>
+            <h2 className="text-base font-bold text-foreground">Bảng Tổng Sắp Tu Tiên Tông Môn</h2>
             <Badge variant="secondary" className="text-xs">
-              {filteredMembers.length} thành viên
+              {filteredMembers.length} đạo hữu
             </Badge>
           </div>
 
@@ -634,7 +668,7 @@ export function LeaderboardClient() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <Input
                 type="text"
-                placeholder="Tìm thành viên..."
+                placeholder="Tìm đạo hữu..."
                 value={searchMember}
                 onChange={(e) => setSearchMember(e.target.value)}
                 className="h-9 pl-8 text-xs"
@@ -642,20 +676,20 @@ export function LeaderboardClient() {
             </div>
 
             {/* Sort Dropdown */}
-            <div className="w-44">
+            <div className="w-48">
               <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder="Sắp xếp theo" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="completed" className="text-xs">
-                    Điểm hoàn thành (Cao → Thấp)
+                    Tu vi đã chốt (Cao → Thấp)
                   </SelectItem>
                   <SelectItem value="total" className="text-xs">
-                    Tổng điểm (Đã chốt + Đang làm)
+                    Tổng tu vi (Đã chốt + Đang luyện)
                   </SelectItem>
                   <SelectItem value="tasks" className="text-xs">
-                    Số lượng task hoàn thành
+                    Số nhiệm vụ hoàn thành
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -683,13 +717,13 @@ export function LeaderboardClient() {
                 <thead>
                   <tr className="border-b bg-muted/40 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                     <th className="py-3 px-4 w-16 text-center">Hạng</th>
-                    <th className="py-3 px-4">Thành viên</th>
-                    <th className="py-3 px-4">Cấp bậc</th>
-                    <th className="py-3 px-4 text-right">Điểm hoàn thành</th>
-                    <th className="py-3 px-4 text-right">Đang làm</th>
-                    <th className="py-3 px-4 text-center">Số Task</th>
-                    <th className="py-3 px-4 w-32 hidden sm:table-cell">Đóng góp</th>
-                    <th className="py-3 px-4 text-right w-24">Chi tiết</th>
+                    <th className="py-3 px-4">Đạo Hữu</th>
+                    <th className="py-3 px-4">Cảnh Giới</th>
+                    <th className="py-3 px-4 text-right">Tu Vi Đã Chốt</th>
+                    <th className="py-3 px-4 text-right">Đang Bế Quan</th>
+                    <th className="py-3 px-4 text-center">Nhiệm Vụ</th>
+                    <th className="py-3 px-4 w-32 hidden sm:table-cell">Đóng Góp</th>
+                    <th className="py-3 px-4 text-right w-24">Chi Tiết</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border text-sm">
@@ -824,7 +858,7 @@ export function LeaderboardClient() {
             <div className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-primary" aria-hidden="true" />
               <DialogTitle className="text-lg font-bold">
-                Task đóng góp - {activeMemberModal?.displayName}
+                Nhiệm vụ đóng góp - {activeMemberModal?.displayName}
               </DialogTitle>
             </div>
             <DialogDescription className="text-xs text-muted-foreground">
@@ -845,7 +879,7 @@ export function LeaderboardClient() {
                 <div className="text-lg font-bold text-foreground tabular-nums">
                   {activeMemberModal.completedTasks}
                 </div>
-                <div className="text-[11px] text-muted-foreground">Task hoàn thành</div>
+                <div className="text-[11px] text-muted-foreground">Nhiệm vụ hoàn thành</div>
               </div>
               <div className="rounded-lg bg-muted/60 p-2.5 text-center border border-border">
                 <div className="text-lg font-bold text-amber-500 tabular-nums">
@@ -861,7 +895,7 @@ export function LeaderboardClient() {
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
             <Input
               type="text"
-              placeholder="Tìm theo mã task hoặc tiêu đề..."
+              placeholder="Tìm theo mã nhiệm vụ hoặc tiêu đề..."
               value={taskSearch}
               onChange={(e) => setTaskSearch(e.target.value)}
               className="h-8 pl-8 text-xs"
@@ -932,6 +966,77 @@ export function LeaderboardClient() {
                 );
               })
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Cultivation Realms Guide Modal ("Sổ Cảnh Giới Tu Tiên") ──── */}
+      <Dialog open={showRealmsModal} onOpenChange={setShowRealmsModal}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-6">
+          <DialogHeader className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-amber-500" aria-hidden="true" />
+              <DialogTitle className="text-lg font-bold">
+                Sổ Cảnh Giới Tu Tiên Tông Môn
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Mỗi Story Point tích lũy thành Tu Vi. Các đại cảnh giới được phân chia rõ từng tầng cụ thể để đạo hữu nắm bắt lộ trình đột phá!
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto space-y-4 pr-1 [scrollbar-width:thin]">
+            {realmGroups.map((group) => (
+              <div key={group.realm} className="rounded-xl border border-border/70 bg-card/60 p-3.5 space-y-2.5">
+                <div className="pb-2 border-b border-border/40 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <TierIcon iconName={group.tiers[0].iconName} className="h-4 w-4 text-primary" />
+                      <span className="font-bold text-sm text-foreground">{group.realm}</span>
+                    </div>
+                    <Badge variant="secondary" className="text-[10px] font-mono">
+                      {group.tiers.length} giai đoạn / tầng
+                    </Badge>
+                  </div>
+                  {group.tiers[0].realmSummary && (
+                    <p className="text-xs text-muted-foreground leading-relaxed bg-muted/40 p-2.5 rounded-md border border-border/40 font-normal">
+                      💡 {group.tiers[0].realmSummary}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  {group.tiers.map((tier) => (
+                    <div
+                      key={tier.id}
+                      className="flex items-start justify-between gap-3 p-2.5 rounded-lg border border-border/50 bg-background/50 hover:bg-muted/40 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className={cn("text-xs font-bold gap-1", tier.badgeClass)}>
+                            <TierIcon iconName={tier.iconName} className="h-3 w-3" />
+                            <span>{tier.name}</span>
+                          </Badge>
+                          <span className="text-xs font-semibold text-foreground">
+                            {tier.title}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-1 italic leading-relaxed">
+                          "{tier.realmDesc}"
+                        </p>
+                      </div>
+
+                      <div className="shrink-0 text-right">
+                        <span className="text-xs font-mono font-bold text-primary">
+                          {tier.minPoints > 0 ? `≥ ${tier.minPoints} pts` : "0 pts"}
+                        </span>
+                        <div className="text-[10px] text-muted-foreground">Tu vi tối thiểu</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </DialogContent>
       </Dialog>

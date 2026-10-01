@@ -31,24 +31,24 @@ function generateCheerMessage(
   pointsToNextTier: number
 ): string {
   if (rank === 1) {
-    return "👑 Tuyệt vời! Bạn đang dẫn đầu bảng xếp hạng. Hãy tiếp tục giữ vững phong độ!";
+    return "👑 Đạo hạnh thông thiên! Đạo hữu đang đứng trên đỉnh cao tiên lộ, xưng bá toàn tông môn!";
   }
   if (rank === 2 || rank === 3) {
     if (pointsToNextRank != null && pointsToNextRank <= 5) {
-      return `🔥 Bạn đang ở Top ${rank}! Chỉ cách vị trí trên ${pointsToNextRank} point nữa thôi, bứt phá ngay nào!`;
+      return `🔥 Đạo hạnh thâm hậu! Bạn đang ở Top ${rank}, chỉ cách đạo hữu phía trên ${pointsToNextRank} tu vi (point), mau mau bứt phá!`;
     }
-    return `🎉 Xuất sắc! Bạn vững vàng trong Top ${rank} bục vinh quang. Cố lên để vươn lên ngôi đầu!`;
+    return `🎉 Tuyệt đỉnh chân nhân! Bạn vững vàng trong Top ${rank} tông môn, sắp sửa chạm tay vào ngôi vị Đạo Tổ!`;
   }
   if (nextRankUser && pointsToNextRank != null && pointsToNextRank <= 3) {
-    return `⚡ Khoảng cách với ${nextRankUser.displayName} chỉ là ${pointsToNextRank} point! Làm thêm 1 task là vượt mặt rồi!`;
+    return `⚡ Khoảng cách với đạo hữu ${nextRankUser.displayName} chỉ là ${pointsToNextRank} tu vi! Luyện thêm 1 task là vượt mặt rồi!`;
   }
   if (pointsToNextTier > 0 && pointsToNextTier <= 5) {
-    return `✨ Chỉ còn ${pointsToNextTier} point nữa là bạn sẽ được nâng cấp bậc mới. Đừng bỏ lỡ!`;
+    return `✨ Chỉ còn ${pointsToNextTier} point tu vi nữa là độ kiếp đột phá cảnh giới mới. Thiên kiếp sắp giáng, vững tâm tu luyện!`;
   }
   if (points === 0) {
-    return "🎯 Chưa có point hoàn thành nào trong kỳ này. Hãy chọn task và bắt tay vào làm ngay nhé!";
+    return "🎯 Đạo hữu hiện tại là Phàm Nhân chưa nhập đạo. Hãy nhận 1 nhiệm vụ tông môn để bắt đầu con đường tu tiên!";
   }
-  return `💪 Bạn đang ở vị trí #${rank}. Mỗi story point hoàn thành đều giúp đội ngũ tiến nhanh hơn!`;
+  return `💪 Bạn đang ở thứ hạng #${rank}. Mỗi story point hoàn thành là một phần công đức giúp tông môn hưng thịnh!`;
 }
 
 export async function getLeaderboardData(options: GetLeaderboardOptions): Promise<LeaderboardResponse> {

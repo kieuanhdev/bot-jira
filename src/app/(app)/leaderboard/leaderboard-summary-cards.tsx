@@ -21,15 +21,15 @@ export function LeaderboardSummaryCards({ summary, loading }: LeaderboardSummary
   return (
     <MetricGrid columns={4}>
       <MetricCard
-        label="Tổng điểm hoàn thành"
+        label="Tổng tu vi tông môn"
         value={summary?.totalTeamPoints ?? 0}
-        description="Story Points"
+        description="Story Points hoàn thành"
         icon={Trophy}
         tone="primary"
         loading={loading}
       />
       <MetricCard
-        label="Task đã chốt"
+        label="Nhiệm vụ đã chốt"
         value={summary?.totalTeamTasks ?? 0}
         description="tasks hoàn thành"
         icon={CheckCircle2}
@@ -37,17 +37,17 @@ export function LeaderboardSummaryCards({ summary, loading }: LeaderboardSummary
         loading={loading}
       />
       <MetricCard
-        label="Điểm TB / Thành viên"
+        label="Tu vi TB / Đạo hữu"
         value={summary?.averagePointsPerMember ?? 0}
-        description="pts / người"
+        description="pts / thành viên"
         icon={TrendingUp}
         tone="info"
         loading={loading}
       />
       <MetricCard
-        label="Quán Quân (MVP)"
+        label="Chí Tôn Tông Môn (MVP)"
         value={mvp?.displayName ?? "Chưa xác định"}
-        description={mvp ? `${mvp.points} points hoàn thành` : undefined}
+        description={mvp ? `${mvp.points} points tu vi` : undefined}
         icon={Crown}
         tone="warning"
         loading={loading}

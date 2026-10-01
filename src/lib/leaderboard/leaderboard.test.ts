@@ -3,30 +3,41 @@ import { getTier, getNextTier, LEADERBOARD_TIERS, computePeriodBounds } from "./
 
 describe("Leaderboard Tier System", () => {
   it("resolves correct tier based on story points", () => {
-    expect(getTier(0).name).toBe("Tân Binh");
-    expect(getTier(5).name).toBe("Đồng");
-    expect(getTier(10).name).toBe("Bạc");
-    expect(getTier(19).name).toBe("Bạc");
-    expect(getTier(20).name).toBe("Vàng");
-    expect(getTier(30).name).toBe("Kim Cương");
-    expect(getTier(50).name).toBe("Huyền Thoại");
-    expect(getTier(100).name).toBe("Huyền Thoại");
+    expect(getTier(0).name).toBe("Phàm Nhân");
+    expect(getTier(1).name).toBe("Luyện Khí • Sơ Kỳ");
+    expect(getTier(2).name).toBe("Luyện Khí • Sơ Kỳ");
+    expect(getTier(3).name).toBe("Luyện Khí • Trung Kỳ");
+    expect(getTier(6).name).toBe("Luyện Khí • Hậu Kỳ");
+    expect(getTier(9).name).toBe("Luyện Khí • Đại Viên Mãn");
+    expect(getTier(13).name).toBe("Trúc Cơ • Sơ Kỳ");
+    expect(getTier(19).name).toBe("Trúc Cơ • Trung Kỳ");
+    expect(getTier(26).name).toBe("Trúc Cơ • Hậu Kỳ");
+    expect(getTier(34).name).toBe("Trúc Cơ • Đại Viên Mãn");
+    expect(getTier(44).name).toBe("Kết Đan • Sơ Kỳ");
+    expect(getTier(58).name).toBe("Kết Đan • Trung Kỳ");
+    expect(getTier(75).name).toBe("Kết Đan • Hậu Kỳ");
+    expect(getTier(95).name).toBe("Kết Đan • Đại Viên Mãn");
+    expect(getTier(120).name).toBe("Nguyên Anh • Sơ Kỳ");
+    expect(getTier(195).name).toBe("Nguyên Anh • Hậu Kỳ");
+    expect(getTier(290).name).toBe("Hóa Thần • Sơ Kỳ");
+    expect(getTier(500).name).toBe("Hóa Thần • Đỉnh Phong (Phi Thăng)");
+    expect(getTier(600).name).toBe("Hóa Thần • Đỉnh Phong (Phi Thăng)");
   });
 
   it("calculates progress to next tier accurately", () => {
-    // 0 points -> next tier is Bronze (1 pt)
+    // 0 points -> next tier is Luyện Khí Sơ Kỳ (1 pt)
     const rookieNext = getNextTier(0);
-    expect(rookieNext?.nextTier.name).toBe("Đồng");
+    expect(rookieNext?.nextTier.name).toBe("Luyện Khí • Sơ Kỳ");
     expect(rookieNext?.pointsNeeded).toBe(1);
 
-    // 15 points -> Silver (10-19), next tier is Gold (20)
-    const silverNext = getNextTier(15);
-    expect(silverNext?.nextTier.name).toBe("Vàng");
-    expect(silverNext?.pointsNeeded).toBe(5);
-    expect(silverNext?.progressPercent).toBe(50);
+    // 15 points -> Trúc Cơ Sơ Kỳ (13-18), next is Trúc Cơ Trung Kỳ (19 pts)
+    const trucCoNext = getNextTier(15);
+    expect(trucCoNext?.nextTier.name).toBe("Trúc Cơ • Trung Kỳ");
+    expect(trucCoNext?.pointsNeeded).toBe(4);
+    expect(trucCoNext?.progressPercent).toBe(33);
 
-    // 60 points -> Legend (50+), already highest tier
-    const legendNext = getNextTier(60);
+    // 600 points -> Hóa Thần Đỉnh Phong (500+), already highest tier
+    const legendNext = getNextTier(600);
     expect(legendNext?.progressPercent).toBe(100);
     expect(legendNext?.pointsNeeded).toBe(0);
   });
