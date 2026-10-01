@@ -83,9 +83,9 @@ export type BoardFilters = {
   /** Comma-separated project keys to scope the query to (e.g. "MR,EPM"). */
   projectList?: string;
   assignee?: string | string[];
-  label?: string;
-  priority?: string;
-  status?: string;
+  label?: string | string[];
+  priority?: string | string[];
+  status?: string | string[];
   releaseLabel?: string;
   q?: string;
   includeDone?: boolean;

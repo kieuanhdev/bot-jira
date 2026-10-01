@@ -90,12 +90,39 @@ export async function GET(req: Request) {
   const isAllAssignees =
     assigneeTokens.length === 0 || assigneeTokens.some((a) => a.toLowerCase() === "all");
 
+  const rawStatuses = url.searchParams.getAll("status");
+  const statuses = rawStatuses
+    .flatMap((s) => s.split(","))
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const rawLabels = url.searchParams.getAll("label");
+  const labels = rawLabels
+    .flatMap((s) => s.split(","))
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const rawPriorities = url.searchParams.getAll("priority");
+  const priorities = rawPriorities
+    .flatMap((s) => s.split(","))
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (
+    assigneeTokens.length > 50 ||
+    statuses.length > 50 ||
+    labels.length > 50 ||
+    priorities.length > 50
+  ) {
+    return NextResponse.json(
+      { error: "Too many filter values (maximum 50 per facet)." },
+      { status: 400 }
+    );
+  }
+
   const jiraUsername = userJiraUsername(user);
   const includeDone = url.searchParams.get("includeDone") === "1";
   const q = (url.searchParams.get("q") ?? "").trim();
-  const label = (url.searchParams.get("label") ?? "").trim();
-  const priority = (url.searchParams.get("priority") ?? "").trim();
-  const status = (url.searchParams.get("status") ?? "").trim();
   const statusCategory = (url.searchParams.get("statusCategory") ?? "").trim().toLowerCase();
   const releaseLabel = (url.searchParams.get("releaseLabel") ?? "").trim();
   const fixVersion = (url.searchParams.get("fixVersion") ?? "").trim();
@@ -108,13 +135,36 @@ export async function GET(req: Request) {
   };
   if (!includeDone) where.statusCategory = { not: "done" };
   if (statusCategory) where.statusCategory = statusCategory;
-  if (status) where.status = status;
-  if (priority) where.priority = priority;
-  if (label) where.labels = { has: label };
-  if (releaseLabel) where.labels = { has: releaseLabel };
-  if (fixVersion) where.fixVersionNames = { has: fixVersion };
+
+  if (statuses.length === 1) {
+    where.status = statuses[0];
+  } else if (statuses.length > 1) {
+    where.status = { in: statuses };
+  }
+
+  if (priorities.length === 1) {
+    where.priority = priorities[0];
+  } else if (priorities.length > 1) {
+    where.priority = { in: priorities };
+  }
+
+  if (labels.length === 1) {
+    where.labels = { has: labels[0] };
+  } else if (labels.length > 1) {
+    where.labels = { hasSome: labels };
+  }
 
   const andConditions: Prisma.IssueCacheWhereInput[] = [];
+
+  if (releaseLabel) {
+    if (labels.length > 0) {
+      andConditions.push({ labels: { has: releaseLabel } });
+    } else {
+      where.labels = { has: releaseLabel };
+    }
+  }
+
+  if (fixVersion) where.fixVersionNames = { has: fixVersion };
 
   // Assignee filtering
   if (!isAllAssignees) {

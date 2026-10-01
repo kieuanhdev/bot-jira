@@ -30,6 +30,13 @@ import { SegmentedControl } from "@/components/shared/segmented-control";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import {
+  type IssueFilters,
+  DEFAULT_BULK_FILTERS,
+  effectiveAssignees,
+  countActiveIssueFilters,
+} from "@/lib/issues/issue-filters";
+import { IssueFilterBar } from "@/components/issues/issue-filter-bar";
+import {
   CheckCheck,
   CheckCircle2,
   CircleAlert,
@@ -216,7 +223,7 @@ export function BulkClient() {
   const { data: filtersData } = useQuery({
     queryKey: issuesKeys.filters(filterProject || "bulk"),
     queryFn: () =>
-      api<{ assignees: string[]; labels: string[]; priorities: string[] }>(
+      api<{ assignees: string[]; statuses?: string[]; labels: string[]; priorities: string[] }>(
         `/api/issues/filters?project=${encodeURIComponent(filterProject)}`
       ),
     enabled: Boolean(filterProject),
@@ -269,9 +276,7 @@ export function BulkClient() {
 
   // Selection mode and task filters
   const [selectionMode, setSelectionMode] = useState<"pick" | "filter">("pick");
-  const [filterStatus, setFilterStatus] = useState("");
-  const [filterAssignee, setFilterAssignee] = useState("");
-  const [taskSearch, setTaskSearch] = useState("");
+  const [taskFilters, setTaskFilters] = useState<IssueFilters>(DEFAULT_BULK_FILTERS);
 
   // Tasks belonging ONLY to the selected project
   const projectIssues = useMemo(
@@ -418,9 +423,7 @@ export function BulkClient() {
     setFilterProject(newProject);
     setExtraIssues([]);
     setSelected(new Set());
-    setFilterStatus("");
-    setFilterAssignee("");
-    setTaskSearch("");
+    setTaskFilters(DEFAULT_BULK_FILTERS);
     setFilterOnlySelected(false);
     resetPreview();
     setEnabledFields(new Set());
@@ -440,8 +443,11 @@ export function BulkClient() {
   }
 
   const statusOptions = useMemo(
-    () => Array.from(new Set(projectIssues.map((issue) => issue.status).filter(Boolean))).sort(),
-    [projectIssues]
+    () => {
+      if (filtersData?.statuses && filtersData.statuses.length > 0) return filtersData.statuses;
+      return Array.from(new Set(projectIssues.map((issue) => issue.status).filter(Boolean))).sort();
+    },
+    [filtersData?.statuses, projectIssues]
   );
 
   // Guarantee placeholder for any initial keys if not already present in the loaded issues list
@@ -476,20 +482,43 @@ export function BulkClient() {
 
   const filteredIssues = useMemo(() => {
     if (!filterProject) return [];
-    const query = taskSearch.trim().toLowerCase();
+    const query = (taskFilters.query || "").trim().toLowerCase();
     const myUsername = session?.user?.jiraUsername?.toLowerCase();
+    const activeAssignees = effectiveAssignees(taskFilters.assigneeScope);
+    const isAllAssignees = activeAssignees === "ALL";
+    const assigneeList: string[] = isAllAssignees ? [] : activeAssignees;
 
     let list = displayProjectIssues
-      .filter((issue) => (filterStatus ? issue.status === filterStatus : true))
       .filter((issue) => {
-        if (!filterAssignee || filterAssignee === "ALL") return true;
-        if (filterAssignee === "UNASSIGNED") return !issue.assigneeJira;
-        if (filterAssignee === "ME") {
-          if (!myUsername) return true;
-          const a = (issue.assigneeJira ?? "").toLowerCase();
-          return a === myUsername || a === myUsername.replace(/_mb$/, "") || `${a}_mb` === myUsername;
-        }
-        return issue.assigneeJira === filterAssignee;
+        if (taskFilters.statuses.length === 0) return true;
+        return taskFilters.statuses.includes(issue.status);
+      })
+      .filter((issue) => {
+        if (taskFilters.labels.length === 0) return true;
+        return taskFilters.labels.some((l) => issue.labels.includes(l));
+      })
+      .filter((issue) => {
+        if (taskFilters.priorities.length === 0) return true;
+        return taskFilters.priorities.includes(issue.priority);
+      })
+      .filter((issue) => {
+        if (isAllAssignees) return true;
+        const hasUnassigned = assigneeList.some(
+          (a) => a.toLowerCase() === "unassigned" || a.toLowerCase() === "none"
+        );
+        const named = assigneeList.filter(
+          (a) => a.toLowerCase() !== "unassigned" && a.toLowerCase() !== "none"
+        );
+        const issueAssignee = (issue.assigneeJira ?? "").toLowerCase();
+        if (!issue.assigneeJira) return hasUnassigned;
+        return named.some((token) => {
+          const t = token.toLowerCase();
+          if (t === "me") {
+            if (!myUsername) return true;
+            return issueAssignee === myUsername || issueAssignee === myUsername.replace(/_mb$/, "") || `${issueAssignee}_mb` === myUsername;
+          }
+          return issueAssignee === t;
+        });
       })
       .filter((issue) =>
         query ? issue.jiraKey.toLowerCase().includes(query) || issue.summary.toLowerCase().includes(query) : true
@@ -517,9 +546,7 @@ export function BulkClient() {
   }, [
     filterProject,
     displayProjectIssues,
-    filterStatus,
-    filterAssignee,
-    taskSearch,
+    taskFilters,
     session?.user?.jiraUsername,
     filterOnlySelected,
     selected,
@@ -528,12 +555,7 @@ export function BulkClient() {
 
   const allSelected = filteredIssues.length > 0 && filteredIssues.every((i) => selected.has(i.jiraKey));
 
-  const effectiveKeys: string[] =
-    selectionMode === "filter"
-      ? filteredIssues.map((i) => i.jiraKey)
-      : Array.from(selected);
-
-  const effectiveCount = effectiveKeys.length;
+  const effectiveCount = selectionMode === "filter" ? filteredIssues.length : selected.size;
 
   function toggle(key: string) {
     setSelected((prev) => {
@@ -635,20 +657,65 @@ export function BulkClient() {
     setPreviewBasis(null);
   }
 
+  const currentBasis = useMemo(() => {
+    const action = buildAction();
+    if (selectionMode === "filter") {
+      return JSON.stringify({
+        action,
+        mode: "filter",
+        project: filterProject,
+        filters: taskFilters,
+      });
+    }
+    return JSON.stringify({
+      action,
+      mode: "keys",
+      keys: Array.from(selected).sort(),
+    });
+  }, [selectionMode, filterProject, taskFilters, selected, buildAction]);
+
+  const previewOutdated = preview != null && previewBasis !== currentBasis;
+
   async function doPreview() {
     const action = buildAction();
-    if (!action || effectiveCount === 0 || !filterProject) return;
+    if (!action || !filterProject) return;
+    if (selectionMode === "pick" && selected.size === 0) return;
     setPreviewing(true);
     setPreview(null);
     setActiveOp(null);
     setPreviewError(null);
     try {
+      const activeAssignees = effectiveAssignees(taskFilters.assigneeScope);
+      const isAllAssignees = activeAssignees === "ALL";
+      const body =
+        selectionMode === "filter"
+          ? {
+              selector: {
+                mode: "filter",
+                project: filterProject,
+                filters: {
+                  q: taskFilters.query || undefined,
+                  assignees: isAllAssignees ? "ALL" : activeAssignees,
+                  statuses: taskFilters.statuses.length > 0 ? taskFilters.statuses : undefined,
+                  labels: taskFilters.labels.length > 0 ? taskFilters.labels : undefined,
+                  priorities: taskFilters.priorities.length > 0 ? taskFilters.priorities : undefined,
+                },
+              },
+              action,
+            }
+          : {
+              selector: {
+                mode: "keys",
+                keys: Array.from(selected),
+              },
+              action,
+            };
       const r = await api<Preview>("/api/issues/bulk", {
         method: "POST",
-        body: { keys: effectiveKeys, action },
+        body,
       });
       setPreview(r);
-      setPreviewBasis(JSON.stringify({ action, keys: [...effectiveKeys].sort() }));
+      setPreviewBasis(currentBasis);
       setPreviewView("changes");
     } catch (e) {
       setPreview(null);
@@ -665,8 +732,6 @@ export function BulkClient() {
       const r = await api<{ operationId: string; queued: boolean }>("/api/issues/bulk", {
         method: "POST",
         body: {
-          keys: preview.items.map((i) => i.jiraKey),
-          action: buildAction(),
           confirm: true,
           operationId: preview.operationId,
         },
@@ -703,9 +768,6 @@ export function BulkClient() {
     }
   }
 
-  const currentBasis = JSON.stringify({ action: buildAction(), keys: [...effectiveKeys].sort() });
-  const previewOutdated = preview != null && previewBasis !== currentBasis;
-
   const previewCounts = preview?.items.reduce<Record<PreviewBucket, number>>(
     (counts, item) => {
       counts[previewBucket(item)] += 1;
@@ -722,12 +784,10 @@ export function BulkClient() {
       : `Cập nhật ${preview.actionable} task`
     : "Xác nhận thay đổi";
 
-  const activeFilterCount = [filterStatus, filterAssignee, taskSearch].filter(Boolean).length;
+  const activeFilterCount = countActiveIssueFilters(taskFilters, DEFAULT_BULK_FILTERS);
 
   function resetTaskFilters() {
-    setFilterStatus("");
-    setFilterAssignee("");
-    setTaskSearch("");
+    setTaskFilters(DEFAULT_BULK_FILTERS);
   }
 
   return (
@@ -881,63 +941,58 @@ export function BulkClient() {
           ) : (
             <>
               {/* Task filters */}
-              <div className="flex flex-col gap-3 border-b p-3 sm:flex-row sm:items-center sm:justify-between">
-                <SegmentedControl
-                  aria-label="Chế độ chọn"
-                  tone="neutral"
-                  value={selectionMode}
-                  onChange={setSelectionMode}
-                  items={[
-                    { value: "pick", label: "Chọn từng task" },
-                    { value: "filter", label: "Tất cả khớp bộ lọc" },
-                  ]}
-                />
-                <SearchField
-                  value={taskSearch}
-                  onChange={setTaskSearch}
-                  placeholder={`Tìm kiếm trong ${filterProject}…`}
-                  ariaLabel="Tìm kiếm task"
-                  className="w-full sm:max-w-xs"
-                />
-              </div>
-
-              <FilterBar
-                activeCount={activeFilterCount}
-                onReset={resetTaskFilters}
-                className="border-b p-3"
-              >
-                <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted-foreground">Trạng thái</span>
-                    <Select value={filterStatus || "ALL"} onValueChange={(value) => setFilterStatus(value === "ALL" ? "" : value)}>
-                      <SelectTrigger aria-label="Lọc theo trạng thái"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-                        {statusOptions.map((itemStatus) => <SelectItem key={itemStatus} value={itemStatus}>{itemStatus}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted-foreground">Người phụ trách</span>
-                    <Select value={filterAssignee || "ALL"} onValueChange={(value) => setFilterAssignee(value === "ALL" ? "" : value)}>
-                      <SelectTrigger aria-label="Lọc theo người phụ trách"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ALL">Tất cả người phụ trách</SelectItem>
-                        {session?.user?.jiraUsername && (
-                          <SelectItem value="ME">Của tôi (@{session.user.jiraUsername})</SelectItem>
-                        )}
-                        <SelectItem value="UNASSIGNED">Chưa giao (Unassigned)</SelectItem>
-                        {availableAssignees.map((a) => (
-                          <SelectItem key={a} value={a}>{a}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <p className="pt-1 text-[11px] text-muted-foreground sm:col-span-2">
-                    Có {filteredIssues.length} task khớp bộ lọc trong dự án {filterProject}.
-                  </p>
+              <div className="flex flex-col gap-3 border-b p-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <SegmentedControl
+                    aria-label="Chế độ chọn"
+                    tone="neutral"
+                    value={selectionMode}
+                    onChange={setSelectionMode}
+                    items={[
+                      { value: "pick", label: "Chọn từng task" },
+                      { value: "filter", label: "Tất cả khớp bộ lọc" },
+                    ]}
+                  />
+                  {selectionMode === "filter" && (
+                    <span className="text-xs text-muted-foreground font-medium">
+                      Server sẽ áp dụng cho toàn bộ task khớp bộ lọc trong dự án {filterProject}
+                    </span>
+                  )}
                 </div>
-              </FilterBar>
+
+                <IssueFilterBar
+                  value={taskFilters}
+                  defaults={DEFAULT_BULK_FILTERS}
+                  onChange={setTaskFilters}
+                  options={{
+                    assignees: availableAssignees,
+                    statuses: statusOptions,
+                    labels: labelOptions,
+                    priorities: priorityOptions,
+                  }}
+                  capabilities={{
+                    search: true,
+                    assignee: "multi",
+                    status: "multi",
+                    label: "multi",
+                    priority: "multi",
+                    quickSwitch: false,
+                  }}
+                  myName={session?.user?.jiraUsername}
+                  searchPlaceholder={`Tìm kiếm trong ${filterProject}…`}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {selectionMode === "filter" ? (
+                    <>
+                      Hiển thị {filteredIssues.length} task xem nhanh tại đây · Chế độ <strong className="text-foreground">Tất cả khớp bộ lọc</strong> sẽ áp dụng lên toàn bộ task của dự án {filterProject} ở server khi chạy.
+                    </>
+                  ) : (
+                    <>
+                      Có {filteredIssues.length} task khớp bộ lọc trong dự án {filterProject}.
+                    </>
+                  )}
+                </p>
+              </div>
 
               {selectionMode === "pick" && (
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 bg-muted/10">
@@ -1535,10 +1590,17 @@ export function BulkClient() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center pt-2">
             <Button
               onClick={doPreview}
-              disabled={previewing || effectiveCount === 0 || !filterProject || !buildAction()}
+              disabled={
+                previewing ||
+                (selectionMode === "pick" && selected.size === 0) ||
+                !filterProject ||
+                !buildAction()
+              }
             >
               {previewing ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-              Xem trước {effectiveCount > 0 ? `${effectiveCount} ` : ""}thay đổi
+              {selectionMode === "filter"
+                ? "Xem trước thay đổi bộ lọc"
+                : `Xem trước ${selected.size > 0 ? `${selected.size} ` : ""}thay đổi`}
             </Button>
             {previewError && (
               <FeedbackBanner tone="destructive">{previewError}</FeedbackBanner>

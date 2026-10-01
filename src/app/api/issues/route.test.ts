@@ -197,6 +197,46 @@ describe("GET /api/issues single project board", () => {
     expect(json.sync.errors).toEqual([]);
   });
 
+  it("filters by multiple statuses using in condition", async () => {
+    const res = await GET(
+      new Request("http://localhost/api/issues?project=MR&assignee=ALL&status=In%20Progress,Review")
+    );
+    expect(res.status).toBe(200);
+
+    const callArgs = mocks.findManyIssues.mock.calls[0][0];
+    expect(callArgs.where.status).toEqual({ in: ["In Progress", "Review"] });
+  });
+
+  it("filters by multiple priorities using in condition", async () => {
+    const res = await GET(
+      new Request("http://localhost/api/issues?project=MR&assignee=ALL&priority=High,Highest")
+    );
+    expect(res.status).toBe(200);
+
+    const callArgs = mocks.findManyIssues.mock.calls[0][0];
+    expect(callArgs.where.priority).toEqual({ in: ["High", "Highest"] });
+  });
+
+  it("filters by multiple labels using hasSome condition (OR semantics)", async () => {
+    const res = await GET(
+      new Request("http://localhost/api/issues?project=MR&assignee=ALL&label=backend,api")
+    );
+    expect(res.status).toBe(200);
+
+    const callArgs = mocks.findManyIssues.mock.calls[0][0];
+    expect(callArgs.where.labels).toEqual({ hasSome: ["backend", "api"] });
+  });
+
+  it("returns 400 when facet value count exceeds limit 50", async () => {
+    const many = Array.from({ length: 55 }, (_, i) => `user_${i}`).join(",");
+    const res = await GET(
+      new Request(`http://localhost/api/issues?project=MR&assignee=${many}`)
+    );
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toContain("Too many filter values");
+  });
+
   it("returns 404 when requested project does not exist in catalog", async () => {
     const res = await GET(new Request("http://localhost/api/issues?project=NONEXISTENT"));
     expect(res.status).toBe(404);

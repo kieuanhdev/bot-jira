@@ -73,12 +73,18 @@ export async function GET(req: Request) {
     projectKey: { in: projects },
   };
 
-  const [assignees, priorities, labelRows] = await prisma.$transaction([
+  const [assignees, statuses, priorities, labelRows] = await prisma.$transaction([
     prisma.issueCache.findMany({
       where: { ...base, assigneeJira: { not: null } },
       select: { assigneeJira: true },
       distinct: ["assigneeJira"],
       orderBy: { assigneeJira: "asc" },
+    }),
+    prisma.issueCache.findMany({
+      where: { ...base, status: { not: "" } },
+      select: { status: true },
+      distinct: ["status"],
+      orderBy: { status: "asc" },
     }),
     prisma.issueCache.findMany({
       where: { ...base, priority: { not: "" } },
@@ -100,6 +106,11 @@ export async function GET(req: Request) {
     if (row.assigneeJira) assigneeSet.add(row.assigneeJira);
   }
 
+  const statusSet = new Set<string>();
+  for (const row of statuses) {
+    if (row.status) statusSet.add(row.status);
+  }
+
   const prioritySet = new Set<string>();
   for (const row of priorities) {
     if (row.priority) prioritySet.add(row.priority);
@@ -114,6 +125,7 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     assignees: [...assigneeSet].sort(),
+    statuses: [...statusSet].sort(),
     labels: [...labelSet].sort(),
     priorities: [...prioritySet].sort(),
   });

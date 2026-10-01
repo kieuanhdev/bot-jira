@@ -52,13 +52,34 @@ describe("fetchIssuesPage serialization", () => {
       10,
       50
     );
-
     const calledUrl: string = mocks.api.mock.calls[0][0];
     const qs = new URL(calledUrl, "http://localhost").searchParams;
 
     expect(qs.get("assignee")).toBe("ALL");
     expect(qs.get("offset")).toBe("10");
     expect(qs.get("limit")).toBe("50");
+  });
+
+  it("serializes arrays of status, label, and priority into comma-separated params", async () => {
+    mocks.api.mockResolvedValueOnce({ items: [], total: 0 });
+
+    await fetchIssuesPage(
+      {
+        project: "MR",
+        status: ["In Progress", "Review"],
+        label: ["frontend", "core"],
+        priority: ["High", "Highest"],
+      },
+      0,
+      100
+    );
+
+    const calledUrl: string = mocks.api.mock.calls[0][0];
+    const qs = new URL(calledUrl, "http://localhost").searchParams;
+
+    expect(qs.get("status")).toBe("In Progress,Review");
+    expect(qs.get("label")).toBe("frontend,core");
+    expect(qs.get("priority")).toBe("High,Highest");
   });
 });
 

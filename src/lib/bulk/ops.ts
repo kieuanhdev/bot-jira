@@ -72,8 +72,23 @@ export type BranchParams = {
   comment?: boolean;
 };
 
-const DEFAULT_BRANCH_TEMPLATE = env.bulkBranchTemplate || "{project}-{number}";
+export const DEFAULT_BRANCH_TEMPLATE = env.bulkBranchTemplate || "{project}-{number}";
 export const MAX_KEYS = 500;
+export const MAX_FILTER_KEYS = 5000;
+
+export type BulkSelector =
+  | { mode: "keys"; keys: string[] }
+  | {
+      mode: "filter";
+      project: string;
+      filters: {
+        q?: string;
+        assignees?: string[] | "ALL";
+        statuses?: string[];
+        labels?: string[];
+        priorities?: string[];
+      };
+    };
 
 type IssueRow = {
   jiraKey: string;
@@ -188,7 +203,9 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-export type ValidationResult = { ok: true; keys: string[]; action: BulkAction } | { ok: false; errors: string[] };
+export type ValidationResult =
+  | { ok: true; keys: string[]; action: BulkAction; selector?: BulkSelector }
+  | { ok: false; errors: string[] };
 
 /**
  * Validate a bulk request body. Returns normalized keys (trimmed, uppercased,
@@ -196,24 +213,60 @@ export type ValidationResult = { ok: true; keys: string[]; action: BulkAction } 
  * after normalization are rejected rather than silently producing nothing, and
  * the list must not exceed MAX_KEYS.
  */
-export function validateBulkRequest(body: unknown): ValidationResult {
+export function validateBulkRequest(body: unknown, resolvedKeys?: string[]): ValidationResult {
   if (!isPlainObject(body)) return { ok: false, errors: ["request body must be an object"] };
 
+  const rawSelector = body.selector;
   const rawKeys = body.keys;
   const rawAction = body.action;
 
-  if (!Array.isArray(rawKeys)) return { ok: false, errors: ["keys must be an array"] };
+  let selector: BulkSelector | undefined;
+  let targetKeys: unknown = rawKeys;
+  let isFilterMode = false;
+
+  if (rawSelector !== undefined) {
+    if (!isPlainObject(rawSelector)) {
+      return { ok: false, errors: ["selector must be an object"] };
+    }
+    const mode = rawSelector.mode;
+    if (mode === "keys") {
+      if (!Array.isArray(rawSelector.keys)) {
+        return { ok: false, errors: ["selector.keys must be an array"] };
+      }
+      selector = { mode: "keys", keys: rawSelector.keys as string[] };
+      targetKeys = rawSelector.keys;
+    } else if (mode === "filter") {
+      if (typeof rawSelector.project !== "string" || !rawSelector.project.trim()) {
+        return { ok: false, errors: ["selector.project must be a non-empty string"] };
+      }
+      selector = {
+        mode: "filter",
+        project: rawSelector.project.trim().toUpperCase(),
+        filters: (isPlainObject(rawSelector.filters) ? rawSelector.filters : {}) as BulkSelector extends { mode: "filter" } ? BulkSelector["filters"] : never,
+      };
+      isFilterMode = true;
+      targetKeys = resolvedKeys !== undefined ? resolvedKeys : [];
+    } else {
+      return { ok: false, errors: [`unknown selector mode: ${String(mode)}`] };
+    }
+  }
+
+  if (!Array.isArray(targetKeys)) return { ok: false, errors: ["keys must be an array"] };
 
   const errors: string[] = [];
 
-  const keys = rawKeys
+  const keys = targetKeys
     .filter((k): k is string => typeof k === "string")
     .map(normalizeKey)
     .filter(Boolean);
   const uniqueKeys = Array.from(new Set(keys));
-  if (uniqueKeys.length === 0) errors.push("keys must contain at least one non-empty key");
-  if (uniqueKeys.length > MAX_KEYS)
-    errors.push(`too many keys: ${uniqueKeys.length} (max ${MAX_KEYS})`);
+  if (uniqueKeys.length === 0) {
+    errors.push(isFilterMode ? "no matching keys found for selector filter" : "keys must contain at least one non-empty key");
+  }
+  const keyLimit = isFilterMode ? MAX_FILTER_KEYS : MAX_KEYS;
+  if (uniqueKeys.length > keyLimit) {
+    errors.push(`too many keys: ${uniqueKeys.length} (max ${keyLimit})`);
+  }
 
   let action: BulkAction | null = null;
   if (!isPlainObject(rawAction)) {
@@ -443,7 +496,114 @@ export function validateBulkRequest(body: unknown): ValidationResult {
   }
 
   if (errors.length > 0 || action == null) return { ok: false, errors };
-  return { ok: true, keys: uniqueKeys, action };
+  return { ok: true, keys: uniqueKeys, action, ...(selector ? { selector } : {}) };
+}
+
+/**
+ * Resolve matching Jira issue keys from local DB cache for a filter selector.
+ * Allows bulk operations on large task sets (>1000) matching criteria without client truncation.
+ */
+export async function resolveFilterKeys(
+  project: string,
+  filters: {
+    q?: string;
+    assignees?: string[] | "ALL";
+    statuses?: string[];
+    labels?: string[];
+    priorities?: string[];
+  },
+  jiraUsername?: string | null,
+  maxKeys: number = MAX_FILTER_KEYS
+): Promise<string[]> {
+  const where: Prisma.IssueCacheWhereInput = {
+    deletedAt: null,
+    projectKey: project.trim().toUpperCase(),
+  };
+
+  if (filters.statuses && filters.statuses.length > 0) {
+    if (filters.statuses.length === 1) {
+      where.status = filters.statuses[0];
+    } else {
+      where.status = { in: filters.statuses };
+    }
+  }
+
+  if (filters.priorities && filters.priorities.length > 0) {
+    if (filters.priorities.length === 1) {
+      where.priority = filters.priorities[0];
+    } else {
+      where.priority = { in: filters.priorities };
+    }
+  }
+
+  if (filters.labels && filters.labels.length > 0) {
+    if (filters.labels.length === 1) {
+      where.labels = { has: filters.labels[0] };
+    } else {
+      where.labels = { hasSome: filters.labels };
+    }
+  }
+
+  if (filters.q && filters.q.trim()) {
+    const qTrimmed = filters.q.trim();
+    where.OR = [
+      { jiraKey: { contains: qTrimmed, mode: "insensitive" } },
+      { summary: { contains: qTrimmed, mode: "insensitive" } },
+    ];
+  }
+
+  const rawAssignees = filters.assignees;
+  const isAll =
+    !rawAssignees ||
+    rawAssignees === "ALL" ||
+    (Array.isArray(rawAssignees) &&
+      (rawAssignees.length === 0 || rawAssignees.some((a) => a.toLowerCase() === "all")));
+
+  if (!isAll && Array.isArray(rawAssignees)) {
+    const tokens = rawAssignees.map((a) => a.trim()).filter(Boolean);
+    const hasUnassigned = tokens.some(
+      (a) => a.toLowerCase() === "unassigned" || a.toLowerCase() === "none"
+    );
+    const namedTokens = tokens
+      .filter((a) => a.toLowerCase() !== "unassigned" && a.toLowerCase() !== "none")
+      .map((a) => (a.toLowerCase() === "me" && jiraUsername ? jiraUsername : a));
+
+    if (namedTokens.length > 0 && hasUnassigned) {
+      const assigneeConditions: Prisma.IssueCacheWhereInput[] = [
+        { assigneeJira: { in: namedTokens } },
+        { assigneeJira: null },
+        { assigneeJira: "" },
+      ];
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, { OR: assigneeConditions }];
+        delete where.OR;
+      } else {
+        where.OR = assigneeConditions;
+      }
+    } else if (namedTokens.length > 0) {
+      where.assigneeJira = { in: namedTokens };
+    } else if (hasUnassigned) {
+      const unassignedConditions: Prisma.IssueCacheWhereInput[] = [
+        { assigneeJira: null },
+        { assigneeJira: "" },
+      ];
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, { OR: unassignedConditions }];
+        delete where.OR;
+      } else {
+        where.OR = unassignedConditions;
+      }
+    }
+  }
+
+  const rows = await prisma.issueCache.findMany({
+    where,
+    select: { jiraKey: true },
+    orderBy: { jiraKey: "asc" },
+    take: maxKeys,
+  });
+
+  return rows.map((r) => r.jiraKey);
 }
 
 // BULK-009 — reasons a transition could not be resolved. Only `no_transition`
@@ -708,9 +868,11 @@ export async function previewBulk(
   keys: string[],
   requestedBy: string,
   jira: TransitionGetter,
-  bitbucketCreds: BbCreds | null = null
+  bitbucketCreds: BbCreds | null = null,
+  options?: { selector?: BulkSelector; maxKeys?: number }
 ): Promise<PreviewResult> {
-  const unique = Array.from(new Set(keys.map(normalizeKey))).slice(0, MAX_KEYS);
+  const limit = options?.maxKeys ?? (options?.selector?.mode === "filter" ? MAX_FILTER_KEYS : MAX_KEYS);
+  const unique = Array.from(new Set(keys.map(normalizeKey))).slice(0, limit);
   if (unique.length === 0) throw new Error("no_keys");
 
   const isFixVersionAction = action.kind === "add-fix-version" || action.kind === "remove-fix-version";
@@ -1043,7 +1205,13 @@ export async function previewBulk(
     data: {
       type: action.kind,
       requestedBy,
-      payload: { action, params: actionParams(action), cycles, truncated } as Prisma.InputJsonValue,
+      payload: {
+        action,
+        params: actionParams(action),
+        cycles,
+        truncated,
+        ...(options?.selector ? { selector: options.selector } : {}),
+      } as Prisma.InputJsonValue,
       state: "preview",
       total: targets.length,
     },

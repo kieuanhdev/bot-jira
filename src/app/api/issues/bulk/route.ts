@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { userBitbucketCreds, userJiraAuth } from "@/lib/user-creds";
+import { userBitbucketCreds, userJiraAuth, userJiraUsername } from "@/lib/user-creds";
 import { jiraWith } from "@/lib/jira/client";
 import {
   previewBulk,
   confirmBulk,
   validateBulkRequest,
+  resolveFilterKeys,
 } from "@/lib/bulk/ops";
 import { enqueueBulkOperation } from "@/lib/queue/boss";
 import { probeJiraAuth } from "@/lib/jira/client";
@@ -14,10 +15,10 @@ import { probeJiraAuth } from "@/lib/jira/client";
 /**
  * M4-02 — Preview + confirm a bulk operation.
  *
- * The request body always includes `action` + `keys`. If `confirm: true` and
- * `operationId` match a `preview` operation the caller created earlier, the
- * operation is confirmed and enqueued for background execution. Otherwise a
- * fresh preview is computed (no mutation) and returned.
+ * The request body always includes `action` + `keys` or `action` + `selector`.
+ * If `confirm: true` and `operationId` match a `preview` operation the caller created
+ * earlier, the operation is confirmed and enqueued for background execution.
+ * Otherwise a fresh preview is computed (no mutation) and returned.
  *
  * Confirming requires the exact operation id from a prior preview, which is the
  * "confirm by operation id" guard: a client cannot mutate without first
@@ -29,6 +30,7 @@ export async function POST(req: Request) {
 
   const rawBody = (await req.json().catch(() => ({}))) as {
     keys?: unknown;
+    selector?: unknown;
     action?: unknown;
     confirm?: boolean;
     operationId?: string;
@@ -92,13 +94,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // Preview path — BULK-004: validate the action and keys on the server before
-  // doing any work, so a malformed/oversized request is rejected with 400
-  // immediately instead of failing deep inside the worker.
-  const validated = validateBulkRequest(rawBody);
-  if (!validated.ok) {
-    return NextResponse.json({ error: "invalid request", fields: validated.errors }, { status: 400 });
-  }
+  // Preview path
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: {
@@ -116,6 +112,42 @@ export async function POST(req: Request) {
       { status: 428 }
     );
   }
+  const jiraUsername = userJiraUsername(user);
+
+  let resolvedKeys: string[] | undefined;
+  if (
+    rawBody.selector &&
+    typeof rawBody.selector === "object" &&
+    (rawBody.selector as { mode?: string }).mode === "filter"
+  ) {
+    const s = rawBody.selector as {
+      project?: string;
+      filters?: {
+        q?: string;
+        assignees?: string[] | "ALL";
+        statuses?: string[];
+        labels?: string[];
+        priorities?: string[];
+      };
+    };
+    if (!s.project || typeof s.project !== "string" || !s.project.trim()) {
+      return NextResponse.json(
+        { error: "invalid request", fields: ["selector.project must be a non-empty string"] },
+        { status: 400 }
+      );
+    }
+    resolvedKeys = await resolveFilterKeys(
+      s.project,
+      s.filters || {},
+      jiraUsername
+    );
+  }
+
+  const validated = validateBulkRequest(rawBody, resolvedKeys);
+  if (!validated.ok) {
+    return NextResponse.json({ error: "invalid request", fields: validated.errors }, { status: 400 });
+  }
+
   const bitbucketCreds = userBitbucketCreds(user);
   if (validated.action.kind === "create-branches" && !bitbucketCreds) {
     return NextResponse.json(
@@ -130,7 +162,8 @@ export async function POST(req: Request) {
       validated.keys,
       session.user.id,
       jira,
-      bitbucketCreds
+      bitbucketCreds,
+      { selector: validated.selector }
     );
     return NextResponse.json(preview);
   } catch (e) {

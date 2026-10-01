@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
@@ -22,7 +22,15 @@ import {
   type IssueSuccessResponse,
 } from "@/hooks/use-issues";
 import { issuesKeys, boardKeys, meKeys, freshnessKeys } from "@/lib/query-keys";
-import { AssigneeMultiSelect } from "@/components/assignee-multi-select";
+import {
+  type IssueFilters,
+  DEFAULT_BOARD_FILTERS,
+  effectiveAssignees,
+  countActiveIssueFilters,
+  parseIssueFilters,
+  serializeIssueFilters,
+} from "@/lib/issues/issue-filters";
+import { IssueFilterBar } from "@/components/issues/issue-filter-bar";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -230,11 +238,43 @@ export function BoardClient() {
       setBoardValidating(false);
     }
   }
+  const searchParams = useSearchParams();
   const [view, setView] = useState<ViewMode>("board");
-  const [q, setQ] = useState("");
-  const [label, setLabel] = useState("");
-  const [priority, setPriority] = useState("");
-  const [selectedAssignees, setSelectedAssignees] = useState<string[]>(["me"]);
+  const [filters, setFilters] = useState<IssueFilters>(() => {
+    if (searchParams) {
+      return parseIssueFilters(searchParams, DEFAULT_BOARD_FILTERS, myName);
+    }
+    return DEFAULT_BOARD_FILTERS;
+  });
+
+  // Re-sync with myName if loaded subsequently and filters was default
+  const myNameSyncedRef = useRef(false);
+  useEffect(() => {
+    if (myName && !myNameSyncedRef.current) {
+      myNameSyncedRef.current = true;
+      setFilters((prev) => (searchParams ? parseIssueFilters(searchParams, prev, myName) : prev));
+    }
+  }, [myName, searchParams]);
+
+  // Sync URL when filters change (debounced for search text)
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      const sp = serializeIssueFilters(filters, DEFAULT_BOARD_FILTERS);
+      const qs = sp.toString();
+      const currentUrl = window.location.pathname + (window.location.search || "");
+      const targetUrl = window.location.pathname + (qs ? `?${qs}` : "");
+      if (currentUrl !== targetUrl) {
+        router.replace(targetUrl, { scroll: false });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [filters, router]);
+
   const [sortMode, setSortMode] = useState<SortMode>("updated");
   const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set());
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -247,14 +287,9 @@ export function BoardClient() {
   const boardQueriesEnabled =
     effectivePreferred.length > 0 && Boolean(selectedProject);
 
-  const activeFilterCount =
-    [q, label, priority].filter(Boolean).length +
-    (selectedAssignees.length !== 1 || selectedAssignees[0] !== "me" ? 1 : 0);
+  const activeFilterCount = countActiveIssueFilters(filters, DEFAULT_BOARD_FILTERS);
   function resetFilters() {
-    setQ("");
-    setLabel("");
-    setPriority("");
-    setSelectedAssignees(["me"]);
+    setFilters(DEFAULT_BOARD_FILTERS);
   }
 
   const [colVisibleState, setColVisibleState] = useState<{ sig: string; counts: Record<string, number> }>({
@@ -276,14 +311,14 @@ export function BoardClient() {
 
   const effectiveView: ViewMode = width === "narrow" ? "list" : view;
 
-  const isAssigneeAll =
-    selectedAssignees.length === 0 || selectedAssignees.includes("ALL");
+  const activeAssignees = effectiveAssignees(filters.assigneeScope);
+  const isAssigneeAll = activeAssignees === "ALL";
   const boardFilters: import("@/hooks/use-issues").BoardFilters = {
     ...(selectedProject ? { project: selectedProject } : {}),
-    q: q || undefined,
-    label: label || undefined,
-    priority: priority || undefined,
-    assignee: isAssigneeAll ? "ALL" : selectedAssignees,
+    q: filters.query || undefined,
+    label: filters.labels.length > 0 ? filters.labels : undefined,
+    priority: filters.priorities.length > 0 ? filters.priorities : undefined,
+    assignee: isAssigneeAll ? "ALL" : activeAssignees,
     includeDone: true,
     limit: 1000,
   };
@@ -296,10 +331,10 @@ export function BoardClient() {
 
   const filterSig = JSON.stringify({
     p: selectedProject,
-    q,
-    label,
-    priority,
-    assignee: isAssigneeAll ? "ALL" : [...selectedAssignees].sort(),
+    q: filters.query,
+    label: [...filters.labels].sort(),
+    priority: [...filters.priorities].sort(),
+    assignee: isAssigneeAll ? "ALL" : [...activeAssignees].sort(),
   });
   const [extraPages, setExtraPages] = useState<{ sig: string; items: IssueItem[] }>({ sig: "", items: [] });
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1386,47 +1421,32 @@ export function BoardClient() {
       )}
 
 
-      <FilterBar activeCount={activeFilterCount} onReset={resetFilters}>
-        <SearchField
-          value={q}
-          onChange={setQ}
-          placeholder={`Tìm kiếm trong ${selectedProject}…`}
-          ariaLabel={`Tìm kiếm trong ${selectedProject}`}
-          className="flex-1 min-w-[220px]"
-        />
-        <AssigneeMultiSelect
-          value={selectedAssignees}
-          onChange={setSelectedAssignees}
-          assignees={assignees}
-          myName={myName}
-        />
+      <IssueFilterBar
+        value={filters}
+        defaults={DEFAULT_BOARD_FILTERS}
+        onChange={setFilters}
+        options={{
+          assignees,
+          labels: labelOptions,
+          priorities: optData?.priorities ?? ["Low", "Medium", "High", "Highest", "Blocker"],
+        }}
+        capabilities={{
+          search: true,
+          assignee: "multi",
+          status: false,
+          label: "single",
+          priority: "single",
+          quickSwitch: true,
+        }}
+        myName={myName}
+        searchPlaceholder={`Tìm kiếm trong ${selectedProject}…`}
+      >
         <div className="flex items-center gap-1.5 self-center text-xs text-muted-foreground whitespace-nowrap">
           <span className="inline-flex items-center gap-1 rounded bg-muted/60 px-2 py-1 text-[11px] font-medium text-muted-foreground border border-border/40">
             Backlog luôn hiển thị toàn bộ task của dự án
           </span>
         </div>
-        <Select value={label || ""} onValueChange={(v) => setLabel(v === "ALL" ? "" : v)}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Nhãn" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Tất cả nhãn</SelectItem>
-            {labelOptions.map((l) => (
-              <SelectItem key={l} value={l}>
-                {l}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={priority || ""} onValueChange={(v) => setPriority(v === "ALL" ? "" : v)}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Độ ưu tiên" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Tất cả độ ưu tiên</SelectItem>
-            <SelectItem value="Low">Low (Thấp)</SelectItem>
-            <SelectItem value="Medium">Medium (Trung bình)</SelectItem>
-            <SelectItem value="High">High (Cao)</SelectItem>
-            <SelectItem value="Highest">Highest (Rất cao)</SelectItem>
-          </SelectContent>
-        </Select>
-      </FilterBar>
+      </IssueFilterBar>
 
       <BoardSummaryCards summary={summary} loading={isLoading} />
 
