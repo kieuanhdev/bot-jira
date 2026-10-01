@@ -114,6 +114,7 @@ export function mergeDefaultsWithRow(
       row.originalEstimate !== undefined ? row.originalEstimate : defaults.originalEstimate,
     dueDate: row.dueDate !== undefined ? row.dueDate : defaults.dueDate,
     fixVersionIds: row.fixVersionIds !== undefined ? row.fixVersionIds : defaults.fixVersionIds,
+    customFields: row.customFields !== undefined ? row.customFields : defaults.customFields,
   };
 }
 
@@ -144,6 +145,7 @@ export function validateAndNormalizeItem(
 
   // 2. Issue Type validation
   let issueTypeId = (merged.issueTypeId ?? "").trim();
+  let isSubtask = false;
   if (!issueTypeId) {
     errors.push({
       field: "issueTypeId",
@@ -161,15 +163,67 @@ export function validateAndNormalizeItem(
         code: "INVALID_ISSUE_TYPE",
         message: `Loại công việc "${issueTypeId}" không tồn tại trong dự án`,
       });
-    } else if (matchedType.subtask) {
-      errors.push({
-        field: "issueTypeId",
-        code: "SUBTASK_NOT_SUPPORTED",
-        message: `Sub-task ("${matchedType.name}") chưa được hỗ trợ trong phiên bản này`,
-      });
     } else {
       issueTypeId = matchedType.id; // normalize to ID
+      isSubtask = matchedType.subtask;
     }
+  }
+
+  // 2b. Parent validation
+  let parent: CanonicalCreateItem["parent"] = null;
+  if (merged.parent) {
+    const pRef = merged.parent;
+    if (pRef.type === "batch") {
+      const ref = pRef.clientRef.trim();
+      if (!ref) {
+        errors.push({
+          field: "parent",
+          code: "PARENT_REQUIRED",
+          message: "Sub-task phải chọn parent trong batch",
+        });
+      } else if (ref === rawItem.clientRef) {
+        errors.push({
+          field: "parent",
+          code: "PARENT_CYCLE",
+          message: "Không thể chọn chính task hiện tại làm parent",
+        });
+      } else {
+        parent = { type: "batch", clientRef: ref };
+      }
+    } else if (pRef.type === "jira") {
+      const key = pRef.jiraKey.trim().toUpperCase();
+      if (!key) {
+        errors.push({
+          field: "parent",
+          code: "PARENT_REQUIRED",
+          message: "Sub-task phải chọn parent trên Jira",
+        });
+      } else if (!/^[A-Z][A-Z0-9_]+-\d+$/.test(key)) {
+        errors.push({
+          field: "parent",
+          code: "PARENT_NOT_FOUND",
+          message: `Jira key "${pRef.jiraKey}" không hợp lệ (định dạng: PROJECT-123)`,
+        });
+      } else {
+        parent = { type: "jira", jiraKey: key };
+      }
+    }
+  }
+
+  // 2c. Enforce parent rules based on issue type
+  if (isSubtask && !parent) {
+    errors.push({
+      field: "parent",
+      code: "PARENT_REQUIRED",
+      message: "Sub-task phải có parent (chọn task trong batch hoặc Jira key)",
+    });
+  }
+  if (!isSubtask && parent) {
+    errors.push({
+      field: "parent",
+      code: "PARENT_NOT_ALLOWED",
+      message: "Task không phải sub-task không được gắn parent",
+    });
   }
 
   // 3. Description validation
@@ -197,17 +251,22 @@ export function validateAndNormalizeItem(
   let priorityId: string | undefined = undefined;
   if (merged.priorityId) {
     const pTrim = merged.priorityId.trim();
-    const matchedPriority = meta.priorityOptions.find(
-      (p) => p.id === pTrim || p.name.toLowerCase() === pTrim.toLowerCase()
-    );
-    if (matchedPriority) {
-      priorityId = matchedPriority.id;
+    if (meta.priorityOptions.length === 0) {
+      // No allowed values from metadata; Jira will use its default.
+      priorityId = pTrim;
     } else {
-      warnings.push({
-        field: "priorityId",
-        code: "UNKNOWN_PRIORITY",
-        message: `Mức ưu tiên "${pTrim}" không tìm thấy, sẽ dùng mặc định của Jira`,
-      });
+      const matchedPriority = meta.priorityOptions.find(
+        (p) => p.id === pTrim || p.name.toLowerCase() === pTrim.toLowerCase()
+      );
+      if (matchedPriority) {
+        priorityId = matchedPriority.id;
+      } else {
+        errors.push({
+          field: "priorityId",
+          code: "FIELD_VALUE_NOT_ALLOWED",
+          message: `Mức ưu tiên "${pTrim}" không nằm trong danh sách được phép của Jira`,
+        });
+      }
     }
   }
 
@@ -330,12 +389,14 @@ export function validateAndNormalizeItem(
   }
 
   // 11. Check required fields for this issue type from metadata
+  const customFields: Record<string, unknown> = {};
   if (issueTypeId && meta.fieldsByIssueType[issueTypeId]) {
     const requiredFields = meta.fieldsByIssueType[issueTypeId].filter((f) => f.required);
     for (const reqField of requiredFields) {
-      if (reqField.id === "summary" && !summary) continue; // already checked
-      if (reqField.id === "issuetype") continue; // already checked
-      if (reqField.id === "project") continue; // handled at batch level
+      // Skip system fields handled above
+      if (reqField.id === "summary") continue;
+      if (reqField.id === "issuetype") continue;
+      if (reqField.id === "project") continue;
 
       if (reqField.id === "description" && !description) {
         errors.push({
@@ -343,18 +404,72 @@ export function validateAndNormalizeItem(
           code: "REQUIRED_FIELD_MISSING",
           message: `Trường bắt buộc "${reqField.name}" chưa có dữ liệu`,
         });
-      } else if (reqField.id === "duedate" && !dueDate) {
+        continue;
+      }
+      if (reqField.id === "duedate" && !dueDate) {
         errors.push({
           field: "dueDate",
           code: "REQUIRED_FIELD_MISSING",
           message: `Trường bắt buộc "${reqField.name}" chưa có dữ liệu`,
         });
-      } else if (reqField.id === "priority" && !priorityId) {
+        continue;
+      }
+      if (reqField.id === "priority" && !priorityId && meta.priorityOptions.length > 0) {
         errors.push({
           field: "priorityId",
           code: "REQUIRED_FIELD_MISSING",
           message: `Trường bắt buộc "${reqField.name}" chưa có dữ liệu`,
         });
+        continue;
+      }
+
+      // Custom / unknown required fields
+      const customValue = merged.customFields?.[reqField.id];
+      if (customValue !== undefined && customValue !== null && customValue !== "") {
+        customFields[reqField.id] = customValue;
+        // Validate allowedValues for option fields
+        if (reqField.allowedValues && reqField.allowedValues.length > 0) {
+          const strVal = String(customValue);
+          const matched = reqField.allowedValues.find(
+            (v) => v.id === strVal || v.name === strVal || v.value === strVal
+          );
+          if (!matched) {
+            errors.push({
+              field: reqField.id,
+              code: "FIELD_VALUE_NOT_ALLOWED",
+              message: `Giá trị cho "${reqField.name}" không nằm trong danh sách được phép`,
+            });
+          }
+        }
+      } else {
+        errors.push({
+          field: reqField.id,
+          code: "REQUIRED_CUSTOM_FIELD_MISSING",
+          message: `Trường bắt buộc "${reqField.name}" (${reqField.id}) chưa có dữ liệu`,
+        });
+      }
+    }
+
+    // Also validate non-required custom fields that have values
+    if (merged.customFields) {
+      for (const [fieldId, val] of Object.entries(merged.customFields)) {
+        if (val === undefined || val === null || val === "") continue;
+        if (fieldId in customFields) continue; // already validated above
+        customFields[fieldId] = val;
+        const fieldDef = meta.fieldsByIssueType[issueTypeId]?.find((f) => f.id === fieldId);
+        if (fieldDef?.allowedValues && fieldDef.allowedValues.length > 0) {
+          const strVal = String(val);
+          const matched = fieldDef.allowedValues.find(
+            (v) => v.id === strVal || v.name === strVal || v.value === strVal
+          );
+          if (!matched) {
+            errors.push({
+              field: fieldId,
+              code: "FIELD_VALUE_NOT_ALLOWED",
+              message: `Giá trị cho "${fieldDef.name}" không nằm trong danh sách được phép`,
+            });
+          }
+        }
       }
     }
   }
@@ -365,6 +480,8 @@ export function validateAndNormalizeItem(
     clientRef: rawItem.clientRef,
     summary,
     issueTypeId,
+    isSubtask,
+    parent,
     description,
     assignee,
     priorityId,
@@ -374,6 +491,7 @@ export function validateAndNormalizeItem(
     originalEstimateSeconds,
     dueDate,
     fixVersionIds,
+    customFields: Object.keys(customFields).length > 0 ? customFields : undefined,
   };
 
   return {
@@ -394,4 +512,89 @@ export function validateAndNormalizeItem(
 export function generateBulkCreateMarker(operationId: string, rowIndex: number): string {
   const shortId = operationId.slice(-8);
   return `ttw-bulk-${shortId}-${rowIndex}`;
+}
+
+/**
+ * Validate batch-level parent relationships:
+ * - Batch parent refs point to existing non-subtask items
+ * - No dependency cycles
+ * Returns additional errors to merge into preview items.
+ */
+export function validateBatchParentGraph(
+  items: Array<{ clientRef: string; parent?: { type: "batch" | "jira"; clientRef?: string } | null; isSubtask: boolean }>
+): Map<string, BulkCreateValidationError[]> {
+  const errorsByRef = new Map<string, BulkCreateValidationError[]>();
+  const byRef = new Map(items.map((i) => [i.clientRef, i]));
+
+  // 1. Validate batch parent references
+  for (const item of items) {
+    if (item.parent?.type !== "batch") continue;
+    const parentRef = item.parent.clientRef;
+    if (!parentRef) continue;
+
+    const parentItem = byRef.get(parentRef);
+    if (!parentItem) {
+      pushError(errorsByRef, item.clientRef, {
+        field: "parent",
+        code: "PARENT_NOT_FOUND",
+        message: `Parent "${parentRef}" không tồn tại trong batch`,
+      });
+    } else if (parentItem.isSubtask) {
+      pushError(errorsByRef, item.clientRef, {
+        field: "parent",
+        code: "PARENT_IS_SUBTASK",
+        message: `Không thể chọn sub-task "${parentRef}" làm parent`,
+      });
+    }
+  }
+
+  // 2. Cycle detection using DFS
+  const WHITE = 0, GRAY = 1, BLACK = 2;
+  const color = new Map<string, number>();
+  for (const item of items) color.set(item.clientRef, WHITE);
+
+  const visit = (ref: string, path: string[]): void => {
+    color.set(ref, GRAY);
+    const item = byRef.get(ref);
+    if (!item) return;
+    if (item.parent?.type === "batch" && item.parent.clientRef) {
+      const parentRef = item.parent.clientRef;
+      const parentColor = color.get(parentRef);
+      if (parentColor === GRAY) {
+        const cycleStart = path.indexOf(parentRef);
+        const cycle = [...path.slice(cycleStart), ref];
+        for (const nodeRef of cycle) {
+          pushError(errorsByRef, nodeRef, {
+            field: "parent",
+            code: "PARENT_CYCLE",
+            message: `Phát hiện vòng lặp parent: ${cycle.join(" → ")}`,
+          });
+        }
+      } else if (parentColor === WHITE) {
+        visit(parentRef, [...path, ref]);
+      }
+    }
+    color.set(ref, BLACK);
+  };
+
+  for (const item of items) {
+    if (color.get(item.clientRef) === WHITE) {
+      visit(item.clientRef, []);
+    }
+  }
+
+  return errorsByRef;
+}
+
+function pushError(
+  map: Map<string, BulkCreateValidationError[]>,
+  ref: string,
+  err: BulkCreateValidationError
+): void {
+  const existing = map.get(ref);
+  if (existing) {
+    existing.push(err);
+  } else {
+    map.set(ref, [err]);
+  }
 }

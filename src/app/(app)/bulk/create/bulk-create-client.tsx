@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
@@ -57,11 +57,15 @@ export function BulkCreateClient() {
     { clientRef: "row-2", summary: "" },
     { clientRef: "row-3", summary: "" },
   ]);
-  const [source, setSource] = useState<{ type: "grid" | "paste" | "csv"; fileName?: string | null }>({
+  const [source, setSource] = useState<{ type: "grid" | "paste" | "csv" | "excel"; fileName?: string | null }>({
     type: "grid",
   });
   const [previewData, setPreviewData] = useState<BulkCreatePreviewResult | null>(null);
   const [activeOperationId, setActiveOperationId] = useState<string | null>(null);
+  const [focusRow, setFocusRow] = useState<number | null>(null);
+  const [draftAvailable, setDraftAvailable] = useState(false);
+  const draftRestoredRef = useRef(false);
+  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Project change confirmation state
   const [pendingProjectKey, setPendingProjectKey] = useState<string | null>(null);
@@ -81,6 +85,70 @@ export function BulkCreateClient() {
 
   // Derive projectKey: use userSelectedProject if explicitly set, else fall back to first available project
   const projectKey = userSelectedProject || availableProjects[0] || "";
+
+  const draftKey = `bulk-create-draft:${projectKey}`;
+
+  const saveDraft = useCallback((itemsToSave: BulkCreateRowInput[], defaultsToSave: BulkCreateFieldDefaults) => {
+    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    draftSaveTimer.current = setTimeout(() => {
+      try {
+        const hasContent = itemsToSave.some((i) => i.summary.trim()) || Object.keys(defaultsToSave).length > 0;
+        if (hasContent) {
+          localStorage.setItem(draftKey, JSON.stringify({ items: itemsToSave, defaults: defaultsToSave, savedAt: Date.now() }));
+        } else {
+          localStorage.removeItem(draftKey);
+        }
+      } catch { /* quota exceeded or unavailable */ }
+    }, 1000);
+  }, [draftKey]);
+
+  // Restore draft on project change
+  useEffect(() => {
+    if (!projectKey || draftRestoredRef.current) return;
+    draftRestoredRef.current = true;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+          const hasContent = parsed.items.some((i: { summary?: string }) => i.summary?.trim());
+          if (hasContent) {
+            queueMicrotask(() => setDraftAvailable(true));
+            return;
+          }
+        }
+      }
+    } catch { /* ignore */ }
+  }, [projectKey, draftKey]);
+
+  // Auto-save draft on items/defaults change
+  useEffect(() => {
+    if (step !== "input") return;
+    if (draftRestoredRef.current) {
+      saveDraft(items, defaults);
+    }
+  }, [items, defaults, step, saveDraft]);
+
+  function handleRestoreDraft() {
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+          setItems(parsed.items);
+          if (parsed.defaults) setDefaults(parsed.defaults);
+        }
+      }
+    } catch { /* ignore */ }
+    setDraftAvailable(false);
+    draftRestoredRef.current = true;
+  }
+
+  function handleDiscardDraft() {
+    localStorage.removeItem(draftKey);
+    setDraftAvailable(false);
+    draftRestoredRef.current = true;
+  }
 
   // Query metadata for selected project
   const {
@@ -127,6 +195,7 @@ export function BulkCreateClient() {
     onSuccess: (data) => {
       setActiveOperationId(data.operationId);
       setStep("progress");
+      localStorage.removeItem(draftKey);
     },
   });
 
@@ -153,12 +222,16 @@ export function BulkCreateClient() {
       setConfirmProjectDialogOpen(true);
     } else {
       setUserSelectedProject(newKey);
+      draftRestoredRef.current = false;
+      setDraftAvailable(false);
     }
   }
 
   function applyProjectChange(newKey: string) {
     setUserSelectedProject(newKey);
     setDefaults({});
+    setDraftAvailable(false);
+    draftRestoredRef.current = false;
     // Preserve general text content, reset project-specific options
     setItems((prev) =>
       prev.map((item) => ({
@@ -365,9 +438,42 @@ export function BulkCreateClient() {
           {/* Main Form and Grid when metadata is loaded and canCreate is true */}
           {metadata && metadata.canCreate && (
             <div className="space-y-6">
+              {/* Draft Restore Banner */}
+              {draftAvailable && (
+                <div className="flex items-center justify-between rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3">
+                  <div className="flex items-center gap-2 text-xs">
+                    <AlertTriangle className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" aria-hidden="true" />
+                    <span className="text-blue-800 dark:text-blue-300">
+                      Có bản nháp chưa hoàn tất cho dự án {projectKey}. Bạn có muốn khôi phục?
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRestoreDraft}
+                      className="h-7 text-xs cursor-pointer"
+                    >
+                      Khôi phục
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleDiscardDraft}
+                      className="h-7 text-xs cursor-pointer text-muted-foreground"
+                    >
+                      Bỏ qua
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Shared Defaults Form */}
               <CreateDefaultsForm
                 metadata={metadata}
+                projectKey={projectKey}
                 defaults={defaults}
                 onChange={setDefaults}
               />
@@ -375,10 +481,13 @@ export function BulkCreateClient() {
               {/* Editable Task Grid */}
               <CreateTaskGrid
                 metadata={metadata}
+                projectKey={projectKey}
                 defaults={defaults}
                 items={items}
                 onChange={setItems}
                 onSourceChange={setSource}
+                focusRow={focusRow}
+                onClearFocusRow={() => setFocusRow(null)}
               />
 
               {/* Bottom Action Footer */}
@@ -432,6 +541,10 @@ export function BulkCreateClient() {
           isConfirming={confirmMutation.isPending}
           confirmError={confirmMutation.isError ? confirmMutation.error.message : null}
           onResetConfirmError={() => confirmMutation.reset()}
+          onFixRow={(rowIndex) => {
+            setFocusRow(rowIndex);
+            setStep("input");
+          }}
         />
       )}
 

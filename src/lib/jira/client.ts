@@ -746,6 +746,84 @@ export function jiraWith(auth?: JiraAuth) {
           releaseDate: new Date().toISOString().slice(0, 10),
         }),
       }, auth),
+    /**
+     * Search assignable users for a project.
+     * Tries the project-level assignable search first, falls back to global user search.
+     */
+    searchAssignableUsers: async (
+      projectKey: string,
+      query: string,
+      limit: number
+    ): Promise<JiraUser[]> => {
+      const q = encodeURIComponent(query);
+      const maxResults = Math.min(Math.max(1, limit), 50);
+      try {
+        // Try project-specific assignable search (available on newer DC versions)
+        const res = await request<{
+          startAt?: number;
+          maxResults?: number;
+          total?: number;
+          values?: JiraUser[];
+        }>(
+          `/rest/api/2/user/assignable/search?projectKey=${encodeURIComponent(projectKey)}&maxResults=${maxResults}&${query ? `username=${q}` : ""}`,
+          {},
+          auth
+        );
+        const users = (res.values ?? []).filter((u) => u.active !== false);
+        if (users.length > 0) return users;
+      } catch {
+        // Fall through to global search
+      }
+      // Fallback: global user search filtered by query
+      const searchUrl = query
+        ? `/rest/api/2/user/search?query=${q}&maxResults=${maxResults}`
+        : `/rest/api/2/user/search?maxResults=${maxResults}`;
+      const res = await request<JiraUser[]>(searchUrl, {}, auth);
+      return (res ?? []).filter((u) => u.active !== false);
+    },
+
+    /**
+     * Search parent issues (non-subtask) in a project.
+     * Used for the parent picker when creating sub-tasks.
+     */
+    searchParentIssues: async (
+      projectKey: string,
+      query: string,
+      limit: number
+    ): Promise<Array<{ key: string; summary: string; issueTypeName: string; status: string }>> => {
+      const maxResults = Math.min(Math.max(1, limit), 50);
+      // JQL: search in project, exclude subtasks, filter by key or summary
+      let jql: string;
+      if (query) {
+        // If query looks like a key (PROJECT-123), search by key
+        if (/^[A-Z][A-Z0-9_]+-\d+$/.test(query)) {
+          jql = `project = "${projectKey}" AND key = "${query}" AND "issuetype" != "Sub-task"`;
+        } else {
+          const escaped = query.replace(/"/g, '\\"');
+          jql = `project = "${projectKey}" AND (key ~ "${escaped}" OR summary ~ "${escaped}") AND "issuetype" != "Sub-task"`;
+        }
+      } else {
+        jql = `project = "${projectKey}" AND "issuetype" != "Sub-task" ORDER BY key DESC`;
+      }
+
+      const res = await request<JiraSearchResult>(
+        `/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=${maxResults}&fields=summary,issuetype,status`,
+        {},
+        auth
+      );
+
+      return (res.issues ?? [])
+        .filter((issue) => {
+          const it = issue.fields.issuetype?.name?.toLowerCase();
+          return it !== "sub-task";
+        })
+        .map((issue) => ({
+          key: issue.key,
+          summary: issue.fields.summary ?? "",
+          issueTypeName: issue.fields.issuetype?.name ?? "Unknown",
+          status: issue.fields.status?.name ?? "Unknown",
+        }));
+    },
   };
 }
 

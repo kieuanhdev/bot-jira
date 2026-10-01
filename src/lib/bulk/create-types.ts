@@ -16,7 +16,13 @@ export type BulkCreateItemStatus =
   | "running"
   | "succeeded"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "waiting_for_parent"
+  | "blocked_by_parent";
+
+export type BulkParentRef =
+  | { type: "batch"; clientRef: string }
+  | { type: "jira"; jiraKey: string };
 
 export type BulkCreateFieldDefaults = {
   issueTypeId?: string;
@@ -28,12 +34,14 @@ export type BulkCreateFieldDefaults = {
   dueDate?: string | null;
   fixVersionIds?: string[];
   description?: string;
+  customFields?: Record<string, unknown>;
 };
 
 export type BulkCreateRowInput = {
   clientRef: string;
   summary: string;
   issueTypeId?: string;
+  parent?: BulkParentRef | null;
   description?: string;
   assignee?: string | null;
   priorityId?: string;
@@ -42,6 +50,7 @@ export type BulkCreateRowInput = {
   originalEstimate?: string;
   dueDate?: string | null;
   fixVersionIds?: string[];
+  customFields?: Record<string, unknown>;
 };
 
 export type BulkCreateRequest = {
@@ -50,7 +59,7 @@ export type BulkCreateRequest = {
   items: BulkCreateRowInput[];
   metadataFingerprint?: string;
   source?: {
-    type: "grid" | "paste" | "csv";
+    type: "grid" | "paste" | "csv" | "excel";
     fileName?: string | null;
   };
 };
@@ -59,6 +68,12 @@ export type CanonicalCreateItem = {
   clientRef: string;
   summary: string;
   issueTypeId: string;
+  isSubtask: boolean;
+  parent?: {
+    type: "batch" | "jira";
+    clientRef?: string;
+    jiraKey?: string;
+  } | null;
   description?: string;
   assignee?: string | null;
   priorityId?: string;
@@ -68,6 +83,7 @@ export type CanonicalCreateItem = {
   originalEstimateSeconds?: number;
   dueDate?: string | null;
   fixVersionIds: string[];
+  customFields?: Record<string, unknown>;
 };
 
 export type BulkCreateValidationWarning = {
@@ -101,11 +117,23 @@ export type BulkCreatePreviewResult = {
   blocked: number;
   metadataFingerprint: string;
   items: BulkCreatePreviewItem[];
+  metrics?: {
+    durationMs: number;
+    isSlow?: boolean;
+    blockedByErrorCode?: Record<string, number>;
+  };
 };
 
 export type BulkCreateConfirmRequest = {
   confirm: true;
   operationId: string;
+};
+
+export type BulkCreateFieldCapability = {
+  /** Whether the field value is available from metadata. */
+  available: boolean;
+  /** Human-readable reason when unavailable. */
+  reason?: string;
 };
 
 export type BulkCreateProjectMetadata = {
@@ -138,6 +166,20 @@ export type BulkCreateProjectMetadata = {
   pointsFieldId: string | null;
   supportsTimeTracking: boolean;
   supportsDueDate: boolean;
+  /** Whether the project has any sub-task issue types. */
+  hasSubtaskTypes: boolean;
+  /** Default issue type ID from Jira metadata (if provided). */
+  defaultIssueTypeId: string | null;
+  /** Default sub-task type ID (if determinable). */
+  defaultSubtaskTypeId: string | null;
+  /** Whether the project allows unassigned issues. */
+  allowsUnassigned: boolean;
+  /** Field capability flags for UI rendering. */
+  fieldCapabilities: {
+    priority: BulkCreateFieldCapability;
+    fixVersions: BulkCreateFieldCapability;
+    points: BulkCreateFieldCapability;
+  };
   fetchedAt: string;
   fingerprint: string;
 };

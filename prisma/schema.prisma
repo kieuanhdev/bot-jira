@@ -634,28 +634,34 @@ model BulkOperationItem {
 }
 
 model BulkCreateItem {
-  id             String        @id @default(cuid())
-  operationId    String
-  rowIndex       Int
-  clientRef      String
-  idempotencyKey String        @unique
-  requested      Json
-  jiraKey        String?
-  jiraIssueId    String?
-  status         String
-  errorCode      String?
-  error          String?
-  retryable      Boolean       @default(true)
-  attemptCount   Int           @default(0)
-  lastAttemptAt  DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  operation      BulkOperation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  id                    String        @id @default(cuid())
+  operationId           String
+  rowIndex              Int
+  clientRef             String
+  idempotencyKey        String        @unique
+  requested             Json
+  jiraKey               String?
+  jiraIssueId           String?
+  status                String
+  errorCode             String?
+  error                 String?
+  retryable             Boolean       @default(true)
+  attemptCount          Int           @default(0)
+  lastAttemptAt         DateTime?
+  parentClientRef       String?
+  parentJiraKey         String?
+  resolvedParentJiraKey String?
+  depth                 Int           @default(0)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  operation             BulkOperation @relation(fields: [operationId], references: [id], onDelete: Cascade)
 
   @@unique([operationId, clientRef])
   @@unique([operationId, rowIndex])
   @@index([operationId, status])
   @@index([jiraKey])
+  @@index([operationId, parentClientRef])
+  @@index([operationId, parentJiraKey])
 }
 
 // M6 — Chat command + result transcript. Every chat command and its outcome are

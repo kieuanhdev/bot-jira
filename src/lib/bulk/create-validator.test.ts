@@ -77,6 +77,15 @@ describe("Bulk Create - Validator and Normalizer", () => {
     pointsFieldId: "customfield_10004",
     supportsTimeTracking: true,
     supportsDueDate: true,
+    hasSubtaskTypes: true,
+    defaultIssueTypeId: "10001",
+    defaultSubtaskTypeId: "10003",
+    allowsUnassigned: true,
+    fieldCapabilities: {
+      priority: { available: true },
+      fixVersions: { available: true },
+      points: { available: true },
+    },
     fetchedAt: new Date().toISOString(),
     fingerprint: "sha256:test",
   };
@@ -139,7 +148,7 @@ describe("Bulk Create - Validator and Normalizer", () => {
     expect(res.normalizedFields.issueTypeId).toBe("10001"); // resolved name to id
   });
 
-  it("blocks item if sub-task is used in MVP", () => {
+  it("blocks item if sub-task has no parent", () => {
     const res = validateAndNormalizeItem(
       { clientRef: "row-1", summary: "Subtask item", issueTypeId: "Sub-task" },
       0,
@@ -147,7 +156,7 @@ describe("Bulk Create - Validator and Normalizer", () => {
       mockMeta
     );
     expect(res.classification).toBe("blocked");
-    expect(res.errors.some((e) => e.code === "SUBTASK_NOT_SUPPORTED")).toBe(true);
+    expect(res.errors.some((e) => e.code === "PARENT_REQUIRED")).toBe(true);
   });
 
   it("blocks item if required field is missing", () => {

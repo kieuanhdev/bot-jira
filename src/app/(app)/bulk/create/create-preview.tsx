@@ -21,6 +21,8 @@ import {
   ArrowLeft,
   Loader2,
   ShieldAlert,
+  Wrench,
+  Crosshair,
 } from "lucide-react";
 
 interface CreatePreviewProps {
@@ -31,6 +33,7 @@ interface CreatePreviewProps {
   isConfirming: boolean;
   confirmError?: string | null;
   onResetConfirmError?: () => void;
+  onFixRow?: (rowIndex: number) => void;
 }
 
 export function CreatePreview({
@@ -41,6 +44,7 @@ export function CreatePreview({
   isConfirming,
   confirmError,
   onResetConfirmError,
+  onFixRow,
 }: CreatePreviewProps) {
   const [filterTab, setFilterTab] = useState<"all" | "ready" | "warning" | "blocked">("all");
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -98,13 +102,30 @@ export function CreatePreview({
         </Card>
       </div>
 
+      {/* Slow operation latency alert banner */}
+      {preview.metrics?.isSlow && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-800 dark:text-amber-300">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <span>
+            Thời gian tạo bản xem trước kéo dài ({preview.metrics.durationMs}ms). Hoạt động mạng hoặc batch lớn có thể làm chậm quá trình xử lý.
+          </span>
+        </div>
+      )}
+
       {/* Main Preview Table Card */}
       <Card className="border-border/80 bg-card shadow-sm">
         <CardHeader className="flex flex-col gap-2 pb-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle className="text-base font-semibold">
-              Chi tiết bản xem trước từng task
-            </CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base font-semibold">
+                Chi tiết bản xem trước từng task
+              </CardTitle>
+              {preview.metrics?.durationMs != null && (
+                <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground font-normal">
+                  {preview.metrics.durationMs}ms
+                </Badge>
+              )}
+            </div>
             <CardDescription className="text-xs text-muted-foreground">
               Kiểm tra các trường chuẩn hoá, cảnh báo trùng lặp và lỗi trước khi xác nhận tạo trên Jira.
             </CardDescription>
@@ -228,14 +249,34 @@ export function CreatePreview({
                           {item.errors.map((e, i) => (
                             <div key={i} className="flex items-start gap-1.5 text-red-600 dark:text-red-400">
                               <XCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden="true" />
-                              <span>{e.message}</span>
+                              <span className="flex-1">{e.message}</span>
+                              {onFixRow && (
+                                <button
+                                  type="button"
+                                  onClick={() => onFixRow(item.rowIndex)}
+                                  className="shrink-0 rounded p-0.5 text-red-500 hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer"
+                                  title="Sửa dòng này"
+                                >
+                                  <Wrench className="h-3 w-3" aria-hidden="true" />
+                                </button>
+                              )}
                             </div>
                           ))}
 
                           {item.warnings.map((w, i) => (
                             <div key={i} className="flex items-start gap-1.5 text-amber-600 dark:text-amber-400">
                               <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden="true" />
-                              <span>{w.message}</span>
+                              <span className="flex-1">{w.message}</span>
+                              {onFixRow && (
+                                <button
+                                  type="button"
+                                  onClick={() => onFixRow(item.rowIndex)}
+                                  className="shrink-0 rounded p-0.5 text-amber-500 hover:bg-amber-500/10 hover:text-amber-700 dark:hover:text-amber-300 transition-colors cursor-pointer"
+                                  title="Sửa dòng này"
+                                >
+                                  <Wrench className="h-3 w-3" aria-hidden="true" />
+                                </button>
+                              )}
                             </div>
                           ))}
 
@@ -278,17 +319,32 @@ export function CreatePreview({
 
       {/* Navigation Footer */}
       <div className="flex items-center justify-between border-t border-border pt-4">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onBack}
-          disabled={isConfirming}
-          className="gap-1.5 cursor-pointer text-xs"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Chỉnh sửa lại dữ liệu
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onBack}
+            disabled={isConfirming}
+            className="gap-1.5 cursor-pointer text-xs"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Chỉnh sửa lại dữ liệu
+          </Button>
+          {onFixRow && blockedItems.length > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onFixRow(blockedItems[0]!.rowIndex)}
+              disabled={isConfirming}
+              className="gap-1.5 cursor-pointer text-xs text-red-600 dark:text-red-400 hover:text-red-700"
+            >
+              <Crosshair className="h-3.5 w-3.5" aria-hidden="true" />
+              Focus lỗi đầu tiên
+            </Button>
+          )}
+        </div>
 
         <Button
           type="button"

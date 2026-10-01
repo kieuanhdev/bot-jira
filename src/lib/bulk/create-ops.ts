@@ -23,8 +23,15 @@ import {
 import {
   validateBulkCreateBatch,
   validateAndNormalizeItem,
+  validateBatchParentGraph,
   generateBulkCreateMarker,
 } from "./create-validator";
+import { buildDependencyGraph } from "./dependency-graph";
+import {
+  recordPreviewMetrics,
+  recordExecutionMetrics,
+  SLOW_ITEM_THRESHOLD_MS,
+} from "./create-metrics";
 
 const METADATA_CACHE_TTL_MS = 5 * 60 * 1000;
 const metadataCache = new Map<
@@ -185,24 +192,22 @@ export async function fetchBulkCreateMetadata(
     // Non-fatal, use whatever fixVersions allowedValues had
   }
 
-  // Fallback priorities if none extracted from metadata
-  const priorityOptions =
-    priorityOptionsMap.size > 0
-      ? Array.from(priorityOptionsMap.values())
-      : [
-          { id: "1", name: "Highest" },
-          { id: "2", name: "High" },
-          { id: "3", name: "Medium" },
-          { id: "4", name: "Low" },
-          { id: "5", name: "Lowest" },
-        ];
-
+  // Do NOT fallback to assumed priority IDs. If Jira metadata doesn't provide
+  // allowed values, the field is unavailable and Jira's default will apply.
+  const priorityOptions = Array.from(priorityOptionsMap.values());
   const versionOptions = Array.from(versionOptionsMap.values());
+
+  const hasSubtaskTypes = issueTypes.some((t) => t.subtask);
+  const defaultIssueTypeId: string | null =
+    (proj as { defaultIssueTypeId?: string }).defaultIssueTypeId ?? issueTypes[0]?.id ?? null;
+  const defaultSubtaskTypeId: string | null =
+    issueTypes.find((t) => t.subtask)?.id ?? null;
+  const allowsUnassigned = true;
 
   const fetchedAt = new Date().toISOString();
   const fingerprintRaw = JSON.stringify({
     projectKey,
-    issueTypes: issueTypes.map((t) => ({ id: t.id, name: t.name })),
+    issueTypes: issueTypes.map((t) => ({ id: t.id, name: t.name, subtask: t.subtask })),
     pointsFieldId,
     priorities: priorityOptions.map((p) => p.id),
     versions: versionOptions.map((v) => v.id),
@@ -224,6 +229,24 @@ export async function fetchBulkCreateMetadata(
     pointsFieldId,
     supportsTimeTracking,
     supportsDueDate,
+    hasSubtaskTypes,
+    defaultIssueTypeId,
+    defaultSubtaskTypeId,
+    allowsUnassigned,
+    fieldCapabilities: {
+      priority: {
+        available: priorityOptions.length > 0,
+        reason: priorityOptions.length === 0 ? "Jira metadata không trả allowed values cho priority" : undefined,
+      },
+      fixVersions: {
+        available: versionOptions.length > 0,
+        reason: versionOptions.length === 0 ? "Dự án chưa có Fix Version" : undefined,
+      },
+      points: {
+        available: pointsFieldId !== null,
+        reason: pointsFieldId === null ? "Không tìm thấy trường Story Points" : undefined,
+      },
+    },
     fetchedAt,
     fingerprint,
   };
@@ -245,6 +268,7 @@ export async function previewBulkCreate(
   userAuth: JiraAuth,
   rawRequest: unknown
 ): Promise<BulkCreatePreviewResult> {
+  const previewStartTime = Date.now();
   const batchValid = validateBulkCreateBatch(rawRequest);
   if (!batchValid.ok) {
     throw new Error(batchValid.errors.map((e) => e.message).join(", "));
@@ -318,6 +342,29 @@ export async function previewBulkCreate(
     }
   }
 
+  // 2.5. Batch-level parent graph validation (cycles, missing refs, subtask-as-parent)
+  const graphInput = previewItems.map((pi) => ({
+    clientRef: pi.clientRef,
+    parent: pi.normalizedFields.parent ?? null,
+    isSubtask: pi.normalizedFields.isSubtask ?? false,
+  }));
+  const graphErrors = validateBatchParentGraph(graphInput);
+  for (const [ref, errs] of graphErrors) {
+    const target = previewItems.find((pi) => pi.clientRef === ref);
+    if (target) {
+      target.errors.push(...errs);
+      target.classification = "blocked";
+    }
+  }
+
+  // 2.6. Build dependency graph for execution ordering
+  const depGraph = buildDependencyGraph(
+    previewItems.map((pi) => ({
+      clientRef: pi.clientRef,
+      parentClientRef: pi.normalizedFields.parent?.type === "batch" ? pi.normalizedFields.parent.clientRef ?? null : null,
+    }))
+  );
+
   const readyItems = previewItems.filter((i) => i.classification === "ready");
   const blockedItems = previewItems.filter((i) => i.classification === "blocked");
 
@@ -329,29 +376,75 @@ export async function previewBulkCreate(
       state: "preview",
       total: previewItems.length,
       payload: {
-        version: 1,
+        version: 2,
         kind: "create-issues",
         projectKey: req.projectKey,
         metadataFingerprint: meta.fingerprint,
-        defaults: req.defaults ?? {},
+        pointsFieldId: meta.pointsFieldId,
+        defaults: (req.defaults ?? {}) as Prisma.InputJsonValue,
         source: req.source ?? { type: "grid", fileName: null },
+        hasDependencies: depGraph.children.size > 0,
       },
     },
   });
 
-  // Save BulkCreateItem records
+  // Save BulkCreateItem records with dependency info
   await prisma.bulkCreateItem.createMany({
-    data: previewItems.map((item) => ({
-      operationId: operation.id,
-      rowIndex: item.rowIndex,
-      clientRef: item.clientRef,
-      idempotencyKey: `${operation.id}:${item.rowIndex}`,
-      requested: (item.normalizedFields ?? {}) as Prisma.InputJsonValue,
-      status: item.classification, // "ready" | "blocked"
-      errorCode: item.errors[0]?.code ?? null,
-      error: item.errors.map((e) => e.message).join("; ") || null,
-      retryable: true,
-    })),
+    data: previewItems.map((item) => {
+      const parent = item.normalizedFields.parent ?? null;
+      const parentClientRef = parent?.type === "batch" ? parent.clientRef ?? null : null;
+      const parentJiraKey = parent?.type === "jira" ? parent.jiraKey ?? null : null;
+      const depth = depGraph.depth.get(item.clientRef) ?? 0;
+
+      return {
+        operationId: operation.id,
+        rowIndex: item.rowIndex,
+        clientRef: item.clientRef,
+        idempotencyKey: `${operation.id}:${item.rowIndex}`,
+        requested: (item.normalizedFields ?? {}) as Prisma.InputJsonValue,
+        status: item.classification, // "ready" | "blocked"
+        errorCode: item.errors[0]?.code ?? null,
+        error: item.errors.map((e) => e.message).join("; ") || null,
+        retryable: true,
+        parentClientRef,
+        parentJiraKey,
+        depth,
+      };
+    }),
+  });
+
+  const durationMs = Date.now() - previewStartTime;
+  const blockedByErrorCode: Record<string, number> = {};
+  let invalidAssigneeCount = 0;
+  let batchParentCount = 0;
+  let jiraParentCount = 0;
+  let warningCount = 0;
+
+  for (const item of previewItems) {
+    if (item.warnings.length > 0) warningCount += item.warnings.length;
+    if (item.normalizedFields.parent?.type === "batch") batchParentCount++;
+    if (item.normalizedFields.parent?.type === "jira") jiraParentCount++;
+
+    for (const err of item.errors) {
+      blockedByErrorCode[err.code] = (blockedByErrorCode[err.code] ?? 0) + 1;
+      if (err.field === "assignee" || err.code === "ASSIGNEE_NOT_ASSIGNABLE") {
+        invalidAssigneeCount++;
+      }
+    }
+  }
+
+  const { isSlow } = recordPreviewMetrics({
+    operationId: operation.id,
+    projectKey: req.projectKey,
+    durationMs,
+    total: previewItems.length,
+    actionable: readyItems.length,
+    blocked: blockedItems.length,
+    warningCount,
+    blockedByErrorCode,
+    invalidAssigneeCount,
+    batchParentCount,
+    jiraParentCount,
   });
 
   return {
@@ -362,6 +455,11 @@ export async function previewBulkCreate(
     blocked: blockedItems.length,
     metadataFingerprint: meta.fingerprint,
     items: previewItems,
+    metrics: {
+      durationMs,
+      isSlow,
+      blockedByErrorCode,
+    },
   };
 }
 
@@ -392,9 +490,16 @@ export async function confirmBulkCreate(
     throw new Error("Thao tác này đã được xác nhận trước đó");
   }
 
-  // Atomically transition ready items to pending
+  // Atomically transition ready items:
+  // - Items with batch parent → "waiting_for_parent" (will be unlocked after parent succeeds)
+  // - Items with no parent or Jira parent → "pending" (can execute immediately)
+  const waitingUpdate = await prisma.bulkCreateItem.updateMany({
+    where: { operationId, status: "ready", parentClientRef: { not: null } },
+    data: { status: "waiting_for_parent" },
+  });
+
   const readyUpdate = await prisma.bulkCreateItem.updateMany({
-    where: { operationId, status: "ready" },
+    where: { operationId, status: "ready", parentClientRef: null },
     data: { status: "pending" },
   });
 
@@ -416,7 +521,7 @@ export async function confirmBulkCreate(
     target: operationId,
     after: {
       total: op.total,
-      actionable: readyUpdate.count,
+      actionable: readyUpdate.count + waitingUpdate.count,
       blocked: blockedCount,
     },
   });
@@ -424,7 +529,7 @@ export async function confirmBulkCreate(
   return {
     operationId,
     total: op.total,
-    actionable: readyUpdate.count,
+    actionable: readyUpdate.count + waitingUpdate.count,
     blocked: blockedCount,
   };
 }
@@ -467,9 +572,9 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
 
   const auth = userJiraAuth(user);
   if (!auth || !auth.token) {
-    // Fail all pending items
+    // Fail all pending and waiting items
     await prisma.bulkCreateItem.updateMany({
-      where: { operationId, status: "pending" },
+      where: { operationId, status: { in: ["pending", "waiting_for_parent"] } },
       data: {
         status: "failed",
         errorCode: "JIRA_CREDENTIALS_REQUIRED",
@@ -492,31 +597,80 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
   }
 
   const jira = jiraWith(auth);
-  const payload = op.payload as { projectKey: string; metadataFingerprint?: string };
+  const payload = op.payload as { projectKey: string; metadataFingerprint?: string; pointsFieldId?: string | null; hasDependencies?: boolean };
   const projectKey = payload.projectKey;
+  const pointsFieldId = payload.pointsFieldId ?? env.jiraPointsFieldId ?? null;
 
   // Concurrency cap: default 2, max 4
   const envConcurrency = Number(process.env.BULK_CREATE_CONCURRENCY) || 2;
   const concurrency = Math.max(1, Math.min(4, envConcurrency));
 
-  // Fetch pending items
-  const pendingItems = await prisma.bulkCreateItem.findMany({
-    where: { operationId, status: "pending" },
-    orderBy: { rowIndex: "asc" },
-  });
+  // Dependency-aware execution loop:
+  // Process all "pending" items, then unlock children of succeeded parents,
+  // block children of failed parents, repeat until no more work.
+  const execStartTime = Date.now();
+  let totalRounds = 0;
+  let slowItemCount = 0;
+  const itemLatenciesMs: number[] = [];
 
-  // Bounded worker pool
-  const queue = [...pendingItems];
-  const runners = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
-    while (queue.length > 0) {
-      const item = queue.shift();
-      if (!item) break;
+  const MAX_ROUNDS = 10; // safety cap (supports 1-level depth, but allows retries)
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const pendingItems = await prisma.bulkCreateItem.findMany({
+      where: { operationId, status: "pending" },
+      orderBy: { rowIndex: "asc" },
+    });
 
-      await processCreateItem(operationId, item.id, item.rowIndex, projectKey, auth, jira);
+    if (pendingItems.length === 0) break;
+    totalRounds++;
+
+    // Bounded worker pool for this round
+    const queue = [...pendingItems];
+    const results: Array<{ id: string; clientRef: string; success: boolean }> = [];
+    const runners = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+      while (queue.length > 0) {
+        const item = queue.shift();
+        if (!item) break;
+        const itemStart = Date.now();
+        const success = await processCreateItem(
+          operationId, item.id, item.rowIndex, projectKey, auth, jira, pointsFieldId
+        );
+        const itemLatency = Date.now() - itemStart;
+        itemLatenciesMs.push(itemLatency);
+        if (itemLatency > SLOW_ITEM_THRESHOLD_MS) {
+          slowItemCount++;
+        }
+        results.push({ id: item.id, clientRef: item.clientRef, success });
+      }
+    });
+    await Promise.all(runners);
+
+    // Unlock children of succeeded parents; block children of failed parents
+    for (const result of results) {
+      if (result.success) {
+        // Get the jiraKey of the succeeded parent
+        const parentItem = await prisma.bulkCreateItem.findUnique({
+          where: { id: result.id },
+          select: { jiraKey: true, clientRef: true },
+        });
+        if (parentItem?.jiraKey) {
+          await unlockChildren(operationId, result.clientRef, parentItem.jiraKey);
+        }
+      } else {
+        // Block children of failed parent
+        await blockChildren(operationId, result.clientRef);
+      }
     }
-  });
+  }
 
-  await Promise.all(runners);
+  // Also block any remaining waiting_for_parent items (orphans whose parent was blocked/failed in a prior round)
+  await prisma.bulkCreateItem.updateMany({
+    where: { operationId, status: "waiting_for_parent" },
+    data: {
+      status: "blocked_by_parent",
+      error: "Parent trong batch không được tạo thành công",
+      errorCode: "PARENT_BLOCKED",
+    },
+  });
 
   // Aggregate counters from DB
   const counts = await prisma.bulkCreateItem.groupBy({
@@ -528,8 +682,9 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
   const byStatus = Object.fromEntries(counts.map((c) => [c.status, c._count._all]));
   const succeeded = byStatus.succeeded ?? 0;
   const failed = byStatus.failed ?? 0;
-  const stillPending = (byStatus.pending ?? 0) + (byStatus.running ?? 0);
-  const terminal = stillPending === 0;
+  const blockedByParent = byStatus.blocked_by_parent ?? 0;
+  const stillActive = (byStatus.pending ?? 0) + (byStatus.running ?? 0) + (byStatus.waiting_for_parent ?? 0);
+  const terminal = stillActive === 0;
 
   const finalState = !terminal
     ? "running"
@@ -549,13 +704,27 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
     },
   });
 
+  const durationMs = Date.now() - execStartTime;
+  recordExecutionMetrics({
+    operationId,
+    projectKey,
+    durationMs,
+    rounds: totalRounds,
+    total: op.total,
+    succeeded,
+    failed,
+    blockedByParent,
+    itemLatenciesMs,
+    slowItemCount,
+  });
+
   if (terminal) {
-    await notifyCreateResult(op, finalState, succeeded, failed);
+    await notifyCreateResult(op, finalState, succeeded, failed + blockedByParent);
     await audit({
       actorId: op.requestedBy,
       action: `bulk.create.${finalState}`,
       target: operationId,
-      after: { projectKey, succeeded, failed },
+      after: { projectKey, succeeded, failed, blockedByParent },
     });
   }
 }
@@ -568,20 +737,49 @@ async function processCreateItem(
   rowIndex: number,
   projectKey: string,
   auth: JiraAuth,
-  jira: ReturnType<typeof jiraWith>
-): Promise<void> {
+  jira: ReturnType<typeof jiraWith>,
+  pointsFieldId?: string | null
+): Promise<boolean> {
   const current = await prisma.bulkCreateItem.findUnique({ where: { id: itemId } });
-  if (!current || current.status === "succeeded") return;
+  if (!current || current.status === "succeeded") return true;
 
-  // Claim item
+  // Claim item (pending → running, or already running from a previous claim)
   const claim = await prisma.bulkCreateItem.updateMany({
     where: { id: itemId, status: "pending" },
     data: { status: "running", lastAttemptAt: new Date() },
   });
-  if (claim.count === 0 && current.status !== "running") return;
+  if (claim.count === 0 && current.status !== "running") return false;
 
   const marker = generateBulkCreateMarker(operationId, rowIndex);
   const reqData = current.requested as Partial<CanonicalCreateItem>;
+
+  // Resolve parent Jira key for subtasks
+  let resolvedParentKey: string | null = null;
+  if (current.parentJiraKey) {
+    // Parent is a Jira issue that already exists
+    resolvedParentKey = current.parentJiraKey;
+  } else if (current.parentClientRef) {
+    // Parent is another item in this batch — look up its jiraKey
+    const parentItem = await prisma.bulkCreateItem.findFirst({
+      where: { operationId, clientRef: current.parentClientRef },
+      select: { jiraKey: true, status: true },
+    });
+    if (parentItem?.jiraKey) {
+      resolvedParentKey = parentItem.jiraKey;
+    } else {
+      // Parent not yet created — should not be in "pending" state if this is true
+      // but handle gracefully
+      await prisma.bulkCreateItem.update({
+        where: { id: itemId },
+        data: {
+          status: "blocked_by_parent",
+          error: `Parent "${current.parentClientRef}" chưa được tạo`,
+          errorCode: "PARENT_BLOCKED",
+        },
+      });
+      return false;
+    }
+  }
 
   let attempts = current.attemptCount;
   let success = false;
@@ -615,11 +813,22 @@ async function processCreateItem(
       if (reqData.fixVersionIds && reqData.fixVersionIds.length > 0) {
         extraFields.fixVersions = reqData.fixVersionIds.map((id) => ({ id }));
       }
-      if (reqData.points !== undefined && reqData.points !== null && env.jiraPointsFieldId) {
-        extraFields[env.jiraPointsFieldId] = reqData.points;
+      if (reqData.points !== undefined && reqData.points !== null && pointsFieldId) {
+        extraFields[pointsFieldId] = reqData.points;
+      }
+      if (reqData.customFields) {
+        for (const [fieldId, val] of Object.entries(reqData.customFields)) {
+          if (val !== undefined && val !== null) {
+            extraFields[fieldId] = val;
+          }
+        }
       }
 
-      // 3. Create issue on Jira
+      // 3. Create issue on Jira (with parent if subtask)
+      if (resolvedParentKey) {
+        extraFields.parent = { key: resolvedParentKey };
+      }
+
       const created = await jira.createIssue({
         projectKey,
         issueTypeId: reqData.issueTypeId,
@@ -661,6 +870,7 @@ async function processCreateItem(
         status: "succeeded",
         jiraKey: finalJiraKey,
         jiraIssueId: finalJiraIssueId,
+        resolvedParentJiraKey: resolvedParentKey,
         attemptCount: attempts,
         error: null,
         errorCode: null,
@@ -678,8 +888,9 @@ async function processCreateItem(
       actorId: auth.user || "system",
       action: "issue.create",
       target: finalJiraKey,
-      after: { operationId, clientRef: current.clientRef },
+      after: { operationId, clientRef: current.clientRef, parentKey: resolvedParentKey },
     });
+    return true;
   } else {
     await prisma.bulkCreateItem.update({
       where: { id: itemId },
@@ -698,7 +909,52 @@ async function processCreateItem(
       target: current.clientRef,
       after: { operationId, error: errorMessage, retryable },
     });
+    return false;
   }
+}
+
+/**
+ * Unlock children of a succeeded parent: change "waiting_for_parent" → "pending".
+ */
+async function unlockChildren(
+  operationId: string,
+  parentClientRef: string,
+  parentJiraKey: string
+): Promise<void> {
+  await prisma.bulkCreateItem.updateMany({
+    where: {
+      operationId,
+      parentClientRef,
+      status: "waiting_for_parent",
+    },
+    data: {
+      status: "pending",
+      resolvedParentJiraKey: parentJiraKey,
+      error: null,
+      errorCode: null,
+    },
+  });
+}
+
+/**
+ * Block children of a failed parent: change "waiting_for_parent" → "blocked_by_parent".
+ */
+async function blockChildren(
+  operationId: string,
+  parentClientRef: string
+): Promise<void> {
+  await prisma.bulkCreateItem.updateMany({
+    where: {
+      operationId,
+      parentClientRef,
+      status: "waiting_for_parent",
+    },
+    data: {
+      status: "blocked_by_parent",
+      error: `Parent "${parentClientRef}" thất bại khi tạo trên Jira`,
+      errorCode: "PARENT_BLOCKED",
+    },
+  });
 }
 
 async function notifyCreateResult(

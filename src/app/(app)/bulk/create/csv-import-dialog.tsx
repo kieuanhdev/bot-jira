@@ -13,10 +13,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { parseBulkCreateCsv, type ParsedCsvResult } from "@/lib/bulk/csv-parser";
-import { type BulkCreateRowInput, MAX_BULK_CREATE_ITEMS } from "@/lib/bulk/create-types";
+import {
+  type BulkCreateRowInput,
+  type BulkCreateProjectMetadata,
+  MAX_BULK_CREATE_ITEMS,
+} from "@/lib/bulk/create-types";
 import {
   Upload,
   FileText,
+  FileSpreadsheet,
   CheckCircle2,
   AlertTriangle,
   ArrowRight,
@@ -24,6 +29,7 @@ import {
   Info,
   HelpCircle,
   XCircle,
+  Loader2,
 } from "lucide-react";
 
 interface CsvImportDialogProps {
@@ -31,31 +37,62 @@ interface CsvImportDialogProps {
   onOpenChange: (open: boolean) => void;
   onImport: (
     items: BulkCreateRowInput[],
-    source: { type: "csv" | "paste"; fileName?: string | null },
+    source: { type: "csv" | "paste" | "excel"; fileName?: string | null },
     mode: "replace" | "append"
   ) => void;
   existingFilledCount: number;
+  projectKey?: string;
+  metadata?: BulkCreateProjectMetadata;
 }
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
-const ALLOWED_EXTENSIONS = [".csv", ".tsv", ".txt"];
+const ALLOWED_EXTENSIONS = [".xlsx", ".csv", ".tsv", ".txt"];
+
+interface ExcelImportResponse {
+  items: BulkCreateRowInput[];
+  manifest?: {
+    schemaVersion: number;
+    projectKey: string;
+    projectName?: string;
+    generatedAt: string;
+    metadataFingerprint: string;
+    maxItems: number;
+  } | null;
+  isStaleMetadata?: boolean;
+  projectKeyMatch?: boolean;
+  fileProjectKey?: string;
+  stats?: {
+    totalRows: number;
+    validCount: number;
+    errorCount: number;
+    skippedEmptyCount: number;
+    overflowCount: number;
+  };
+  errors?: Array<{ row: number; col?: string; message: string }>;
+  warnings?: string[];
+}
 
 export function CsvImportDialog({
   open,
   onOpenChange,
   onImport,
   existingFilledCount,
+  projectKey,
+  metadata,
 }: CsvImportDialogProps) {
   const [activeTab, setActiveTab] = useState<"file" | "paste" | "guide">("file");
   const [rawText, setRawText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ParsedCsvResult | null>(null);
+  const [excelResult, setExcelResult] = useState<ExcelImportResponse | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [importMode, setImportMode] = useState<"replace" | "append">(
     existingFilledCount > 0 ? "append" : "replace"
   );
   const [confirmTruncation, setConfirmTruncation] = useState(false);
+  const [downloadingExcel, setDownloadingExcel] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,15 +101,16 @@ export function CsvImportDialog({
       ? MAX_BULK_CREATE_ITEMS
       : Math.max(0, MAX_BULK_CREATE_ITEMS - existingFilledCount);
 
-  function processFile(file: File) {
+  async function processFile(file: File) {
     setFileError(null);
     setFileName(file.name);
+    setParsed(null);
+    setExcelResult(null);
 
     // 1. File size check (5 MB)
     if (file.size > MAX_FILE_SIZE_BYTES) {
       const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
       setFileError(`Tệp "${file.name}" (${sizeMb} MB) vượt quá dung lượng tối đa cho phép là 5 MB.`);
-      setParsed(null);
       return;
     }
 
@@ -81,23 +119,50 @@ export function CsvImportDialog({
     const ext = dotIdx >= 0 ? file.name.slice(dotIdx).toLowerCase() : "";
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
       setFileError(
-        `Định dạng tệp "${ext || "không xác định"}" không được hỗ trợ. Vui lòng chọn tệp .csv, .tsv hoặc .txt. Lưu ý: Tệp Excel nhị phân (.xlsx, .xls) chưa thể tải trực tiếp; vui lòng chọn "Lưu dạng CSV" trong Excel hoặc sao chép và dán vào tab "Dán dữ liệu".`
+        `Định dạng tệp "${ext || "không xác định"}" không được hỗ trợ. Vui lòng chọn tệp .xlsx, .csv, .tsv hoặc .txt.`
       );
-      setParsed(null);
       return;
     }
 
-    // 3. Read file with FileReader
+    // 3. Handle Excel file (.xlsx) via backend API
+    if (ext === ".xlsx") {
+      setIsProcessing(true);
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        if (projectKey) {
+          formData.append("project", projectKey);
+        }
+
+        const res = await fetch("/api/bulk/create/excel-import", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data: ExcelImportResponse & { error?: string } = await res.json();
+        if (!res.ok) {
+          setFileError(data.error || `Lỗi khi xử lý file Excel (${res.status})`);
+          return;
+        }
+
+        setExcelResult(data);
+      } catch (err) {
+        setFileError(`Không thể tải và đọc file Excel: ${(err as Error).message}`);
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
+
+    // 4. Handle text/csv file with FileReader
     const reader = new FileReader();
     reader.onerror = () => {
       setFileError("Đã xảy ra lỗi khi đọc nội dung tệp. Vui lòng kiểm tra lại tệp và thử lại.");
-      setParsed(null);
     };
     reader.onload = (e) => {
       const content = String(e.target?.result ?? "");
       if (!content.trim()) {
         setFileError(`Tệp "${file.name}" trống, không có dữ liệu để nhập.`);
-        setParsed(null);
         return;
       }
       try {
@@ -105,7 +170,6 @@ export function CsvImportDialog({
         setParsed(res);
       } catch (err) {
         setFileError(`Không thể phân tích cú pháp tệp CSV: ${(err as Error).message}`);
-        setParsed(null);
       }
     };
     reader.readAsText(file, "UTF-8");
@@ -116,7 +180,6 @@ export function CsvImportDialog({
     if (file) {
       processFile(file);
     }
-    // Reset input value so the same file can be selected again
     e.target.value = "";
   }
 
@@ -145,6 +208,7 @@ export function CsvImportDialog({
   function handlePasteChange(text: string) {
     setRawText(text);
     setFileError(null);
+    setExcelResult(null);
     if (!text.trim()) {
       setParsed(null);
       return;
@@ -153,12 +217,45 @@ export function CsvImportDialog({
     setParsed(res);
   }
 
-  function handleDownloadTemplate() {
+  async function handleDownloadExcelTemplate() {
+    if (!projectKey) return;
+    setDownloadingExcel(true);
+    setFileError(null);
+    try {
+      const res = await fetch(`/api/bulk/create/excel-template?project=${encodeURIComponent(projectKey)}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Không thể tải mẫu Excel" }));
+        throw new Error(err.error || `Lỗi tải file (${res.status})`);
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const disposition = res.headers.get("Content-Disposition");
+      let filename = `bulk-create-${projectKey}.xlsx`;
+      if (disposition && disposition.includes("filename=")) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match?.[1]) filename = match[1];
+      }
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setFileError(`Lỗi khi tải mẫu Excel: ${(err as Error).message}`);
+    } finally {
+      setDownloadingExcel(false);
+    }
+  }
+
+  function handleDownloadCsvTemplate() {
     const templateCsv =
       "\uFEFF" +
-      `clientRef,summary,issueType,description,assignee,priority,labels,points,originalEstimate,dueDate,fixVersions\n` +
-      `TASK-001,Thiết kế API,Task,"Mô tả có dấu phẩy",user.name,High,"backend,api",3,1d 4h,2026-10-10,"Release 1"\n` +
-      `TASK-002,Sửa lỗi đăng nhập,Bug,Không đăng nhập được,user.name,Highest,"bug,login",5,30m,2026-10-12,"Release 1,Release 2"\n`;
+      `clientRef,summary,issueType,parentRef,parentKey,description,assignee,priority,labels,points,originalEstimate,dueDate,fixVersions\n` +
+      `TASK-001,Xây API đăng nhập,Task,,,Mô tả API,user.name,High,"backend,api",5,1d 4h,2026-10-10,"Release 1"\n` +
+      `TASK-002,Thiết kế schema,Sub-task,TASK-001,,Mô tả schema,user.name,Medium,backend,2,2h,2026-10-08,"Release 1"\n` +
+      `TASK-003,Test với task cha cũ,Sub-task,,ABC-123,Mô tả test,user.name,Medium,test,1,1h,2026-10-09,"Release 1"\n`;
 
     const blob = new Blob([templateCsv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -171,19 +268,22 @@ export function CsvImportDialog({
     URL.revokeObjectURL(url);
   }
 
-  const itemsToImport = parsed ? parsed.items.slice(0, remainingCapacity) : [];
-  const hasTruncation = parsed ? parsed.items.length > remainingCapacity : false;
+  // Calculate items to import
+  const rawItems = excelResult ? excelResult.items : parsed ? parsed.items : [];
+  const itemsToImport = rawItems.slice(0, remainingCapacity);
+  const hasTruncation = rawItems.length > remainingCapacity;
   const isImportDisabled =
-    !parsed ||
+    (!parsed && !excelResult) ||
     itemsToImport.length === 0 ||
     (hasTruncation && !confirmTruncation);
 
   function handleConfirmImport() {
-    if (!parsed || itemsToImport.length === 0) return;
+    if (itemsToImport.length === 0) return;
+    const sourceType = excelResult ? "excel" : activeTab === "file" ? "csv" : "paste";
     onImport(
       itemsToImport,
       {
-        type: activeTab === "file" ? "csv" : "paste",
+        type: sourceType,
         fileName: activeTab === "file" ? fileName : null,
       },
       importMode
@@ -191,6 +291,7 @@ export function CsvImportDialog({
     onOpenChange(false);
     // Reset state
     setParsed(null);
+    setExcelResult(null);
     setRawText("");
     setFileName(null);
     setFileError(null);
@@ -201,24 +302,43 @@ export function CsvImportDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl sm:max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
               <Upload className="h-5 w-5 text-primary" aria-hidden="true" />
-              Nhập danh sách task từ CSV / Bảng tính
+              Nhập task từ Excel / CSV
             </DialogTitle>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleDownloadTemplate}
-              className="h-8 gap-1.5 text-xs cursor-pointer"
-            >
-              <Download className="h-3.5 w-3.5" aria-hidden="true" />
-              Tải CSV mẫu
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {projectKey && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleDownloadExcelTemplate}
+                  disabled={downloadingExcel || (metadata && !metadata.canCreate)}
+                  title={`Tải mẫu Excel theo dự án ${projectKey}`}
+                  className="h-8 gap-1.5 text-xs cursor-pointer bg-teal-600 hover:bg-teal-700 text-white font-medium"
+                >
+                  {downloadingExcel ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  Tải mẫu Excel ({projectKey})
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadCsvTemplate}
+                className="h-8 gap-1.5 text-xs cursor-pointer"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                Tải CSV mẫu
+              </Button>
+            </div>
           </div>
           <DialogDescription className="text-xs">
-            Hỗ trợ tệp .csv (dấu phẩy/chấm phẩy), .tsv, .txt UTF-8 hoặc dán dữ liệu trực tiếp từ Excel, Google Sheets.
+            Hỗ trợ file Excel (.xlsx) chuẩn theo dự án có dropdown, hoặc file .csv, .tsv, .txt UTF-8 và dán dữ liệu trực tiếp.
           </DialogDescription>
         </DialogHeader>
 
@@ -233,7 +353,7 @@ export function CsvImportDialog({
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Tải lên file CSV / TSV
+            Tải lên file (Excel / CSV)
           </button>
           <button
             type="button"
@@ -272,16 +392,16 @@ export function CsvImportDialog({
                 onDragEnter={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => !isProcessing && fileInputRef.current?.click()}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    fileInputRef.current?.click();
+                    if (!isProcessing) fileInputRef.current?.click();
                   }
                 }}
                 tabIndex={0}
                 role="button"
-                aria-label="Tải lên tệp CSV bằng cách nhấp hoặc kéo thả"
+                aria-label="Tải lên tệp Excel hoặc CSV"
                 className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-7 text-center transition-colors focus:outline-hidden focus:ring-2 focus:ring-primary ${
                   isDragging
                     ? "border-primary bg-primary/10"
@@ -291,20 +411,27 @@ export function CsvImportDialog({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv,.tsv,.txt"
+                  accept=".xlsx,.csv,.tsv,.txt"
                   className="hidden"
                   onChange={handleFileInputChange}
+                  disabled={isProcessing}
                 />
-                <FileText className="mb-2 h-9 w-9 text-muted-foreground" aria-hidden="true" />
-                <p className="text-sm font-medium text-foreground">
-                  {fileName ? fileName : "Nhấp để chọn file CSV hoặc kéo thả vào đây"}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Định dạng: UTF-8 (.csv, .tsv, .txt) · Tối đa 5 MB · Tối đa {MAX_BULK_CREATE_ITEMS} dòng
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground/80">
-                  (Tệp Excel .xlsx/.xls: Vui lòng lưu dạng CSV hoặc sao chép và dán vào tab bên cạnh)
-                </p>
+                {isProcessing ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="h-9 w-9 text-primary animate-spin" aria-hidden="true" />
+                    <p className="text-sm font-medium text-foreground">Đang xử lý tệp Excel...</p>
+                  </div>
+                ) : (
+                  <>
+                    <FileSpreadsheet className="mb-2 h-9 w-9 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                    <p className="text-sm font-medium text-foreground">
+                      {fileName ? fileName : "Nhấp để chọn file Excel (.xlsx) / CSV hoặc kéo thả vào đây"}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Hỗ trợ: .xlsx, .csv, .tsv · Tối đa 5 MB · Tối đa {MAX_BULK_CREATE_ITEMS} dòng
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -354,9 +481,27 @@ export function CsvImportDialog({
                     </tr>
                     <tr>
                       <td className="p-2 font-mono font-medium">issueType</td>
+                      <td className="p-2 text-destructive font-semibold">Có</td>
+                      <td className="p-2 text-muted-foreground">Tên hoặc ID loại công việc (chọn từ dropdown trong file mẫu)</td>
+                      <td className="p-2 font-mono">Task [10001], Task</td>
+                    </tr>
+                    <tr>
+                      <td className="p-2 font-mono font-medium">clientRef</td>
+                      <td className="p-2 text-destructive font-semibold">Có</td>
+                      <td className="p-2 text-muted-foreground">Mã định danh duy nhất trong file (vd: TASK-001)</td>
+                      <td className="p-2 font-mono">TASK-001</td>
+                    </tr>
+                    <tr>
+                      <td className="p-2 font-mono font-medium">parentRef</td>
                       <td className="p-2 text-muted-foreground">Không</td>
-                      <td className="p-2 text-muted-foreground">Tên hoặc ID loại công việc (không hỗ trợ subtask)</td>
-                      <td className="p-2 font-mono">Task, Bug</td>
+                      <td className="p-2 text-muted-foreground">clientRef của task cha TRONG CÙNG BATCH</td>
+                      <td className="p-2 font-mono">TASK-001</td>
+                    </tr>
+                    <tr>
+                      <td className="p-2 font-mono font-medium">parentKey</td>
+                      <td className="p-2 text-muted-foreground">Không</td>
+                      <td className="p-2 text-muted-foreground">Jira key của task cha ĐÃ CÓ SẴN (không điền cùng parentRef)</td>
+                      <td className="p-2 font-mono">ABC-123</td>
                     </tr>
                     <tr>
                       <td className="p-2 font-mono font-medium">description</td>
@@ -367,20 +512,20 @@ export function CsvImportDialog({
                     <tr>
                       <td className="p-2 font-mono font-medium">assignee</td>
                       <td className="p-2 text-muted-foreground">Không</td>
-                      <td className="p-2 text-muted-foreground">Tên tài khoản Jira của người thực hiện</td>
-                      <td className="p-2 font-mono">user.name</td>
+                      <td className="p-2 text-muted-foreground">Tên [username] hoặc username Jira</td>
+                      <td className="p-2 font-mono">Nguyễn Văn A [nguyenvana]</td>
                     </tr>
                     <tr>
                       <td className="p-2 font-mono font-medium">priority</td>
                       <td className="p-2 text-muted-foreground">Không</td>
-                      <td className="p-2 text-muted-foreground">Tên hoặc ID mức ưu tiên</td>
-                      <td className="p-2 font-mono">High, Medium</td>
+                      <td className="p-2 text-muted-foreground">Tên [ID] hoặc tên mức ưu tiên</td>
+                      <td className="p-2 font-mono">High [3], Medium</td>
                     </tr>
                     <tr>
                       <td className="p-2 font-mono font-medium">labels</td>
                       <td className="p-2 text-muted-foreground">Không</td>
-                      <td className="p-2 text-muted-foreground">Phân cách bằng dấu phẩy hoặc chấm phẩy</td>
-                      <td className="p-2 font-mono">&quot;api,backend&quot;</td>
+                      <td className="p-2 text-muted-foreground">Phân cách bằng dấu phẩy</td>
+                      <td className="p-2 font-mono">backend, api</td>
                     </tr>
                     <tr>
                       <td className="p-2 font-mono font-medium">points</td>
@@ -397,20 +542,14 @@ export function CsvImportDialog({
                     <tr>
                       <td className="p-2 font-mono font-medium">dueDate</td>
                       <td className="p-2 text-muted-foreground">Không</td>
-                      <td className="p-2 text-muted-foreground">Định dạng YYYY-MM-DD hợp lệ trên lịch</td>
+                      <td className="p-2 text-muted-foreground">Định dạng YYYY-MM-DD</td>
                       <td className="p-2 font-mono">2026-10-10</td>
                     </tr>
                     <tr>
                       <td className="p-2 font-mono font-medium">fixVersions</td>
                       <td className="p-2 text-muted-foreground">Không</td>
                       <td className="p-2 text-muted-foreground">Tên hoặc ID phiên bản Jira</td>
-                      <td className="p-2 font-mono">&quot;Release 1&quot;</td>
-                    </tr>
-                    <tr>
-                      <td className="p-2 font-mono font-medium">clientRef</td>
-                      <td className="p-2 text-muted-foreground">Không</td>
-                      <td className="p-2 text-muted-foreground">Mã tham chiếu duy nhất (tự sinh nếu trống)</td>
-                      <td className="p-2 font-mono">TASK-001</td>
+                      <td className="p-2 font-mono">Release 1.0 [10420]</td>
                     </tr>
                   </tbody>
                 </table>
@@ -426,10 +565,183 @@ export function CsvImportDialog({
             </div>
           )}
 
-          {/* Parsed Result Preview */}
-          {parsed && (
+          {/* Excel Parsed Result Preview */}
+          {excelResult && (
             <div className="space-y-3 rounded-md border bg-card p-3.5 text-xs">
-              {/* Counter Badges */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                  <span className="font-semibold text-foreground">
+                    Kết quả đọc file Excel: {excelResult.stats?.validCount ?? excelResult.items.length} task hợp lệ
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
+                  {excelResult.manifest?.projectKey && (
+                    <Badge variant="outline" className="text-teal-600 dark:text-teal-400 border-teal-500/30">
+                      Project: {excelResult.manifest.projectKey}
+                    </Badge>
+                  )}
+                  <Badge variant="outline">Tổng dòng: {excelResult.stats?.totalRows ?? excelResult.items.length}</Badge>
+                  <Badge variant="success">Hợp lệ: {excelResult.stats?.validCount ?? excelResult.items.length}</Badge>
+                  {(excelResult.stats?.errorCount ?? (excelResult.errors?.length || 0)) > 0 && (
+                    <Badge variant="danger">Lỗi: {excelResult.stats?.errorCount ?? excelResult.errors?.length}</Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* Stale Metadata Warning */}
+              {excelResult.isStaleMetadata && (
+                <div className="flex items-start gap-2 rounded bg-amber-500/10 p-2.5 text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" aria-hidden="true" />
+                  <div className="space-y-0.5">
+                    <p className="font-semibold">Mẫu Excel cũ hơn cấu hình Jira hiện tại</p>
+                    <p className="text-[11px]">
+                      Cấu hình của dự án trên Jira đã thay đổi kể từ khi file mẫu này được tải. Dữ liệu vẫn được nạp vào bảng và sẽ được kiểm tra lại với cấu hình mới nhất.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Import Mode Selection */}
+              {existingFilledCount > 0 && (
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
+                  <div className="font-medium text-foreground">
+                    Bảng hiện đang có {existingFilledCount} task. Vui lòng chọn cách nhập:
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer font-medium text-xs">
+                      <input
+                        type="radio"
+                        name="importModeExcel"
+                        value="append"
+                        checked={importMode === "append"}
+                        onChange={() => setImportMode("append")}
+                        className="text-primary"
+                      />
+                      <span>
+                        Nối tiếp vào bảng (còn chỗ:{" "}
+                        <strong className="text-primary">
+                          {Math.max(0, MAX_BULK_CREATE_ITEMS - existingFilledCount)}
+                        </strong>{" "}
+                        task)
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer font-medium text-xs">
+                      <input
+                        type="radio"
+                        name="importModeExcel"
+                        value="replace"
+                        checked={importMode === "replace"}
+                        onChange={() => setImportMode("replace")}
+                        className="text-primary"
+                      />
+                      <span>
+                        Thay thế toàn bộ bảng (sức chứa: <strong>{MAX_BULK_CREATE_ITEMS}</strong> task)
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* Truncation Warning */}
+              {hasTruncation && (
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" aria-hidden="true" />
+                    <div>
+                      <p className="font-semibold">Dữ liệu vượt quá sức chứa còn lại của bảng!</p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed">
+                        Tệp có <strong>{rawItems.length}</strong> task hợp lệ, nhưng theo chế độ đã chọn chỉ có thể nhận thêm <strong>{remainingCapacity}</strong> task.
+                      </p>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 pt-1 cursor-pointer font-medium text-[11px]">
+                    <input
+                      type="checkbox"
+                      checked={confirmTruncation}
+                      onChange={(e) => setConfirmTruncation(e.target.checked)}
+                      className="rounded border-amber-500/50"
+                    />
+                    <span>Tôi hiểu và đồng ý chỉ nhập {remainingCapacity} task đầu tiên.</span>
+                  </label>
+                </div>
+              )}
+
+              {/* Errors list */}
+              {excelResult.errors && excelResult.errors.length > 0 && (
+                <div className="rounded border border-red-500/20 bg-red-500/5 p-2.5 text-[11px] text-red-700 dark:text-red-400 space-y-1">
+                  <div className="font-semibold flex items-center gap-1.5">
+                    <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                    Các dòng có lỗi ({excelResult.errors.length} lỗi):
+                  </div>
+                  <ul className="list-disc pl-5 space-y-0.5 max-h-24 overflow-y-auto">
+                    {excelResult.errors.slice(0, 10).map((err, i) => (
+                      <li key={i}>{err.message}</li>
+                    ))}
+                    {excelResult.errors.length > 10 && (
+                      <li className="font-medium">...và {excelResult.errors.length - 10} lỗi khác</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              {/* General warnings */}
+              {excelResult.warnings && excelResult.warnings.length > 0 && (
+                <div className="space-y-1 text-[11px] text-amber-700 dark:text-amber-400">
+                  {excelResult.warnings.map((w, i) => (
+                    <p key={i}>⚠️ {w}</p>
+                  ))}
+                </div>
+              )}
+
+              {/* Preview table (up to 5 rows) */}
+              {itemsToImport.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="font-medium text-muted-foreground text-[11px]">
+                    Bản xem trước dữ liệu ({Math.min(5, itemsToImport.length)} / {itemsToImport.length} dòng):
+                  </div>
+                  <div className="overflow-x-auto rounded border border-border/50">
+                    <table className="w-full text-left text-[11px]">
+                      <thead className="bg-muted/40 font-semibold text-muted-foreground">
+                        <tr>
+                          <th className="p-1.5 w-8">#</th>
+                          <th className="p-1.5">Tiêu đề (Summary)</th>
+                          <th className="p-1.5">Loại</th>
+                          <th className="p-1.5">Mức ưu tiên</th>
+                          <th className="p-1.5">Người thực hiện</th>
+                          <th className="p-1.5">Task cha</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/40">
+                        {itemsToImport.slice(0, 5).map((item, i) => (
+                          <tr key={i} className="hover:bg-muted/10">
+                            <td className="p-1.5 font-mono text-muted-foreground">{item.clientRef || i + 1}</td>
+                            <td className="p-1.5 font-medium text-foreground truncate max-w-[200px]">
+                              {item.summary || "—"}
+                            </td>
+                            <td className="p-1.5 text-muted-foreground">{item.issueTypeId || "Mặc định"}</td>
+                            <td className="p-1.5 text-muted-foreground">{item.priorityId || "Mặc định"}</td>
+                            <td className="p-1.5 text-muted-foreground">{item.assignee || "—"}</td>
+                            <td className="p-1.5 text-muted-foreground">
+                              {item.parent?.type === "batch"
+                                ? `Ref: ${item.parent.clientRef}`
+                                : item.parent?.type === "jira"
+                                  ? `Jira: ${item.parent.jiraKey}`
+                                  : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* CSV Parsed Result Preview */}
+          {parsed && !excelResult && (
+            <div className="space-y-3 rounded-md border bg-card p-3.5 text-xs">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
@@ -460,7 +772,7 @@ export function CsvImportDialog({
                     <label className="flex items-center gap-2 cursor-pointer font-medium text-xs">
                       <input
                         type="radio"
-                        name="importMode"
+                        name="importModeCsv"
                         value="append"
                         checked={importMode === "append"}
                         onChange={() => setImportMode("append")}
@@ -477,7 +789,7 @@ export function CsvImportDialog({
                     <label className="flex items-center gap-2 cursor-pointer font-medium text-xs">
                       <input
                         type="radio"
-                        name="importMode"
+                        name="importModeCsv"
                         value="replace"
                         checked={importMode === "replace"}
                         onChange={() => setImportMode("replace")}
@@ -497,9 +809,7 @@ export function CsvImportDialog({
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" aria-hidden="true" />
                     <div>
-                      <p className="font-semibold">
-                        Dữ liệu vượt quá sức chứa còn lại của bảng!
-                      </p>
+                      <p className="font-semibold">Dữ liệu vượt quá sức chứa còn lại của bảng!</p>
                       <p className="mt-0.5 text-[11px] leading-relaxed">
                         Tệp có <strong>{parsed.items.length}</strong> task hợp lệ, nhưng theo chế độ đã chọn chỉ có thể nhận thêm <strong>{remainingCapacity}</strong> task.{" "}
                         <strong>{parsed.items.length - remainingCapacity}</strong> task ở cuối tệp sẽ bị bỏ qua.
@@ -513,9 +823,7 @@ export function CsvImportDialog({
                       onChange={(e) => setConfirmTruncation(e.target.checked)}
                       className="rounded border-amber-500/50"
                     />
-                    <span>
-                      Tôi hiểu và đồng ý chỉ nhập {remainingCapacity} task đầu tiên.
-                    </span>
+                    <span>Tôi hiểu và đồng ý chỉ nhập {remainingCapacity} task đầu tiên.</span>
                   </label>
                 </div>
               )}

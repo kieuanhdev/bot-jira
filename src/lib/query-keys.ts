@@ -112,4 +112,18 @@ export const bulkKeys = {
   versions: (projects: string[]) => ["bulk-versions", [...projects].sort()] as const,
   /** Available editable fields metadata for a project. */
   fields: (project: string) => ["bulk-fields", project] as const,
+  /** `["bulk-create-metadata", <projectKey>]`. */
+  createMetadata: (projectKey: string) => ["bulk-create-metadata", projectKey] as const,
+  /** `["bulk-create-assignees", <projectKey>, <query>]`. */
+  createAssignees: (projectKey: string, query: string) =>
+    ["bulk-create-assignees", projectKey, query] as const,
+  /** `["bulk-create-parents", <projectKey>, <query>]`. */
+  createParentIssues: (projectKey: string, query: string) =>
+    ["bulk-create-parents", projectKey, query] as const,
+  /** `["bulk-create-labels", <projectKey>, <query>]`. */
+  createLabels: (projectKey: string, query: string) =>
+    ["bulk-create-labels", projectKey, query] as const,
+  /** `["bulk-create-template", <projectKey>, <issueKey>]`. */
+  createTemplate: (projectKey: string, issueKey: string) =>
+    ["bulk-create-template", projectKey, issueKey] as const,
 };

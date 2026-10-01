@@ -16,15 +16,19 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { SlidersHorizontal, ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
+import { AssigneeCombobox } from "./assignee-combobox";
+import { LabelCombobox } from "./label-combobox";
 
 interface CreateDefaultsFormProps {
   metadata: BulkCreateProjectMetadata;
+  projectKey: string;
   defaults: BulkCreateFieldDefaults;
   onChange: (updated: BulkCreateFieldDefaults) => void;
 }
 
 export function CreateDefaultsForm({
   metadata,
+  projectKey,
   defaults,
   onChange,
 }: CreateDefaultsFormProps) {
@@ -97,22 +101,35 @@ export function CreateDefaultsForm({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {/* Issue Type */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-foreground">Loại công việc mặc định</Label>
+              <Label className="text-xs font-medium text-foreground">
+                Loại công việc mặc định
+                {!defaults.issueTypeId && !metadata.defaultIssueTypeId && (
+                  <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400 font-normal">
+                    (nên đặt)
+                  </span>
+                )}
+              </Label>
               <Select
                 value={defaults.issueTypeId || ""}
                 onValueChange={(val) => updateField("issueTypeId", val || undefined)}
               >
-                <SelectTrigger className="h-9 text-xs cursor-pointer">
-                  <SelectValue placeholder="Chọn loại task..." />
+                <SelectTrigger className={`h-9 text-xs cursor-pointer ${
+                  !defaults.issueTypeId && !metadata.defaultIssueTypeId
+                    ? "border-amber-500/30"
+                    : ""
+                }`}>
+                  <SelectValue placeholder={
+                    metadata.defaultIssueTypeId
+                      ? `${metadata.issueTypes.find((t) => t.id === metadata.defaultIssueTypeId)?.name ?? "?"} (Jira mặc định)`
+                      : "Chọn loại task..."
+                  } />
                 </SelectTrigger>
                 <SelectContent>
-                  {metadata.issueTypes
-                    .filter((t) => !t.subtask)
-                    .map((t) => (
-                      <SelectItem key={t.id} value={t.id} className="text-xs cursor-pointer">
-                        {t.name}
-                      </SelectItem>
-                    ))}
+                  {metadata.issueTypes.map((t) => (
+                    <SelectItem key={t.id} value={t.id} className="text-xs cursor-pointer">
+                      {t.subtask ? `⚡ ${t.name}` : t.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -139,29 +156,23 @@ export function CreateDefaultsForm({
 
             {/* Assignee */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-foreground">Người thực hiện (Username)</Label>
-              <Input
-                placeholder="vd: nguyen.van.a"
-                value={defaults.assignee ?? ""}
-                onChange={(e) => updateField("assignee", e.target.value.trim() || undefined)}
-                className="h-9 text-xs"
+              <Label className="text-xs font-medium text-foreground">Người thực hiện</Label>
+              <AssigneeCombobox
+                projectKey={projectKey}
+                value={defaults.assignee ?? null}
+                onChange={(username) => updateField("assignee", username)}
+                placeholder="Tìm assignee…"
               />
             </div>
 
             {/* Labels */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-foreground">Nhãn (cách nhau bởi dấu phẩy)</Label>
-              <Input
+              <Label className="text-xs font-medium text-foreground">Nhãn</Label>
+              <LabelCombobox
+                projectKey={projectKey}
+                value={defaults.labels}
+                onChange={(labels) => updateField("labels", labels)}
                 placeholder="vd: frontend, urgent"
-                value={defaults.labels?.join(", ") ?? ""}
-                onChange={(e) => {
-                  const arr = e.target.value
-                    .split(",")
-                    .map((l) => l.trim())
-                    .filter(Boolean);
-                  updateField("labels", arr.length > 0 ? arr : undefined);
-                }}
-                className="h-9 text-xs"
               />
             </div>
 

@@ -152,16 +152,18 @@ describe("executeBulkCreateOperation worker execution", () => {
     mocks.bulkOperationUpdateMany.mockResolvedValue({ count: 1 });
     mocks.userFindUnique.mockResolvedValue({ id: "user-1" });
 
-    mocks.bulkCreateItemFindMany.mockResolvedValue([
-      {
-        id: "item-2",
-        rowIndex: 0,
-        clientRef: "row-2",
-        status: "pending",
-        requested: { summary: "Fresh task", issueTypeId: "10001" },
-        attemptCount: 0,
-      },
-    ]);
+    mocks.bulkCreateItemFindMany
+      .mockResolvedValueOnce([
+        {
+          id: "item-2",
+          rowIndex: 0,
+          clientRef: "row-2",
+          status: "pending",
+          requested: { summary: "Fresh task", issueTypeId: "10001" },
+          attemptCount: 0,
+        },
+      ])
+      .mockResolvedValueOnce([]);
     mocks.bulkCreateItemFindUnique.mockResolvedValue({
       id: "item-2",
       status: "running",

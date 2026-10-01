@@ -19,6 +19,7 @@ import {
   Check,
   RefreshCw,
   PlusCircle,
+  GitBranch,
 } from "lucide-react";
 
 interface OperationDetailResponse {
@@ -43,6 +44,7 @@ interface OperationDetailResponse {
       errorCode: string | null;
       retryable: boolean;
       attemptCount: number;
+      parentClientRef: string | null;
       requested: { summary?: string; issueTypeId?: string };
     }>;
   };
@@ -86,6 +88,18 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
     },
   });
 
+  const retryBranchMutation = useMutation({
+    mutationFn: (clientRef: string) =>
+      api<{ queued: boolean; operationId: string; retriedParent: string; unblockedChildren: number }>(
+        `/api/bulk/operations/${operationId}/retry-branch`,
+        { method: "POST", body: { clientRef } }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bulk-operation", operationId] });
+      queryClient.invalidateQueries({ queryKey: ["bulk-operations"] });
+    },
+  });
+
   const op = data?.operation;
   const items = op?.createItems ?? [];
   const isFinished =
@@ -93,6 +107,18 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
     op?.state === "partially_failed" ||
     op?.state === "failed" ||
     op?.state === "cancelled";
+
+  const blockedCount = items.filter((i) => i.status === "blocked_by_parent").length;
+
+  const blockedChildrenMap = new Map<string, number>();
+  for (const item of items) {
+    if (item.status === "blocked_by_parent" && item.parentClientRef) {
+      blockedChildrenMap.set(
+        item.parentClientRef,
+        (blockedChildrenMap.get(item.parentClientRef) ?? 0) + 1
+      );
+    }
+  }
 
   const total = op?.total ?? 1;
   const succeeded = op?.succeeded ?? 0;
@@ -226,6 +252,11 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
                 Lỗi: {failed}
               </Badge>
             )}
+            {blockedCount > 0 && (
+              <Badge variant="secondary" className="px-2.5 py-1 font-mono">
+                Chờ parent: {blockedCount}
+              </Badge>
+            )}
             {!isFinished && (
               <Badge variant="info" className="px-2.5 py-1 font-mono">
                 Đang xử lý: {total - processed}
@@ -278,6 +309,12 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
           </div>
         )}
 
+        {retryBranchMutation.isError && (
+          <div className="mx-6 mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-400">
+            Lỗi khi thử lại nhánh: {retryBranchMutation.error.message}
+          </div>
+        )}
+
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -296,12 +333,15 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
                   const isFailed = item.status === "failed";
                   const isRunning = item.status === "running";
                   const isPending = item.status === "pending";
+                  const isWaitingForParent = item.status === "waiting_for_parent";
+                  const isBlockedByParent = item.status === "blocked_by_parent";
+                  const blockedChildCount = isFailed ? (blockedChildrenMap.get(item.clientRef) ?? 0) : 0;
 
                   return (
                     <tr
                       key={item.id}
                       className={`transition-colors ${
-                        isFailed ? "bg-red-500/5 hover:bg-red-500/10" : "hover:bg-muted/15"
+                        isFailed ? "bg-red-500/5 hover:bg-red-500/10" : isBlockedByParent ? "bg-amber-500/5 hover:bg-amber-500/10" : "hover:bg-muted/15"
                       }`}
                     >
                       <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">
@@ -331,6 +371,18 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
                           <Badge variant="secondary" className="gap-1 font-medium">
                             <Clock className="h-3 w-3" aria-hidden="true" />
                             Chờ xử lý
+                          </Badge>
+                        )}
+                        {isWaitingForParent && (
+                          <Badge variant="info" className="gap-1 font-medium">
+                            <GitBranch className="h-3 w-3" aria-hidden="true" />
+                            Chờ parent
+                          </Badge>
+                        )}
+                        {isBlockedByParent && (
+                          <Badge variant="secondary" className="gap-1 font-medium text-amber-700 dark:text-amber-400">
+                            <XCircle className="h-3 w-3" aria-hidden="true" />
+                            Chặn (parent)
                           </Badge>
                         )}
                       </td>
@@ -381,10 +433,33 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
                                 </label>
                               </div>
                             )}
+                            {blockedChildCount > 0 && isFinished && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => retryBranchMutation.mutate(item.clientRef)}
+                                disabled={retryBranchMutation.isPending}
+                                className="mt-1 h-7 gap-1 px-2 text-[11px] cursor-pointer text-primary border-primary/30 hover:bg-primary/10"
+                              >
+                                {retryBranchMutation.isPending && retryBranchMutation.variables === item.clientRef ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                                ) : (
+                                  <GitBranch className="h-3 w-3" aria-hidden="true" />
+                                )}
+                                Thử lại cả nhánh ({blockedChildCount} con)
+                              </Button>
+                            )}
                           </div>
                         )}
                         {(isRunning || isPending) && (
                           <span className="text-muted-foreground">Đang trong hàng đợi</span>
+                        )}
+                        {isWaitingForParent && (
+                          <span className="text-muted-foreground">Đang chờ parent được tạo</span>
+                        )}
+                        {isBlockedByParent && (
+                          <span className="text-amber-700 dark:text-amber-400">{item.error || "Parent thất bại"}</span>
                         )}
                       </td>
                     </tr>

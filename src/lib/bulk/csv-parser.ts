@@ -1,5 +1,6 @@
 import {
   type BulkCreateRowInput,
+  type BulkParentRef,
   MAX_BULK_CREATE_ITEMS,
 } from "./create-types";
 import { generateUniqueClientRef } from "./client-ref";
@@ -25,7 +26,7 @@ export type ParsedCsvResult = {
   warnings: string[];
 };
 
-const CANONICAL_FIELD_MAP: Record<string, keyof BulkCreateRowInput> = {
+const CANONICAL_FIELD_MAP: Record<string, keyof BulkCreateRowInput | "parentRef" | "parentKey"> = {
   summary: "summary",
   title: "summary",
   tieude: "summary",
@@ -99,6 +100,16 @@ const CANONICAL_FIELD_MAP: Record<string, keyof BulkCreateRowInput> = {
   id: "clientRef",
   ma: "clientRef",
   "mã": "clientRef",
+
+  parentref: "parentRef",
+  "parent ref": "parentRef",
+  "task cha": "parentRef",
+  "parent trong batch": "parentRef",
+
+  parentkey: "parentKey",
+  "parent key": "parentKey",
+  "jira key cha": "parentKey",
+  "parent jira": "parentKey",
 };
 
 /**
@@ -301,8 +312,8 @@ export function parseBulkCreateCsv(
   const recognizedHeaders: Record<string, string> = {};
   const unrecognizedHeaders: string[] = [];
   const duplicateCanonicalHeaders: string[] = [];
-  const canonicalToHeaderMap: Map<keyof BulkCreateRowInput, string> = new Map();
-  const columnIndexMap: Map<number, keyof BulkCreateRowInput> = new Map();
+  const canonicalToHeaderMap: Map<keyof BulkCreateRowInput | "parentRef" | "parentKey", string> = new Map();
+  const columnIndexMap: Map<number, keyof BulkCreateRowInput | "parentRef" | "parentKey"> = new Map();
 
   let hasSummaryHeader = false;
   rawHeaders.forEach((header, idx) => {
@@ -386,6 +397,8 @@ export function parseBulkCreateCsv(
     let originalEstimate: string | undefined;
     let dueDate: string | null | undefined;
     let fixVersionIds: string[] | undefined;
+    let parentRef: string | undefined;
+    let parentKey: string | undefined;
     const rowErrors: string[] = [];
 
     row.forEach((cell, colIdx) => {
@@ -450,12 +463,29 @@ export function parseBulkCreateCsv(
               .filter(Boolean);
           }
           break;
+        case "parentRef":
+          if (trimmed) parentRef = trimmed;
+          break;
+        case "parentKey":
+          if (trimmed) parentKey = trimmed;
+          break;
       }
     });
 
     // Check mandatory summary
     if (!summary) {
       rowErrors.push("Thiếu tiêu đề (Summary)");
+    }
+
+    if (parentRef && parentKey) {
+      rowErrors.push('Không được đặt đồng thời cả "parentRef" và "parentKey". Chọn một trong hai.');
+    }
+
+    let parent: BulkParentRef | null | undefined;
+    if (parentRef) {
+      parent = { type: "batch", clientRef: parentRef };
+    } else if (parentKey) {
+      parent = { type: "jira", jiraKey: parentKey };
     }
 
     if (rowErrors.length > 0) {
@@ -493,6 +523,7 @@ export function parseBulkCreateCsv(
       clientRef,
       summary,
       issueTypeId,
+      parent,
       description,
       assignee,
       priorityId,
