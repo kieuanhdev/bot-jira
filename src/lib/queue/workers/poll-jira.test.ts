@@ -428,7 +428,7 @@ describe("runPollJiraProject", () => {
     expect(mocks.issueUpdateMany).not.toHaveBeenCalled();
   });
 
-  it("rejects cursor write if cursor was modified concurrently by another job", async () => {
+  it("treats an active lease held by another job as a skipped coalesced run", async () => {
     mocks.search.mockResolvedValue({
       total: 1,
       issues: [
@@ -448,8 +448,16 @@ describe("runPollJiraProject", () => {
       requestedAt: new Date().toISOString(),
     });
 
-    expect(res.ok).toBe(false);
-    expect(res.errors?.[0]).toMatch(/already running|lease/i);
+    expect(res.ok).toBe(true);
+    expect(res.skipped).toBe(true);
+    expect(res.reason).toMatch(/already running|lease/i);
+    expect(res.errors).toBeUndefined();
+    expect(res.stats).toMatchObject({
+      projectKey: "EPM",
+      source: "manual",
+      coalescedByLease: true,
+      ok: true,
+    });
   });
 
   it("does not soft-delete issues when full sync is aborted", async () => {

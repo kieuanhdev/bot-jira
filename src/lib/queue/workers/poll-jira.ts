@@ -380,7 +380,7 @@ export async function runPollJiraProject(
     const isAlreadyRunning = error instanceof SyncAlreadyRunningError;
     const isLeaseLost = error instanceof SyncLeaseLostError;
 
-    console.error(
+    console[isAlreadyRunning ? "info" : isLeaseLost ? "warn" : "error"](
       JSON.stringify({
         level: isAlreadyRunning ? "info" : isLeaseLost ? "warn" : "error",
         job: "poll-jira-project",
@@ -393,6 +393,28 @@ export async function runPollJiraProject(
         error: errorMsg,
       })
     );
+
+    // Lease contention is an expected coalescing outcome: another worker/run
+    // already owns this project's sync. Treat it as skipped so recordRun does
+    // not turn it into a job failure, retry it, or raise a false health alert.
+    // The active owner will either finish normally or its bounded lease will
+    // expire, after which the scheduler/watchdog can claim a fresh lease.
+    if (isAlreadyRunning) {
+      return {
+        ok: true,
+        skipped: true,
+        reason: errorMsg,
+        stats: {
+          projectKey,
+          durationMs,
+          queueLagMs,
+          source: data.source,
+          coalescedByLease: true,
+          ok: true,
+        },
+      };
+    }
+
     return {
       ok: false,
       errors: [errorMsg],
