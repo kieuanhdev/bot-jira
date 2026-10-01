@@ -1,4 +1,8 @@
-import { jiraProjectList, isKnownProject } from "@/lib/env";
+import {
+  listSyncEnabledProjectKeys,
+  normalizeProjectKey,
+  isValidProjectKeyFormat,
+} from "@/lib/jira/project-catalog";
 import { enqueueJiraProjectSync } from "@/lib/queue/boss";
 import type { WorkerLog } from "../guard";
 import type { JiraSyncSource } from "./poll-jira";
@@ -13,16 +17,16 @@ export type PollJiraDispatchJobData = {
 export async function runPollJiraDispatch(data: PollJiraDispatchJobData = {}): Promise<WorkerLog> {
   const rawProjects = data.projectKeys && data.projectKeys.length > 0
     ? data.projectKeys
-    : jiraProjectList;
+    : await listSyncEnabledProjectKeys();
 
   // Normalize and dedupe
   const seen = new Set<string>();
   const projects: string[] = [];
   for (const raw of rawProjects) {
-    const key = raw.trim().toUpperCase();
+    const key = normalizeProjectKey(raw);
     if (!key || seen.has(key)) continue;
     // Validate project key format
-    if (!isKnownProject(key) && !/^[A-Z][A-Z0-9_]{1,19}$/.test(key)) {
+    if (!isValidProjectKeyFormat(key)) {
       continue;
     }
     seen.add(key);

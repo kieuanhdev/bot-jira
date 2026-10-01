@@ -1,6 +1,7 @@
 import { PgBoss } from "pg-boss";
 import { prisma } from "@/lib/prisma";
-import { env, jiraProjectList } from "@/lib/env";
+import { env } from "@/lib/env";
+import { listSyncEnabledProjectKeys } from "@/lib/jira/project-catalog";
 import { getWorkerHealth } from "@/lib/health/worker-health";
 import { runCheckBranches } from "./workers/check-branches";
 import { runAiScore } from "./workers/ai-score";
@@ -493,6 +494,7 @@ export async function reconcileStartupJiraProjects(): Promise<{
   coalesced: number;
   errors: string[];
 }> {
+  const syncProjects = await listSyncEnabledProjectKeys();
   const health = await getWorkerHealth();
   const targetProjects = [...new Set([
     ...(health.staleProjects ?? []),
@@ -502,12 +504,12 @@ export async function reconcileStartupJiraProjects(): Promise<{
   console.info(JSON.stringify({
     level: "info",
     job: "startup-reconciliation",
-    message: `Worker startup: checked ${jiraProjectList.length} projects, found ${targetProjects.length} stale/failing`,
+    message: `Worker startup: checked ${syncProjects.length} projects, found ${targetProjects.length} stale/failing`,
     targetProjects,
   }));
 
   if (targetProjects.length === 0) {
-    return { checked: jiraProjectList.length, staleCount: 0, queued: 0, coalesced: 0, errors: [] };
+    return { checked: syncProjects.length, staleCount: 0, queued: 0, coalesced: 0, errors: [] };
   }
 
   let queued = 0;
@@ -529,7 +531,7 @@ export async function reconcileStartupJiraProjects(): Promise<{
   }
 
   return {
-    checked: jiraProjectList.length,
+    checked: syncProjects.length,
     staleCount: targetProjects.length,
     queued,
     coalesced,

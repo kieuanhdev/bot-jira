@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { isKnownProject, jiraProjectList } from "@/lib/env";
+import {
+  listActiveProjects,
+  normalizeProjectKey,
+} from "@/lib/jira/project-catalog";
 
 /**
  * Distinct filter options (assignees, labels, priorities) for the current
@@ -19,25 +22,46 @@ export async function GET(req: Request) {
     select: { boardProjects: true },
   });
 
-  const url = new URL(req.url);
-  const project = (url.searchParams.get("project") ?? "").trim().toUpperCase();
-  const projectList = (url.searchParams.get("projectList") ?? "")
-    .split(",")
-    .map((s) => s.trim().toUpperCase())
-    .filter(isKnownProject);
+  const activeCatalog = await listActiveProjects();
+  const activeCatalogKeys = new Set(activeCatalog.map((p) => p.key));
 
-  const userBoardProjects = (user?.boardProjects ?? []).map((p) => p.trim().toUpperCase());
+  const userBoardProjects = (user?.boardProjects ?? [])
+    .map(normalizeProjectKey)
+    .filter((k) => activeCatalogKeys.has(k));
+
   const isAllowedProject = (k: string) =>
-    isKnownProject(k) || userBoardProjects.includes(k) || /^[A-Z][A-Z0-9_]{1,19}$/.test(k);
+    activeCatalogKeys.has(k) || userBoardProjects.includes(k);
 
+  const url = new URL(req.url);
+  const rawProject = url.searchParams.get("project");
   let projects: string[];
-  if (project && isAllowedProject(project)) {
+
+  if (rawProject !== null && rawProject.trim() !== "") {
+    const project = normalizeProjectKey(rawProject);
+    if (!activeCatalogKeys.has(project)) {
+      return NextResponse.json(
+        { error: `Project '${project}' không tồn tại hoặc đã bị vô hiệu hóa.` },
+        { status: 404 }
+      );
+    }
+    if (!isAllowedProject(project)) {
+      return NextResponse.json(
+        { error: `Bạn không có quyền truy cập dự án '${project}'.` },
+        { status: 403 }
+      );
+    }
     projects = [project];
-  } else if (projectList.length > 0) {
-    projects = projectList.filter(isAllowedProject);
   } else {
-    const selected = userBoardProjects.filter(isAllowedProject);
-    projects = selected.length > 0 ? selected : jiraProjectList;
+    const projectList = (url.searchParams.get("projectList") ?? "")
+      .split(",")
+      .map(normalizeProjectKey)
+      .filter(isAllowedProject);
+
+    projects = projectList.length > 0
+      ? projectList
+      : userBoardProjects.length > 0
+        ? userBoardProjects
+        : activeCatalog.map((p) => p.key);
   }
 
   if (projects.length === 0) {

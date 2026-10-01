@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { isKnownProject, jiraProjectList } from "@/lib/env";
+import {
+  listActiveProjects,
+} from "@/lib/jira/project-catalog";
 import { jiraUsernameAliases, userJiraUsername } from "@/lib/user-creds";
 import {
   type LeaderboardTimeframe,
@@ -61,9 +63,13 @@ export async function getLeaderboardData(options: GetLeaderboardOptions): Promis
   const myUsername = currentUser ? userJiraUsername(currentUser) : null;
   const myAliases = jiraUsernameAliases(myUsername).map((a) => a.toLowerCase());
 
-  // Leaderboard tracks all mobile projects, not restricted to individual board settings
-  const mobileProjects = [...new Set(jiraProjectList)];
-  const projectsInScope = project && isKnownProject(project) ? [project] : mobileProjects;
+  // Leaderboard tracks all active projects, not restricted to individual board settings
+  const activeCatalog = await listActiveProjects();
+  const activeProjects = activeCatalog.map((p) => p.key);
+  const cleanProject = project ? project.trim().toUpperCase() : null;
+  const projectsInScope = cleanProject && activeProjects.includes(cleanProject)
+    ? [cleanProject]
+    : activeProjects;
 
   // 2. Compute date range
   const period = computePeriodBounds(timeframe, year, month, quarter);
@@ -311,8 +317,8 @@ export async function getLeaderboardData(options: GetLeaderboardOptions): Promis
     year: period.year,
     month: period.month,
     quarter: period.quarter,
-    project: project && isKnownProject(project) ? project : null,
-    projects: mobileProjects,
+    project: cleanProject && activeProjects.includes(cleanProject) ? cleanProject : null,
+    projects: activeProjects,
     members: rankedMembers,
     summary: {
       totalTeamPoints,

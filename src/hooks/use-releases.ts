@@ -4,9 +4,30 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api-client";
 import { releasesKeys } from "@/lib/query-keys";
 
-// --- Types ---
+export type ProjectReleaseSyncState = "synced" | "empty" | "forbidden" | "auth_required" | "failed";
 
-type SyncResult = { result?: { totalReleases: number; tasksLinked: number } };
+export type ProjectReleaseSyncResult = {
+  projectKey: string;
+  state: ProjectReleaseSyncState;
+  versionCount: number;
+  created: number;
+  updated: number;
+  tasksLinked: number;
+  errorCode: string | null;
+  errorMessage: string | null;
+};
+
+export type SyncResult = {
+  success?: boolean;
+  partial?: boolean;
+  result?: {
+    totalReleases: number;
+    tasksLinked: number;
+    syncedProjects: string[];
+    errors: string[];
+    projects?: ProjectReleaseSyncResult[];
+  };
+};
 type CreateReleaseBody = { projectKey: string; version: string; description?: string };
 
 export type ReleaseBlocker = {
@@ -36,8 +57,11 @@ export function useReleaseSync() {
         : "/api/releases/sync";
       return api<SyncResult>(url, { method: "POST" });
     },
-    onSuccess: () => {
+    onSuccess: (_data, projectKey) => {
       qc.invalidateQueries({ queryKey: ["releases"] });
+      if (projectKey && projectKey !== "all") {
+        qc.invalidateQueries({ queryKey: releasesKeys.permissions(projectKey) });
+      }
     },
   });
 }

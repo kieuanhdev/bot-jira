@@ -7,7 +7,6 @@ import {
   notifyWatchersOfComment,
   notifyWatchersOfIssueChange,
 } from "@/lib/issues/notify-watchers";
-import { jiraProjectList } from "@/lib/env";
 import { guard, env } from "../guard";
 import type { WorkerLog } from "../guard";
 import {
@@ -394,6 +393,17 @@ export async function runPollJiraProject(
     );
 
 
+    try {
+      const { updateProjectBootstrapState } = await import("@/lib/jira/project-catalog");
+      await updateProjectBootstrapState(
+        projectKey,
+        ok ? "ready" : "partial",
+        stats.errors.length > 0 ? stats.errors.join("; ") : null
+      );
+    } catch {
+      // Non-critical catalog update
+    }
+
     return {
       ok,
       stats: {
@@ -411,6 +421,15 @@ export async function runPollJiraProject(
     const errorMsg = safeError(error);
     const isAlreadyRunning = error instanceof SyncAlreadyRunningError;
     const isLeaseLost = error instanceof SyncLeaseLostError;
+
+    if (!isAlreadyRunning) {
+      try {
+        const { updateProjectBootstrapState } = await import("@/lib/jira/project-catalog");
+        await updateProjectBootstrapState(projectKey, "failed", errorMsg);
+      } catch {
+        // Non-critical
+      }
+    }
 
     console[isAlreadyRunning ? "info" : isLeaseLost ? "warn" : "error"](
       JSON.stringify({
@@ -478,7 +497,8 @@ export async function runPollJira(data: PollJiraJobData = {}): Promise<WorkerLog
   const auth = await getSystemJiraAuth();
   if (!auth) return guard(false, "Jira not configured in env or user settings");
 
-  const projects = jiraProjectList;
+  const { listSyncEnabledProjectKeys } = await import("@/lib/jira/project-catalog");
+  const projects = await listSyncEnabledProjectKeys();
   if (projects.length === 0) {
     return { ok: false, errors: ["No Jira projects configured"] };
   }

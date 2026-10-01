@@ -4,10 +4,13 @@ const mocks = vi.hoisted(() => ({
   enqueueJiraProjectSync: vi.fn(),
 }));
 
-vi.mock("@/lib/env", () => ({
-  jiraProjectList: ["CICM", "EPM", "MR"],
-  isKnownProject: (key: string) => ["CICM", "EPM", "MR", "EDM"].includes(key),
-}));
+vi.mock("@/lib/jira/project-catalog", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/jira/project-catalog")>();
+  return {
+    ...actual,
+    listSyncEnabledProjectKeys: vi.fn().mockResolvedValue(["CICM", "EPM", "MR"]),
+  };
+});
 
 vi.mock("@/lib/queue/boss", () => ({
   enqueueJiraProjectSync: mocks.enqueueJiraProjectSync,

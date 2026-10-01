@@ -30,8 +30,8 @@ export const env = {
   jiraToken: str("JIRA_TOKEN"),
   // "Bearer" (default) or "basic". This Jira DC accepts a raw Bearer token.
   jiraAuth: str("JIRA_AUTH", "Bearer"),
-  // Comma-separated project keys to sync + show on the board.
-  // Mobile projects by default.
+  // Comma-separated bootstrap project keys for initial seeding and fallback.
+  // Runtime project catalog is dynamically stored in JiraProject table.
   jiraProjectKeys: str("JIRA_PROJECT_KEYS", "CICM,EDM,EMA,EPM,ETM,MHRM,MR"),
   // Optional extra JQL filter applied to the default poll query.
   jiraJqlExtra: str("JIRA_JQL_EXTRA"),
@@ -282,7 +282,10 @@ export const boardBacklogColumns: Record<string, string> = (() => {
   return out;
 })();
 
-/** True when a JQL board/search query should be scoped to a single project. */
+/**
+ * @deprecated Use `isCatalogProject` from `@/lib/jira/project-catalog` or format validation instead.
+ * Kept for backward compatibility during rollout.
+ */
 export function isKnownProject(key: string): boolean {
   return jiraProjectList.includes(key.toUpperCase());
 }

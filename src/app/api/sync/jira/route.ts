@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { isKnownProject } from "@/lib/env";
+import {
+  normalizeProjectKey,
+  isValidProjectKeyFormat,
+} from "@/lib/jira/project-catalog";
 import { enqueueJiraProjectSync, enqueueJiraDispatch } from "@/lib/queue/boss";
 
 export async function POST(req: Request) {
@@ -14,9 +17,8 @@ export async function POST(req: Request) {
 
   const rawKey = body.projectKey?.trim();
   if (rawKey) {
-    const projectKey = rawKey.toUpperCase();
-    const isFormatValid = /^[A-Z][A-Z0-9_]{1,19}$/.test(projectKey);
-    if (!isKnownProject(projectKey) && !isFormatValid) {
+    const projectKey = normalizeProjectKey(rawKey);
+    if (!isValidProjectKeyFormat(projectKey)) {
       return NextResponse.json({ error: "unknown_project" }, { status: 400 });
     }
 

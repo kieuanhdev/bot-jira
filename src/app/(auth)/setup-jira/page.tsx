@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getSession } from "@/lib/session";
 import { userJiraAuth } from "@/lib/user-creds";
 import { prisma } from "@/lib/prisma";
-import { jiraProjectList } from "@/lib/env";
+import { listActiveProjects } from "@/lib/jira/project-catalog";
 import { SetupJiraClient } from "./setup-jira-client";
 
 export const metadata: Metadata = { title: "Thiết lập dự án & Jira" };
@@ -30,6 +30,8 @@ export default async function SetupJiraPage() {
   if (jiraReady && user?.onboarded) redirect("/board");
 
   const step = !jiraReady ? "jira" : "projects";
+  const activeCatalog = await listActiveProjects();
+  const availableProjects = activeCatalog.map((p) => p.key);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -45,7 +47,7 @@ export default async function SetupJiraPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <SetupJiraClient step={step} availableProjects={jiraProjectList} initialProjects={user?.boardProjects ?? []} />
+          <SetupJiraClient step={step} availableProjects={availableProjects} initialProjects={user?.boardProjects ?? []} />
         </CardContent>
       </Card>
     </div>

@@ -202,26 +202,28 @@ export function BoardClient() {
     setBoardValidating(true);
     setBoardValidateError(null);
     try {
-      const res = await api<{ ok: boolean; error?: string; project?: { key: string; name: string } }>(
-        "/api/projects/validate",
-        { method: "POST", body: { key } }
-      );
+      const res = await api<{
+        ok: boolean;
+        error?: string;
+        created?: boolean;
+        project?: { key: string; name: string };
+        bootstrap?: { state: string };
+      }>("/api/projects", { method: "POST", body: { key } });
+
       if (!res.ok || !res.project) {
         setBoardValidateError(res.error ?? "Dự án không tồn tại trên Jira.");
         return;
       }
       const verifiedKey = res.project.key;
-      const nextProjects = Array.from(new Set([...effectivePreferred, verifiedKey]));
-      await savePrefs(nextProjects);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: meKeys.prefs }),
+        qc.invalidateQueries({ queryKey: boardKeys.projects }),
+        qc.invalidateQueries({ queryKey: ["board", "statuses", verifiedKey] }),
+      ]);
       setProject(verifiedKey);
       setBoardNewKey("");
       closePicker();
       setToast(`Đã thêm dự án ${res.project.name} (${verifiedKey}) và bắt đầu đồng bộ.`);
-      try {
-        await api("/api/sync/jira", { method: "POST", body: { projectKey: verifiedKey } });
-      } catch {
-        // queue failed or already queued
-      }
     } catch (err: unknown) {
       setBoardValidateError((err as Error).message || "Lỗi kiểm tra dự án trên Jira.");
     } finally {

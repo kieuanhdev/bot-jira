@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { isKnownProject, jiraProjectList } from "@/lib/env";
+import {
+  listActiveProjects,
+  normalizeProjectKey,
+} from "@/lib/jira/project-catalog";
 import { statusGroup } from "@/lib/status-groups";
 import { computeAges } from "@/lib/stale/age";
 import { classifyStale, STALE_REASON_LABELS, type StaleReason } from "@/lib/stale/classify";
@@ -151,17 +154,29 @@ export async function GET(req: Request) {
   const myUsername = user?.jiraUsername || session.user.jiraUsername || null;
   const myAliases = jiraUsernameAliases(myUsername);
 
+  const activeCatalog = await listActiveProjects();
+  const activeCatalogKeys = new Set(activeCatalog.map((p) => p.key));
+
   const url = new URL(req.url);
-  const project = (url.searchParams.get("project") ?? "").trim().toUpperCase();
+  const project = normalizeProjectKey(url.searchParams.get("project") ?? "");
   const projectList = (url.searchParams.get("projectList") ?? "")
-    .split(",").map((s) => s.trim().toUpperCase()).filter(isKnownProject);
-  const allowedProjects = (user?.boardProjects ?? []).filter(isKnownProject).length > 0
-    ? (user?.boardProjects ?? []).filter(isKnownProject)
-    : jiraProjectList;
-  const projects = project && isKnownProject(project)
+    .split(",")
+    .map(normalizeProjectKey)
+    .filter((s) => activeCatalogKeys.has(s));
+
+  const userBoardProjects = (user?.boardProjects ?? [])
+    .map(normalizeProjectKey)
+    .filter((k) => activeCatalogKeys.has(k));
+
+  const allowedProjects = userBoardProjects.length > 0
+    ? userBoardProjects
+    : activeCatalog.map((p) => p.key);
+
+  const projects = project && activeCatalogKeys.has(project)
     ? [project]
-    : projectList.length > 0 ? projectList
-    : allowedProjects;
+    : projectList.length > 0
+      ? projectList
+      : allowedProjects;
 
   // `all` is the UI sentinel. Treat it as no filter as a defensive API
   // measure so copied URLs and older clients cannot accidentally hide data.

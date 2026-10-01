@@ -67,22 +67,16 @@ export async function GET(req: Request) {
     select: RELEASE_SELECT,
   });
 
-  // If there are no releases in the database yet, run an initial sync from Jira
-  if (releases.length === 0 && projectKey && projectKey !== "all") {
-    try {
-      await syncReleasesFromJira({
-        userId: session.user?.id,
-        projectKeys: [projectKey],
-      });
-      releases = await prisma.release.findMany({
-        where: { projectKey },
-        orderBy: { createdAt: "desc" },
-        select: RELEASE_SELECT,
-      });
-    } catch {
-      // Proceed with empty list if sync encounters error
-    }
-  }
+  const cursor = projectKey && projectKey !== "all"
+    ? await prisma.integrationCursor.findUnique({
+        where: {
+          integration_scope: {
+            integration: "jira-releases",
+            scope: projectKey,
+          },
+        },
+      })
+    : null;
 
   // Collect all unique Jira keys across releases for a single batched branch lookup
   const allJiraKeys = Array.from(
@@ -213,7 +207,44 @@ export async function GET(req: Request) {
     items = items.filter((r) => !r.archived);
   }
 
-  return NextResponse.json({ summary, items });
+  let syncState: "never_synced" | "synced" | "empty" | "forbidden" | "auth_required" | "failed" = "never_synced";
+  let lastErrorCode: string | null = null;
+  let lastError: string | null = null;
+  let isStale = false;
+
+  if (cursor) {
+    lastError = cursor.lastError;
+    const stats = (cursor.stats as Record<string, unknown> | null) ?? null;
+    if (stats?.errorCode && typeof stats.errorCode === "string") {
+      lastErrorCode = stats.errorCode;
+    }
+    if (stats?.state && typeof stats.state === "string") {
+      syncState = stats.state as any;
+    } else if (cursor.lastSuccessAt) {
+      syncState = releases.length === 0 ? "empty" : "synced";
+    } else if (cursor.lastError) {
+      syncState = "failed";
+    }
+
+    if (cursor.lastSuccessAt && cursor.lastErrorAt && cursor.lastErrorAt > cursor.lastSuccessAt) {
+      isStale = true;
+    }
+  } else if (projectKey && projectKey !== "all" && releases.length > 0) {
+    syncState = "synced";
+  }
+
+  return NextResponse.json({
+    summary,
+    items,
+    sync: {
+      state: syncState,
+      lastAttemptAt: cursor?.lastStartedAt?.toISOString() ?? null,
+      lastSuccessAt: cursor?.lastSuccessAt?.toISOString() ?? null,
+      lastErrorCode,
+      lastError,
+      stale: isStale,
+    },
+  });
 }
 
 /**

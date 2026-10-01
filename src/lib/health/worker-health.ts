@@ -76,7 +76,7 @@ export async function writeWorkerHeartbeat(): Promise<void> {
  * - "unknown": liveness was never recorded (fresh install, worker not run yet).
  * - "healthy": everything is within SLA.
  */
-export async function getWorkerHealth(): Promise<WorkerHealth> {
+export async function getWorkerHealth(customProjects?: string[]): Promise<WorkerHealth> {
   const now = Date.now();
   let dbError: string | null = null;
   let rows: Array<{
@@ -119,7 +119,16 @@ export async function getWorkerHealth(): Promise<WorkerHealth> {
 
   const workerAgeMs = ageMs(liveness?.lastStartedAt, now);
 
-  const configuredProjects = jiraProjectList;
+  let configuredProjects = customProjects;
+  if (!configuredProjects) {
+    try {
+      const { listSyncEnabledProjectKeys } = await import("@/lib/jira/project-catalog");
+      configuredProjects = await listSyncEnabledProjectKeys();
+    } catch {
+      configuredProjects = jiraProjectList;
+    }
+  }
+
   const staleProjects: string[] = [];
   const failingProjects: string[] = [];
   let jiraSyncAgeMs: number | null = null;

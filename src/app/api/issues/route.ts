@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { env, isKnownProject, jiraProjectList } from "@/lib/env";
+import { env } from "@/lib/env";
+import {
+  listActiveProjects,
+  normalizeProjectKey,
+} from "@/lib/jira/project-catalog";
 import { jiraUsernameAliases, userJiraUsername } from "@/lib/user-creds";
 
 function positiveLimit(raw: string | null): number {
@@ -36,23 +40,47 @@ export async function GET(req: Request) {
 
   const userLookupDur = Date.now() - reqStart;
 
-  const userBoardProjects = user.boardProjects.map((p) => p.trim().toUpperCase());
+  const activeCatalog = await listActiveProjects();
+  const activeCatalogKeys = new Set(activeCatalog.map((p) => p.key));
+
+  const userBoardProjects = user.boardProjects
+    .map(normalizeProjectKey)
+    .filter((k) => activeCatalogKeys.has(k));
+
   const isAllowedProject = (k: string) =>
-    isKnownProject(k) || userBoardProjects.includes(k) || /^[A-Z][A-Z0-9_]{1,19}$/.test(k);
+    activeCatalogKeys.has(k) || userBoardProjects.includes(k);
 
   const url = new URL(req.url);
-  const project = (url.searchParams.get("project") ?? "").trim().toUpperCase();
-  const requestedProjects = (url.searchParams.get("projectList") ?? "")
-    .split(",")
-    .map((value) => value.trim().toUpperCase())
-    .filter(isAllowedProject);
-  const projects = project && isAllowedProject(project)
-    ? [project]
-    : requestedProjects.length > 0
+  const rawProject = url.searchParams.get("project");
+  let projects: string[];
+
+  if (rawProject !== null && rawProject.trim() !== "") {
+    const project = normalizeProjectKey(rawProject);
+    if (!activeCatalogKeys.has(project)) {
+      return NextResponse.json(
+        { error: `Project '${project}' không tồn tại hoặc đã bị vô hiệu hóa.` },
+        { status: 404 }
+      );
+    }
+    if (!isAllowedProject(project)) {
+      return NextResponse.json(
+        { error: `Bạn không có quyền truy cập dự án '${project}'.` },
+        { status: 403 }
+      );
+    }
+    projects = [project];
+  } else {
+    const requestedProjects = (url.searchParams.get("projectList") ?? "")
+      .split(",")
+      .map(normalizeProjectKey)
+      .filter(isAllowedProject);
+
+    projects = requestedProjects.length > 0
       ? requestedProjects
       : userBoardProjects.length > 0
         ? userBoardProjects
-        : jiraProjectList;
+        : activeCatalog.map((p) => p.key);
+  }
 
   const rawAssignees = url.searchParams.getAll("assignee");
   const assigneeTokens = (rawAssignees.length > 0 ? rawAssignees : ["me"])

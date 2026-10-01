@@ -7,9 +7,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/session", () => ({ getSession: mocks.session }));
-vi.mock("@/lib/env", () => ({
-  isKnownProject: (key: string) => ["EPM", "MR", "CICM"].includes(key),
-}));
+vi.mock("@/lib/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/env")>();
+  return {
+    ...actual,
+    isKnownProject: (key: string) => ["EPM", "MR", "CICM"].includes(key),
+  };
+});
 vi.mock("@/lib/queue/boss", () => ({
   enqueueJiraProjectSync: mocks.enqueueJiraProjectSync,
   enqueueJiraDispatch: mocks.enqueueJiraDispatch,

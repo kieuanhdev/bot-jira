@@ -55,17 +55,39 @@ export function ReleaseClient() {
     queryFn: () => api<{ items: Array<{ key: string; openCount: number }> }>("/api/projects"),
   });
 
-  // Query releases with summary
+  // Query releases with summary and sync metadata
   const { data, isLoading, refetch, isRefetching } = useQuery<{
     summary: ReleaseSummary;
     items: ReleaseCardItem[];
+    sync?: {
+      state: "never_synced" | "synced" | "empty" | "forbidden" | "auth_required" | "failed";
+      lastAttemptAt: string | null;
+      lastSuccessAt: string | null;
+      lastErrorCode: string | null;
+      lastError?: string | null;
+      stale: boolean;
+    };
   }>({
     queryKey: ["releases", selectedProject],
     queryFn: () => {
       const p = selectedProject !== "all" ? `?projectKey=${encodeURIComponent(selectedProject)}&includeArchived=true` : "?includeArchived=true";
-      return api<{ summary: ReleaseSummary; items: ReleaseCardItem[] }>(`/api/releases${p}`);
+      return api<{
+        summary: ReleaseSummary;
+        items: ReleaseCardItem[];
+        sync?: {
+          state: "never_synced" | "synced" | "empty" | "forbidden" | "auth_required" | "failed";
+          lastAttemptAt: string | null;
+          lastSuccessAt: string | null;
+          lastErrorCode: string | null;
+          lastError?: string | null;
+          stale: boolean;
+        };
+      }>(`/api/releases${p}`);
     },
   });
+
+  const syncMeta = data?.sync;
+  const isSyncPending = syncMutation.isPending;
 
   // Query Jira permissions for creating a version in the selected project
   const {
@@ -147,12 +169,21 @@ export function ReleaseClient() {
   // Sync releases from Jira
   const handleSync = () => {
     setSyncMessage(null);
-    syncMutation.mutate(selectedProject !== "all" ? selectedProject : undefined, {
+    const targetProject = selectedProject !== "all" ? selectedProject : undefined;
+    syncMutation.mutate(targetProject, {
       onSuccess: (data) => {
-        setSyncMessage({
-          tone: "success",
-          text: `Đã đồng bộ thành công ${data.result?.totalReleases ?? 0} phiên bản (${data.result?.tasksLinked ?? 0} task).`,
-        });
+        const prjResult = targetProject ? data.result?.projects?.find((p) => p.projectKey === targetProject) : undefined;
+        if (prjResult?.state === "empty") {
+          setSyncMessage({
+            tone: "success",
+            text: `Đồng bộ hoàn tất: Dự án ${targetProject} chưa có Fix Version nào trên Jira.`,
+          });
+        } else {
+          setSyncMessage({
+            tone: "success",
+            text: `Đã đồng bộ thành công ${data.result?.totalReleases ?? 0} phiên bản (${data.result?.tasksLinked ?? 0} task).`,
+          });
+        }
         setTimeout(() => setSyncMessage(null), 5000);
       },
       onError: (err) => {
@@ -282,6 +313,13 @@ export function ReleaseClient() {
         </FeedbackBanner>
       )}
 
+      {/* Stale warning banner if sync has errors but stale DB data is visible */}
+      {syncMeta?.stale && syncMeta?.lastError && (
+        <FeedbackBanner tone="warning" className="text-xs">
+          Cảnh báo: Không thể làm mới dữ liệu từ Jira ({syncMeta.lastError}). Đang hiển thị bản phát hành đã lưu trước đó.
+        </FeedbackBanner>
+      )}
+
       {/* KPI Summary Cards */}
       <ReleaseSummaryCards
         summary={summary}
@@ -339,7 +377,7 @@ export function ReleaseClient() {
 
       {/* Release List */}
       <div className="space-y-3.5">
-        {isLoading ? (
+        {isLoading || isSyncPending ? (
           // Loading Skeletons
           Array.from({ length: 4 }).map((_, i) => (
             <div
@@ -362,30 +400,140 @@ export function ReleaseClient() {
             </div>
           ))
         ) : filteredReleases.length === 0 ? (
-          // Empty state
+          // Differentiate empty states based on sync metadata
           <div className="py-16 text-center rounded-xl border border-dashed border-border bg-card p-8 flex flex-col items-center justify-center">
-            <div className="p-4 rounded-full bg-muted/60 mb-3">
-              <PackageOpen className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-            </div>
-            <h3 className="text-base font-semibold text-foreground">
-              Không tìm thấy bản phát hành nào
-            </h3>
-            <p className="text-xs text-muted-foreground max-w-sm mt-1">
-              {searchQuery
-                ? "Không có phiên bản nào khớp với từ khóa tìm kiếm của bạn."
-                : "Chưa có Fix Version nào trong phạm vi đã chọn hoặc cần đồng bộ từ Jira."}
-            </p>
-            {!searchQuery && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSync}
-                disabled={syncMutation.isPending}
-                className="mt-4 gap-1.5 text-xs cursor-pointer"
-              >
-                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                Đồng bộ từ Jira ngay
-              </Button>
+            {searchQuery ? (
+              <>
+                <div className="p-4 rounded-full bg-muted/60 mb-3">
+                  <PackageOpen className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+                </div>
+                <h3 className="text-base font-semibold text-foreground">
+                  Không tìm thấy bản phát hành nào
+                </h3>
+                <p className="text-xs text-muted-foreground max-w-sm mt-1">
+                  Không có phiên bản nào khớp với từ khóa tìm kiếm &quot;{searchQuery}&quot;.
+                </p>
+              </>
+            ) : syncMeta?.state === "auth_required" ? (
+              <>
+                <div className="p-4 rounded-full bg-amber-500/10 mb-3">
+                  <AlertCircle className="h-8 w-8 text-amber-500" aria-hidden="true" />
+                </div>
+                <h3 className="text-base font-semibold text-foreground">
+                  Cần cấu hình tài khoản Jira
+                </h3>
+                <p className="text-xs text-muted-foreground max-w-sm mt-1">
+                  Bạn cần cấu hình token Jira cá nhân trong phần Cài đặt để đồng bộ và xem các bản phát hành.
+                </p>
+                <Button asChild variant="outline" size="sm" className="mt-4 gap-1.5 text-xs">
+                  <Link href="/settings">Đi đến Cài đặt</Link>
+                </Button>
+              </>
+            ) : syncMeta?.state === "forbidden" ? (
+              <>
+                <div className="p-4 rounded-full bg-rose-500/10 mb-3">
+                  <AlertCircle className="h-8 w-8 text-destructive" aria-hidden="true" />
+                </div>
+                <h3 className="text-base font-semibold text-foreground">
+                  Không có quyền truy cập dự án {selectedProject}
+                </h3>
+                <p className="text-xs text-muted-foreground max-w-sm mt-1">
+                  Tài khoản Jira của bạn không có quyền xem hoặc quản lý Fix Version trong dự án này.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSync}
+                  disabled={isSyncPending}
+                  className="mt-4 gap-1.5 text-xs cursor-pointer"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                  Thử lại
+                </Button>
+              </>
+            ) : syncMeta?.state === "failed" ? (
+              <>
+                <div className="p-4 rounded-full bg-rose-500/10 mb-3">
+                  <AlertCircle className="h-8 w-8 text-destructive" aria-hidden="true" />
+                </div>
+                <h3 className="text-base font-semibold text-foreground">
+                  Đồng bộ bản phát hành thất bại
+                </h3>
+                <p className="text-xs text-muted-foreground max-w-sm mt-1">
+                  {syncMeta.lastError || "Đã xảy ra lỗi khi kết nối đến Jira để lấy danh sách bản phát hành."}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSync}
+                  disabled={isSyncPending}
+                  className="mt-4 gap-1.5 text-xs cursor-pointer"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                  Thử lại
+                </Button>
+              </>
+            ) : syncMeta?.state === "empty" ? (
+              <>
+                <div className="p-4 rounded-full bg-muted/60 mb-3">
+                  <PackageOpen className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+                </div>
+                <h3 className="text-base font-semibold text-foreground">
+                  Dự án {selectedProject} chưa có Fix Version trên Jira
+                </h3>
+                <p className="text-xs text-muted-foreground max-w-sm mt-1">
+                  Hệ thống đã đồng bộ thành công nhưng dự án này chưa có phiên bản phát hành nào trên Jira.
+                </p>
+                <div className="mt-4 flex items-center gap-2">
+                  {canManage && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setCreateProject(selectedProject);
+                        setCreateOpen(true);
+                      }}
+                      className="gap-1.5 text-xs cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                      Tạo bản phát hành
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSync}
+                    disabled={isSyncPending}
+                    className="gap-1.5 text-xs cursor-pointer"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                    Đồng bộ lại
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="p-4 rounded-full bg-muted/60 mb-3">
+                  <PackageOpen className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+                </div>
+                <h3 className="text-base font-semibold text-foreground">
+                  {selectedProject !== "all"
+                    ? `Chưa đồng bộ bản phát hành dự án ${selectedProject}`
+                    : "Chưa có bản phát hành nào"}
+                </h3>
+                <p className="text-xs text-muted-foreground max-w-sm mt-1">
+                  Chưa có Fix Version nào trong phạm vi đã chọn hoặc cần đồng bộ từ Jira.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSync}
+                  disabled={isSyncPending}
+                  className="mt-4 gap-1.5 text-xs cursor-pointer"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                  Đồng bộ từ Jira ngay
+                </Button>
+              </>
             )}
           </div>
         ) : (

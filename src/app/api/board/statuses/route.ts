@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { isKnownProject, jiraProjectList } from "@/lib/env";
+import {
+  listActiveProjects,
+  normalizeProjectKey,
+} from "@/lib/jira/project-catalog";
 import {
   getProjectWorkflowConfig,
   type CategoryKey,
@@ -62,16 +65,22 @@ export async function GET(req: Request) {
     },
   });
 
+  const activeCatalog = await listActiveProjects();
+  const activeCatalogKeys = new Set(activeCatalog.map((p) => p.key));
+
   const url = new URL(req.url);
-  const project = (url.searchParams.get("project") ?? "").toUpperCase();
+  const project = normalizeProjectKey(url.searchParams.get("project") ?? "");
   const projectList = (url.searchParams.get("projectList") ?? "")
     .split(",")
-    .map((s) => s.trim().toUpperCase())
+    .map(normalizeProjectKey)
     .filter(Boolean);
 
-  const userBoardProjects = (user?.boardProjects ?? []).map((p) => p.trim().toUpperCase());
+  const userBoardProjects = (user?.boardProjects ?? [])
+    .map(normalizeProjectKey)
+    .filter((k) => activeCatalogKeys.has(k));
+
   const isAllowedProject = (k: string) =>
-    isKnownProject(k) || userBoardProjects.includes(k) || /^[A-Z][A-Z0-9_]{1,19}$/.test(k);
+    activeCatalogKeys.has(k) || userBoardProjects.includes(k);
 
   let keys: string[];
   if (project && isAllowedProject(project)) {
@@ -79,8 +88,7 @@ export async function GET(req: Request) {
   } else if (projectList.length > 0) {
     keys = projectList.filter(isAllowedProject);
   } else {
-    const selected = userBoardProjects.filter(isAllowedProject);
-    keys = selected.length > 0 ? selected : jiraProjectList.filter(isKnownProject);
+    keys = userBoardProjects.length > 0 ? userBoardProjects : activeCatalog.map((p) => p.key);
   }
 
   if (keys.length === 0) {

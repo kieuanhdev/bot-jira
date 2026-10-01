@@ -54,4 +54,89 @@ describe("POST /api/releases/sync", () => {
       projectKeys: ["EPM"],
     });
   });
+
+  it("returns 428 when sync result indicates auth_required", async () => {
+    syncReleasesFromJiraMock.mockResolvedValue({
+      syncedProjects: [],
+      totalReleases: 0,
+      created: 0,
+      updated: 0,
+      tasksLinked: 0,
+      errors: ["Chưa cấu hình tài khoản Jira hợp lệ"],
+      projects: [
+        {
+          projectKey: "EIM",
+          state: "auth_required",
+          errorCode: "jira_credentials_required",
+          errorMessage: "Chưa cấu hình tài khoản Jira hợp lệ",
+          versionCount: 0,
+          created: 0,
+          updated: 0,
+          tasksLinked: 0,
+        },
+      ],
+    });
+
+    const res = await POST(new Request("http://localhost/api/releases/sync?projectKey=EIM", { method: "POST" }));
+    expect(res.status).toBe(428);
+    const json = await res.json();
+    expect(json.code).toBe("jira_credentials_required");
+  });
+
+  it("returns 403 when sync result indicates forbidden", async () => {
+    syncReleasesFromJiraMock.mockResolvedValue({
+      syncedProjects: [],
+      totalReleases: 0,
+      created: 0,
+      updated: 0,
+      tasksLinked: 0,
+      errors: ["Forbidden"],
+      projects: [
+        {
+          projectKey: "EIM",
+          state: "forbidden",
+          errorCode: "jira_forbidden",
+          errorMessage: "Không có quyền xem version",
+          versionCount: 0,
+          created: 0,
+          updated: 0,
+          tasksLinked: 0,
+        },
+      ],
+    });
+
+    const res = await POST(new Request("http://localhost/api/releases/sync?projectKey=EIM", { method: "POST" }));
+    expect(res.status).toBe(403);
+    const json = await res.json();
+    expect(json.code).toBe("jira_forbidden");
+  });
+
+  it("returns 200 with success when sync confirms project is empty", async () => {
+    syncReleasesFromJiraMock.mockResolvedValue({
+      syncedProjects: ["EIM"],
+      totalReleases: 0,
+      created: 0,
+      updated: 0,
+      tasksLinked: 0,
+      errors: [],
+      projects: [
+        {
+          projectKey: "EIM",
+          state: "empty",
+          errorCode: null,
+          errorMessage: null,
+          versionCount: 0,
+          created: 0,
+          updated: 0,
+          tasksLinked: 0,
+        },
+      ],
+    });
+
+    const res = await POST(new Request("http://localhost/api/releases/sync?projectKey=EIM", { method: "POST" }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.result.projects[0].state).toBe("empty");
+  });
 });

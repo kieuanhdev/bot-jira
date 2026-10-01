@@ -21,6 +21,16 @@ vi.mock("@/lib/env", async (importOriginal) => {
     jiraProjectList: ["EPM", "MHRM"],
   };
 });
+vi.mock("@/lib/jira/project-catalog", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/jira/project-catalog")>();
+  return {
+    ...actual,
+    listActiveProjects: vi.fn().mockResolvedValue([
+      { key: "EPM", name: "EPM", active: true, syncEnabled: true },
+      { key: "MHRM", name: "MHRM", active: true, syncEnabled: true },
+    ]),
+  };
+});
 
 import { GET } from "./route";
 

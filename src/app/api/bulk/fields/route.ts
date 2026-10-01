@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { isKnownProject } from "@/lib/env";
+import {
+  isCatalogProject,
+  normalizeProjectKey,
+} from "@/lib/jira/project-catalog";
 import { jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 
@@ -22,15 +25,16 @@ export async function GET(req: Request) {
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const url = new URL(req.url);
-  const project = (url.searchParams.get("project") ?? "").trim().toUpperCase();
+  const project = normalizeProjectKey(url.searchParams.get("project") ?? "");
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true, boardProjects: true },
   });
 
-  const userProjects = (user?.boardProjects ?? []).map((p) => p.toUpperCase());
-  if (!project || (!isKnownProject(project) && !userProjects.includes(project))) {
+  const userProjects = (user?.boardProjects ?? []).map(normalizeProjectKey);
+  const isAllowed = project && ((await isCatalogProject(project)) || userProjects.includes(project));
+  if (!project || !isAllowed) {
     return NextResponse.json({ error: "Invalid or missing project parameter" }, { status: 400 });
   }
 

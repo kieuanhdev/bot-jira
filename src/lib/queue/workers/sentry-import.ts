@@ -39,7 +39,13 @@ function backoffMs(attemptCount: number): number {
 }
 
 async function findJiraIssueByLabel(label: string): Promise<JiraIssue | null> {
-  const projectKeys = jiraProjectList;
+  let projectKeys: string[];
+  try {
+    const { listSyncEnabledProjectKeys } = await import("@/lib/jira/project-catalog");
+    projectKeys = await listSyncEnabledProjectKeys();
+  } catch {
+    projectKeys = jiraProjectList;
+  }
   for (const pk of projectKeys) {
     const jql = `project = ${pk} AND labels = "${label}" ORDER BY created DESC`;
     try {

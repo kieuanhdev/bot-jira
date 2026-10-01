@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { isKnownProject } from "@/lib/env";
+import {
+  isCatalogProject,
+  normalizeProjectKey,
+} from "@/lib/jira/project-catalog";
 import { jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 
@@ -22,13 +25,22 @@ export async function GET(req: Request) {
     select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true, boardProjects: true },
   });
 
-  const userProjects = (user?.boardProjects ?? []).map((p) => p.toUpperCase());
-  const requestedProjects = Array.from(new Set(
+  const userProjects = (user?.boardProjects ?? []).map(normalizeProjectKey);
+  const rawProjects = Array.from(new Set(
     (new URL(req.url).searchParams.get("projects") ?? "")
       .split(",")
-      .map((project) => project.trim().toUpperCase())
-      .filter((project) => isKnownProject(project) || userProjects.includes(project))
+      .map(normalizeProjectKey)
+      .filter(Boolean)
   ));
+
+  const validProjects = await Promise.all(
+    rawProjects.map(async (project) => {
+      const allowed = (await isCatalogProject(project)) || userProjects.includes(project);
+      return allowed ? project : null;
+    })
+  );
+  const requestedProjects = validProjects.filter((p): p is string => Boolean(p));
+
   if (requestedProjects.length === 0) {
     return NextResponse.json({ items: [], projects: [], unavailableProjects: [] });
   }

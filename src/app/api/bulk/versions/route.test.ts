@@ -8,9 +8,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/session", () => ({ getSession: mocks.session }));
 vi.mock("@/lib/prisma", () => ({ prisma: { user: { findUnique: mocks.user } } }));
-vi.mock("@/lib/env", () => ({
-  isKnownProject: (key: string) => ["EPM", "MHRM"].includes(key.toUpperCase()),
-}));
+vi.mock("@/lib/jira/project-catalog", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/jira/project-catalog")>();
+  return {
+    ...actual,
+    isCatalogProject: vi.fn().mockImplementation(async (key: string) => ["EPM", "MHRM"].includes(key.toUpperCase())),
+  };
+});
 vi.mock("@/lib/user-creds", () => ({
   userJiraAuth: () => ({ user: "alice", token: "token", authMode: "Bearer" }),
 }));

@@ -32,6 +32,9 @@ const { prismaMock, sessionMock, canMock, userJiraAuthMock, jiraWithMock, create
     releaseTask: {
       createMany: vi.fn(),
     },
+    integrationCursor: {
+      findUnique: vi.fn(),
+    },
   };
   return { prismaMock, sessionMock, canMock, userJiraAuthMock, jiraWithMock, createVersionMock, getVersionsMock, getMyPermissionsMock };
 });
@@ -60,6 +63,7 @@ beforeEach(() => {
   prismaMock.user.findUnique.mockResolvedValue(null);
   prismaMock.branchInfo.findMany.mockResolvedValue([]);
   prismaMock.issueCache.findMany.mockResolvedValue([]);
+  prismaMock.integrationCursor.findUnique.mockResolvedValue(null);
   getMyPermissionsMock.mockResolvedValue({
     permissions: {
       ADMINISTER_PROJECTS: { id: "23", name: "Administer Projects", havePermission: true },
@@ -122,6 +126,40 @@ describe("GET /api/releases", () => {
       data.summary.inProgress + data.summary.ready + data.summary.empty + data.summary.released
     );
     expect(data.items).toHaveLength(2);
+    expect(data.sync).toBeDefined();
+    expect(data.sync.state).toBe("synced");
+  });
+
+  it("returns never_synced when project has 0 releases and no sync cursor", async () => {
+    prismaMock.release.findMany.mockResolvedValue([]);
+    prismaMock.integrationCursor.findUnique.mockResolvedValue(null);
+
+    const res = await GET(new Request("http://localhost/api/releases?projectKey=EIM"));
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.items).toHaveLength(0);
+    expect(data.sync.state).toBe("never_synced");
+    expect(data.sync.lastSuccessAt).toBeNull();
+  });
+
+  it("returns empty when sync cursor confirms project has no Fix Versions on Jira", async () => {
+    prismaMock.release.findMany.mockResolvedValue([]);
+    prismaMock.integrationCursor.findUnique.mockResolvedValue({
+      scope: "EIM",
+      lastSuccessAt: new Date("2026-10-01T12:00:00Z"),
+      lastStartedAt: new Date("2026-10-01T12:00:00Z"),
+      lastError: null,
+      stats: { state: "empty", versionCount: 0, errorCode: null },
+    });
+
+    const res = await GET(new Request("http://localhost/api/releases?projectKey=EIM"));
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.items).toHaveLength(0);
+    expect(data.sync.state).toBe("empty");
+    expect(data.sync.lastSuccessAt).toBe("2026-10-01T12:00:00.000Z");
   });
 });
 

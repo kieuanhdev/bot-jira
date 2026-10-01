@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { isKnownProject } from "@/lib/env";
+import {
+  normalizeProjectKey,
+  isValidProjectKeyFormat,
+} from "@/lib/jira/project-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +22,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "missing_project_key" }, { status: 400 });
   }
 
-  const projectKey = rawProject.toUpperCase();
-  const isFormatValid = /^[A-Z][A-Z0-9_]{1,19}$/.test(projectKey);
-  if (!isKnownProject(projectKey) && !isFormatValid) {
+  const projectKey = normalizeProjectKey(rawProject);
+  if (!isValidProjectKeyFormat(projectKey)) {
     return NextResponse.json({ error: "invalid_project_key" }, { status: 400 });
   }
 

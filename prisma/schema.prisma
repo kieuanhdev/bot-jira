@@ -53,6 +53,7 @@ model User {
 
   boardPreferences UserBoardPreference[]
   boardMembershipSnapshots JiraBoardMembershipSnapshot[]
+  discoveredProjects JiraProject[] @relation("DiscoveredProjects")
 
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -807,4 +808,28 @@ model JiraProjectWorkflowStatus {
   @@unique([snapshotId, statusId])
   @@index([snapshotId, displayOrder])
 }
+
+model JiraProject {
+  id                 String    @id @default(cuid())
+  key                String    @unique
+  jiraId             String?
+  name               String
+  active             Boolean   @default(true)
+  source             String    // bootstrap | user_added | admin | migration
+  syncEnabled        Boolean   @default(true)
+  discoveredById     String?
+  lastValidatedAt    DateTime?
+  lastValidationCode String?
+  bootstrapState     String?   @default("ready") // pending | syncing_issues | syncing_workflow | ready | partial | failed
+  lastBootstrapAt    DateTime?
+  lastBootstrapError String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  discoveredBy User? @relation("DiscoveredProjects", fields: [discoveredById], references: [id], onDelete: SetNull)
+
+  @@index([active, syncEnabled])
+  @@index([name])
+}
+
 

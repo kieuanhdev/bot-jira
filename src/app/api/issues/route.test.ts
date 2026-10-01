@@ -36,6 +36,16 @@ vi.mock("@/lib/env", () => ({
   isKnownProject: (p: string) => ["MR", "EPM"].includes(p),
   jiraProjectList: ["MR"],
 }));
+vi.mock("@/lib/jira/project-catalog", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/jira/project-catalog")>();
+  return {
+    ...actual,
+    listActiveProjects: vi.fn().mockResolvedValue([
+      { key: "MR", name: "MR", active: true, syncEnabled: true },
+      { key: "EPM", name: "EPM", active: true, syncEnabled: true },
+    ]),
+  };
+});
 
 import { GET } from "./route";
 
@@ -185,5 +195,12 @@ describe("GET /api/issues single project board", () => {
     expect(json.sync.projects).toEqual(["MR"]);
     expect(json.sync.lastSuccessAt).toBe(successDate.toISOString());
     expect(json.sync.errors).toEqual([]);
+  });
+
+  it("returns 404 when requested project does not exist in catalog", async () => {
+    const res = await GET(new Request("http://localhost/api/issues?project=NONEXISTENT"));
+    expect(res.status).toBe(404);
+    const json = await res.json();
+    expect(json.error).toContain("không tồn tại");
   });
 });

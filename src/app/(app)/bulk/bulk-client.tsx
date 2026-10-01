@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api-client";
-import { useIssues, type IssueItem } from "@/hooks/use-issues";
+import { useIssues, fetchIssuesPage, type IssueItem } from "@/hooks/use-issues";
 import { issuesKeys, boardKeys, bulkKeys, meKeys, staleKeys } from "@/lib/query-keys";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -131,37 +131,6 @@ export function BulkClient() {
   const searchParams = useSearchParams();
   const { data: session } = useSession();
 
-  // Load issues from cache
-  const { data, isLoading } = useIssues({ includeDone: true, limit: 1000, assignee: "all" });
-  const issues: IssueItem[] = useMemo(
-    () => (data && "items" in data ? data.items : []),
-    [data]
-  );
-
-  // Jira base URL for deep links
-  const { data: meStatus } = useQuery({
-    queryKey: meKeys.status,
-    queryFn: () => api<{ jiraName: string | null; jiraBaseUrl?: string }>("/api/me/status"),
-    retry: 0,
-  });
-  const jiraBaseUrl = (meStatus?.jiraBaseUrl ?? "").replace(/\/$/, "");
-
-  // Project list
-  const { data: projectsData } = useQuery({
-    queryKey: boardKeys.projects,
-    queryFn: () => api<{ items: { key: string; openCount: number }[] }>("/api/projects"),
-    staleTime: 5 * 60_000,
-    retry: 0,
-  });
-  const projectOptions = useMemo(() => projectsData?.items ?? [], [projectsData?.items]);
-
-  // User preferences (to pre-select the active project)
-  const { data: prefs } = useQuery({
-    queryKey: meKeys.prefs,
-    queryFn: () => api<{ projects: string[]; available: string[] }>("/api/me/preferences"),
-    retry: 0,
-  });
-
   const returnTo = searchParams?.get("returnTo");
 
   const initialKeys = useMemo(() => {
@@ -199,6 +168,85 @@ export function BulkClient() {
 
   // Project scope (MANDATORY)
   const [filterProject, setFilterProject] = useState(initialProjectFromUrl);
+  const [extraIssues, setExtraIssues] = useState<IssueItem[]>([]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Load issues from cache directly scoped to the selected project
+  const { data, isLoading, isFetching } = useIssues(
+    {
+      project: filterProject,
+      includeDone: true,
+      limit: 1000,
+      assignee: "all",
+    },
+    { enabled: Boolean(filterProject) }
+  );
+
+  const issues: IssueItem[] = useMemo(() => {
+    const baseItems = data && "items" in data ? data.items : [];
+    if (extraIssues.length === 0) return baseItems;
+    const seen = new Set(baseItems.map((i) => i.jiraKey));
+    const uniqueExtra = extraIssues.filter((i) => !seen.has(i.jiraKey));
+    return [...baseItems, ...uniqueExtra];
+  }, [data, extraIssues]);
+
+  const totalServerIssues = data && "total" in data ? data.total : issues.length;
+  const isIssuesLoading = isLoading || (Boolean(filterProject) && isFetching && issues.length === 0);
+
+  async function handleLoadMore() {
+    if (!filterProject || isLoadingMore || issues.length >= totalServerIssues) return;
+    setIsLoadingMore(true);
+    try {
+      const nextPage = await fetchIssuesPage(
+        { project: filterProject, includeDone: true, assignee: "all" },
+        issues.length,
+        1000
+      );
+      if (nextPage && "items" in nextPage && Array.isArray(nextPage.items)) {
+        setExtraIssues((prev) => [...prev, ...nextPage.items]);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
+
+  // Load distinct filter options for the project from server
+  const { data: filtersData } = useQuery({
+    queryKey: issuesKeys.filters(filterProject || "bulk"),
+    queryFn: () =>
+      api<{ assignees: string[]; labels: string[]; priorities: string[] }>(
+        `/api/issues/filters?project=${encodeURIComponent(filterProject)}`
+      ),
+    enabled: Boolean(filterProject),
+    staleTime: 60_000,
+    retry: 0,
+  });
+
+  // Jira base URL for deep links
+  const { data: meStatus } = useQuery({
+    queryKey: meKeys.status,
+    queryFn: () => api<{ jiraName: string | null; jiraBaseUrl?: string }>("/api/me/status"),
+    retry: 0,
+  });
+  const jiraBaseUrl = (meStatus?.jiraBaseUrl ?? "").replace(/\/$/, "");
+
+  // Project list
+  const { data: projectsData } = useQuery({
+    queryKey: boardKeys.projects,
+    queryFn: () => api<{ items: { key: string; openCount: number }[] }>("/api/projects"),
+    staleTime: 5 * 60_000,
+    retry: 0,
+  });
+  const projectOptions = useMemo(() => projectsData?.items ?? [], [projectsData?.items]);
+
+  // User preferences (to pre-select the active project)
+  const { data: prefs } = useQuery({
+    queryKey: meKeys.prefs,
+    queryFn: () => api<{ projects: string[]; available: string[] }>("/api/me/preferences"),
+    retry: 0,
+  });
 
   // Auto-select the first preferred project (or the first available project)
   useEffect(() => {
@@ -213,7 +261,10 @@ export function BulkClient() {
       projectKeys[0] ??
       "";
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (pick) setFilterProject(pick);
+    if (pick) {
+      setFilterProject(pick);
+      setExtraIssues([]);
+    }
   }, [prefs, projectOptions, filterProject]);
 
   // Selection mode and task filters
@@ -227,18 +278,21 @@ export function BulkClient() {
     () => (filterProject ? issues.filter((issue) => issue.projectKey === filterProject) : []),
     [filterProject, issues]
   );
-  const availableAssignees = useMemo(
-    () => Array.from(new Set(projectIssues.map((issue) => issue.assigneeJira).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b)),
-    [projectIssues]
-  );
-  const labelOptions = useMemo(
-    () => Array.from(new Set(projectIssues.flatMap((issue) => issue.labels))).sort((a, b) => a.localeCompare(b)),
-    [projectIssues]
-  );
+  const availableAssignees = useMemo(() => {
+    if (filtersData?.assignees && filtersData.assignees.length > 0) return filtersData.assignees;
+    return Array.from(new Set(projectIssues.map((issue) => issue.assigneeJira).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b));
+  }, [filtersData?.assignees, projectIssues]);
+
+  const labelOptions = useMemo(() => {
+    if (filtersData?.labels && filtersData.labels.length > 0) return filtersData.labels;
+    return Array.from(new Set(projectIssues.flatMap((issue) => issue.labels))).sort((a, b) => a.localeCompare(b));
+  }, [filtersData?.labels, projectIssues]);
+
   const priorityOptions = useMemo(() => {
+    if (filtersData?.priorities && filtersData.priorities.length > 0) return filtersData.priorities;
     const values = Array.from(new Set(projectIssues.map((issue) => issue.priority).filter(Boolean)));
     return (values.length > 0 ? values : ["Low", "Medium", "High", "Highest", "Blocker"]).sort((a, b) => a.localeCompare(b));
-  }, [projectIssues]);
+  }, [filtersData?.priorities, projectIssues]);
 
   // Selected task keys
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initialKeys));
@@ -248,9 +302,12 @@ export function BulkClient() {
     if (initialKeys.length > 0) {
       setSelected(new Set(initialKeys));
       const proj = searchParams?.get("project")?.trim().toUpperCase() || initialKeys[0]?.split("-")[0];
-      if (proj) setFilterProject(proj);
+      if (proj && proj !== filterProject) {
+        setFilterProject(proj);
+        setExtraIssues([]);
+      }
     }
-  }, [initialKeys, searchParams]);
+  }, [initialKeys, searchParams, filterProject]);
 
   // Enabled fields toggle
   const [enabledFields, setEnabledFields] = useState<Set<string>>(() => new Set(initialFields));
@@ -359,7 +416,11 @@ export function BulkClient() {
   // Reset when changing project
   function handleProjectChange(newProject: string) {
     setFilterProject(newProject);
+    setExtraIssues([]);
     setSelected(new Set());
+    setFilterStatus("");
+    setFilterAssignee("");
+    setTaskSearch("");
     setFilterOnlySelected(false);
     resetPreview();
     setEnabledFields(new Set());
@@ -909,7 +970,7 @@ export function BulkClient() {
 
               {/* Task table / list */}
               <div className="max-h-80 overflow-auto">
-                {isLoading && (
+                {isIssuesLoading && (
                   <div className="flex flex-col gap-2 p-4">
                     {[0, 1, 2, 3, 4].map((i) => (
                       <div key={i} className="flex items-center gap-3">
@@ -986,7 +1047,7 @@ export function BulkClient() {
                     </label>
                   );
                 })}
-                {!isLoading && filteredIssues.length === 0 && (
+                {!isIssuesLoading && filteredIssues.length === 0 && (
                   <div className="flex flex-col items-center p-10 text-center">
                     <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-muted">
                       <Search className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
@@ -997,7 +1058,29 @@ export function BulkClient() {
                 )}
               </div>
               <div className="flex items-center justify-between border-t bg-muted/30 px-3 py-2.5 text-xs">
-                <span className="text-muted-foreground">Hiển thị {filteredIssues.length} task</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">
+                    Hiển thị {filteredIssues.length} task (đã tải {issues.length}/{totalServerIssues} của dự án {filterProject})
+                  </span>
+                  {issues.length < totalServerIssues && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleLoadMore}
+                      disabled={isLoadingMore}
+                      className="h-6 text-[11px] px-2 py-0 cursor-pointer"
+                    >
+                      {isLoadingMore ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          Đang tải...
+                        </>
+                      ) : (
+                        `Tải thêm (${totalServerIssues - issues.length} task còn lại)`
+                      )}
+                    </Button>
+                  )}
+                </div>
                 <span className="font-semibold text-primary">Tổng số task sẽ cập nhật: {effectiveCount}</span>
               </div>
             </>
