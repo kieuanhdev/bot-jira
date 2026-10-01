@@ -18,6 +18,8 @@ import { runPollWatchedIssues } from "./workers/poll-watched-issues";
 import type { WorkerLog } from "./guard";
 import { scheduledJiraJobAgeMs, shouldSkipStaleJiraJob } from "./jira-job-policy";
 
+import { runRefreshBoardMembership, type RefreshBoardMembershipJobData } from "./workers/refresh-board-membership";
+
 const globalForBoss = globalThis as unknown as { boss?: PgBoss; bossStart?: Promise<PgBoss> };
 let watchTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -26,6 +28,7 @@ export const JOB_NAMES = [
   "poll-jira-project",
   "poll-jira",
   "poll-watched-issues",
+  "refresh-board-membership",
   "check-branches",
   "parse-comment-branches",
   "poll-pr-comments",
@@ -257,11 +260,18 @@ export async function enqueueNotificationDelivery(startAfter?: Date): Promise<st
   });
 }
 
+/** Enqueue background refresh of board membership snapshot. Disabled in single project board mode. */
+export async function enqueueBoardMembershipRefresh(_data: RefreshBoardMembershipJobData): Promise<string | null> {
+  // Producer-off: single project board mode does not use membership jobs
+  return null;
+}
+
 const QUEUE_EXPIRE_SECONDS: Record<string, number> = {
   "poll-jira-dispatch": 60,
   "poll-jira-project": env.jiraSyncExpireSeconds,
   "poll-jira": 300,
   "poll-watched-issues": 30,
+  "refresh-board-membership": 180,
   "deliver-notifications": 60,
   "check-branches": 300,
   "parse-comment-branches": 120,
@@ -408,6 +418,14 @@ export async function registerJobs(): Promise<PgBoss> {
       source: "recovery",
     }),
   })));
+  await boss.work<RefreshBoardMembershipJobData>("refresh-board-membership", async (jobs) => {
+    const job = jobs[0];
+    if (!job?.data) return { ok: false, reason: "No job data" };
+    const { userId, projectKey, boardId } = job.data;
+    return recordRun(`refresh-board-membership:${userId}:${projectKey}:${boardId}`, () =>
+      runRefreshBoardMembership(job.data)
+    );
+  });
   // M5 — webhook processing: one-off jobs enqueued by the webhook endpoints.
   await boss.work<ProcessWebhookJobData>("process-webhook", { pollingIntervalSeconds: 0.5 }, async (jobs) => {
     const data = jobs[0]?.data ?? { source: "jira", eventId: "" };

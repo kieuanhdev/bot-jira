@@ -22,21 +22,29 @@ vi.mock("@/lib/prisma", () => ({
     $transaction: (promises: unknown[]) => Promise.all(promises),
   },
 }));
+vi.mock("@/lib/user-creds", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@/lib/user-creds")>();
+  return {
+    ...mod,
+    userJiraUsername: (user: any) => user?.jiraUsername ?? "current_user",
+  };
+});
 vi.mock("@/lib/env", () => ({
-  env: { jiraFreshnessMinutes: 30 },
+  env: {
+    jiraFreshnessMinutes: 30,
+  },
   isKnownProject: (p: string) => ["MR", "EPM"].includes(p),
   jiraProjectList: ["MR"],
 }));
 
 import { GET } from "./route";
 
-describe("GET /api/issues multi-assignee filtering", () => {
+describe("GET /api/issues single project board", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.session.mockResolvedValue({ user: { id: "user-1" } });
     mocks.user.mockResolvedValue({
       jiraUsername: "current_user",
-      jiraUserEnc: null,
       boardProjects: ["MR"],
     });
     mocks.findManyIssues.mockResolvedValue([]);
@@ -145,5 +153,37 @@ describe("GET /api/issues multi-assignee filtering", () => {
         },
       ])
     );
+  });
+
+  it("ignores legacy boardId param and queries project directly without error", async () => {
+    const res = await GET(
+      new Request("http://localhost/api/issues?project=MR&boardId=101&assignee=ALL")
+    );
+    expect(res.status).toBe(200);
+
+    const callArgs = mocks.findManyIssues.mock.calls[0][0];
+    expect(callArgs.where.projectKey).toEqual({ in: ["MR"] });
+    // Invariant: no where.jiraKey membership filter
+    expect(callArgs.where.jiraKey).toBeUndefined();
+  });
+
+  it("returns sync freshness information from IntegrationCursor", async () => {
+    const successDate = new Date("2026-10-01T12:00:00Z");
+    mocks.findManyCursors.mockResolvedValue([
+      {
+        scope: "MR",
+        lastSuccessAt: successDate,
+        lastStartedAt: successDate,
+        lastError: null,
+      },
+    ]);
+
+    const res = await GET(new Request("http://localhost/api/issues?project=MR&assignee=ALL"));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+
+    expect(json.sync.projects).toEqual(["MR"]);
+    expect(json.sync.lastSuccessAt).toBe(successDate.toISOString());
+    expect(json.sync.errors).toEqual([]);
   });
 });

@@ -15,7 +15,12 @@ import {
   type CollisionDetection,
 } from "@dnd-kit/core";
 import { api, ApiError } from "@/lib/api-client";
-import { useIssues, fetchIssuesPage, type IssueItem } from "@/hooks/use-issues";
+import {
+  useIssues,
+  fetchIssuesPage,
+  type IssueItem,
+  type IssueSuccessResponse,
+} from "@/hooks/use-issues";
 import { issuesKeys, boardKeys, meKeys, freshnessKeys } from "@/lib/query-keys";
 import { AssigneeMultiSelect } from "@/components/assignee-multi-select";
 import { Card } from "@/components/ui/card";
@@ -63,7 +68,6 @@ import {
   type ViewMode,
   type Transition,
   type BoardSyncState,
-  CATEGORY_ORDER,
 } from "./lib/board-types";
 import { daysSince, sortIssues, columnKeyForIssue, statusDot } from "./lib/board-utils";
 
@@ -238,6 +242,9 @@ export function BoardClient() {
   const cardRefs = useRef<Map<string, HTMLElement | null>>(new Map());
   const selectedProject = effectivePreferred.includes(project) ? project : (effectivePreferred[0] ?? "");
 
+  const boardQueriesEnabled =
+    effectivePreferred.length > 0 && Boolean(selectedProject);
+
   const activeFilterCount =
     [q, label, priority].filter(Boolean).length +
     (selectedAssignees.length !== 1 || selectedAssignees[0] !== "me" ? 1 : 0);
@@ -267,7 +274,6 @@ export function BoardClient() {
 
   const effectiveView: ViewMode = width === "narrow" ? "list" : view;
 
-  const enabled = effectivePreferred.length > 0;
   const isAssigneeAll =
     selectedAssignees.length === 0 || selectedAssignees.includes("ALL");
   const boardFilters: import("@/hooks/use-issues").BoardFilters = {
@@ -279,7 +285,12 @@ export function BoardClient() {
     includeDone: true,
     limit: 1000,
   };
-  const { data, isLoading, isFetching } = useIssues(boardFilters, { enabled });
+  const { data, isLoading, isFetching } = useIssues(boardFilters, {
+    enabled: boardQueriesEnabled,
+  });
+
+  const issueData: IssueSuccessResponse | null =
+    data && "items" in data ? (data as IssueSuccessResponse) : null;
 
   const filterSig = JSON.stringify({
     p: selectedProject,
@@ -290,13 +301,13 @@ export function BoardClient() {
   });
   const [extraPages, setExtraPages] = useState<{ sig: string; items: IssueItem[] }>({ sig: "", items: [] });
   const [loadingMore, setLoadingMore] = useState(false);
-  const loadedTotal = data?.total ?? 0;
+  const loadedTotal = issueData?.total ?? 0;
 
   const extraIssues = useMemo(
     () => (extraPages.sig === filterSig ? extraPages.items : []),
     [extraPages, filterSig]
   );
-  const firstPageCount = data?.items.length ?? 0;
+  const firstPageCount = issueData?.items.length ?? 0;
   const hasMore = firstPageCount + extraIssues.length < loadedTotal;
 
   async function loadMore() {
@@ -317,9 +328,9 @@ export function BoardClient() {
     }
   }
 
-  const issues = useMemo(
-    () => (data?.items ?? []).concat(extraIssues),
-    [data?.items, extraIssues]
+  const issues: IssueItem[] = useMemo(
+    () => (issueData ? [...issueData.items, ...extraIssues] : [...extraIssues]),
+    [issueData, extraIssues]
   );
 
   const [boardSync, setBoardSync] = useState<{
@@ -492,52 +503,103 @@ export function BoardClient() {
     return () => window.removeEventListener("keydown", onKey);
   }, [paletteOpen, quickPanel]);
 
-  const { data: statusesData } = useQuery({
+  const { data: statusesData, isLoading: isLoadingStatuses } = useQuery({
     queryKey: boardKeys.statuses(selectedProject),
-    enabled: effectivePreferred.length > 0 && Boolean(selectedProject),
+    enabled: boardQueriesEnabled,
     queryFn: () =>
       api<{
-        items: { name: string; category: string }[];
+        projectKey?: string;
+        source?: string;
+        columns?: Array<{
+          id: string;
+          name: string;
+          statusIds: string[];
+          statuses: Array<{ id: string; name: string }>;
+          category?: string;
+          isBacklog: boolean;
+          isDone: boolean;
+        }>;
+        backlogColumnId?: string | null;
+        backlogStatusIds?: string[];
+        items?: { name: string; category: string }[];
         statusCategoryMap: Record<string, string>;
-      }>(`/api/board/statuses?project=${selectedProject}`),
+      }>(
+        `/api/board/statuses?project=${selectedProject}`
+      ),
     staleTime: 5 * 60_000,
-    retry: 0,
+    retry: 1,
   });
   const statusCategoryMap = useMemo<Record<string, string>>(
     () => statusesData?.statusCategoryMap ?? {},
     [statusesData?.statusCategoryMap]
   );
 
-  type Column = { key: string; label: string; category: string; isDone: boolean };
+  type Column = {
+    key: string;
+    label: string;
+    category: string;
+    isDone: boolean;
+    isBacklog: boolean;
+    statusIds: string[];
+    statuses: Array<{ id: string; name: string }>;
+  };
+
   const columns = useMemo<Column[]>(() => {
-    const items = statusesData?.items ?? [];
-    if (items.length === 0) {
+    const cols: Column[] = [];
+    const seenColKeys = new Set<string>();
+    const seenStatusNames = new Set<string>();
+
+    if (statusesData?.columns && statusesData.columns.length > 0) {
+      for (const c of statusesData.columns) {
+        cols.push({
+          key: c.id,
+          label: c.name,
+          category: c.isDone ? "done" : (statusCategoryMap[c.name] ?? "new"),
+          isDone: c.isDone,
+          isBacklog: c.isBacklog,
+          statusIds: c.statusIds ?? [],
+          statuses: c.statuses ?? [],
+        });
+        seenColKeys.add(c.id);
+        seenStatusNames.add(c.name.toLowerCase());
+        for (const s of c.statuses ?? []) {
+          seenStatusNames.add(s.name.toLowerCase());
+        }
+      }
+    }
+
+    // Dynamic runtime column creation: if an issue has a status not present in workflow columns,
+    // add a runtime column so it never gets lost or placed in the wrong column
+    for (const issue of issues) {
+      const sId = (issue.statusId || "").trim();
+      const sName = (issue.status || "").trim();
+      const key = sId ? `status:${sId}` : `status:${sName}`;
+      if (!seenColKeys.has(key) && !seenStatusNames.has(sName.toLowerCase())) {
+        seenColKeys.add(key);
+        seenStatusNames.add(sName.toLowerCase());
+        const cat = issue.statusCategory || statusCategoryMap[sName] || "new";
+        cols.push({
+          key,
+          label: sName || (sId ? `Status ${sId}` : "Khác"),
+          category: cat,
+          isDone: cat === "done",
+          isBacklog: false,
+          statusIds: sId ? [sId] : [],
+          statuses: sId ? [{ id: sId, name: sName }] : [],
+        });
+      }
+    }
+
+    if (cols.length === 0) {
       return [
-        { key: "To Do", label: "To Do", category: "new", isDone: false },
-        { key: "In Progress", label: "In Progress", category: "indeterminate", isDone: false },
-        { key: "Done", label: "Done", category: "done", isDone: true },
+        { key: "status:todo", label: "To Do", category: "new", isDone: false, isBacklog: false, statusIds: [], statuses: [] },
+        { key: "status:inprogress", label: "In Progress", category: "indeterminate", isDone: false, isBacklog: false, statusIds: [], statuses: [] },
+        { key: "status:done", label: "Done", category: "done", isDone: true, isBacklog: false, statusIds: [], statuses: [] },
       ];
     }
-    const seen = new Set<string>();
-    const cols: Column[] = [];
-    for (const s of items) {
-      const label = (s.name || "").trim();
-      if (!label || seen.has(label)) continue;
-      seen.add(label);
-      const cat =
-        typeof s.category === "string" && CATEGORY_ORDER.includes(s.category as (typeof CATEGORY_ORDER)[number])
-          ? s.category
-          : "new";
-      cols.push({ key: label, label, category: cat, isDone: cat === "done" });
-    }
-    return cols.length > 0
-      ? cols
-      : [
-          { key: "To Do", label: "To Do", category: "new", isDone: false },
-          { key: "In Progress", label: "In Progress", category: "indeterminate", isDone: false },
-          { key: "Done", label: "Done", category: "done", isDone: true },
-        ];
-  }, [statusesData?.items]);
+
+    return cols;
+  }, [statusesData, statusCategoryMap, issues]);
 
   const [optimistic, setOptimistic] = useState<Map<string, string>>(new Map());
 
@@ -550,9 +612,24 @@ export function BoardClient() {
     });
   }
 
+  const columnKeyByStatusId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of columns) {
+      for (const sId of c.statusIds) {
+        m.set(sId, c.key);
+      }
+    }
+    return m;
+  }, [columns]);
+
   const columnKeyByStatus = useMemo(() => {
     const m = new Map<string, string>();
-    for (const c of columns) m.set(c.label, c.key);
+    for (const c of columns) {
+      m.set(c.label, c.key);
+      for (const s of c.statuses) {
+        m.set(s.name, c.key);
+      }
+    }
     return m;
   }, [columns]);
 
@@ -560,7 +637,13 @@ export function BoardClient() {
     const effective = optimistic.has(issue.jiraKey)
       ? ({ ...issue, status: optimistic.get(issue.jiraKey)! } as IssueItem)
       : issue;
-    return columnKeyForIssue(effective, columnKeyByStatus, statusCategoryMap, columns);
+    return columnKeyForIssue(
+      effective,
+      columnKeyByStatus,
+      statusCategoryMap,
+      columns,
+      columnKeyByStatusId
+    );
   }
 
   const byColumn = useMemo(() => {
@@ -658,6 +741,12 @@ export function BoardClient() {
     if (canTransitionToStatus(all, targetLabel)) {
       return true;
     }
+    const targetCol = columns.find((c) => c.key === targetKey);
+    if (targetCol && targetCol.statuses.length > 0) {
+      for (const st of targetCol.statuses) {
+        if (canTransitionToStatus(all, st.name)) return true;
+      }
+    }
     if (targetCat && targetKey !== targetLabel) {
       return all.some((tr) => {
         const t = toName(tr);
@@ -667,10 +756,19 @@ export function BoardClient() {
     return false;
   }
 
-  function findTransition(all: Transition[], targetLabel: string): Transition | null {
+  function findTransition(all: Transition[], targetLabel: string, targetKey?: string): Transition | null {
     const exact = findTransitionToStatus(all, targetLabel);
     if (exact) return exact;
-    const targetCat = columns.find((c) => c.key === targetLabel)?.category;
+    if (targetKey) {
+      const targetCol = columns.find((c) => c.key === targetKey);
+      if (targetCol && targetCol.statuses.length > 0) {
+        for (const st of targetCol.statuses) {
+          const match = findTransitionToStatus(all, st.name);
+          if (match) return match;
+        }
+      }
+    }
+    const targetCat = columns.find((c) => c.key === (targetKey ?? targetLabel))?.category;
     if (targetCat) {
       const byCat = all.find((tr) => {
         const target = toName(tr);
@@ -735,7 +833,7 @@ export function BoardClient() {
       }
 
       const all = await fetchTransitions(key);
-      const found = findTransition(all, targetLabel);
+      const found = findTransition(all, targetLabel, targetKey);
 
       if (!found) {
         setToast(
@@ -744,7 +842,8 @@ export function BoardClient() {
         return;
       }
 
-      setOptimisticStatus(key, targetLabel);
+      const targetStatusName = transitionTarget(found);
+      setOptimisticStatus(key, targetStatusName);
       await doTransition(key, found.id, fromStatus);
     } catch (e) {
       setOptimisticStatus(key, null);
@@ -917,11 +1016,16 @@ export function BoardClient() {
       seen.set(c.category, idxInCat + 1);
       const all = sortedByColumn.get(c.key) ?? [];
       const count = colVisible[c.key] ?? COL_BATCH;
+      const emptyMessage = c.isBacklog
+        ? (activeFilterCount > 0 ? "Không có task Backlog khớp bộ lọc" : "Không có task Backlog")
+        : undefined;
       return {
         id: c.key,
         label: c.label,
         category: c.category,
         isDone: c.isDone,
+        isBacklog: c.isBacklog,
+        emptyMessage,
         colIndex: i,
         columnCount: columns.length,
         dotColor: statusDot(c.category, idxInCat),
@@ -931,7 +1035,7 @@ export function BoardClient() {
         collapsed: collapsedCols.has(c.key),
       };
     });
-  }, [columns, sortedByColumn, colVisible, collapsedCols]);
+  }, [columns, sortedByColumn, colVisible, collapsedCols, activeFilterCount]);
 
   function growColumn(colId: string) {
     setColVisibleState((prev) => {
@@ -1087,7 +1191,13 @@ export function BoardClient() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           {projectList.map((p) => (
-            <button key={p.key} onClick={() => setProject(p.key)} className={tabCls(selectedProject === p.key)}>
+            <button
+              key={p.key}
+              onClick={() => {
+                setProject(p.key);
+              }}
+              className={tabCls(selectedProject === p.key)}
+            >
               {p.key}
               <span
                 className={
@@ -1186,6 +1296,7 @@ export function BoardClient() {
               </Card>
             )}
           </div>
+
         </div>
 
         <div className="flex items-center gap-2">
@@ -1259,18 +1370,19 @@ export function BoardClient() {
         </div>
       </div>
 
-      {data?.sync.stale && (
+      {issueData?.sync.stale && (
         <div className="flex items-start gap-2 rounded-md border border-amber-300/50 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <div>
             <p className="font-medium">Dữ liệu Jira chưa được đồng bộ mới</p>
             <p className="text-xs opacity-90">
-              Đồng bộ thành công lần cuối: {data.sync.lastSuccessAt ? timeAgo(data.sync.lastSuccessAt) : "chưa từng"}.
+              Đồng bộ thành công lần cuối: {issueData.sync.lastSuccessAt ? timeAgo(issueData.sync.lastSuccessAt) : "chưa từng"}.
               Hãy xếp hàng đồng bộ hoặc kiểm tra worker trước khi ra quyết định phát hành.
             </p>
           </div>
         </div>
       )}
+
 
       <FilterBar activeCount={activeFilterCount} onReset={resetFilters}>
         <SearchField
@@ -1286,6 +1398,11 @@ export function BoardClient() {
           assignees={assignees}
           myName={myName}
         />
+        <div className="flex items-center gap-1.5 self-center text-xs text-muted-foreground whitespace-nowrap">
+          <span className="inline-flex items-center gap-1 rounded bg-muted/60 px-2 py-1 text-[11px] font-medium text-muted-foreground border border-border/40">
+            Backlog luôn hiển thị toàn bộ task của dự án
+          </span>
+        </div>
         <Select value={label || ""} onValueChange={(v) => setLabel(v === "ALL" ? "" : v)}>
           <SelectTrigger className="w-40"><SelectValue placeholder="Nhãn" /></SelectTrigger>
           <SelectContent>
@@ -1313,18 +1430,23 @@ export function BoardClient() {
 
       {activeProject && (
         <div className="text-sm text-muted-foreground">
-          Dự án <span className="font-semibold text-foreground">{activeProject.key}</span> ·{" "}
-          {issues.length} task
+          Dự án <span className="font-semibold text-foreground">{activeProject.key}</span>
+          {" "}· {issues.length} task
+          {issueData?.sync.lastSuccessAt ? (
+            <>
+              {" "}· Đồng bộ <span className="font-medium text-foreground">{timeAgo(issueData.sync.lastSuccessAt)}</span>
+            </>
+          ) : null}
         </div>
       )}
 
-      {isLoading ? (
+      {isLoading || isLoadingStatuses ? (
         <BoardSkeleton columnCount={columns.length || 5} />
       ) : issues.length === 0 ? (
         <EmptyState
           icon={Search}
           title="Không có task nào để hiển thị"
-          hint="Hãy thử điều chỉnh bộ lọc, hoặc chạy đồng bộ Jira để làm mới bảng."
+          hint="Hãy thử điều chỉnh bộ lọc, hoặc làm mới dữ liệu để cập nhật bảng."
           className="flex-1"
         />
       ) : effectiveView === "board" ? (
@@ -1351,6 +1473,8 @@ export function BoardClient() {
                 label={col.label}
                 category={col.category}
                 isDone={col.isDone}
+                isBacklog={col.isBacklog}
+                emptyMessage={col.emptyMessage}
                 items={col.items}
                 colIndex={col.colIndex}
                 columnCount={col.columnCount}

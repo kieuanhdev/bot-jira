@@ -133,7 +133,10 @@ export function BulkClient() {
 
   // Load issues from cache
   const { data, isLoading } = useIssues({ includeDone: true, limit: 1000, assignee: "all" });
-  const issues: IssueItem[] = useMemo(() => data?.items ?? [], [data?.items]);
+  const issues: IssueItem[] = useMemo(
+    () => (data && "items" in data ? data.items : []),
+    [data]
+  );
 
   // Jira base URL for deep links
   const { data: meStatus } = useQuery({

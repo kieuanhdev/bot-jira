@@ -80,12 +80,26 @@ export function statusText(category: string): string {
 export function columnKeyForIssue(
   issue: IssueItem,
   columnKeyByStatus: Map<string, string>,
-  statusCategoryMap: Record<string, string>,
-  columns: { key: string; category: string }[]
+  _statusCategoryMap: Record<string, string>,
+  columns: Array<{ key: string; category: string; statusIds?: string[] }>,
+  columnKeyByStatusId?: Map<string, string>
 ): string {
+  if (issue.statusId && columnKeyByStatusId?.has(issue.statusId)) {
+    return columnKeyByStatusId.get(issue.statusId)!;
+  }
   const byName = columnKeyByStatus.get(issue.status);
   if (byName) return byName;
-  const cat = issue.statusCategory || statusCategoryMap[issue.status] || "new";
-  const col = columns.find((c) => c.category === cat) ?? columns[0];
-  return col ? col.key : "To Do";
+
+  const normalized = (issue.status || "").trim().toLowerCase();
+  for (const [name, key] of columnKeyByStatus.entries()) {
+    if (name.toLowerCase() === normalized) return key;
+  }
+
+  // Exact fallback: if a column has this exact key, use it
+  const targetKey = issue.statusId ? `status:${issue.statusId}` : `status:${issue.status || "unknown"}`;
+  if (columns.some((c) => c.key === targetKey)) {
+    return targetKey;
+  }
+
+  return targetKey;
 }

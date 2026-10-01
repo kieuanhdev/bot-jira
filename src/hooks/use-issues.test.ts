@@ -8,7 +8,7 @@ vi.mock("@/lib/api-client", () => ({
   api: mocks.api,
 }));
 
-import { fetchIssuesPage } from "./use-issues";
+import { fetchIssuesPage, isMembershipPending } from "./use-issues";
 
 describe("fetchIssuesPage serialization", () => {
   beforeEach(() => {
@@ -61,3 +61,14 @@ describe("fetchIssuesPage serialization", () => {
     expect(qs.get("limit")).toBe("50");
   });
 });
+
+describe("isMembershipPending", () => {
+  it("returns true for membership_pending and membership_preparing", () => {
+    expect(isMembershipPending({ code: "membership_pending", projectKey: "EPM", boardId: 101 })).toBe(true);
+    expect(isMembershipPending({ code: "membership_preparing", projectKey: "EPM", boardId: 101 })).toBe(true);
+    expect(isMembershipPending({ items: [], total: 0 })).toBe(false);
+    expect(isMembershipPending(null)).toBe(false);
+    expect(isMembershipPending(undefined)).toBe(false);
+  });
+});
+

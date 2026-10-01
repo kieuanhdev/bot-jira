@@ -16,6 +16,8 @@ export function BoardColumn({
   label,
   category,
   isDone,
+  isBacklog,
+  emptyMessage,
   items,
   total,
   colIndex,
@@ -41,6 +43,8 @@ export function BoardColumn({
   label: string;
   category: string;
   isDone: boolean;
+  isBacklog?: boolean;
+  emptyMessage?: string;
   items: IssueItem[];
   total: number;
   colIndex: number;
@@ -145,7 +149,7 @@ export function BoardColumn({
                 isOver ? "border-primary/50 bg-primary/5 text-primary" : "border-border/70 text-muted-foreground/70"
               )}
             >
-              {isOver ? "Thả task vào đây" : "Không có task"}
+              {isOver ? "Thả task vào đây" : emptyMessage || (isBacklog ? "Không có task Backlog" : "Không có task")}
             </div>
           ) : (
             <>

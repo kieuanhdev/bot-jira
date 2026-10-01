@@ -65,6 +65,8 @@ export type ProjectStats = {
   cursorAdvanced?: boolean;
   lastSuccessAt?: string | null;
   lastError?: string | null;
+  workflowStatusCount?: number;
+  workflowRefreshError?: string | null;
 };
 
 export function safeError(error: unknown): string {
@@ -229,6 +231,35 @@ export async function syncProject(
     stats.cursor = cursor;
     stats.cursorAdvanced = cursorAdvanced;
 
+    // Refresh project workflow statuses from Jira before finalize cursor
+    try {
+      await renewAndAssert();
+      const statusesResp = await jira.getProjectStatuses(projectKey);
+      const flatStatuses: Array<{ id: string; name: string; category?: string }> = [];
+      const seenIds = new Set<string>();
+      for (const item of statusesResp || []) {
+        for (const st of item.statuses || []) {
+          if (st.id && !seenIds.has(st.id)) {
+            seenIds.add(st.id);
+            flatStatuses.push({
+              id: st.id,
+              name: st.name,
+              category: st.statusCategory?.key,
+            });
+          }
+        }
+      }
+      if (flatStatuses.length > 0) {
+        const { upsertProjectWorkflowSnapshot } = await import("@/lib/jira/project-workflow-store");
+        const res = await upsertProjectWorkflowSnapshot(projectKey, flatStatuses);
+        stats.workflowStatusCount = res.statusCount;
+      }
+    } catch (err: unknown) {
+      const errText = safeError(err);
+      stats.workflowRefreshError = errText;
+      console.warn(`[poll-jira] Failed to refresh workflow statuses for ${projectKey}:`, errText);
+    }
+
     // Renew lease before finalize
     await renewAndAssert();
 
@@ -361,6 +392,7 @@ export async function runPollJiraProject(
         ok,
       })
     );
+
 
     return {
       ok,

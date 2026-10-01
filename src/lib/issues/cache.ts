@@ -25,6 +25,7 @@ export function issueCacheData(issue: JiraIssue) {
     summary: f.summary ?? "",
     description: descriptionText(f.description),
     status: f.status?.name ?? "",
+    statusId: f.status?.id ?? null,
     statusCategory: f.status?.statusCategory?.key?.toLowerCase() ?? "unknown",
     statusChangedAt: parseJiraDate(f.statuscategorychangedate) ?? null,
     assigneeJira: f.assignee?.name ?? null,

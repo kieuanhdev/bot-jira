@@ -15,15 +15,26 @@ function nonNegativeOffset(raw: string | null): number {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
+/**
+ * Single project board read path: pure PostgreSQL query from IssueCache,
+ * without any Jira Agile / board membership dependencies.
+ */
 export async function GET(req: Request) {
+  const reqStart = Date.now();
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { jiraUsername: true, jiraUserEnc: true, boardProjects: true },
+    select: {
+      id: true,
+      jiraUsername: true,
+      boardProjects: true,
+    },
   });
   if (!user) return NextResponse.json({ error: "session_invalid" }, { status: 401 });
+
+  const userLookupDur = Date.now() - reqStart;
 
   const userBoardProjects = user.boardProjects.map((p) => p.trim().toUpperCase());
   const isAllowedProject = (k: string) =>
@@ -77,6 +88,7 @@ export async function GET(req: Request) {
 
   const andConditions: Prisma.IssueCacheWhereInput[] = [];
 
+  // Assignee filtering
   if (!isAllAssignees) {
     const hasUnassigned = assigneeTokens.some(
       (a) => a.toLowerCase() === "unassigned" || a.toLowerCase() === "none"
@@ -118,6 +130,7 @@ export async function GET(req: Request) {
     where.AND = andConditions;
   }
 
+  const dbStart = Date.now();
   const [items, total, cursors] = await prisma.$transaction([
     prisma.issueCache.findMany({
       where,
@@ -138,6 +151,8 @@ export async function GET(req: Request) {
       select: { scope: true, lastSuccessAt: true, lastStartedAt: true, lastError: true },
     }),
   ]);
+  const dbDur = Date.now() - dbStart;
+  const totalDur = Date.now() - reqStart;
 
   const successful = cursors.flatMap((cursor) => cursor.lastSuccessAt ? [cursor.lastSuccessAt] : []);
   const oldestSuccess = successful.length > 0
@@ -146,48 +161,59 @@ export async function GET(req: Request) {
   const stale = cursors.length < projects.length || !oldestSuccess ||
     Date.now() - oldestSuccess.getTime() > env.jiraFreshnessMinutes * 60_000;
 
-  return NextResponse.json({
-    items: items.map((item) => ({
-      jiraKey: item.jiraKey,
-      projectKey: item.projectKey,
-      summary: item.summary,
-      description: item.description,
-      status: item.status,
-      statusCategory: item.statusCategory,
-      statusChangedAt: item.statusChangedAt,
-      assigneeJira: item.assigneeJira,
-      labels: item.labels,
-      fixVersionIds: item.fixVersionIds,
-      fixVersionNames: item.fixVersionNames,
-      priority: item.priority,
-      points: item.points,
-      type: item.type,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-      lastSyncedAt: item.lastSyncedAt,
-      aiScore: item.aiScore,
-      aiDecision: item.aiScore?.decisions?.[0]
-        ? {
-            decision: item.aiScore.decisions[0].decision,
-            finalPoints: item.aiScore.decisions[0].finalPoints,
-            decidedAt: item.aiScore.decisions[0].decidedAt,
-          }
-        : null,
-      delivery: item.branches && item.branches.length > 0
-        ? {
-            branchCount: item.branches.length,
-            prOpen: item.branches.some((b) => (b.prState ?? "").toUpperCase() === "OPEN"),
-            prMerged: item.branches.some((b) => (b.prState ?? "").toUpperCase() === "MERGED" || b.merged),
-          }
-        : null,
-    })),
-    total,
-    sync: {
-      projects,
-      lastSuccessAt: oldestSuccess,
-      stale,
-      freshnessMinutes: env.jiraFreshnessMinutes,
-      errors: cursors.filter((cursor) => cursor.lastError).map((cursor) => ({ project: cursor.scope, error: cursor.lastError })),
+  const responseHeaders = new Headers();
+  responseHeaders.set(
+    "Server-Timing",
+    `user;dur=${userLookupDur}, db;dur=${dbDur}, total;dur=${totalDur}`
+  );
+
+  return NextResponse.json(
+    {
+      items: items.map((item) => ({
+        jiraKey: item.jiraKey,
+        projectKey: item.projectKey,
+        summary: item.summary,
+        description: item.description,
+        status: item.status,
+        statusId: item.statusId,
+        statusCategory: item.statusCategory,
+        statusChangedAt: item.statusChangedAt,
+        assigneeJira: item.assigneeJira,
+        labels: item.labels,
+        fixVersionIds: item.fixVersionIds,
+        fixVersionNames: item.fixVersionNames,
+        priority: item.priority,
+        points: item.points,
+        type: item.type,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        lastSyncedAt: item.lastSyncedAt,
+        aiScore: item.aiScore,
+        aiDecision: item.aiScore?.decisions?.[0]
+          ? {
+              decision: item.aiScore.decisions[0].decision,
+              finalPoints: item.aiScore.decisions[0].finalPoints,
+              decidedAt: item.aiScore.decisions[0].decidedAt,
+            }
+          : null,
+        delivery: item.branches && item.branches.length > 0
+          ? {
+              branchCount: item.branches.length,
+              prOpen: item.branches.some((b) => (b.prState ?? "").toUpperCase() === "OPEN"),
+              prMerged: item.branches.some((b) => (b.prState ?? "").toUpperCase() === "MERGED" || b.merged),
+            }
+          : null,
+      })),
+      total,
+      sync: {
+        projects,
+        lastSuccessAt: oldestSuccess,
+        stale,
+        freshnessMinutes: env.jiraFreshnessMinutes,
+        errors: cursors.filter((cursor) => cursor.lastError).map((cursor) => ({ project: cursor.scope, error: cursor.lastError })),
+      },
+      membership: null,
     },
-  });
+    { headers: responseHeaders }
+  );
 }

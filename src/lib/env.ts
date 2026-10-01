@@ -56,6 +56,16 @@ export const env = {
   // Each entry is "KEY:col1|col2|...". Columns are raw workflow status names,
   // shown in this order. Projects not listed here use an auto-derived set.
   jiraProjectColumns: str("JIRA_PROJECT_COLUMNS"),
+  // Explicit projectKey -> boardId mapping. Format: "EPM:101,ETM:102,ECM:103"
+  jiraProjectBoardIds: str("JIRA_PROJECT_BOARD_IDS"),
+  // Optional Backlog column name override by board ID or project key.
+  // Format: "101:Product Queue,102:Backlog,EPM:Product Backlog"
+  jiraBoardBacklogColumns: str("JIRA_BOARD_BACKLOG_COLUMNS"),
+  // Board Membership Performance and Cache Policy
+  jiraBoardMembershipMode: (str("JIRA_BOARD_MEMBERSHIP_MODE", "snapshot").toLowerCase() as "sync" | "shadow" | "snapshot"),
+  jiraBoardMembershipFreshTtlSeconds: int("JIRA_BOARD_MEMBERSHIP_FRESH_TTL_SECONDS", 300),
+  jiraBoardMembershipStaleTtlSeconds: int("JIRA_BOARD_MEMBERSHIP_STALE_TTL_SECONDS", 1800),
+  jiraBoardMembershipMaxIssues: int("JIRA_BOARD_MEMBERSHIP_MAX_ISSUES", 5000),
 
   // Jira Issue Link Dependency Config
   jiraDependencyLinkType: str("JIRA_DEPENDENCY_LINK_TYPE", "Blocks"),
@@ -228,6 +238,46 @@ export const projectColumns: Record<string, string[]> = (() => {
       .map((s) => s.trim())
       .filter(Boolean);
     if (key && cols.length > 0) out[key] = cols;
+  }
+  return out;
+})();
+
+/**
+ * Explicit projectKey -> boardId mapping parsed from JIRA_PROJECT_BOARD_IDS.
+ * Format: "EPM:101,ETM:102,ECM:103"
+ */
+export const projectBoardIds: Record<string, number> = (() => {
+  const out: Record<string, number> = {};
+  for (const part of env.jiraProjectBoardIds.split(",")) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const idx = trimmed.indexOf(":");
+    if (idx === -1) continue;
+    const key = trimmed.slice(0, idx).trim().toUpperCase();
+    const idNum = Number.parseInt(trimmed.slice(idx + 1).trim(), 10);
+    if (key && Number.isInteger(idNum) && idNum > 0) {
+      out[key] = idNum;
+    }
+  }
+  return out;
+})();
+
+/**
+ * Board ID or project key -> Backlog column name override parsed from JIRA_BOARD_BACKLOG_COLUMNS.
+ * Format: "101:Product Queue,102:Backlog,EPM:Product Backlog"
+ */
+export const boardBacklogColumns: Record<string, string> = (() => {
+  const out: Record<string, string> = {};
+  for (const part of env.jiraBoardBacklogColumns.split(",")) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const idx = trimmed.indexOf(":");
+    if (idx === -1) continue;
+    const key = trimmed.slice(0, idx).trim().toUpperCase();
+    const colName = trimmed.slice(idx + 1).trim();
+    if (key && colName) {
+      out[key] = colName;
+    }
   }
   return out;
 })();

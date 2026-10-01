@@ -40,7 +40,11 @@ export const notificationsKeys = {
 
 export const boardKeys = {
   projects: ["projects"] as const,
-  statuses: (project: string) => ["board", "statuses", project] as const,
+  statuses: (project: string, boardId?: number | null) =>
+    ["board", "statuses", project, boardId ? String(boardId) : "auto"] as const,
+  options: (project: string) => ["board", "options", project] as const,
+  membershipStatus: (project: string, boardId: number) =>
+    ["board", "membership", "status", project, boardId] as const,
 };
 
 export const meKeys = {

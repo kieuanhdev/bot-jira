@@ -19,6 +19,9 @@ import type {
   JiraCreateMetaFieldsResponse,
   CreateIssueInput,
   CreateIssueResult,
+  JiraBoard,
+  JiraBoardPage,
+  JiraBoardConfiguration,
 } from "./types";
 
 const BASE_ISSUE_FIELDS = [
@@ -824,8 +827,129 @@ export function jiraWith(auth?: JiraAuth) {
           status: issue.fields.status?.name ?? "Unknown",
         }));
     },
+
+    /**
+     * List Jira Agile boards for a given project key.
+     * Backed by Jira Agile REST v1.0 GET /rest/agile/1.0/board?projectKeyOrId={projectKey}
+     */
+    getBoardsForProject: async (projectKey: string): Promise<JiraBoard[]> => {
+      const cleanKey = projectKey.trim().toUpperCase();
+      if (!cleanKey) return [];
+      const boards: JiraBoard[] = [];
+      let startAt = 0;
+      const maxResults = 50;
+      while (true) {
+        const url = `/rest/agile/1.0/board?projectKeyOrId=${encodeURIComponent(cleanKey)}&startAt=${startAt}&maxResults=${maxResults}`;
+        const res = await request<JiraBoardPage>(url, {}, auth);
+        const values = res?.values ?? [];
+        boards.push(...values);
+        if (res?.isLast || values.length === 0 || (res?.total !== undefined && boards.length >= res.total)) {
+          break;
+        }
+        startAt += values.length;
+        if (boards.length > 500) break;
+      }
+      return boards;
+    },
+
+    /**
+     * Get Jira Agile board configuration (including column configuration and status mappings).
+     * Backed by Jira Agile REST v1.0 GET /rest/agile/1.0/board/{boardId}/configuration
+     */
+    getBoardConfiguration: async (boardId: number): Promise<JiraBoardConfiguration> => {
+      if (!Number.isInteger(boardId) || boardId <= 0) {
+        throw new JiraRequestError(`Invalid boardId: ${boardId}`, 400, false);
+      }
+      return request<JiraBoardConfiguration>(`/rest/agile/1.0/board/${boardId}/configuration`, {}, auth);
+    },
+
+    /**
+     * Get a Jira Agile board by ID.
+     * Backed by Jira Agile REST v1.0 GET /rest/agile/1.0/board/{boardId}
+     */
+    getBoard: async (boardId: number): Promise<JiraBoard> => {
+      if (!Number.isInteger(boardId) || boardId <= 0) {
+        throw new JiraRequestError(`Invalid boardId: ${boardId}`, 400, false);
+      }
+      return request<JiraBoard>(`/rest/agile/1.0/board/${boardId}`, {}, auth);
+    },
+
+    /**
+     * Get projects associated with a Jira Agile board.
+     * Backed by Jira Agile REST v1.0 GET /rest/agile/1.0/board/{boardId}/project
+     */
+    getBoardProjects: async (boardId: number): Promise<JiraProject[]> => {
+      if (!Number.isInteger(boardId) || boardId <= 0) {
+        throw new JiraRequestError(`Invalid boardId: ${boardId}`, 400, false);
+      }
+      const res = await request<JiraProject[] | { values?: JiraProject[] }>(
+        `/rest/agile/1.0/board/${boardId}/project`,
+        {},
+        auth
+      );
+      if (Array.isArray(res)) return res;
+      return res?.values ?? [];
+    },
+
+    /**
+     * Get issues belonging to a Jira Agile board.
+     * Backed by Jira Agile REST v1.0 GET /rest/agile/1.0/board/{boardId}/issue
+     */
+    getBoardIssues: async (
+      boardId: number,
+      options?: { startAt?: number; maxResults?: number; jql?: string; fields?: string }
+    ): Promise<JiraSearchResult> => {
+      if (!Number.isInteger(boardId) || boardId <= 0) {
+        throw new JiraRequestError(`Invalid boardId: ${boardId}`, 400, false);
+      }
+      const startAt = options?.startAt ?? 0;
+      const maxResults = options?.maxResults ?? 50;
+      const query = new URLSearchParams({
+        startAt: String(startAt),
+        maxResults: String(maxResults),
+        fields: options?.fields ?? "id,key",
+      });
+      if (options?.jql) {
+        query.set("jql", options.jql);
+      }
+      return request<JiraSearchResult>(
+        `/rest/agile/1.0/board/${boardId}/issue?${query.toString()}`,
+        {},
+        auth
+      );
+    },
+
+    /**
+     * Get backlog issues belonging to a Jira Agile board.
+     * Backed by Jira Agile REST v1.0 GET /rest/agile/1.0/board/{boardId}/backlog
+     */
+    getBoardBacklog: async (
+      boardId: number,
+      options?: { startAt?: number; maxResults?: number; jql?: string; fields?: string }
+    ): Promise<JiraSearchResult> => {
+      if (!Number.isInteger(boardId) || boardId <= 0) {
+        throw new JiraRequestError(`Invalid boardId: ${boardId}`, 400, false);
+      }
+      const startAt = options?.startAt ?? 0;
+      const maxResults = options?.maxResults ?? 50;
+      const query = new URLSearchParams({
+        startAt: String(startAt),
+        maxResults: String(maxResults),
+        fields: options?.fields ?? "id,key",
+      });
+      if (options?.jql) {
+        query.set("jql", options.jql);
+      }
+      return request<JiraSearchResult>(
+        `/rest/agile/1.0/board/${boardId}/backlog?${query.toString()}`,
+        {},
+        auth
+      );
+    },
   };
 }
+
+export type JiraClient = ReturnType<typeof jiraWith>;
 
 // System client for workers, webhooks and health checks.
 // Falls back to system credentials from .env, or the first configured user in DB.

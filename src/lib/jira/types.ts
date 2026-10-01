@@ -254,3 +254,71 @@ export type CreateIssueResult = {
   self: string;
 };
 
+export type JiraBoard = {
+  id: number;
+  name: string;
+  type: string;
+  self?: string;
+  location?: {
+    projectId?: number;
+    projectKey?: string;
+    projectName?: string;
+    displayName?: string;
+  };
+};
+
+export type JiraBoardPage = {
+  maxResults: number;
+  startAt: number;
+  total?: number;
+  isLast?: boolean;
+  values: JiraBoard[];
+};
+
+export type JiraBoardColumnConfig = {
+  columns: Array<{
+    name: string;
+    statuses?: Array<{ id: string; self?: string }>;
+    min?: number;
+    max?: number;
+  }>;
+  constraintType?: string;
+};
+
+export type JiraBoardConfiguration = {
+  id: number;
+  name: string;
+  type: string;
+  self?: string;
+  columnConfig: JiraBoardColumnConfig;
+  subQuery?: { query?: string };
+};
+
+export type JiraIssuePage = JiraSearchResult;
+
+export type BoardSelectionSource = "user_preference" | "environment_default" | "single_board" | "none";
+
+export type JiraBoardOption = {
+  id: number;
+  name: string;
+  type: string;
+};
+
+export type BoardOptionsResponse = {
+  projectKey: string;
+  selectedBoardId: number | null;
+  selectionSource: BoardSelectionSource;
+  requiresSelection: boolean;
+  items: JiraBoardOption[];
+};
+
+export type UserBoardPreferenceResponse = {
+  projectKey: string;
+  board: JiraBoardOption;
+  preferenceSaved?: boolean;
+  membership?: {
+    state: "fresh" | "preparing" | "stale" | "queue_failed";
+    jobId: string | null;
+  };
+};
+

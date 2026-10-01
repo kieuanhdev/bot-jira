@@ -10,6 +10,7 @@ export type IssueItem = {
   summary: string;
   description: string;
   status: string;
+  statusId?: string | null;
   statusCategory: string;
   statusChangedAt: string | null;
   assigneeJira: string | null;
@@ -37,7 +38,14 @@ export type IssueItem = {
   delivery?: { branchCount: number; prOpen: boolean; prMerged: boolean } | null;
 };
 
-export type IssueResponse = {
+export type IssuePendingResponse = {
+  code: "membership_pending" | "membership_preparing";
+  projectKey: string;
+  boardId: number;
+  retryAfterMs?: number;
+};
+
+export type IssueSuccessResponse = {
   items: IssueItem[];
   total: number;
   sync: {
@@ -47,10 +55,31 @@ export type IssueResponse = {
     freshnessMinutes: number;
     errors: { project: string; error: string }[];
   };
+  membership?: {
+    state: string;
+    fetchedAt: string | null;
+    refreshing: boolean;
+    stale: boolean;
+    lastErrorCode: string | null;
+    itemCount: number;
+    truncated: boolean;
+  } | null;
 };
+
+export type IssueResponse = IssueSuccessResponse;
+export type IssueQueryResult = IssueSuccessResponse | IssuePendingResponse;
+
+export function isMembershipPending(data: unknown): data is IssuePendingResponse {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    ((data as any).code === "membership_pending" || (data as any).code === "membership_preparing")
+  );
+}
 
 export type BoardFilters = {
   project?: string;
+  boardId?: number | null;
   /** Comma-separated project keys to scope the query to (e.g. "MR,EPM"). */
   projectList?: string;
   assignee?: string | string[];
@@ -60,6 +89,7 @@ export type BoardFilters = {
   releaseLabel?: string;
   q?: string;
   includeDone?: boolean;
+  includeBacklogRegardlessOfAssignee?: boolean;
   limit?: number;
   /** Skip the first N rows (stable order: updatedAt desc, jiraKey asc). */
   offset?: number;
@@ -82,10 +112,19 @@ export function useIssues(
     params.set(k, v === true ? "1" : v === false ? "0" : String(v));
   });
   const qs = params.toString();
-  return useQuery({
+  return useQuery<IssueQueryResult>({
     queryKey: issuesKeys.list(qs),
-    queryFn: () => api<IssueResponse>(`/api/issues${qs ? "?" + qs : ""}`),
-    refetchInterval: 30000,
+    queryFn: () => api<IssueQueryResult>(`/api/issues${qs ? "?" + qs : ""}`),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (isMembershipPending(data)) {
+        return data.retryAfterMs ?? 1500;
+      }
+      return false;
+    },
     retry: 1,
     enabled: opts.enabled ?? true,
   });

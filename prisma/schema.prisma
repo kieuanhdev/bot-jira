@@ -51,6 +51,9 @@ model User {
   // after linking Jira). Gated by the (app) layout to force that step once.
   onboarded     Boolean  @default(false)
 
+  boardPreferences UserBoardPreference[]
+  boardMembershipSnapshots JiraBoardMembershipSnapshot[]
+
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   watches        Watch[]
@@ -67,6 +70,7 @@ model IssueCache {
   summary        String        @default("")
   description    String        @default("")
   status         String        @default("")
+  statusId       String?
   statusCategory String        @default("unknown")
   statusChangedAt DateTime?
   assigneeJira   String?
@@ -92,6 +96,7 @@ model IssueCache {
   branches       BranchInfo[]
 
   @@index([status])
+  @@index([statusId])
   @@index([projectKey])
   @@index([statusCategory])
   @@index([assigneeJira])
@@ -718,5 +723,88 @@ model WorklogIdempotency {
 
   @@index([jiraKey, createdAt])
   @@index([userId, createdAt])
+}
+
+model UserBoardPreference {
+  id         String   @id @default(cuid())
+  userId     String
+  projectKey String
+  boardId    Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectKey])
+  @@index([boardId])
+}
+
+model JiraBoardMembershipSnapshot {
+  id            String   @id @default(cuid())
+  userId        String
+  projectKey    String
+  boardId       Int
+  generation    String
+  state         String   // refreshing | ready | failed | forbidden
+  itemCount     Int       @default(0)
+  backlogCount  Int       @default(0)
+  truncated     Boolean   @default(false)
+  fetchedAt     DateTime?
+  expiresAt     DateTime?
+  staleUntil    DateTime?
+  lastErrorCode String?
+  lastErrorAt   DateTime?
+  lastRequestedAt DateTime?
+  lastStartedAt   DateTime?
+  lastSuccessAt   DateTime?
+  lastJobId       String?
+  refreshReason   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user    User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries JiraBoardMembershipEntry[]
+
+  @@unique([userId, projectKey, boardId])
+  @@index([state, expiresAt])
+}
+
+model JiraBoardMembershipEntry {
+  id         String  @id @default(cuid())
+  snapshotId String
+  generation String
+  jiraKey    String
+  isBacklog  Boolean @default(false)
+
+  snapshot JiraBoardMembershipSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@unique([snapshotId, generation, jiraKey])
+  @@index([snapshotId, generation, isBacklog])
+  @@index([jiraKey])
+}
+
+model JiraProjectWorkflowSnapshot {
+  id            String   @id @default(cuid())
+  projectKey    String   @unique
+  fetchedAt     DateTime
+  lastErrorCode String?
+  lastErrorAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  statuses      JiraProjectWorkflowStatus[]
+}
+
+model JiraProjectWorkflowStatus {
+  id           String @id @default(cuid())
+  snapshotId   String
+  statusId     String
+  name         String
+  category     String // new | indeterminate | done | unknown
+  displayOrder Int
+
+  snapshot JiraProjectWorkflowSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@unique([snapshotId, statusId])
+  @@index([snapshotId, displayOrder])
 }
 
