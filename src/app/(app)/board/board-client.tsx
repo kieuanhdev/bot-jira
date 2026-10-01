@@ -31,6 +31,16 @@ import {
   serializeIssueFilters,
 } from "@/lib/issues/issue-filters";
 import { IssueFilterBar } from "@/components/issues/issue-filter-bar";
+import {
+  loadStoredFilters,
+  loadStoredProject,
+  loadStoredSortMode,
+  loadStoredViewMode,
+  saveStoredFilters,
+  saveStoredProject,
+  saveStoredSortMode,
+  saveStoredViewMode,
+} from "./lib/board-storage";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -145,7 +155,17 @@ export function BoardClient() {
   const preferred = useMemo(() => prefs?.projects ?? [], [prefs?.projects]);
   const availableKeys = useMemo(() => prefs?.available ?? [], [prefs?.available]);
 
-  const [project, setProject] = useState<string>("");
+  const searchParams = useSearchParams();
+  const urlProject = searchParams?.get("project")?.trim().toUpperCase() || "";
+  const hasFilterParamsInUrl = Boolean(
+    searchParams &&
+      Array.from(searchParams.keys()).some((k) => k !== "project")
+  );
+
+  const [project, setProject] = useState<string>(() => {
+    if (urlProject) return urlProject;
+    return loadStoredProject() || "";
+  });
   const [boardNewKey, setBoardNewKey] = useState("");
   const [boardValidating, setBoardValidating] = useState(false);
   const [boardValidateError, setBoardValidateError] = useState<string | null>(null);
@@ -163,6 +183,10 @@ export function BoardClient() {
     () => (preferred.length === 0 ? availableKeys : preferred),
     [preferred, availableKeys]
   );
+
+  const selectedProject = effectivePreferred.includes(project)
+    ? project
+    : (effectivePreferred[0] ?? "");
 
   const countMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -204,6 +228,24 @@ export function BoardClient() {
     });
   }
 
+  function handleSelectProject(nextKey: string) {
+    if (nextKey === selectedProject) return;
+    if (selectedProject) {
+      saveStoredFilters(selectedProject, filters);
+    }
+    setProject(nextKey);
+    saveStoredProject(nextKey);
+    const saved = loadStoredFilters(nextKey, myName);
+    if (saved) {
+      setFilters(saved);
+    } else {
+      setFilters({
+        ...DEFAULT_BOARD_FILTERS,
+        project: nextKey,
+      });
+    }
+  }
+
   async function handleAddProjectToBoard() {
     const key = boardNewKey.trim().toUpperCase();
     if (!key) return;
@@ -228,9 +270,9 @@ export function BoardClient() {
         qc.invalidateQueries({ queryKey: boardKeys.projects }),
         qc.invalidateQueries({ queryKey: ["board", "statuses", verifiedKey] }),
       ]);
-      setProject(verifiedKey);
       setBoardNewKey("");
       closePicker();
+      handleSelectProject(verifiedKey);
       setToast(`Đã thêm dự án ${res.project.name} (${verifiedKey}) và bắt đầu đồng bộ.`);
     } catch (err: unknown) {
       setBoardValidateError((err as Error).message || "Lỗi kiểm tra dự án trên Jira.");
@@ -238,23 +280,65 @@ export function BoardClient() {
       setBoardValidating(false);
     }
   }
-  const searchParams = useSearchParams();
-  const [view, setView] = useState<ViewMode>("board");
+
+  const [view, setView] = useState<ViewMode>(() => {
+    return loadStoredViewMode() ?? "board";
+  });
   const [filters, setFilters] = useState<IssueFilters>(() => {
-    if (searchParams) {
+    if (searchParams && hasFilterParamsInUrl) {
       return parseIssueFilters(searchParams, DEFAULT_BOARD_FILTERS, myName);
+    }
+    const initialPrj = urlProject || loadStoredProject() || "";
+    if (initialPrj) {
+      const saved = loadStoredFilters(initialPrj, myName);
+      if (saved) return saved;
     }
     return DEFAULT_BOARD_FILTERS;
   });
 
-  // Re-sync with myName if loaded subsequently and filters was default
+  // When selectedProject changes, ensure it is saved in storage
+  useEffect(() => {
+    if (selectedProject) {
+      saveStoredProject(selectedProject);
+    }
+  }, [selectedProject]);
+
+  // Initial sync when selectedProject resolves after async preferences load
+  const initialSyncDoneRef = useRef(false);
+  useEffect(() => {
+    if (!initialSyncDoneRef.current && selectedProject && !hasFilterParamsInUrl) {
+      initialSyncDoneRef.current = true;
+      const saved = loadStoredFilters(selectedProject, myName);
+      if (saved) {
+        setFilters(saved);
+      }
+    }
+  }, [selectedProject, myName, hasFilterParamsInUrl]);
+
+  // Re-sync with myName if loaded subsequently
   const myNameSyncedRef = useRef(false);
   useEffect(() => {
     if (myName && !myNameSyncedRef.current) {
       myNameSyncedRef.current = true;
-      setFilters((prev) => (searchParams ? parseIssueFilters(searchParams, prev, myName) : prev));
+      setFilters((prev) => {
+        if (hasFilterParamsInUrl && searchParams) {
+          return parseIssueFilters(searchParams, prev, myName);
+        }
+        if (selectedProject) {
+          const saved = loadStoredFilters(selectedProject, myName);
+          if (saved) return saved;
+        }
+        return prev;
+      });
     }
-  }, [myName, searchParams]);
+  }, [myName, searchParams, hasFilterParamsInUrl, selectedProject]);
+
+  // Save filters to localStorage whenever filters or selectedProject change
+  useEffect(() => {
+    if (selectedProject) {
+      saveStoredFilters(selectedProject, filters);
+    }
+  }, [filters, selectedProject]);
 
   // Sync URL when filters change (debounced for search text)
   const isInitialMount = useRef(true);
@@ -264,7 +348,14 @@ export function BoardClient() {
       return;
     }
     const timer = setTimeout(() => {
-      const sp = serializeIssueFilters(filters, DEFAULT_BOARD_FILTERS);
+      const filtersWithProject: IssueFilters = {
+        ...filters,
+        project: selectedProject,
+      };
+      const sp = serializeIssueFilters(filtersWithProject, DEFAULT_BOARD_FILTERS);
+      if (selectedProject) {
+        sp.set("project", selectedProject);
+      }
       const qs = sp.toString();
       const currentUrl = window.location.pathname + (window.location.search || "");
       const targetUrl = window.location.pathname + (qs ? `?${qs}` : "");
@@ -273,16 +364,23 @@ export function BoardClient() {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [filters, router]);
+  }, [filters, selectedProject, router]);
 
-  const [sortMode, setSortMode] = useState<SortMode>("updated");
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    return loadStoredSortMode() ?? "updated";
+  });
+  useEffect(() => {
+    saveStoredSortMode(sortMode);
+  }, [sortMode]);
+
+  useEffect(() => {
+    saveStoredViewMode(view);
+  }, [view]);
+
   const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set());
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [paletteQ, setPaletteQ] = useState("");
   const [quickPanel, setQuickPanel] = useState<IssueItem | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const cardRefs = useRef<Map<string, HTMLElement | null>>(new Map());
-  const selectedProject = effectivePreferred.includes(project) ? project : (effectivePreferred[0] ?? "");
 
   const boardQueriesEnabled =
     effectivePreferred.length > 0 && Boolean(selectedProject);
@@ -503,18 +601,6 @@ export function BoardClient() {
   const assignees = optData?.assignees ?? [];
   const labelOptions = optData?.labels ?? [];
 
-  const paletteResults = useMemo(() => {
-    const needle = paletteQ.trim().toLowerCase();
-    if (!needle) return issues.slice(0, 8);
-    return issues
-      .filter(
-        (i) =>
-          i.jiraKey.toLowerCase().includes(needle) ||
-          (i.summary ?? "").toLowerCase().includes(needle)
-      )
-      .slice(0, 8);
-  }, [issues, paletteQ]);
-
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
@@ -523,22 +609,14 @@ export function BoardClient() {
         (target.tagName === "INPUT" ||
           target.tagName === "TEXTAREA" ||
           target.isContentEditable);
-      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
-        e.preventDefault();
-        setPaletteOpen((open) => {
-          const next = !open;
-          if (next) setPaletteQ("");
-          return next;
-        });
-      } else if (e.key === "Escape" && (paletteOpen || quickPanel)) {
-        setPaletteOpen(false);
+      if (typing) return;
+      if (e.key === "Escape" && quickPanel) {
         setQuickPanel(null);
       }
-      if (typing) return;
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [paletteOpen, quickPanel]);
+  }, [quickPanel]);
 
   const { data: statusesData, isLoading: isLoadingStatuses } = useQuery({
     queryKey: boardKeys.statuses(selectedProject),
@@ -1231,7 +1309,7 @@ export function BoardClient() {
             <button
               key={p.key}
               onClick={() => {
-                setProject(p.key);
+                handleSelectProject(p.key);
               }}
               className={tabCls(selectedProject === p.key)}
             >
@@ -1390,20 +1468,6 @@ export function BoardClient() {
               <SelectItem value="age">Cũ nhất trước</SelectItem>
             </SelectContent>
           </Select>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPaletteOpen(true)}
-            className="gap-1.5"
-            title="Chuyển nhanh đến task (Ctrl/Cmd + K)"
-          >
-            <Search className="h-4 w-4" />
-            <span className="hidden sm:inline">Tìm nhanh</span>
-            <kbd className="ml-1 hidden rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground md:inline">
-              ⌘K
-            </kbd>
-          </Button>
         </div>
       </div>
 
@@ -1440,13 +1504,7 @@ export function BoardClient() {
         }}
         myName={myName}
         searchPlaceholder={`Tìm kiếm trong ${selectedProject}…`}
-      >
-        <div className="flex items-center gap-1.5 self-center text-xs text-muted-foreground whitespace-nowrap">
-          <span className="inline-flex items-center gap-1 rounded bg-muted/60 px-2 py-1 text-[11px] font-medium text-muted-foreground border border-border/40">
-            Backlog luôn hiển thị toàn bộ task của dự án
-          </span>
-        </div>
-      </IssueFilterBar>
+      />
 
       <BoardSummaryCards summary={summary} loading={isLoading} />
 
@@ -1573,45 +1631,6 @@ export function BoardClient() {
           assignees={assignees}
           onClose={() => setQuickPanel(null)}
         />
-      )}
-
-      {paletteOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[15vh] backdrop-blur-[1px]"
-          onMouseDown={() => setPaletteOpen(false)}
-        >
-          <div
-            className="w-full max-w-md overflow-hidden rounded-xl border bg-popover shadow-2xl"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <input
-              autoFocus
-              value={paletteQ}
-              onChange={(e) => setPaletteQ(e.target.value)}
-              placeholder="Nhập key hoặc summary…"
-              className="w-full border-b bg-transparent px-4 py-3 text-sm outline-none"
-            />
-            <div className="max-h-72 overflow-auto p-1">
-              {paletteResults.length === 0 ? (
-                <p className="px-3 py-4 text-center text-sm text-muted-foreground">Không tìm thấy</p>
-              ) : (
-                paletteResults.map((i) => (
-                  <button
-                    key={i.jiraKey}
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-accent"
-                    onClick={() => {
-                      setPaletteOpen(false);
-                      router.push(`/issue/${i.jiraKey}`);
-                    }}
-                  >
-                    <span className="font-mono text-xs text-primary">{i.jiraKey}</span>
-                    <span className="truncate text-muted-foreground">{i.summary}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
