@@ -10,8 +10,8 @@ import {
   type BulkCreatePreviewResult,
   type BulkCreateProjectMetadata,
 } from "@/lib/bulk/create-types";
-import { CreateDefaultsForm } from "./create-defaults-form";
-import { CreateTaskGrid } from "./create-task-grid";
+import { BulkCreateEditorShell } from "./bulk-create-editor-shell";
+import { getStoredEditorMode, setStoredEditorMode } from "./lib/editor-preferences";
 import { CreatePreview } from "./create-preview";
 import { CreateProgress } from "./create-progress";
 import { Card } from "@/components/ui/card";
@@ -43,6 +43,7 @@ import {
   ListPlus,
   Edit3,
   AlertTriangle,
+  Maximize2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -63,9 +64,24 @@ export function BulkCreateClient() {
   const [previewData, setPreviewData] = useState<BulkCreatePreviewResult | null>(null);
   const [activeOperationId, setActiveOperationId] = useState<string | null>(null);
   const [focusRow, setFocusRow] = useState<number | null>(null);
+  const [focusField, setFocusField] = useState<string | null>(null);
   const [draftAvailable, setDraftAvailable] = useState(false);
+  const [isEditorFullscreen, setIsEditorFullscreen] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [draftSavedTime, setDraftSavedTime] = useState<number | null>(null);
   const draftRestoredRef = useRef(false);
   const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const mode = getStoredEditorMode();
+    setIsEditorFullscreen(mode === "fullscreen");
+  }, []);
+
+  function handleToggleFullscreen() {
+    const next = !isEditorFullscreen;
+    setIsEditorFullscreen(next);
+    setStoredEditorMode(next ? "fullscreen" : "standard");
+  }
 
   // Project change confirmation state
   const [pendingProjectKey, setPendingProjectKey] = useState<string | null>(null);
@@ -90,15 +106,22 @@ export function BulkCreateClient() {
 
   const saveDraft = useCallback((itemsToSave: BulkCreateRowInput[], defaultsToSave: BulkCreateFieldDefaults) => {
     if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    setIsSavingDraft(true);
     draftSaveTimer.current = setTimeout(() => {
       try {
         const hasContent = itemsToSave.some((i) => i.summary.trim()) || Object.keys(defaultsToSave).length > 0;
         if (hasContent) {
-          localStorage.setItem(draftKey, JSON.stringify({ items: itemsToSave, defaults: defaultsToSave, savedAt: Date.now() }));
+          const now = Date.now();
+          localStorage.setItem(draftKey, JSON.stringify({ items: itemsToSave, defaults: defaultsToSave, savedAt: now }));
+          setDraftSavedTime(now);
         } else {
           localStorage.removeItem(draftKey);
+          setDraftSavedTime(null);
         }
       } catch { /* quota exceeded or unavailable */ }
+      finally {
+        setIsSavingDraft(false);
+      }
     }, 1000);
   }, [draftKey]);
 
@@ -295,6 +318,18 @@ export function BulkCreateClient() {
             <Badge variant={filledCount > 0 ? "info" : "secondary"} className="px-3 py-1 text-xs">
               {filledCount} task đã sẵn sàng
             </Badge>
+            {step === "input" && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleToggleFullscreen}
+                className="h-8 gap-1.5 text-xs font-semibold cursor-pointer border-primary/40 text-primary hover:bg-primary/10 ml-1"
+              >
+                <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Mở toàn màn hình</span>
+              </Button>
+            )}
           </div>
         )}
       </header>
@@ -435,9 +470,9 @@ export function BulkCreateClient() {
             </Card>
           )}
 
-          {/* Main Form and Grid when metadata is loaded and canCreate is true */}
+          {/* Main Workspace when metadata is loaded and canCreate is true */}
           {metadata && metadata.canCreate && (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {/* Draft Restore Banner */}
               {draftAvailable && (
                 <div className="flex items-center justify-between rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3">
@@ -470,56 +505,30 @@ export function BulkCreateClient() {
                 </div>
               )}
 
-              {/* Shared Defaults Form */}
-              <CreateDefaultsForm
+              {/* Fullscreen / Inline Editor Shell */}
+              <BulkCreateEditorShell
                 metadata={metadata}
                 projectKey={projectKey}
+                availableProjects={availableProjects}
+                onSelectProject={handleProjectSelect}
                 defaults={defaults}
-                onChange={setDefaults}
-              />
-
-              {/* Editable Task Grid */}
-              <CreateTaskGrid
-                metadata={metadata}
-                projectKey={projectKey}
-                defaults={defaults}
+                onDefaultsChange={setDefaults}
                 items={items}
-                onChange={setItems}
+                onItemsChange={setItems}
                 onSourceChange={setSource}
+                isFullscreen={isEditorFullscreen}
+                onToggleFullscreen={handleToggleFullscreen}
+                onPreview={() => previewMutation.mutate()}
+                isPreviewPending={previewMutation.isPending}
+                isSavingDraft={isSavingDraft}
+                draftSavedTime={draftSavedTime}
                 focusRow={focusRow}
-                onClearFocusRow={() => setFocusRow(null)}
+                focusField={focusField}
+                onClearFocusRow={() => {
+                  setFocusRow(null);
+                  setFocusField(null);
+                }}
               />
-
-              {/* Bottom Action Footer */}
-              <div className="flex items-center justify-between border-t border-border pt-4">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleResetAll}
-                  className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
-                >
-                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                  Xoá làm lại từ đầu
-                </Button>
-
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => previewMutation.mutate()}
-                  disabled={filledCount === 0 || previewMutation.isPending}
-                  className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold cursor-pointer"
-                >
-                  {previewMutation.isPending ? (
-                    "Đang kiểm tra dữ liệu..."
-                  ) : (
-                    <>
-                      Kiểm tra & Xem trước {filledCount} task
-                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </>
-                  )}
-                </Button>
-              </div>
 
               {previewMutation.isError && (
                 <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-400">
@@ -541,8 +550,10 @@ export function BulkCreateClient() {
           isConfirming={confirmMutation.isPending}
           confirmError={confirmMutation.isError ? confirmMutation.error.message : null}
           onResetConfirmError={() => confirmMutation.reset()}
-          onFixRow={(rowIndex) => {
+          onFixRow={(rowIndex, field) => {
             setFocusRow(rowIndex);
+            setFocusField(field || null);
+            setIsEditorFullscreen(true);
             setStep("input");
           }}
         />

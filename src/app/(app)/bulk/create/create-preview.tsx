@@ -33,7 +33,7 @@ interface CreatePreviewProps {
   isConfirming: boolean;
   confirmError?: string | null;
   onResetConfirmError?: () => void;
-  onFixRow?: (rowIndex: number) => void;
+  onFixRow?: (rowIndex: number, field?: string) => void;
 }
 
 export function CreatePreview({
@@ -253,7 +253,7 @@ export function CreatePreview({
                               {onFixRow && (
                                 <button
                                   type="button"
-                                  onClick={() => onFixRow(item.rowIndex)}
+                                  onClick={() => onFixRow(item.rowIndex, e.field)}
                                   className="shrink-0 rounded p-0.5 text-red-500 hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer"
                                   title="Sửa dòng này"
                                 >
@@ -270,7 +270,7 @@ export function CreatePreview({
                               {onFixRow && (
                                 <button
                                   type="button"
-                                  onClick={() => onFixRow(item.rowIndex)}
+                                  onClick={() => onFixRow(item.rowIndex, w.field)}
                                   className="shrink-0 rounded p-0.5 text-amber-500 hover:bg-amber-500/10 hover:text-amber-700 dark:hover:text-amber-300 transition-colors cursor-pointer"
                                   title="Sửa dòng này"
                                 >
