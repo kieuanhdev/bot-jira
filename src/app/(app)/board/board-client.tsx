@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -11,19 +10,15 @@ import {
   closestCorners,
   useSensor,
   useSensors,
-  useDroppable,
-  useDraggable,
   type DragEndEvent,
   type DragOverEvent,
   type CollisionDetection,
 } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 import { api, ApiError } from "@/lib/api-client";
 import { useIssues, fetchIssuesPage, type IssueItem } from "@/hooks/use-issues";
-import { issuesKeys, boardKeys, meKeys, transitionsKeys, branchesForKeys, freshnessKeys } from "@/lib/query-keys";
+import { issuesKeys, boardKeys, meKeys, freshnessKeys } from "@/lib/query-keys";
 import { AssigneeMultiSelect } from "@/components/assignee-multi-select";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -33,754 +28,44 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { timeAgo, formatDateTime } from "@/lib/utils";
-import { wikiToHtml } from "@/lib/wiki";
+import { timeAgo } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { type BoardWidth } from "@/lib/status-groups";
 import {
   canTransitionToStatus,
   findTransitionToStatus,
   transitionTarget,
-  type BoardTransition,
 } from "@/lib/jira/board-transitions";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuGroup,
-} from "@/components/ui/dropdown-menu";
-import {
   Search,
-  Bot,
   ListFilter,
   LayoutGrid,
   List,
-  Clock,
-  TrendingUp,
-  CheckCircle2,
   AlertTriangle,
   RefreshCw,
-  ChevronLeft,
-  ChevronRight,
-  MoreHorizontal,
-  ExternalLink,
-  Copy,
-  User,
-  Flag,
-  X,
-  CornerDownLeft,
   ChevronsUpDown,
-  Eye,
-  EyeOff,
-  Send,
-  Check,
-  GitBranch,
-  UserCheck,
-  Hash,
   Plus,
-  ChevronDown,
 } from "lucide-react";
-
-type Project = { key: string; openCount: number };
-type SortMode = "priority" | "updated" | "age";
-type QuickAction =
-  | { kind: "assignee"; value: string | null }
-  | { kind: "priority"; value: string }
-  | { kind: "done" }
-  | { kind: "openJira" }
-  | { kind: "copyKey" }
-  | { kind: "openFull" };
-type ViewMode = "board" | "list";
-type Transition = BoardTransition;
-
-const PRIORITY_RANK: Record<string, number> = {
-  Blocker: 0,
-  Highest: 1,
-  High: 2,
-  Medium: 3,
-  Low: 4,
-  Lowest: 5,
-};
-
-function daysSince(d: string | null): number {
-  if (!d) return 0;
-  return Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000);
-}
-
-/** Sort a column's issues. `age` = oldest first, `updated` = most recent first. */
-function sortIssues(items: IssueItem[], mode: SortMode): IssueItem[] {
-  const arr = [...items];
-  if (mode === "priority") {
-    arr.sort((a, b) => {
-      const ra = PRIORITY_RANK[a.priority] ?? 9;
-      const rb = PRIORITY_RANK[b.priority] ?? 9;
-      if (ra !== rb) return ra - rb;
-      return daysSince(b.updatedAt) - daysSince(a.updatedAt);
-    });
-  } else if (mode === "updated") {
-    arr.sort((a, b) => {
-      const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-      const tb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-      if (tb !== ta) return tb - ta;
-      const ra = PRIORITY_RANK[a.priority] ?? 9;
-      const rb = PRIORITY_RANK[b.priority] ?? 9;
-      return ra - rb;
-    });
-  } else {
-    arr.sort((a, b) => daysSince(b.updatedAt) - daysSince(a.updatedAt));
-  }
-  return arr;
-}
-
-/** Visuals per priority: a colored left rail + a soft badge. Higher = stronger. */
-const PRIORITY_META: Record<string, { rail: string; badge: string }> = {
-  Blocker: { rail: "bg-rose-500", badge: "bg-rose-500/12 text-rose-600 dark:text-rose-400" },
-  Highest: { rail: "bg-rose-400", badge: "bg-rose-400/12 text-rose-600 dark:text-rose-400" },
-  High: { rail: "bg-amber-500", badge: "bg-amber-500/12 text-amber-700 dark:text-amber-400" },
-  Medium: { rail: "bg-sky-400", badge: "bg-sky-500/12 text-sky-700 dark:text-sky-400" },
-  Low: { rail: "bg-slate-300 dark:bg-slate-600", badge: "bg-muted text-muted-foreground" },
-  Lowest: { rail: "bg-slate-300 dark:bg-slate-600", badge: "bg-muted text-muted-foreground" },
-};
-const PRIORITY_NEUTRAL = { rail: "bg-transparent", badge: "bg-muted text-muted-foreground" };
-
-function priorityMeta(priority: string) {
-  return PRIORITY_META[priority] ?? PRIORITY_NEUTRAL;
-}
-
-/** Deterministic avatar palette keyed by name (stable, no hashing lib needed). */
-const AVATAR_PALETTE = [
-  "bg-teal-500/15 text-teal-700 dark:text-teal-300",
-  "bg-sky-500/15 text-sky-700 dark:text-sky-300",
-  "bg-violet-500/15 text-violet-700 dark:text-violet-300",
-  "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  "bg-rose-500/15 text-rose-700 dark:text-rose-300",
-  "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300",
-];
-
-function avatarClass(name: string | null | undefined): string {
-  if (!name) return "bg-muted text-muted-foreground";
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
-}
-
-function initials(name: string | null | undefined): string {
-  if (!name) return "?";
-  const parts = name.trim().split(/[\s._-]+/).filter(Boolean);
-  if (parts.length === 0) return name.slice(0, 1).toUpperCase();
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-/** Shorten a Jira issue type for the key-row chip. */
-function typeShort(type: string): string {
-  const t = type.trim();
-  const map: Record<string, string> = {
-    "Story": "Story", "Task": "Task", "Bug": "Bug",
-    "Sub-task": "Sub", "Sub Task": "Sub", "Subtask": "Sub",
-    "Epic": "Epic", "Sprint Goal": "Goal",
-    "Test": "Test", "Test Case": "Test", "Risk": "Risk",
-  };
-  return map[t] ?? t.slice(0, 4);
-}
-
-/**
- * Status color per Jira status category key (stable across instances). Colors
- * are grouped into 3 families — to-do (sky), in-progress (teal), done
- * (emerald) — and *within* a family each status gets a distinct shade so two
- * columns of the same category never look identical.
- */
-const CATEGORY_DOTS: Record<string, string[]> = {
-  new: ["bg-sky-400", "bg-cyan-500", "bg-blue-400", "bg-indigo-400", "bg-teal-400", "bg-sky-600", "bg-cyan-400", "bg-blue-500"],
-  indeterminate: ["bg-primary", "bg-cyan-500", "bg-sky-600", "bg-blue-500", "bg-indigo-500", "bg-primary/70"],
-  done: ["bg-emerald-500", "bg-green-500", "bg-teal-500", "bg-lime-500", "bg-emerald-400", "bg-green-400"],
-};
-const CATEGORY_TEXT: Record<string, string> = {
-  new: "text-sky-600 dark:text-sky-400",
-  indeterminate: "text-primary",
-  done: "text-emerald-600 dark:text-emerald-400",
-};
-/** Distinct dot per (category, position-within-category); stable by index. */
-function statusDot(category: string, idxInCategory: number): string {
-  const arr = CATEGORY_DOTS[category] ?? CATEGORY_DOTS.new;
-  return arr[idxInCategory % arr.length];
-}
-function statusText(category: string): string {
-  return CATEGORY_TEXT[category] ?? CATEGORY_TEXT.new;
-}
-
-/** Column order matches Jira's to-do → in-progress → done. */
-const CATEGORY_ORDER = ["new", "indeterminate", "done"] as const;
-
-/**
- * Route an issue to a board column.
- * 1. Exact status-name match against the project's real columns (preferred —
- *    this is what makes "Backlog" vs "Selected for Development" split into
- *    separate columns like the Jira board).
- * 2. Fallback: the issue's status category (from the cache, or the workflow
- *    status → category map), which picks the first column of that category.
- */
-function columnKeyForIssue(
-  issue: IssueItem,
-  columnKeyByStatus: Map<string, string>,
-  statusCategoryMap: Record<string, string>,
-  columns: { key: string; category: string }[]
-): string {
-  const byName = columnKeyByStatus.get(issue.status);
-  if (byName) return byName;
-  const cat = issue.statusCategory || statusCategoryMap[issue.status] || "new";
-  const col = columns.find((c) => c.category === cat) ?? columns[0];
-  return col ? col.key : "To Do";
-}
-
-function CardContent({
-  issue,
-  done,
-  dragging,
-  onTransition,
-  colIndex,
-  columnCount,
-  showNav,
-  onQuickAction,
-  assignees,
-}: {
-  issue: IssueItem;
-  done: boolean;
-  dragging?: boolean;
-  onTransition?: (key: string, target: string) => void;
-  colIndex?: number;
-  columnCount?: number;
-  showNav?: boolean;
-  onQuickAction?: (key: string, action: QuickAction) => void;
-  assignees?: string[];
-}) {
-  const stale = daysSince(issue.updatedAt) >= 7 && !done;
-  const pm = priorityMeta(issue.priority || "");
-  const canPrev = (colIndex ?? 0) > 0;
-  const canNext = (colIndex ?? 0) < (columnCount ?? 0) - 1;
-  const priorities = ["Blocker", "Highest", "High", "Medium", "Low", "Lowest"];
-  return (
-    <div
-      className={cn(
-        "group relative overflow-hidden rounded-lg border bg-card transition-all duration-150",
-        dragging
-          ? "border-primary/50 shadow-lg ring-2 ring-primary/25"
-          : "border-border/70 shadow-sm hover:-translate-y-px hover:border-primary/40 hover:shadow-md"
-      )}
-    >
-      <span className={cn("absolute inset-y-0 left-0 w-[3px]", pm.rail)} aria-hidden />
-      <div className="py-2 pl-3.5 pr-2.5">
-        <div className="flex items-center gap-1.5">
-          <span className="shrink-0 font-mono text-[11px] font-medium text-muted-foreground">{issue.jiraKey}</span>
-          {issue.type && (
-            <span className="shrink-0 rounded bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
-              {typeShort(issue.type)}
-            </span>
-          )}
-          <span className="ml-auto shrink-0" />
-          {issue.points != null && (
-            <span className="inline-flex h-4 shrink-0 items-center rounded-full bg-secondary px-1.5 font-mono text-[10px] font-semibold tabular-nums text-secondary-foreground">
-              {issue.points}
-            </span>
-          )}
-          {onQuickAction && !dragging && (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                aria-label={`Actions for ${issue.jiraKey}`}
-                className="-mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus:opacity-100 hover:bg-accent hover:text-foreground"
-              >
-                <MoreHorizontal className="h-3.5 w-3.5" aria-hidden />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52" onPointerDown={(e) => e.stopPropagation()}>
-                <DropdownMenuLabel className="font-mono text-xs">{issue.jiraKey}</DropdownMenuLabel>
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    onSelect={(e) => { e.preventDefault(); onQuickAction(issue.jiraKey, { kind: "assignee", value: null }); }}
-                    className="gap-2"
-                  >
-                    <User className="h-3.5 w-3.5" aria-hidden /> Unassign
-                  </DropdownMenuItem>
-                  {assignees && assignees.length > 0 && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuLabel>Assign to</DropdownMenuLabel>
-                      {assignees.slice(0, 12).map((a) => (
-                        <DropdownMenuItem
-                          key={a}
-                          onSelect={(e) => { e.preventDefault(); onQuickAction(issue.jiraKey, { kind: "assignee", value: a }); }}
-                          className="gap-2"
-                        >
-                          {a === issue.assigneeJira && <span className="text-primary">•</span>}
-                          <span className="truncate">{a}</span>
-                        </DropdownMenuItem>
-                      ))}
-                    </>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Priority</DropdownMenuLabel>
-                  {priorities.map((p) => (
-                    <DropdownMenuItem
-                      key={p}
-                      onSelect={(e) => { e.preventDefault(); onQuickAction(issue.jiraKey, { kind: "priority", value: p }); }}
-                      className="gap-2"
-                    >
-                      <Flag className="h-3.5 w-3.5" aria-hidden />
-                      <span>{p}</span>
-                      {p === issue.priority && <span className="ml-auto text-primary">•</span>}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                {!done && (
-                  <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onQuickAction(issue.jiraKey, { kind: "done" }); }} className="gap-2">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" aria-hidden /> Mark done
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onQuickAction(issue.jiraKey, { kind: "copyKey" }); }} className="gap-2">
-                  <Copy className="h-3.5 w-3.5" aria-hidden /> Copy key
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onQuickAction(issue.jiraKey, { kind: "openJira" }); }} className="gap-2">
-                  <ExternalLink className="h-3.5 w-3.5" aria-hidden /> Open in Jira
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onQuickAction(issue.jiraKey, { kind: "openFull" }); }} className="gap-2">
-                  <CornerDownLeft className="h-3.5 w-3.5" aria-hidden /> Open full detail
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-
-        <p className="mt-1 line-clamp-2 text-[13px] font-medium leading-snug text-card-foreground">
-          {issue.summary}
-        </p>
-
-        {(issue.aiScore || stale || (issue.delivery && issue.delivery.branchCount > 0)) && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-1">
-            {issue.delivery && issue.delivery.branchCount > 0 && (
-              <Badge
-                variant="secondary"
-                className={cn(
-                  "h-4 gap-1 px-1.5 text-[10px] font-mono",
-                  issue.delivery.prMerged
-                    ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
-                    : issue.delivery.prOpen
-                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                      : "bg-muted text-muted-foreground"
-                )}
-                title={`${issue.delivery.branchCount} branch liên kết${issue.delivery.prMerged ? " • PR merged" : issue.delivery.prOpen ? " • PR open" : ""}`}
-              >
-                <GitBranch className="h-2.5 w-2.5" />
-                {issue.delivery.branchCount}b
-                {issue.delivery.prMerged ? " ✓" : issue.delivery.prOpen ? " PR" : ""}
-              </Badge>
-            )}
-            {issue.aiScore && (
-              <Badge
-                variant={issue.aiDecision ? (issue.aiDecision.decision === "rejected" ? "danger" : "success") : "info"}
-                className="h-4 gap-1 px-1.5 text-[10px]"
-                title={issue.aiDecision ? `AI estimate ${issue.aiDecision.decision}` : "AI estimate (pending review)"}
-              >
-                <Bot className="h-2.5 w-2.5" />
-                {issue.aiScore.points}pt
-                {issue.aiScore.confidence != null ? ` ${Math.round(issue.aiScore.confidence * 100)}%` : ""}
-              </Badge>
-            )}
-            {stale && (
-              <Badge variant="warning" className="h-4 gap-1 px-1.5 text-[10px]" title="Stale — not updated in 7+ days">
-                <Clock className="h-2.5 w-2.5" />
-                {daysSince(issue.updatedAt)}d
-              </Badge>
-            )}
-            {issue.priority && issue.priority !== "Low" && issue.priority !== "Lowest" && (
-              <span className={cn("inline-flex h-4 items-center rounded-full px-1.5 text-[10px] font-semibold", pm.badge)}>
-                {issue.priority}
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="mt-2 flex items-center gap-1.5">
-          {issue.assigneeJira ? (
-            <span
-              className={cn(
-                "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
-                avatarClass(issue.assigneeJira)
-              )}
-              title={issue.assigneeJira}
-            >
-              {initials(issue.assigneeJira)}
-            </span>
-          ) : (
-            <span
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted-foreground/60"
-              title="Unassigned"
-              aria-label="Unassigned"
-            >
-              –
-            </span>
-          )}
-          <span className="truncate text-[11px] text-muted-foreground">{timeAgo(issue.updatedAt)}</span>
-          {showNav && onTransition && !done && (
-            <span className="ml-auto flex items-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
-              <button
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTransition(issue.jiraKey, "__prev__"); }}
-                disabled={!canPrev}
-                aria-label="Move to previous column"
-                title="Move left"
-                className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:invisible"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-              </button>
-              <button
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTransition(issue.jiraKey, "__next__"); }}
-                disabled={!canNext}
-                aria-label="Move to next column"
-                title="Move right"
-                className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:invisible"
-              >
-                <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-              </button>
-            </span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DraggableCard({
-  issue,
-  done,
-  colIndex,
-  columnCount,
-  onTransition,
-  busy,
-  dndDisabled,
-  showNavButtons,
-  onOpen,
-  onQuickAction,
-  assignees,
-  registerRef,
-  focused,
-}: {
-  issue: IssueItem;
-  done: boolean;
-  colIndex: number;
-  columnCount: number;
-  onTransition: (key: string, targetStatus: string) => void;
-  busy: boolean;
-  dndDisabled: boolean;
-  showNavButtons: boolean;
-  onOpen?: (issue: IssueItem) => void;
-  onQuickAction?: (key: string, action: QuickAction) => void;
-  assignees?: string[];
-  registerRef?: (key: string, el: HTMLElement | null) => void;
-  focused?: boolean;
-}) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: issue.jiraKey,
-    disabled: dndDisabled,
-  });
-
-  const style = transform
-    ? { transform: CSS.Translate.toString(transform) }
-    : undefined;
-
-  return (
-    <div
-      ref={(el) => {
-        setNodeRef(el);
-        registerRef?.(issue.jiraKey, el);
-      }}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className={cn(
-        "relative rounded-lg outline-none transition-shadow duration-150",
-        !dndDisabled && !isDragging && "cursor-grab active:cursor-grabbing",
-        isDragging && "z-10 opacity-40",
-        focused && "ring-2 ring-ring/70 ring-offset-1 ring-offset-background"
-      )}
-    >
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => onOpen?.(issue)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onOpen?.(issue);
-          }
-        }}
-        className={cn(
-          "block w-full rounded-lg text-left outline-none",
-          "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
-        )}
-      >
-        <CardContent
-          issue={issue}
-          done={done}
-          onTransition={busy ? undefined : onTransition}
-          colIndex={colIndex}
-          columnCount={columnCount}
-          showNav={showNavButtons && !dndDisabled}
-          onQuickAction={onQuickAction}
-          assignees={assignees}
-        />
-      </div>
-    </div>
-  );
-}
-
-function BoardColumn({
-  id,
-  label,
-  category,
-  isDone,
-  items,
-  total,
-  colIndex,
-  columnCount,
-  onTransition,
-  busy,
-  dndDisabled,
-  onOverChange,
-  dotColor,
-  dragBlocked,
-  optimistic,
-  wipOver,
-  collapsed,
-  onGrow,
-  onToggleCollapse,
-  onOpen,
-  onQuickAction,
-  assignees,
-  registerRef,
-  focusKey,
-}: {
-  id: string;
-  label: string;
-  category: string;
-  isDone: boolean;
-  items: IssueItem[];
-  total: number;
-  colIndex: number;
-  columnCount: number;
-  onTransition: (key: string, targetStatus: string) => void;
-  busy: boolean;
-  dndDisabled: boolean;
-  onOverChange: (over: boolean) => void;
-  dotColor: string;
-  /** True while dragging a card that the workflow cannot move into this column. */
-  dragBlocked?: boolean;
-  /** issueKey -> target status for in-flight optimistic moves. */
-  optimistic: Map<string, string>;
-  wipOver: boolean;
-  collapsed: boolean;
-  onGrow: (id: string) => void;
-  onToggleCollapse: (id: string) => void;
-  onOpen: (issue: IssueItem) => void;
-  onQuickAction: (key: string, action: QuickAction) => void;
-  assignees: string[];
-  registerRef: (key: string, el: HTMLElement | null) => void;
-  focusKey: string | null;
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id });
-  const text = statusText(category);
-  const hasMore = items.length < total;
-
-  useEffect(() => {
-    onOverChange(isOver);
-    // onOverChange is a stable setState callback from the parent.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOver]);
-
-  if (collapsed) {
-    return (
-      <div className="flex w-9 shrink-0 flex-col items-center gap-2 py-1">
-        <button
-          onClick={() => onToggleCollapse(id)}
-          title={`Mở cột ${label}`}
-          aria-label={`Mở cột ${label}`}
-          className="flex flex-col items-center gap-1.5 rounded-lg border border-border/60 bg-muted/25 px-1 py-2 transition-colors hover:border-primary/40 hover:bg-primary/5"
-        >
-          <span className={cn("h-2.5 w-2.5 rounded-full", dotColor)} />
-          <span className="text-[10px] font-semibold tabular-nums text-muted-foreground">{total}</span>
-          <span
-            className="text-[10px] font-semibold tracking-tight"
-            style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
-          >
-            {label}
-          </span>
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex min-w-0 flex-1 basis-72 flex-col">
-      <div className="mb-2 flex items-center gap-2 px-0.5">
-        <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dotColor)} />
-        <span className={cn("min-w-0 truncate text-[13px] font-semibold tracking-tight", text)}>{label}</span>
-        {wipOver && (
-          <span
-            className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400"
-            title="Nhiều task đang chạy hơn mức khuyến nghị (WIP)"
-          >
-            WIP
-          </span>
-        )}
-        {dragBlocked ? (
-          <span className="ml-auto shrink-0 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400">
-            Không cho
-          </span>
-        ) : (
-          <span className="ml-auto shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
-            {total}
-          </span>
-        )}
-        <button
-          onClick={() => onToggleCollapse(id)}
-          title={`Thu gọn cột ${label}`}
-          aria-label={`Thu gọn cột ${label}`}
-          className="shrink-0 rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-        </button>
-      </div>
-      <div
-        ref={setNodeRef}
-        className={cn(
-          "relative flex flex-1 flex-col overflow-hidden rounded-xl border transition-colors duration-150",
-          dragBlocked
-            ? "border-rose-400/50 bg-rose-500/10"
-            : isOver
-              ? "border-primary/40 bg-primary/10"
-              : "border-border/60 bg-muted/25"
-        )}
-      >
-        <div className={cn("pointer-events-none absolute inset-x-0 top-0 h-0.5 opacity-80", dragBlocked ? "bg-rose-400" : dotColor)} aria-hidden />
-        <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2 [scrollbar-width:thin]">
-          {items.length === 0 ? (
-            <div
-              className={cn(
-                "flex flex-1 items-center justify-center rounded-lg border border-dashed px-3 py-8 text-center text-[11px] transition-colors",
-                isOver ? "border-primary/50 bg-primary/5 text-primary" : "border-border/70 text-muted-foreground/70"
-              )}
-            >
-              {isOver ? "Thả task vào đây" : "Không có task"}
-            </div>
-          ) : (
-            <>
-              {items.map((issue) => {
-                const pending = optimistic.has(issue.jiraKey);
-                const shown = pending
-                  ? ({ ...issue, status: optimistic.get(issue.jiraKey)! } as IssueItem)
-                  : issue;
-                return (
-                  <div key={issue.jiraKey} className="relative">
-                    {pending && (
-                      <span
-                        className="absolute right-1.5 top-1.5 z-10 h-3 w-3 animate-spin rounded-full border-2 border-primary/30 border-t-primary motion-reduce:animate-none"
-                        title="Đang cập nhật Jira…"
-                        aria-label="Đang cập nhật Jira"
-                      />
-                    )}
-                    <DraggableCard
-                      issue={shown}
-                      done={isDone}
-                      colIndex={colIndex}
-                      columnCount={columnCount}
-                      onTransition={onTransition}
-                      busy={busy}
-                      dndDisabled={dndDisabled}
-                      showNavButtons
-                      onOpen={() => onOpen(shown)}
-                      onQuickAction={onQuickAction}
-                      assignees={assignees}
-                      registerRef={registerRef}
-                      focused={focusKey === issue.jiraKey}
-                    />
-                  </div>
-                );
-              })}
-              {hasMore && (
-                <button
-                  onClick={() => onGrow(id)}
-                  className="rounded-lg border border-dashed border-border/70 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
-                >
-                  Xem thêm {total - items.length}
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SummaryTile({
-  label,
-  value,
-  icon,
-  tone,
-}: {
-  label: string;
-  value: number;
-  icon: React.ReactNode;
-  tone: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-card px-3 py-2 shadow-sm transition-shadow duration-150 hover:shadow-md">
-      <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", tone)}>
-        {icon}
-      </span>
-      <div className="leading-tight">
-        <div className="text-lg font-semibold tabular-nums">{value}</div>
-        <div className="text-[11px] text-muted-foreground">{label}</div>
-      </div>
-    </div>
-  );
-}
-
-function BoardSkeleton({ columnCount }: { columnCount: number }) {
-  const count = Math.max(3, Math.min(columnCount, 6));
-  return (
-    <div className="flex flex-1 gap-3 overflow-hidden">
-      {Array.from({ length: count }, (_, g) => (
-        <div key={g} className="flex min-w-0 flex-1 basis-64 flex-col gap-2">
-          <div className="flex items-center justify-between px-1">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-4 w-6" />
-          </div>
-          <div className="flex flex-col gap-2">
-            {[0, 1, 2].map((row) => (
-              <Card key={row} className="p-2.5">
-                <div className="flex items-center justify-between">
-                  <Skeleton className="h-3 w-14" />
-                  <Skeleton className="h-4 w-8" />
-                </div>
-                <Skeleton className="mt-2 h-4 w-full" />
-                <Skeleton className="mt-1 h-4 w-2/3" />
-                <Skeleton className="mt-2 h-3 w-24" />
-              </Card>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
+import { FilterBar } from "@/components/shared/filter-bar";
+import { SearchField } from "@/components/shared/search-field";
+import { SegmentedControl } from "@/components/shared/segmented-control";
+import { EmptyState } from "@/components/shared/empty-state";
+import { BoardSummaryCards } from "./board-summary-cards";
+import { CardContent } from "./board-card";
+import { BoardColumn, BoardSkeleton } from "./board-column";
+import { QuickPanel } from "./board-quick-panel";
+import {
+  type Project,
+  type SortMode,
+  type QuickAction,
+  type ViewMode,
+  type Transition,
+  type BoardSyncState,
+  CATEGORY_ORDER,
+} from "./lib/board-types";
+import { daysSince, sortIssues, columnKeyForIssue, statusDot } from "./lib/board-utils";
 
 export function BoardClient() {
   const qc = useQueryClient();
@@ -862,10 +147,6 @@ export function BoardClient() {
     setProject((prev) => (next.length > 0 && (!prev || !next.includes(prev)) ? next[0] : prev));
   }, [qc]);
 
-  // First visit: if the user has never chosen projects (empty prefs), treat
-  // every available project as selected so the board shows something
-  // immediately instead of a blank "No projects" screen. The empty array is
-  // only shown while prefs are still loading.
   const effectivePreferred = useMemo(
     () => (preferred.length === 0 ? availableKeys : preferred),
     [preferred, availableKeys]
@@ -884,7 +165,6 @@ export function BoardClient() {
     [effectivePreferred, countMap, availableKeys]
   );
 
-  // Picker uses local state while open; only commits on "Done"
   const pickerActive = pickerSelection ?? effectivePreferred;
   const pickerSet = new Set(pickerActive);
 
@@ -933,7 +213,6 @@ export function BoardClient() {
       setBoardNewKey("");
       closePicker();
       setToast(`Đã thêm dự án ${res.project.name} (${verifiedKey}) và bắt đầu đồng bộ.`);
-      // Enqueue sync immediately
       try {
         await api("/api/sync/jira", { method: "POST", body: { projectKey: verifiedKey } });
       } catch {
@@ -959,9 +238,16 @@ export function BoardClient() {
   const cardRefs = useRef<Map<string, HTMLElement | null>>(new Map());
   const selectedProject = effectivePreferred.includes(project) ? project : (effectivePreferred[0] ?? "");
 
-  // Bounded render (#2): how many cards each column shows before "load more".
-  // Stored as { sig, counts } so a change to the visible set / sort / project
-  // resets the counters automatically (checked during render below, no effect).
+  const activeFilterCount =
+    [q, label, priority].filter(Boolean).length +
+    (selectedAssignees.length !== 1 || selectedAssignees[0] !== "me" ? 1 : 0);
+  function resetFilters() {
+    setQ("");
+    setLabel("");
+    setPriority("");
+    setSelectedAssignees(["me"]);
+  }
+
   const [colVisibleState, setColVisibleState] = useState<{ sig: string; counts: Record<string, number> }>({
     sig: "",
     counts: {},
@@ -995,9 +281,6 @@ export function BoardClient() {
   };
   const { data, isLoading, isFetching } = useIssues(boardFilters, { enabled });
 
-  // Extra pages loaded on demand for projects larger than the first page. The
-  // filter signature is the key that resets them: when it changes, the loaded
-  // pages no longer match, so we only render the first page until reloaded.
   const filterSig = JSON.stringify({
     p: selectedProject,
     q,
@@ -1038,7 +321,6 @@ export function BoardClient() {
     () => (data?.items ?? []).concat(extraIssues),
     [data?.items, extraIssues]
   );
-  type BoardSyncState = "idle" | "enqueueing" | "queued" | "running" | "succeeded" | "failed";
 
   const [boardSync, setBoardSync] = useState<{
     projectKey: string;
@@ -1065,7 +347,6 @@ export function BoardClient() {
 
     async function checkStatus() {
       const elapsed = Date.now() - pollStartMs;
-      // Timeout after 60 seconds
       if (elapsed > 60_000) {
         if (!cancelled) {
           setToast("Chưa nhận được trạng thái đồng bộ. Hãy kiểm tra worker hoặc thử lại.");
@@ -1111,18 +392,15 @@ export function BoardClient() {
           setBoardSync((prev) => (prev.projectKey === projectKey ? { ...prev, state: "running" } : prev));
         }
 
-        // Schedule next check: 1s for first 15s, then 2.5s
         const nextDelay = elapsed < 15_000 ? 1000 : 2500;
         timer = setTimeout(checkStatus, nextDelay);
       } catch {
-        // Retry on network jitter
         if (!cancelled) {
           timer = setTimeout(checkStatus, 2500);
         }
       }
     }
 
-    // Start checking after a short delay
     timer = setTimeout(checkStatus, 800);
 
     return () => {
@@ -1177,8 +455,6 @@ export function BoardClient() {
   const assignees = optData?.assignees ?? [];
   const labelOptions = optData?.labels ?? [];
 
-  // Command palette (Cmd/Ctrl+K): jump to any issue on the board by key or
-  // summary. Filters the already-loaded issues; Enter opens its detail page.
   const paletteResults = useMemo(() => {
     const needle = paletteQ.trim().toLowerCase();
     if (!needle) return issues.slice(0, 8);
@@ -1210,17 +486,12 @@ export function BoardClient() {
         setPaletteOpen(false);
         setQuickPanel(null);
       }
-      // Ignore the rest while typing in a field.
       if (typing) return;
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [paletteOpen, quickPanel]);
 
-  // Dynamic columns from the project's real Jira workflow (grouped by status
-  // category). Falls back to the 3 default category columns if the endpoint is
-  // empty (Jira not configured / error). Column identity = category key, so an
-  // issue routes by its category, not by a fragile status-name match.
   const { data: statusesData } = useQuery({
     queryKey: boardKeys.statuses(selectedProject),
     enabled: effectivePreferred.length > 0 && Boolean(selectedProject),
@@ -1247,11 +518,6 @@ export function BoardClient() {
         { key: "Done", label: "Done", category: "done", isDone: true },
       ];
     }
-    // One column per workflow status (the project's real workflow / manual
-    // columns), in the order Jira reports them. Column identity = the status
-    // name; its category (new/indeterminate/done) drives color + the done
-    // accent, and is what an issue routes to when its own statusCategory is
-    // unknown.
     const seen = new Set<string>();
     const cols: Column[] = [];
     for (const s of items) {
@@ -1273,9 +539,6 @@ export function BoardClient() {
         ];
   }, [statusesData?.items]);
 
-  // Optimistic card moves: issueKey -> status name we're moving it to. Applied
-  // instantly so the card lands in the new column the moment you drop it, before
-  // Jira confirms. Cleared on success (refetch reconciles) or failure (revert).
   const [optimistic, setOptimistic] = useState<Map<string, string>>(new Map());
 
   function setOptimisticStatus(key: string, status: string | null) {
@@ -1287,14 +550,12 @@ export function BoardClient() {
     });
   }
 
-  // Map an issue to the column that carries its status name.
   const columnKeyByStatus = useMemo(() => {
     const m = new Map<string, string>();
     for (const c of columns) m.set(c.label, c.key);
     return m;
   }, [columns]);
 
-  // Route an issue to its column, honoring any in-flight optimistic move.
   function findColumnForIssue(issue: IssueItem): string {
     const effective = optimistic.has(issue.jiraKey)
       ? ({ ...issue, status: optimistic.get(issue.jiraKey)! } as IssueItem)
@@ -1315,7 +576,6 @@ export function BoardClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [issues, columns, columnKeyByStatus, statusCategoryMap, optimistic]);
 
-  // Each column's issues, sorted by the selected mode.
   const sortedByColumn = useMemo(() => {
     const m = new Map<string, IssueItem[]>();
     for (const [k, v] of byColumn) m.set(k, sortIssues(v, sortMode));
@@ -1341,7 +601,6 @@ export function BoardClient() {
 
   const transitionCache = useRef(new Map<string, Transition[]>());
   const transitionRequests = useRef(new Map<string, Promise<Transition[]>>());
-  // While dragging, the set of column keys the active card can legally move to.
   const [allowedCols, setAllowedCols] = useState<Set<string> | null>(null);
 
   function toName(tr: Transition): string {
@@ -1370,9 +629,6 @@ export function BoardClient() {
     transitionRequests.current.delete(key);
   }
 
-  // Preload each visible issue's available transitions once so drag-over can
-  // validate drop targets instantly (no per-hover request). Re-runs when the
-  // visible set changes (new filter, a successful move, a fresh poll).
   const transitionKeys = useMemo(() => issues.map((i) => i.jiraKey).join("|"), [issues]);
   useEffect(() => {
     const keys = transitionKeys ? transitionKeys.split("|") : [];
@@ -1393,11 +649,6 @@ export function BoardClient() {
     };
   }, [transitionKeys, fetchTransitions]);
 
-  /**
-   * Can an issue legally transition into `targetLabel`? Exact status-name match
-   * first; for the 3-column fallback layout (a column is a whole category) any
-   * transition into that category counts.
-   */
   function canDropTo(
     all: Transition[],
     targetLabel: string,
@@ -1416,13 +667,6 @@ export function BoardClient() {
     return false;
   }
 
-  /**
-   * Find a transition that lands in the target column. A column is a specific
-   * workflow status, so the primary match is an exact status-name match. The
-   * fallback accepts any transition whose target status shares the column's
-   * category (covers the 3-column fallback layout, where a column is a category
-   * like "To Do"/"In Progress"/"Done" rather than a single status).
-   */
   function findTransition(all: Transition[], targetLabel: string): Transition | null {
     const exact = findTransitionToStatus(all, targetLabel);
     if (exact) return exact;
@@ -1446,7 +690,6 @@ export function BoardClient() {
       });
     } catch (e) {
       const status = (e as ApiError)?.status ?? null;
-      // Revert the optimistic move so the card snaps back to its original column.
       setOptimisticStatus(key, revertTo);
       if (status === 403 || status === 401) {
         setToast(`${key}: You don't have permission to make this transition.`);
@@ -1456,12 +699,11 @@ export function BoardClient() {
         setToast(`${key}: This transition isn't available from the current state. Move it via Jira.`);
         return;
       }
-      // 502/other: Jira upstream failure or network.
       setToast(`${key}: Couldn't update Jira. The card has been reverted. Try again, or make the change in Jira.`);
       return;
     }
     invalidateTransitionCache(key);
-    setOptimisticStatus(key, null); // confirmed; the refetch below reconciles
+    setOptimisticStatus(key, null);
     await qc.invalidateQueries({ queryKey: issuesKeys.all });
   }
 
@@ -1469,8 +711,6 @@ export function BoardClient() {
     setTransitionBusy(true);
     setToast(null);
     try {
-      // `target` is a column KEY (or a prev/next marker). Resolve it to the
-      // column's label (a real workflow status name) for the transition lookup.
       let targetKey: string;
       if (target === "__prev__" || target === "__next__") {
         const issue = issues.find((i) => i.jiraKey === key);
@@ -1489,7 +729,6 @@ export function BoardClient() {
       const issue = issues.find((i) => i.jiraKey === key);
       const fromStatus = issue?.status ?? "";
 
-      // No-op if the issue is already in the target column.
       if (issue && findColumnForIssue(issue) === targetKey) {
         setTransitionBusy(false);
         return;
@@ -1499,16 +738,12 @@ export function BoardClient() {
       const found = findTransition(all, targetLabel);
 
       if (!found) {
-        // The workflow does not allow this move. Block it with a clear message
-        // rather than silently failing — the user expected the card to move.
         setToast(
           `${key}: "${issue?.status || "current"}" cannot move to ${targetLabel}. The workflow doesn't allow this transition.`
         );
         return;
       }
 
-      // Optimistic: move the card to the destination column now, before Jira
-      // confirms. If the transition fails, doTransition reverts it.
       setOptimisticStatus(key, targetLabel);
       await doTransition(key, found.id, fromStatus);
     } catch (e) {
@@ -1519,12 +754,6 @@ export function BoardClient() {
     }
   }
 
-  /**
-   * Card quick actions (the ⋯ menu). Field updates (assignee / priority) hit the
-   * per-issue PATCH; "done" runs the same transition flow as a drag. Jira deep
-   * link and key copy are local. All Jira writes are confirmed then the issues
-   * cache is invalidated so the board reconciles.
-   */
   async function handleQuickAction(key: string, action: QuickAction) {
     try {
       switch (action.kind) {
@@ -1568,7 +797,6 @@ export function BoardClient() {
         case "done": {
           const issue = issues.find((i) => i.jiraKey === key);
           const fromStatus = issue?.status ?? null;
-          // Find a transition into a done-category status.
           const all = await fetchTransitions(key);
           const doneCol = columns.find((c) => c.category === "done");
           const target = doneCol?.label ?? "Done";
@@ -1604,23 +832,12 @@ export function BoardClient() {
     const targetColumn = String(over.id);
     const source = issues.find((i) => i.jiraKey === key);
     if (!source) return;
-    // skip if already in this column (exact or via category routing)
     const currentCol = findColumnForIssue(source);
     if (currentCol === targetColumn) return;
     handleTransition(key, targetColumn);
   }
 
-  /**
-   * A card may only be dropped into a column the workflow actually allows. The
-   * collision-detection function receives the candidate columns (ranked) and
-   * returns the first one the card can move to; if the nearest is off-limits we
-   * fall back to the card's own column so it animates back instead of moving
-   * illegally. Returning an empty array also rejects the drop (card returns).
-   */
   function collisionDetection(args: Parameters<CollisionDetection>[0]): ReturnType<CollisionDetection> {
-    // Rank candidates with the default (closestCorners) detector, then keep
-    // only the first column the card may legally move to. If the nearest is
-    // off-limits, return [] so the drop is rejected and the card animates back.
     const ranked = closestCorners(args);
     const activeKey = String(args.active.id).replace(/^card:/, "");
     const source = issues.find((i) => i.jiraKey === activeKey);
@@ -1636,8 +853,6 @@ export function BoardClient() {
     return first ? [first] : [];
   }
 
-  // While dragging, tell every column whether the active card may drop into it
-  // so the UI can highlight reachable (teal) vs unreachable (red) columns live.
   function onDragOver(event: DragOverEvent) {
     const activeId = String(event.active.id);
     const activeKey = activeId.replace(/^card:/, "");
@@ -1664,10 +879,6 @@ export function BoardClient() {
     setAllowedCols(null);
     if (!issue) return;
 
-    // The board preloads transitions, but a user can start dragging before that
-    // background work finishes. Fetch the active card immediately so a cold
-    // cache cannot make a valid destination (notably Waiting For Deploy on MR)
-    // look blocked for the entire gesture.
     void fetchTransitions(issue.jiraKey)
       .then((all) => {
         if (activeDragKeyRef.current !== issue.jiraKey) return;
@@ -1688,21 +899,16 @@ export function BoardClient() {
       });
   }
 
-  // A signature of the visible set + sort; when it changes, the bounded
-  // "load more" counters reset so columns re-render from the top.
   const colResetSig = useMemo(
     () => `${selectedProject}|${sortMode}|${filterSig}|${issues.length}`,
     [selectedProject, sortMode, filterSig, issues.length]
   );
-  // Reset the bounded counters when the visible set / sort / project changes.
-  // Derived (not in an effect) so a sig change clears the counters on the next
-  // render without a setState-in-effect.
   const colVisible = useMemo(
     () => (colVisibleState.sig === colResetSig ? colVisibleState.counts : {}),
     [colVisibleState, colResetSig]
   );
 
-  const WIP_LIMIT = 8; // in-progress columns warn beyond this
+  const WIP_LIMIT = 8;
 
   const boardColumnsRender = useMemo(() => {
     const seen = new Map<string, number>();
@@ -1719,7 +925,6 @@ export function BoardClient() {
         colIndex: i,
         columnCount: columns.length,
         dotColor: statusDot(c.category, idxInCat),
-        textColor: statusText(c.category),
         items: all.slice(0, count),
         total: all.length,
         wipOver: c.category === "indeterminate" && all.length > WIP_LIMIT,
@@ -1745,9 +950,6 @@ export function BoardClient() {
     });
   }
 
-  // Keyboard navigation (#10): a flat, column-major order of the rendered cards
-  // (skipping collapsed columns). Arrow keys move focus; Enter opens the quick
-  // panel. Only active in the board view.
   const focusOrder = useMemo(
     () =>
       boardColumnsRender
@@ -1814,7 +1016,6 @@ export function BoardClient() {
           Chọn các dự án Jira muốn hiển thị trên bảng, hoặc nhập mã dự án bên dưới để bắt đầu.
         </p>
 
-        {/* Input trực tiếp trên Empty state */}
         <div className="mt-2 flex w-full max-w-xs flex-col gap-2 rounded-lg border border-border bg-card p-3 shadow-xs">
           <Label className="text-left text-xs font-semibold text-foreground">
             Nhập mã dự án Jira muốn có
@@ -1930,7 +1131,6 @@ export function BoardClient() {
                   ))}
                 </div>
 
-                {/* Nhập dự án muốn có */}
                 <div className="mt-2.5 border-t border-border pt-2.5">
                   <p className="mb-1 text-[11px] font-semibold text-muted-foreground">
                     Nhập dự án muốn có
@@ -2021,32 +1221,15 @@ export function BoardClient() {
               ? "Đã đồng bộ"
               : "Đồng bộ Jira"}
           </Button>
-          <div className="flex rounded-md border p-0.5">
-          {(["board", "list"] as ViewMode[]).map((m) => {
-            const isNarrow = width === "narrow";
-            const disabled = isNarrow && m === "board";
-            const active = effectiveView === m;
-            return (
-              <button
-                key={m}
-                onClick={() => !disabled && setView(m)}
-                disabled={disabled}
-                title={disabled ? "Không khả dụng ở độ rộng màn hình này" : undefined}
-                className={cn(
-                  "flex items-center gap-1.5 rounded px-2.5 py-1 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : disabled
-                      ? "cursor-not-allowed text-muted-foreground/40"
-                      : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {m === "board" ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
-                <span className="hidden sm:inline">{m === "board" ? "Bảng" : "Danh sách"}</span>
-              </button>
-            );
-          })}
-          </div>
+          <SegmentedControl<ViewMode>
+            items={[
+              { value: "board", label: "Bảng", icon: LayoutGrid, disabled: width === "narrow" },
+              { value: "list", label: "Danh sách", icon: List },
+            ]}
+            value={effectiveView}
+            onChange={setView}
+            aria-label="Chế độ hiển thị"
+          />
 
           <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
             <SelectTrigger className="h-8 w-auto gap-1.5 text-sm" title="Sắp xếp thẻ trong từng cột">
@@ -2089,16 +1272,14 @@ export function BoardClient() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={`Tìm kiếm trong ${selectedProject}…`}
-            className="pl-8"
-          />
-        </div>
+      <FilterBar activeCount={activeFilterCount} onReset={resetFilters}>
+        <SearchField
+          value={q}
+          onChange={setQ}
+          placeholder={`Tìm kiếm trong ${selectedProject}…`}
+          ariaLabel={`Tìm kiếm trong ${selectedProject}`}
+          className="flex-1 min-w-[220px]"
+        />
         <AssigneeMultiSelect
           value={selectedAssignees}
           onChange={setSelectedAssignees}
@@ -2126,34 +1307,9 @@ export function BoardClient() {
             <SelectItem value="Highest">Highest (Rất cao)</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </FilterBar>
 
-      <div className="flex flex-wrap gap-2">
-        <SummaryTile
-          label="Mở"
-          value={summary.open}
-          icon={<TrendingUp className="h-4 w-4" />}
-          tone="bg-sky-500/12 text-sky-600 dark:text-sky-400"
-        />
-        <SummaryTile
-          label="Đang làm"
-          value={summary.inProgress}
-          icon={<ListFilter className="h-4 w-4" />}
-          tone="bg-primary/12 text-primary"
-        />
-        <SummaryTile
-          label="Tồn đọng (7d+)"
-          value={summary.stale}
-          icon={<Clock className="h-4 w-4" />}
-          tone="bg-amber-500/12 text-amber-600 dark:text-amber-400"
-        />
-        <SummaryTile
-          label="Hoàn thành"
-          value={summary.done}
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          tone="bg-emerald-500/12 text-emerald-600 dark:text-emerald-400"
-        />
-      </div>
+      <BoardSummaryCards summary={summary} loading={isLoading} />
 
       {activeProject && (
         <div className="text-sm text-muted-foreground">
@@ -2165,15 +1321,12 @@ export function BoardClient() {
       {isLoading ? (
         <BoardSkeleton columnCount={columns.length || 5} />
       ) : issues.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-            <Search className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <p className="text-sm font-medium">Không có task nào để hiển thị</p>
-          <p className="max-w-xs text-xs text-muted-foreground">
-            Hãy thử điều chỉnh bộ lọc, hoặc chạy đồng bộ Jira để làm mới bảng.
-          </p>
-        </div>
+        <EmptyState
+          icon={Search}
+          title="Không có task nào để hiển thị"
+          hint="Hãy thử điều chỉnh bộ lọc, hoặc chạy đồng bộ Jira để làm mới bảng."
+          className="flex-1"
+        />
       ) : effectiveView === "board" ? (
         <DndContext
           sensors={sensors}
@@ -2221,127 +1374,51 @@ export function BoardClient() {
               />
             ))}
           </div>
-          <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
+          <DragOverlay>
             {activeDrag ? (
-              <div className="rotate-2 scale-[1.03]">
-                <CardContent issue={activeDrag} done={false} dragging />
-              </div>
+              <CardContent issue={activeDrag} done={false} dragging />
             ) : null}
           </DragOverlay>
         </DndContext>
       ) : (
-        <div className="flex flex-1 flex-col gap-2 overflow-x-auto pb-2">
-          {boardColumnsRender.map((col) => {
-            const items = col.items;
-            if (items.length === 0) return null;
-            const done = col.category === "done";
-            return (
-              <div key={col.id}>
-                <div className="mb-1.5 flex items-center gap-1.5 px-1">
-                  <span className={cn("h-2 w-2 rounded-full", col.dotColor)} />
-                  <span className={cn("text-sm font-semibold", col.textColor)}>{col.label}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">{items.length}</span>
-                </div>
-                <div className="flex flex-col gap-2">
-                  {items.map((issue) => (
-                    <DraggableCard
-                      key={issue.jiraKey}
-                      issue={issue}
-                      done={done}
-                      colIndex={col.colIndex}
-                      columnCount={col.columnCount}
-                        onTransition={handleTransition}
-                        busy={transitionBusy}
-                        dndDisabled={dndDisabled}
-                        showNavButtons={false}
-                        onOpen={(issue) => setQuickPanel(issue)}
-                        onQuickAction={handleQuickAction}
-                        assignees={assignees}
-                      />
-                    ))}
-                  </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {hasMore && (
-        <div className="flex justify-center pb-1">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadMore}
-            disabled={loadingMore}
-            className="gap-1.5"
-          >
-            {loadingMore ? "Loading…" : `Load more (${loadedTotal - issues.length} remaining)`}
-          </Button>
-        </div>
-      )}
-
-      {paletteOpen &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[12vh] backdrop-blur-sm"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Jump to issue"
-            onMouseDown={() => setPaletteOpen(false)}
-          >
-            <div
-              className="flex w-full max-w-lg flex-col overflow-hidden rounded-xl border bg-popover shadow-2xl"
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-2 border-b px-3">
-                <Search className="h-4 w-4 text-muted-foreground" />
-                <input
-                  autoFocus
-                  value={paletteQ}
-                  onChange={(e) => setPaletteQ(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && paletteResults[0]) {
-                      e.preventDefault();
-                      setPaletteOpen(false);
-                      router.push(`/issue/${paletteResults[0].jiraKey}`);
-                    }
-                  }}
-                  placeholder="Nhập mã task hoặc tóm tắt…"
-                  className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                />
-                <kbd className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                  Esc
-                </kbd>
-              </div>
-              <div className="max-h-72 overflow-auto p-1.5">
-                {paletteResults.length === 0 ? (
-                  <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                    Không tìm thấy task nào phù hợp trên bảng này.
-                  </p>
-                ) : (
-                  paletteResults.map((issue) => (
-                    <button
-                      key={issue.jiraKey}
-                      onClick={() => {
-                        setPaletteOpen(false);
-                        router.push(`/issue/${issue.jiraKey}`);
-                      }}
-                      className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-accent"
-                    >
-                      <span className="font-mono text-xs font-semibold text-primary">{issue.jiraKey}</span>
-                      <span className="flex-1 truncate text-sm">{issue.summary || "(no summary)"}</span>
-                      <Badge variant="secondary" className="shrink-0 text-[11px]">
-                        {issue.status}
-                      </Badge>
-                    </button>
-                  ))
-                )}
-              </div>
+        <div className="flex-1 overflow-auto rounded-lg border">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-muted/50 text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 font-medium">Key</th>
+                <th className="px-3 py-2 font-medium">Summary</th>
+                <th className="px-3 py-2 font-medium">Status</th>
+                <th className="px-3 py-2 font-medium">Assignee</th>
+                <th className="px-3 py-2 font-medium">Priority</th>
+                <th className="px-3 py-2 font-medium">Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {issues.map((issue) => (
+                <tr
+                  key={issue.jiraKey}
+                  className="cursor-pointer border-t transition-colors hover:bg-muted/30"
+                  onClick={() => setQuickPanel(issue)}
+                >
+                  <td className="px-3 py-2 font-mono text-xs text-primary">{issue.jiraKey}</td>
+                  <td className="max-w-xs truncate px-3 py-2 font-medium">{issue.summary}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{issue.status}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{issue.assigneeJira ?? "—"}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{issue.priority ?? "—"}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{timeAgo(issue.updatedAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {hasMore && (
+            <div className="border-t p-3 text-center">
+              <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? "Đang tải…" : "Xem thêm"}
+              </Button>
             </div>
-          </div>,
-          document.body
-        )}
+          )}
+        </div>
+      )}
 
       {quickPanel && (
         <QuickPanel
@@ -2351,1001 +1428,45 @@ export function BoardClient() {
           onClose={() => setQuickPanel(null)}
         />
       )}
-    </div>
-  );
-}
 
-/**
- * Quick panel: a right-side slide-over with the issue's detail. It renders
- * instantly from the card's cached data, then silently refreshes from the
- * server for freshness (staleTime 15s). Carries the same quick actions as the
- * card menu plus watch, add-comment, and move-to. "Open full detail" navigates
- * to the full page.
- */
-type QuickPanelDetail = {
-  summary: string;
-  description: string;
-  status: string;
-  assigneeJira: string | null;
-  labels: string[];
-  priority: string;
-  points: number | null;
-  type: string;
-  createdAt: string | null;
-  updatedAt: string | null;
-  lastSyncedAt: string;
-  aiScore: { points: number; confidence: number | null } | null;
-  aiDecision: { decision: string } | null;
-  staleSnapshots: { staleReason: string; severity: string; stateAgeDays: number }[];
-  comments: { id: string; author: string; body: string; createdAt: string | null }[];
-  releaseTasks: { release: { version: string; status: string } }[];
-  fixVersions?: string[];
-};
-
-function QuickPanel({
-  issue,
-  jiraBaseUrl,
-  assignees,
-  onClose,
-}: {
-  issue: IssueItem;
-  jiraBaseUrl: string;
-  assignees: string[];
-  onClose: () => void;
-}) {
-  const router = useRouter();
-  const qc = useQueryClient();
-  const [watched, setWatched] = useState(false);
-  const [commentDraft, setCommentDraft] = useState("");
-  const [commenting, setCommenting] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [creatingBranch, setCreatingBranch] = useState(false);
-  const [branchMsg, setBranchMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [newLabelInput, setNewLabelInput] = useState("");
-  const [showAddLabel, setShowAddLabel] = useState(false);
-  const [newVersionInput, setNewVersionInput] = useState("");
-  const [showAddVersion, setShowAddVersion] = useState(false);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const priorities = ["Blocker", "Highest", "High", "Medium", "Low", "Lowest"];
-
-  const { data: me } = useQuery({
-    queryKey: meKeys.status,
-    queryFn: () => api<{ jiraName: string | null }>("/api/me/status"),
-    staleTime: 60_000,
-  });
-
-  const { data: detail } = useQuery({
-    queryKey: issuesKeys.detail(issue.jiraKey),
-    queryFn: () => api<{ issue: QuickPanelDetail }>(`/api/issues/${issue.jiraKey}`),
-    staleTime: 15_000,
-    retry: 1,
-  });
-
-  const { data: transitions } = useQuery({
-    queryKey: transitionsKeys.forIssue(issue.jiraKey),
-    queryFn: () =>
-      api<{ transitions: { id: string; to?: { name?: string } | string }[] }>(
-        `/api/issues/${issue.jiraKey}/transitions`
-      ),
-    retry: 1,
-  });
-
-  const { data: branchesData, refetch: refetchBranches } = useQuery({
-    queryKey: branchesForKeys.forIssue(issue.jiraKey),
-    queryFn: () =>
-      api<{ items: { repo: string; branch: string; prUrl?: string | null }[] }>(
-        `/api/issues/${issue.jiraKey}/branches`
-      ),
-    staleTime: 15_000,
-  });
-
-  const { data: projectVersions } = useQuery({
-    queryKey: issuesKeys.versions(issue.jiraKey),
-    queryFn: () => api<{ items: { id: string; name: string }[] }>(`/api/issues/${issue.jiraKey}/versions`),
-    staleTime: 60_000,
-  });
-
-  const d = detail?.issue;
-  const summary = d?.summary || issue.summary || "(no summary)";
-  const status = d?.status ?? issue.status;
-  const statusCat = issue.statusCategory;
-  const priority = d?.priority ?? issue.priority;
-  const assigneeJira = d?.assigneeJira ?? issue.assigneeJira;
-  const points = d?.points ?? issue.points;
-  const type = d?.type ?? issue.type ?? "—";
-  const labels = d?.labels ?? issue.labels;
-  const updatedAt = d?.updatedAt ?? issue.updatedAt;
-  const createdAt = d?.createdAt ?? issue.createdAt;
-  const lastSyncedAt = d?.lastSyncedAt ?? issue.lastSyncedAt;
-  const aiScore = d?.aiScore ?? issue.aiScore;
-  const aiDecision = d?.aiDecision ?? issue.aiDecision;
-  const description = d?.description ?? issue.description;
-  const stale = d?.staleSnapshots?.[0] ?? null;
-  const releases = d?.releaseTasks ?? [];
-
-  function toName(t: { to?: { name?: string } | string }): string {
-    return typeof t.to === "string" ? t.to : t.to?.name ?? "";
-  }
-
-  // Auto-focus the panel on open; trap Tab inside; Escape closes (the board's
-  // global Esc handler also closes, but trapping keeps focus sane).
-  useEffect(() => {
-    panelRef.current?.focus({ preventScroll: true });
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-        return;
-      }
-      if (e.key === "Tab" && panelRef.current) {
-        const focusables = panelRef.current.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
-        );
-        if (focusables.length === 0) return;
-        const first = focusables[0];
-        const last = focusables[focusables.length - 1];
-        const active = document.activeElement as HTMLElement | null;
-        if (e.shiftKey && (active === first || active === panelRef.current)) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && active === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    }
-    const node = panelRef.current;
-    node?.addEventListener("keydown", onKey);
-    return () => {
-      node?.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [onClose]);
-
-  async function invalidate() {
-    await qc.invalidateQueries({ queryKey: issuesKeys.all });
-    qc.invalidateQueries({ queryKey: issuesKeys.detail(issue.jiraKey) });
-  }
-
-  async function mutateField(patch: Record<string, unknown>) {
-    try {
-      await api(`/api/issues/${issue.jiraKey}`, { method: "PATCH", body: patch });
-      await invalidate();
-    } catch {
-      // ignore
-    }
-  }
-
-  async function handleCreateBranch() {
-    setCreatingBranch(true);
-    setBranchMsg(null);
-    try {
-      const res = await api<{ ok: boolean; branch?: string; error?: string }>(
-        `/api/issues/${issue.jiraKey}/branches`,
-        { method: "POST", body: {} }
-      );
-      await refetchBranches();
-      setBranchMsg({ type: "success", text: `Đã tạo nhánh: ${res.branch}` });
-      setTimeout(() => setBranchMsg(null), 4000);
-    } catch (e) {
-      setBranchMsg({ type: "error", text: `Lỗi: ${(e as Error).message}` });
-      setTimeout(() => setBranchMsg(null), 4000);
-    } finally {
-      setCreatingBranch(false);
-    }
-  }
-
-  async function handleAddLabel() {
-    const val = newLabelInput.trim();
-    if (!val) return;
-    await mutateField({ addLabel: val });
-    setNewLabelInput("");
-    setShowAddLabel(false);
-  }
-
-  async function handleRemoveLabel(label: string) {
-    await mutateField({ removeLabel: label });
-  }
-
-  async function handleAddVersion(verName: string) {
-    const val = verName.trim();
-    if (!val) return;
-    await mutateField({ addFixVersion: val });
-    setNewVersionInput("");
-    setShowAddVersion(false);
-  }
-
-  async function handleRemoveVersion(verName: string) {
-    await mutateField({ removeFixVersion: verName });
-  }
-
-  async function doAction(action: QuickAction) {
-    const key = issue.jiraKey;
-    try {
-      if (action.kind === "openJira") {
-        const base = jiraBaseUrl.replace(/\/$/, "");
-        if (base) window.open(`${base}/browse/${key}`, "_blank", "noopener");
-        return;
-      }
-      if (action.kind === "openFull") {
-        router.push(`/issue/${key}`);
-        return;
-      }
-      if (action.kind === "copyKey") {
-        await navigator.clipboard.writeText(key);
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1500);
-        return;
-      }
-      if (action.kind === "assignee") {
-        await api(`/api/issues/${key}`, { method: "PATCH", body: { assignee: action.value } });
-      } else if (action.kind === "priority") {
-        await api(`/api/issues/${key}`, { method: "PATCH", body: { priority: action.value } });
-      } else {
-        const done = (transitions?.transitions ?? []).find(
-          (t) => toName(t) && statusCatOf(t, issue)
-        );
-        if (done) await api(`/api/issues/${key}/transition`, { method: "POST", body: { transitionId: done.id } });
-      }
-      await invalidate();
-    } catch {
-      // Swallow; the board refetches on its own poll.
-    }
-  }
-
-  function statusCatOf(t: { to?: { name?: string } | string }, i: IssueItem) {
-    // Approximate "done" by the to-name; the board already computes exact
-    // categories, but a name match against a done-ish label is good enough here.
-    const n = toName(t).toLowerCase();
-    return /done|resolved|closed|complete/.test(n) || i.statusCategory === "done";
-  }
-
-  async function toggleWatch() {
-    try {
-      await api(`/api/issues/${issue.jiraKey}/watch`, { method: "POST", body: {} });
-      setWatched(true);
-    } catch {
-      // Ignore.
-    }
-  }
-
-  async function addComment() {
-    const text = commentDraft.trim();
-    if (!text || commenting) return;
-    setCommenting(true);
-    try {
-      await api(`/api/issues/${issue.jiraKey}/comments`, { method: "POST", body: { body: text } });
-      setCommentDraft("");
-      await invalidate();
-    } catch {
-      // Ignore.
-    } finally {
-      setCommenting(false);
-    }
-  }
-
-  const dotClass = CATEGORY_DOT_MAP[statusCat] ?? "bg-slate-400";
-  const commentCount = d?.comments?.length ?? 0;
-
-  if (typeof document === "undefined") return null;
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-[1px]"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${issue.jiraKey} quick panel`}
-      onMouseDown={onClose}
-    >
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        className="flex h-full w-full max-w-md flex-col overflow-hidden border-l bg-card shadow-2xl outline-none motion-safe:animate-[panelIn_180ms_ease-out]"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
-          <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dotClass)} aria-hidden />
-          <span className="font-mono text-sm font-semibold text-primary">{issue.jiraKey}</span>
-          <Badge variant="secondary" className="text-[11px]">{status}</Badge>
-          {priority && (
-            <Badge variant="outline" className="text-[11px]">{priority}</Badge>
-          )}
-          {points != null && (
-            <Badge variant="outline" className="text-[11px]">{points}pt</Badge>
-          )}
-          {aiScore && (
-            <Badge
-              variant={aiDecision ? (aiDecision.decision === "rejected" ? "danger" : "success") : "info"}
-              className="h-4 gap-1 px-1.5 text-[10px]"
-              title={aiDecision ? `AI ${aiDecision.decision}` : "AI estimate (pending)"}
-            >
-              <Bot className="h-2.5 w-2.5" />
-              {aiScore.points}pt
-            </Badge>
-          )}
-          {stale && (
-            <Badge variant="warning" className="h-4 gap-1 px-1.5 text-[10px]">
-              <Clock className="h-2.5 w-2.5" /> {stale.stateAgeDays}d
-            </Badge>
-          )}
-          <div className="ml-auto flex items-center gap-0.5">
-            <button
-              onClick={() => { navigator.clipboard.writeText(issue.jiraKey).catch(() => {}); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }}
-              className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-              aria-label="Copy key"
-              title="Copy key"
-            >
-              {copied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
-            </button>
-            <button
-              onClick={onClose}
-              className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-              aria-label="Close"
-              title="Close (Esc)"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Quick Actions Bar */}
-        <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/20 px-4 py-2">
-          {/* Status Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs font-medium">
-                <span className={cn("h-2 w-2 rounded-full", dotClass)} />
-                <span className="truncate max-w-[110px]">{status}</span>
-                <ChevronDown className="h-3 w-3 opacity-60" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuLabel className="text-xs">Chuyển trạng thái</DropdownMenuLabel>
-              {(transitions?.transitions ?? []).map((t) => (
-                <DropdownMenuItem
-                  key={t.id}
-                  onClick={async () => {
-                    await api(`/api/issues/${issue.jiraKey}/transition`, {
-                      method: "POST",
-                      body: { transitionId: t.id },
-                    });
-                    await invalidate();
-                  }}
-                  className="gap-2 text-xs"
-                >
-                  <CornerDownLeft className="h-3.5 w-3.5 text-muted-foreground" />
-                  {toName(t)}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Assignee Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
-                <User className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="truncate max-w-[100px]">{assigneeJira || "Chưa gán"}</span>
-                <ChevronDown className="h-3 w-3 opacity-60" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-52 max-h-64 overflow-y-auto">
-              <DropdownMenuLabel className="text-xs">Gán người thực hiện</DropdownMenuLabel>
-              {me?.jiraName && (
-                <DropdownMenuItem
-                  onClick={() => mutateField({ assignee: me.jiraName })}
-                  className="gap-2 text-xs font-medium text-primary"
-                >
-                  <UserCheck className="h-3.5 w-3.5" /> Gán cho tôi ({me.jiraName})
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                onClick={() => mutateField({ assignee: null })}
-                className="gap-2 text-xs text-muted-foreground"
-              >
-                <User className="h-3.5 w-3.5" /> Chưa gán (Unassigned)
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {assignees.map((a) => (
-                <DropdownMenuItem
-                  key={a}
-                  onClick={() => mutateField({ assignee: a })}
-                  className="gap-2 text-xs"
-                >
-                  <User className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="truncate">{a}</span>
-                  {a === assigneeJira && <span className="ml-auto text-primary">•</span>}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Quick "Gán cho tôi" button */}
-          {me?.jiraName && assigneeJira !== me.jiraName && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => mutateField({ assignee: me.jiraName })}
-              className="h-7 gap-1 px-2 text-xs text-primary hover:bg-primary/10"
-              title={`Gán nhanh cho tôi (${me.jiraName})`}
-            >
-              <UserCheck className="h-3.5 w-3.5" />
-              Gán cho tôi
-            </Button>
-          )}
-
-          {/* Story Points Picker */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-7 gap-1 text-xs">
-                <Hash className="h-3.5 w-3.5 text-muted-foreground" />
-                {points != null ? `${points} pt` : "— pt"}
-                <ChevronDown className="h-3 w-3 opacity-60" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-40">
-              <DropdownMenuLabel className="text-xs">Đặt Story Points</DropdownMenuLabel>
-              <div className="grid grid-cols-4 gap-1 p-1">
-                {[1, 2, 3, 5, 8, 13, 21].map((p) => (
-                  <Button
-                    key={p}
-                    variant={points === p ? "default" : "outline"}
-                    size="sm"
-                    className="h-7 px-0 text-xs"
-                    onClick={() => mutateField({ points: p })}
-                  >
-                    {p}
-                  </Button>
-                ))}
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => mutateField({ points: null })}
-                className="text-xs text-destructive"
-              >
-                Xóa điểm (None)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Priority Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-7 gap-1 text-xs">
-                <Flag className="h-3.5 w-3.5 text-muted-foreground" />
-                <span>{priority || "Priority"}</span>
-                <ChevronDown className="h-3 w-3 opacity-60" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-36">
-              <DropdownMenuLabel className="text-xs">Độ ưu tiên</DropdownMenuLabel>
-              {priorities.map((p) => (
-                <DropdownMenuItem
-                  key={p}
-                  onClick={() => mutateField({ priority: p })}
-                  className="gap-2 text-xs"
-                >
-                  <Flag className="h-3.5 w-3.5" /> {p}
-                  {p === priority && <span className="ml-auto text-primary">•</span>}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Create Branch Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={creatingBranch}
-            onClick={handleCreateBranch}
-            className="h-7 gap-1.5 text-xs ml-auto"
-            title="Tạo nhánh Bitbucket theo định dạng chuẩn"
-          >
-            {creatingBranch ? (
-              <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />
-            ) : (
-              <GitBranch className="h-3.5 w-3.5 text-primary" />
-            )}
-            {creatingBranch ? "Đang tạo…" : "Tạo nhánh Git"}
-          </Button>
-        </div>
-
-        {branchMsg && (
+      {paletteOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[15vh] backdrop-blur-[1px]"
+          onMouseDown={() => setPaletteOpen(false)}
+        >
           <div
-            className={cn(
-              "px-4 py-1.5 text-xs font-medium",
-              branchMsg.type === "success"
-                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                : "bg-destructive/10 text-destructive"
-            )}
+            className="w-full max-w-md overflow-hidden rounded-xl border bg-popover shadow-2xl"
+            onMouseDown={(e) => e.stopPropagation()}
           >
-            {branchMsg.text}
-          </div>
-        )}
-
-        {/* Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4">
-          <h2 className="text-base font-semibold leading-snug">{summary}</h2>
-
-          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-            <Field label="Status">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1 hover:underline text-left">
-                    <span className={cn("h-2 w-2 rounded-full inline-block mr-1", dotClass)} />
-                    {status}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-48">
-                  {(transitions?.transitions ?? []).map((t) => (
-                    <DropdownMenuItem
-                      key={t.id}
-                      onClick={async () => {
-                        await api(`/api/issues/${issue.jiraKey}/transition`, {
-                          method: "POST",
-                          body: { transitionId: t.id },
-                        });
-                        await invalidate();
-                      }}
-                      className="text-xs"
-                    >
-                      {toName(t)}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </Field>
-
-            <Field label="Priority">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1 hover:underline text-left">
-                    {priority || "—"}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-36">
-                  {priorities.map((p) => (
-                    <DropdownMenuItem key={p} onClick={() => mutateField({ priority: p })} className="text-xs">
-                      {p}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </Field>
-
-            <Field label="Assignee">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1.5 hover:underline text-left">
-                    {assigneeJira ? (
-                      <>
-                        <span
-                          className={cn(
-                            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
-                            avatarClass(assigneeJira)
-                          )}
-                        >
-                          {initials(assigneeJira)}
-                        </span>
-                        <span className="truncate">{assigneeJira}</span>
-                      </>
-                    ) : (
-                      "Unassigned"
-                    )}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-52 max-h-64 overflow-y-auto">
-                  {me?.jiraName && (
-                    <DropdownMenuItem
-                      onClick={() => mutateField({ assignee: me.jiraName })}
-                      className="text-xs font-medium text-primary"
-                    >
-                      Gán cho tôi ({me.jiraName})
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onClick={() => mutateField({ assignee: null })} className="text-xs">
-                    Chưa gán
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {assignees.map((a) => (
-                    <DropdownMenuItem key={a} onClick={() => mutateField({ assignee: a })} className="text-xs">
-                      {a}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </Field>
-
-            <Field label="Points">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="hover:underline text-left">
-                    {points != null ? `${points} pt` : "—"}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-36">
-                  <div className="grid grid-cols-4 gap-1 p-1">
-                    {[1, 2, 3, 5, 8, 13, 21].map((p) => (
-                      <Button
-                        key={p}
-                        variant={points === p ? "default" : "outline"}
-                        size="sm"
-                        className="h-7 px-0 text-xs"
-                        onClick={() => mutateField({ points: p })}
-                      >
-                        {p}
-                      </Button>
-                    ))}
-                  </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => mutateField({ points: null })} className="text-xs text-destructive">
-                    Xóa điểm
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </Field>
-
-            <Field label="Type">{type}</Field>
-            <Field label="Updated">{timeAgo(updatedAt)}</Field>
-            <Field label="Created">{formatDateTime(createdAt)}</Field>
-            <Field label="Last synced">{timeAgo(lastSyncedAt)}</Field>
-          </div>
-
-          {/* Fix Versions */}
-          <div className="mt-4">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">
-                Phiên bản phát hành (Fix Versions)
-              </span>
-              {!showAddVersion && (
-                <button
-                  onClick={() => setShowAddVersion(true)}
-                  className="flex items-center gap-1 text-[11px] text-primary hover:underline"
-                >
-                  <Plus className="h-3 w-3" /> Thêm version
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {(d?.fixVersions ?? issue.fixVersionNames ?? []).length === 0 && !showAddVersion && (
-                <span className="text-xs italic text-muted-foreground">Chưa gắn phiên bản</span>
-              )}
-              {(d?.fixVersions ?? issue.fixVersionNames ?? []).map((v) => (
-                <Badge key={v} variant="info" className="gap-1 text-[11px]">
-                  {v}
+            <input
+              autoFocus
+              value={paletteQ}
+              onChange={(e) => setPaletteQ(e.target.value)}
+              placeholder="Nhập key hoặc summary…"
+              className="w-full border-b bg-transparent px-4 py-3 text-sm outline-none"
+            />
+            <div className="max-h-72 overflow-auto p-1">
+              {paletteResults.length === 0 ? (
+                <p className="px-3 py-4 text-center text-sm text-muted-foreground">Không tìm thấy</p>
+              ) : (
+                paletteResults.map((i) => (
                   <button
-                    onClick={() => handleRemoveVersion(v)}
-                    className="ml-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10"
-                    title={`Gỡ ${v}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-              {showAddVersion && (
-                <div className="flex items-center gap-1.5">
-                  {projectVersions?.items && projectVersions.items.length > 0 ? (
-                    <Select onValueChange={(val) => handleAddVersion(val)}>
-                      <SelectTrigger className="h-6 w-32 text-xs">
-                        <SelectValue placeholder="Chọn version…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {projectVersions.items.map((pv) => (
-                          <SelectItem key={pv.id} value={pv.name} className="text-xs">
-                            {pv.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      autoFocus
-                      value={newVersionInput}
-                      onChange={(e) => setNewVersionInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleAddVersion(newVersionInput);
-                        if (e.key === "Escape") setShowAddVersion(false);
-                      }}
-                      placeholder="1.0.0"
-                      className="h-6 w-24 text-xs px-1.5"
-                    />
-                  )}
-                  {!projectVersions?.items?.length && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-6 px-2 text-xs"
-                      onClick={() => handleAddVersion(newVersionInput)}
-                    >
-                      Lưu
-                    </Button>
-                  )}
-                  <button
-                    onClick={() => setShowAddVersion(false)}
-                    className="p-1 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Labels */}
-          <div className="mt-4">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">
-                Nhãn (Labels)
-              </span>
-              {!showAddLabel && (
-                <button
-                  onClick={() => setShowAddLabel(true)}
-                  className="flex items-center gap-1 text-[11px] text-primary hover:underline"
-                >
-                  <Plus className="h-3 w-3" /> Thêm nhãn
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {(d?.labels ?? issue.labels ?? []).length === 0 && !showAddLabel && (
-                <span className="text-xs italic text-muted-foreground">Không có nhãn</span>
-              )}
-              {(d?.labels ?? issue.labels ?? []).map((l) => (
-                <Badge key={l} variant="outline" className="gap-1 text-[11px]">
-                  {l}
-                  <button
-                    onClick={() => handleRemoveLabel(l)}
-                    className="ml-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10"
-                    title={`Xóa nhãn ${l}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-              {showAddLabel && (
-                <div className="flex items-center gap-1.5">
-                  <Input
-                    autoFocus
-                    value={newLabelInput}
-                    onChange={(e) => setNewLabelInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleAddLabel();
-                      if (e.key === "Escape") setShowAddLabel(false);
+                    key={i.jiraKey}
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-accent"
+                    onClick={() => {
+                      setPaletteOpen(false);
+                      router.push(`/issue/${i.jiraKey}`);
                     }}
-                    placeholder="Tên nhãn…"
-                    className="h-6 w-28 text-xs px-1.5"
-                  />
-                  <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={handleAddLabel}>
-                    Lưu
-                  </Button>
-                  <button
-                    onClick={() => setShowAddLabel(false)}
-                    className="p-1 text-muted-foreground hover:text-foreground"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <span className="font-mono text-xs text-primary">{i.jiraKey}</span>
+                    <span className="truncate text-muted-foreground">{i.summary}</span>
                   </button>
-                </div>
+                ))
               )}
             </div>
           </div>
-
-          {/* Linked Branches */}
-          {(branchesData?.items ?? []).length > 0 && (
-            <div className="mt-4">
-              <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold block mb-1.5">
-                Nhánh Bitbucket liên kết
-              </span>
-              <div className="flex flex-col gap-1.5">
-                {branchesData!.items.map((b) => (
-                  <div
-                    key={`${b.repo}-${b.branch}`}
-                    className="flex items-center justify-between rounded-md border bg-muted/20 px-2.5 py-1.5 text-xs font-mono"
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <GitBranch className="h-3.5 w-3.5 text-primary shrink-0" />
-                      <span className="truncate">{b.branch}</span>
-                    </div>
-                    {b.prUrl && (
-                      <a
-                        href={b.prUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline flex items-center gap-1 shrink-0 ml-2"
-                      >
-                        PR <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <Section title="Description">
-            {description ? (
-              <div
-                className="wiki-content text-sm leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: wikiToHtml(description) }}
-              />
-            ) : (
-              <p className="text-sm italic text-muted-foreground">No description.</p>
-            )}
-          </Section>
-
-          <Section title={`Comments (${commentCount})`}>
-            <div className="flex gap-2">
-              <textarea
-                value={commentDraft}
-                onChange={(e) => setCommentDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") void addComment();
-                }}
-                placeholder="Thêm bình luận lên Jira…"
-                rows={2}
-                className="min-h-[3rem] flex-1 resize-y rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={commenting || !commentDraft.trim()}
-                onClick={() => void addComment()}
-                className="h-8 shrink-0 gap-1.5"
-              >
-                <Send className="h-3.5 w-3.5" /> {commenting ? "…" : "Gửi"}
-              </Button>
-            </div>
-            {(d?.comments ?? []).length > 0 && (
-              <div className="mt-3 flex flex-col gap-2">
-                {(d?.comments ?? [])
-                  .slice(-3)
-                  .map((c) => (
-                    <div key={c.id} className="rounded-md border bg-muted/30 p-2.5">
-                      <div className="mb-1 flex items-center gap-2 text-xs">
-                        <span className="font-medium">{c.author}</span>
-                        <span className="text-muted-foreground">{formatDateTime(c.createdAt)}</span>
-                      </div>
-                      <div
-                        className="wiki-content text-sm"
-                        dangerouslySetInnerHTML={{ __html: wikiToHtml(c.body) }}
-                      />
-                    </div>
-                  ))}
-              </div>
-            )}
-          </Section>
         </div>
-
-        {/* Footer */}
-        <div className="flex shrink-0 items-center gap-2 border-t px-4 py-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => (watched ? setWatched(false) : void toggleWatch())}
-            className="gap-1.5"
-            title={watched ? "Stop watching" : "Watch"}
-          >
-            {watched ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            {watched ? "Watching" : "Watch"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const base = jiraBaseUrl.replace(/\/$/, "");
-              if (base) window.open(`${base}/browse/${issue.jiraKey}`, "_blank", "noopener");
-            }}
-            className="gap-1.5"
-            title="Open in Jira"
-          >
-            <ExternalLink className="h-4 w-4" /> Jira
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5">
-                <MoreHorizontal className="h-4 w-4" /> More
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel>Assign to</DropdownMenuLabel>
-              <DropdownMenuItem
-                onSelect={(e) => { e.preventDefault(); void doAction({ kind: "assignee", value: null }); }}
-                className="gap-2"
-              >
-                <User className="h-3.5 w-3.5 text-muted-foreground" aria-hidden /> Unassigned
-              </DropdownMenuItem>
-              {assignees.slice(0, 12).map((a) => (
-                <DropdownMenuItem
-                  key={a}
-                  onSelect={(e) => { e.preventDefault(); void doAction({ kind: "assignee", value: a }); }}
-                  className="gap-2"
-                >
-                  <User className="h-3.5 w-3.5" aria-hidden />
-                  <span className="truncate">{a}</span>
-                  {a === assigneeJira && <span className="ml-auto text-primary">•</span>}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>Priority</DropdownMenuLabel>
-              {priorities.map((p) => (
-                <DropdownMenuItem
-                  key={p}
-                  onSelect={(e) => { e.preventDefault(); void doAction({ kind: "priority", value: p }); }}
-                  className="gap-2"
-                >
-                  <Flag className="h-3.5 w-3.5" aria-hidden /> {p}
-                  {p === priority && <span className="ml-auto text-primary">•</span>}
-                </DropdownMenuItem>
-              ))}
-              {transitions && transitions.transitions.length > 0 && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Move to…</DropdownMenuLabel>
-                  {transitions.transitions.map((t) => (
-                    <DropdownMenuItem
-                      key={t.id}
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        void (async () => {
-                          try {
-                            await api(`/api/issues/${issue.jiraKey}/transition`, {
-                              method: "POST",
-                              body: { transitionId: t.id },
-                            });
-                            await invalidate();
-                          } catch {
-                            // ignore
-                          }
-                        })();
-                      }}
-                      className="gap-2"
-                    >
-                      <CornerDownLeft className="h-3.5 w-3.5" aria-hidden /> {toName(t)}
-                    </DropdownMenuItem>
-                  ))}
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button
-            size="sm"
-            className="ml-auto gap-1.5"
-            onClick={() => router.push(`/issue/${issue.jiraKey}`)}
-            title="Open full detail"
-          >
-            <CornerDownLeft className="h-4 w-4" /> Full detail
-          </Button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-const CATEGORY_DOT_MAP: Record<string, string> = {
-  new: "bg-slate-400",
-  indeterminate: "bg-amber-400",
-  done: "bg-emerald-500",
-};
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="mt-5">
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h3>
-      {children}
-    </section>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 truncate font-medium">{children}</dd>
+      )}
     </div>
   );
 }

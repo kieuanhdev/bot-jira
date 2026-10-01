@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { api } from "@/lib/api-client";
+import { api, getErrorMessage } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { PageHeader } from "@/components/shared/page-header";
+import { EmptyState } from "@/components/shared/empty-state";
+import { ErrorState } from "@/components/shared/async-state";
+import { LeaderboardSummaryCards } from "./leaderboard-summary-cards";
 import {
   Trophy,
   Crown,
@@ -25,20 +29,14 @@ import {
   Award,
   Sparkles,
   Zap,
-  Flame,
-  CheckCircle2,
   TrendingUp,
-  Target,
   Star,
-  User as UserIcon,
   ExternalLink,
   Search,
   Calendar,
   RotateCw,
   ChevronRight,
-  Filter,
   ArrowUpRight,
-  ShieldAlert,
   Inbox,
 } from "lucide-react";
 import type {
@@ -46,7 +44,6 @@ import type {
   LeaderboardMember,
   LeaderboardTimeframe,
   LeaderboardTier,
-  LeaderboardTaskItem,
 } from "@/lib/leaderboard/types";
 
 const ALL_PROJECTS = "ALL";
@@ -138,7 +135,7 @@ export function LeaderboardClient() {
     return `/api/leaderboard?${params.toString()}`;
   }, [timeframe, selectedYear, selectedMonth, selectedQuarter, selectedProject]);
 
-  const { data, isLoading, isFetching, refetch } = useQuery<LeaderboardResponse>({
+  const { data, isLoading, isFetching, error, refetch } = useQuery<LeaderboardResponse>({
     queryKey: ["leaderboard", timeframe, selectedYear, selectedMonth, selectedQuarter, selectedProject],
     queryFn: () => api<LeaderboardResponse>(queryUrl),
     staleTime: 60_000,
@@ -190,23 +187,12 @@ export function LeaderboardClient() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-12">
-      {/* ── Page Header & Motivational Hero ────────────────────── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-5">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-teal-700 text-white shadow-md shadow-primary/25">
-              <Trophy className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Bảng Xếp Hạng Năng Suất</h1>
-              <p className="text-sm text-muted-foreground">
-                Tích lũy Story Point, vinh danh cá nhân và tiếp thêm động lực cho toàn đội ngũ.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+      {/* ── Page Header ────────────────────────────────────────── */}
+      <PageHeader
+        icon={Trophy}
+        title="Bảng Xếp Hạng Năng Suất"
+        description="Tích lũy Story Point, vinh danh cá nhân và tiếp thêm động lực cho toàn đội ngũ."
+        actions={
           <Button
             variant="outline"
             size="sm"
@@ -214,11 +200,11 @@ export function LeaderboardClient() {
             disabled={isFetching}
             className="cursor-pointer gap-2 text-xs"
           >
-            <RotateCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} aria-hidden="true" />
+            <RotateCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
             <span>Làm mới</span>
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Filter Bar: Timeframe & Scope ──────────────────────── */}
       <Card className="border bg-card shadow-xs">
@@ -373,95 +359,15 @@ export function LeaderboardClient() {
       </Card>
 
       {/* ── KPI Summary Cards ──────────────────────────────────── */}
-      {isLoading ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-xl" />
-          ))}
-        </div>
+      {error && !data ? (
+        <ErrorState
+          message={getErrorMessage(error)}
+          onRetry={() => void refetch()}
+          retryDisabled={isFetching}
+        />
       ) : (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-          {/* Card 1: Total Points */}
-          <Card className="border bg-card">
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">Tổng điểm hoàn thành</span>
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Trophy className="h-4 w-4" aria-hidden="true" />
-                </span>
-              </div>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground tabular-nums">
-                  {summary?.totalTeamPoints ?? 0}
-                </span>
-                <span className="text-xs font-semibold text-primary">Story Points</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Card 2: Total Tasks */}
-          <Card className="border bg-card">
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">Task đã chốt</span>
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                </span>
-              </div>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground tabular-nums">
-                  {summary?.totalTeamTasks ?? 0}
-                </span>
-                <span className="text-xs text-muted-foreground">tasks hoàn thành</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Card 3: Average Points */}
-          <Card className="border bg-card">
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">Điểm TB / Thành viên</span>
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
-                  <TrendingUp className="h-4 w-4" aria-hidden="true" />
-                </span>
-              </div>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground tabular-nums">
-                  {summary?.averagePointsPerMember ?? 0}
-                </span>
-                <span className="text-xs text-muted-foreground">pts / người</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Card 4: Current MVP */}
-          <Card className="border bg-card">
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">Quán Quân (MVP)</span>
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/15 text-amber-500">
-                  <Crown className="h-4 w-4" aria-hidden="true" />
-                </span>
-              </div>
-              <div className="mt-2">
-                {summary?.topPerformer ? (
-                  <div>
-                    <div className="text-base sm:text-lg font-bold tracking-tight text-foreground truncate">
-                      {summary.topPerformer.displayName}
-                    </div>
-                    <div className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                      {summary.topPerformer.points} points hoàn thành
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground italic">Chưa xác định</div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+        <>
+        <LeaderboardSummaryCards summary={summary} loading={isLoading} />
 
       {/* ── Personal Performance Banner ("Thành tích của bạn") ──── */}
       {myPerformance && (
@@ -765,15 +671,12 @@ export function LeaderboardClient() {
               ))}
             </div>
           ) : filteredMembers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-12 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground mb-3">
-                <Inbox className="h-6 w-6" aria-hidden="true" />
-              </div>
-              <h3 className="font-semibold text-foreground">Không có dữ liệu</h3>
-              <p className="mt-1 text-xs text-muted-foreground max-w-sm">
-                Không tìm thấy thành viên nào có point trong khoảng thời gian hoặc dự án đã chọn.
-              </p>
-            </div>
+            <EmptyState
+              icon={Inbox}
+              title="Không có dữ liệu"
+              hint="Không tìm thấy thành viên nào có point trong khoảng thời gian hoặc dự án đã chọn."
+              className="m-4"
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -903,6 +806,8 @@ export function LeaderboardClient() {
           )}
         </CardContent>
       </Card>
+        </>
+      )}
 
       {/* ── Task Contribution Breakdown Modal (Radix Dialog) ───── */}
       <Dialog

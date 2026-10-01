@@ -12,32 +12,25 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PageHeader } from "@/components/shared/page-header";
+import { FilterBar } from "@/components/shared/filter-bar";
+import { SearchField } from "@/components/shared/search-field";
+import { EmptyState } from "@/components/shared/empty-state";
+import { ErrorState } from "@/components/shared/async-state";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  AlertCircle,
   AlertTriangle,
   ArrowRight,
   CalendarClock,
   CalendarX,
   Check,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   CircleGauge,
   Clock,
   Clock3,
   Filter,
-  Inbox,
   Layers,
   ListChecks,
   ListTodo,
@@ -46,8 +39,6 @@ import {
   RotateCcw,
   Search,
   ShieldAlert,
-  Sparkles,
-  Target,
   User,
   UserRoundX,
   Users,
@@ -56,263 +47,29 @@ import {
 import {
   type RequirementCode,
   REQUIREMENT_LABELS,
-  REQUIREMENT_BULK_FIELDS,
   formatMissingSummary,
 } from "@/lib/issues/standardization";
+import {
+  ALL,
+  GROUP_DOT,
+  ACTION_BY_REASON,
+  type SortMode,
+  type FocusMode,
+  type StaleResponse,
+} from "./lib/stale-types";
+import {
+  sortTasks,
+  matchesFocus,
+  formatTimeSpent,
+  formatDueDate,
+  buildMissingBulkFields,
+} from "./lib/stale-utils";
+import { SeverityBadge, TaskMeta, GreenCheck } from "./stale-task-meta";
+import { BulkStandardizationAction } from "./stale-standardization-action";
+import { MyWorkHealthyState } from "./stale-my-work-healthy";
+import { FocusCard, InsightBrief, ActionQueue, AgingDistribution } from "./stale-team-sections";
 
-type Severity = "info" | "warning" | "high";
-type PointAlertLevel = "within" | "warning" | "high";
-type SortMode = "priority" | "overBy" | "stateAge" | "overdue";
-type FocusMode = "all" | "high" | "blocked" | "overdue" | "unassigned";
-
-interface Task {
-  jiraKey: string;
-  projectKey: string;
-  summary: string;
-  status: string;
-  statusGroup: string;
-  assigneeJira: string | null;
-  type: string;
-  priority: string;
-  points: number | null;
-  fixVersionNames: string[];
-  dueDate: string | null;
-  timeSpent: number | null;
-  totalAgeDays: number;
-  stateAgeDays: number;
-  inactiveDays: number;
-  blockedDays: number;
-  staleReason: string;
-  staleReasonLabel: string;
-  severity: Severity;
-  slaDays: number;
-  overByDays: number;
-  baselineLevel: PointAlertLevel;
-  expectedCycleMax: number | null;
-  alertThreshold: number | null;
-  overdueDays: number;
-  labels: string[];
-}
-
-interface Bottleneck {
-  status: string;
-  group: string;
-  count: number;
-  avgStateAge: number;
-  totalOverBy: number;
-}
-interface SupportEntry {
-  assignee: string;
-  taskCount: number;
-  reasons: { reason: string; label: string; count: number }[];
-  avgStateAge: number;
-}
-interface BlockedTask {
-  jiraKey: string;
-  summary: string;
-  status: string;
-  assigneeJira: string | null;
-  blockedDays: number;
-  reason: string;
-  reasonLabel: string;
-}
-interface TrendPoint {
-  week: string;
-  count: number;
-}
-interface WipEntry {
-  assignee: string;
-  taskCount: number;
-  statuses: string[];
-}
-
-export interface StandardizationTask {
-  jiraKey: string;
-  projectKey: string;
-  summary: string;
-  status: string;
-  statusCategory: string;
-  statusGroup: string;
-  assigneeJira: string | null;
-  type: string;
-  priority: string;
-  points: number | null;
-  originalEstimateSeconds: number | null;
-  timeSpent: number | null;
-  fixVersionNames: string[];
-  dueDate: string | null;
-  labels: string[];
-  policyId: string;
-  policyVersion: string;
-  statusResult: "complete" | "incomplete" | "unknown";
-  required: RequirementCode[];
-  missing: RequirementCode[];
-  satisfied: RequirementCode[];
-  unknown: RequirementCode[];
-  warnings: string[];
-  isStale: boolean;
-  stateAgeDays: number;
-  slaDays: number;
-  overdueDays: number;
-  isBlocked: boolean;
-  blockedDays: number;
-  updatedAt: string | null;
-  lastSyncedAt: string | null;
-}
-
-export interface StandardizationSummary {
-  complete: number;
-  incomplete: number;
-  unknown: number;
-  missingCounts: Record<RequirementCode, number>;
-  tasks: StandardizationTask[];
-}
-
-interface MyWorkTask {
-  jiraKey: string;
-  summary: string;
-  status: string;
-  points: number | null;
-  updatedAt: string | null;
-}
-
-interface MyWorkInfo {
-  username: string | null;
-  totalActive: number;
-  totalStale: number;
-  wipCount: number;
-  lastSyncedAt: string | null;
-  standardization?: StandardizationSummary;
-  tasks: MyWorkTask[];
-}
-
-interface Summary {
-  totalActive: number;
-  totalStale: number;
-  totalHigh: number;
-  totalBlocked: number;
-  totalNoAssignee: number;
-  worstOverBy: number;
-  totalOverdue: number;
-  totalBaselineAlert: number;
-  wipCount: number;
-}
-
-interface StaleResponse {
-  tasks: Task[];
-  bottleneck: Bottleneck[];
-  support: SupportEntry[];
-  blocked: BlockedTask[];
-  trend: TrendPoint[];
-  wip: WipEntry[];
-  filters: {
-    projects: string[];
-    assignees: string[];
-    statuses: string[];
-    reasons: string[];
-    reasonLabels: Record<string, string>;
-  };
-  myWork?: MyWorkInfo;
-  summary: Summary;
-}
-
-const ALL = "all";
-const SEVERITY_VARIANT: Record<Severity, "info" | "warning" | "danger"> = {
-  info: "info",
-  warning: "warning",
-  high: "danger",
-};
-const SEVERITY_LABEL: Record<Severity, string> = {
-  info: "Theo dõi",
-  warning: "Cần chú ý",
-  high: "Khẩn cấp",
-};
-const GROUP_DOT: Record<string, string> = {
-  Backlog: "bg-muted-foreground/50",
-  "To Do": "bg-sky-500",
-  "In Progress": "bg-primary",
-  "In Review": "bg-amber-500",
-  Done: "bg-emerald-500",
-};
-const ACTION_BY_REASON: Record<string, string> = {
-  no_assignee: "Chỉ định người xử lý",
-  waiting_to_start: "Ưu tiên lại hoặc bắt đầu",
-  in_progress_no_update: "Chốt tiến độ và bước tiếp theo",
-  waiting_review: "Tìm hoặc nhắc reviewer",
-  waiting_qa: "Bắt đầu hoặc làm rõ QA",
-  waiting_other_team: "Theo dõi phụ thuộc bên ngoài",
-  blocked: "Tháo gỡ điểm nghẽn",
-  unknown: "Kiểm tra ánh xạ quy trình",
-};
-
-function SeverityBadge({ severity }: { severity: Severity }) {
-  return <Badge variant={SEVERITY_VARIANT[severity]}>{SEVERITY_LABEL[severity]}</Badge>;
-}
-
-function priorityScore(task: Task) {
-  const severity = task.severity === "high" ? 3 : task.severity === "warning" ? 2 : 1;
-  const blocked = task.staleReason === "blocked" || task.blockedDays > 0 ? 30_000 : 0;
-  const unassigned = !task.assigneeJira ? 20_000 : 0;
-  return (
-    severity * 100_000 +
-    (task.overdueDays > 0 ? 50_000 + task.overdueDays * 100 : 0) +
-    blocked +
-    unassigned +
-    task.overByDays
-  );
-}
-
-function sortTasks(tasks: Task[], mode: SortMode) {
-  return [...tasks].sort((a, b) => {
-    if (mode === "stateAge") return b.stateAgeDays - a.stateAgeDays;
-    if (mode === "overdue") return b.overdueDays - a.overdueDays || b.overByDays - a.overByDays;
-    if (mode === "overBy") return b.overByDays - a.overByDays;
-    return priorityScore(b) - priorityScore(a);
-  });
-}
-
-function matchesFocus(task: Task, focus: FocusMode) {
-  if (focus === "high") return task.severity === "high";
-  if (focus === "blocked") return task.staleReason === "blocked" || task.blockedDays > 0;
-  if (focus === "overdue") return task.overdueDays > 0;
-  if (focus === "unassigned") return !task.assigneeJira;
-  return true;
-}
-
-function formatTimeSpent(seconds: number | null) {
-  if (seconds == null || seconds <= 0) return null;
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) return `${hours}h${minutes > 0 ? ` ${minutes}m` : ""}`;
-  return minutes > 0 ? `${minutes}m` : `${seconds}s`;
-}
-
-function formatDueDate(value: string | null) {
-  if (!value) return null;
-  return new Date(`${value}T00:00:00`).toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function TaskMeta({ task }: { task: Task }) {
-  const worklog = formatTimeSpent(task.timeSpent);
-  return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-      <span>
-        {task.projectKey} · {task.type}
-      </span>
-      {task.points != null && <span>{task.points} điểm</span>}
-      {task.fixVersionNames.length > 0 && (
-        <span className="max-w-48 truncate">{task.fixVersionNames.join(", ")}</span>
-      )}
-      {worklog && <span>{worklog} đã ghi nhận</span>}
-    </div>
-  );
-}
-
-function EmptyState({
+function StaleEmptyState({
   filtered,
   onClear,
   title,
@@ -324,576 +81,18 @@ function EmptyState({
   hint?: string;
 }) {
   return (
-    <Card className="shadow-none">
-      <CardContent className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          {filtered ? (
-            <Search className="h-6 w-6 text-muted-foreground" aria-hidden />
-          ) : (
-            <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" aria-hidden />
-          )}
-        </span>
-        <div>
-          <p className="text-sm font-semibold">
-            {title ??
-              (filtered
-                ? "Không có task phù hợp với lăng kính này"
-                : "Luồng công việc đang trong giới hạn")}
-          </p>
-          <p className="mt-1 max-w-md text-xs text-muted-foreground">
-            {hint ??
-              (filtered
-                ? "Thử đổi phạm vi, từ khóa hoặc xóa bộ lọc để xem toàn bộ task vượt SLA."
-                : "Không có task hoạt động nào vượt SLA theo trạng thái trong phạm vi hiện tại.")}
-          </p>
-        </div>
-        {filtered && onClear && (
+    <EmptyState
+      icon={filtered ? Search : GreenCheck}
+      title={title ?? (filtered ? "Không có task phù hợp với lăng kính này" : "Luồng công việc đang trong giới hạn")}
+      hint={hint ?? (filtered ? "Thử đổi phạm vi, từ khóa hoặc xóa bộ lọc để xem toàn bộ task vượt SLA." : "Không có task hoạt động nào vượt SLA theo trạng thái trong phạm vi hiện tại.")}
+      action={
+        filtered && onClear ? (
           <Button className="cursor-pointer" variant="outline" size="sm" onClick={onClear}>
             <RotateCcw aria-hidden className="h-3.5 w-3.5 mr-1.5" /> Xóa bộ lọc
           </Button>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function buildMissingBulkFields(keys: Set<string>, tasks: StandardizationTask[]): string {
-  const fields = new Set<string>();
-  for (const task of tasks) {
-    if (keys.has(task.jiraKey)) {
-      for (const req of task.missing) {
-        if (req === "WORKLOG") continue;
-        const bulkFields = REQUIREMENT_BULK_FIELDS[req] ?? [];
-        for (const bf of bulkFields) fields.add(bf);
+        ) : undefined
       }
-    }
-  }
-  return fields.size > 0
-    ? Array.from(fields).join(",")
-    : "points,estimate,fixVersions,dueDate";
-}
-
-function BulkStandardizationAction({
-  selectedKeys,
-  allTasks,
-  incompleteCount,
-  onFilterToSingleProject,
-}: {
-  selectedKeys: Set<string>;
-  allTasks: StandardizationTask[];
-  incompleteCount: number;
-  onFilterToSingleProject?: (projectKey: string) => void;
-}) {
-  const selectedTasksList = useMemo(
-    () => allTasks.filter((t) => selectedKeys.has(t.jiraKey)),
-    [allTasks, selectedKeys]
-  );
-  const selectedProjects = useMemo(
-    () => Array.from(new Set(selectedTasksList.map((t) => t.projectKey))),
-    [selectedTasksList]
-  );
-  const isMultiProject = selectedProjects.length > 1;
-  const projectParam = selectedProjects.length === 1 ? `project=${encodeURIComponent(selectedProjects[0])}&` : "";
-
-  const allOnlyMissWorklog =
-    selectedTasksList.length > 0 &&
-    selectedTasksList.every((t) => t.missing.length === 1 && t.missing[0] === "WORKLOG");
-  const hasAnyMissWorklog = selectedTasksList.some((t) => t.missing.includes("WORKLOG"));
-  const hasAnyMissMetadata = selectedTasksList.some((t) => t.missing.some((m) => m !== "WORKLOG"));
-
-  const metadataFields = buildMissingBulkFields(selectedKeys, allTasks);
-  const selectedKeysCsv = Array.from(selectedKeys).join(",");
-  const worklogKeysCsv = selectedTasksList
-    .filter((t) => t.missing.includes("WORKLOG"))
-    .map((t) => t.jiraKey)
-    .join(",");
-
-  if (selectedKeys.size === 0) {
-    if (incompleteCount === 0) return null;
-    const firstProject = allTasks[0]?.projectKey;
-    const sameProjectTasks = allTasks
-      .filter((t) => !firstProject || t.projectKey === firstProject)
-      .slice(0, 20);
-    const pParam = firstProject ? `project=${encodeURIComponent(firstProject)}&` : "";
-    const allFirstProjectOnlyWorklog =
-      sameProjectTasks.length > 0 &&
-      sameProjectTasks.every((t) => t.missing.length === 1 && t.missing[0] === "WORKLOG");
-
-    return (
-      <Button
-        asChild
-        className="cursor-pointer bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm"
-      >
-        <Link
-          href={
-            allFirstProjectOnlyWorklog
-              ? `/bulk?${pParam}keys=${sameProjectTasks.map((t) => t.jiraKey).join(",")}&action=log-work&returnTo=standardization`
-              : `/bulk?${pParam}keys=${sameProjectTasks.map((t) => t.jiraKey).join(",")}&fields=points,estimate,fixVersions,dueDate&returnTo=standardization`
-          }
-        >
-          {allFirstProjectOnlyWorklog ? (
-            <Clock className="h-4 w-4 mr-1.5" aria-hidden />
-          ) : (
-            <ListChecks className="h-4 w-4 mr-1.5" aria-hidden />
-          )}
-          {allFirstProjectOnlyWorklog ? "Ghi Worklog hàng loạt" : "Chuẩn hóa hàng loạt"} (
-          {Math.min(sameProjectTasks.length, incompleteCount)})
-        </Link>
-      </Button>
-    );
-  }
-
-  // Multi-project warning: Bulk operations must belong to the same project
-  if (isMultiProject) {
-    return (
-      <div className="flex flex-col gap-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md p-2.5">
-        <span className="font-semibold flex items-center gap-1">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          Đã chọn task từ {selectedProjects.length} dự án ({selectedProjects.join(", ")})
-        </span>
-        <span>Thao tác hàng loạt chỉ hỗ trợ một dự án tại một thời điểm.</span>
-        {onFilterToSingleProject && (
-          <button
-            type="button"
-            onClick={() => onFilterToSingleProject(selectedProjects[0])}
-            className="cursor-pointer text-left underline font-medium hover:text-amber-800 dark:hover:text-amber-300"
-          >
-            Chỉ chọn các task dự án {selectedProjects[0]}
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  // Only Worklog missing for all selected tasks
-  if (allOnlyMissWorklog) {
-    return (
-      <Button
-        asChild
-        className="cursor-pointer bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm"
-      >
-        <Link
-          href={`/bulk?${projectParam}keys=${selectedKeysCsv}&action=log-work&returnTo=standardization`}
-        >
-          <Clock className="h-4 w-4 mr-1.5" aria-hidden />
-          Ghi Worklog đã chọn ({selectedKeys.size})
-        </Link>
-      </Button>
-    );
-  }
-
-  // Only metadata missing (no worklog missing)
-  if (!hasAnyMissWorklog) {
-    return (
-      <Button
-        asChild
-        className="cursor-pointer bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm"
-      >
-        <Link
-          href={`/bulk?${projectParam}keys=${selectedKeysCsv}&fields=${metadataFields}&returnTo=standardization`}
-        >
-          <ListChecks className="h-4 w-4 mr-1.5" aria-hidden />
-          Chuẩn hóa đã chọn ({selectedKeys.size})
-        </Link>
-      </Button>
-    );
-  }
-
-  // Mixed: some missing worklog, some missing metadata
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button className="cursor-pointer bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm inline-flex items-center gap-1.5">
-          <ListChecks className="h-4 w-4" aria-hidden />
-          Chuẩn hóa đã chọn ({selectedKeys.size})
-          <ChevronDown className="h-3.5 w-3.5 opacity-70" aria-hidden />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-          Chọn loại thao tác cho {selectedKeys.size} task:
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {hasAnyMissMetadata && (
-          <DropdownMenuItem asChild className="cursor-pointer py-2">
-            <Link
-              href={`/bulk?${projectParam}keys=${selectedKeysCsv}&fields=${metadataFields}&returnTo=standardization`}
-              className="flex items-center gap-2"
-            >
-              <ListChecks className="h-4 w-4 text-primary shrink-0" aria-hidden />
-              <div>
-                <p className="font-medium text-xs">Cập nhật trường dữ liệu</p>
-                <p className="text-[11px] text-muted-foreground">Points, Estimate, Due date, Fix Version...</p>
-              </div>
-            </Link>
-          </DropdownMenuItem>
-        )}
-        {hasAnyMissWorklog && (
-          <DropdownMenuItem asChild className="cursor-pointer py-2">
-            <Link
-              href={`/bulk?${projectParam}keys=${worklogKeysCsv}&action=log-work&returnTo=standardization`}
-              className="flex items-center gap-2"
-            >
-              <Clock className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" aria-hidden />
-              <div>
-                <p className="font-medium text-xs">Ghi Worklog hàng loạt</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Ghi thời gian cho {selectedTasksList.filter((t) => t.missing.includes("WORKLOG")).length} task thiếu worklog
-                </p>
-              </div>
-            </Link>
-          </DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-function MyWorkHealthyState({
-  myWork,
-  onViewTeam,
-  onViewStandardization,
-}: {
-  myWork?: MyWorkInfo;
-  onViewTeam: () => void;
-  onViewStandardization?: () => void;
-}) {
-  const hasIncompleteStandardization =
-    (myWork?.standardization?.incomplete ?? 0) > 0 || (myWork?.standardization?.unknown ?? 0) > 0;
-
-  return (
-    <Card className="shadow-none border-emerald-500/25 bg-emerald-500/[0.035]">
-      <CardContent className="flex flex-col gap-5 p-6 sm:p-8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3.5">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
-            </span>
-            <div>
-              <h2 className="text-lg font-semibold tracking-tight text-foreground">
-                Tuyệt vời! Bạn không có task nào bị tồn đọng (vượt SLA)
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {myWork?.totalActive
-                  ? `Toàn bộ ${myWork.totalActive} task bạn đang phụ trách đều có tiến độ ổn định và nằm trong thời hạn SLA cho phép.`
-                  : "Bạn hiện không có task nào đang chờ xử lý trong phạm vi đã chọn."}
-              </p>
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onViewTeam}
-            className="cursor-pointer shrink-0 border-primary/30 text-primary hover:bg-primary/10 transition-colors"
-          >
-            Xem toàn dự án
-            <ArrowRight className="h-4 w-4 ml-1.5" aria-hidden="true" />
-          </Button>
-        </div>
-
-        {hasIncompleteStandardization && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden />
-              <div>
-                <p className="text-sm font-semibold text-foreground">
-                  Bạn có {myWork?.standardization?.incomplete} task chưa đạt chuẩn dữ liệu
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Task chưa bị ngâm nhưng còn thiếu Estimate, Worklog, Fix Version hoặc Due date.
-                </p>
-              </div>
-            </div>
-            {onViewStandardization && (
-              <Button
-                size="sm"
-                onClick={onViewStandardization}
-                className="cursor-pointer shrink-0 bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-600 dark:hover:bg-amber-500"
-              >
-                Kiểm tra tiêu chuẩn ({myWork?.standardization?.incomplete})
-                <ArrowRight className="h-4 w-4 ml-1.5" aria-hidden />
-              </Button>
-            )}
-          </div>
-        )}
-
-        {myWork?.tasks && myWork.tasks.length > 0 && (
-          <div className="rounded-lg border border-border/70 bg-card overflow-hidden">
-            <div className="border-b bg-muted/40 px-4 py-2.5 flex items-center justify-between text-xs">
-              <span className="font-semibold text-foreground">
-                Task bạn đang thực hiện ({myWork.tasks.length})
-              </span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-medium">Trong hạn SLA</span>
-            </div>
-            <div className="divide-y divide-border">
-              {myWork.tasks.map((task) => (
-                <Link
-                  key={task.jiraKey}
-                  href={`/issue/${task.jiraKey}`}
-                  className="group flex items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-muted/40 transition-colors cursor-pointer"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-semibold text-primary group-hover:underline">
-                        {task.jiraKey}
-                      </span>
-                      <Badge variant="secondary" className="text-[11px] font-normal">
-                        {task.status}
-                      </Badge>
-                      {task.points != null && (
-                        <span className="text-[11px] font-mono text-muted-foreground">
-                          {task.points}pt
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1 truncate text-xs text-foreground font-medium group-hover:text-primary transition-colors">
-                      {task.summary}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full">
-                      Đang chạy tốt
-                    </span>
-                    <ChevronRight
-                      className="h-4 w-4 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-foreground motion-reduce:transform-none"
-                      aria-hidden="true"
-                    />
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function FocusCard({
-  active,
-  count,
-  description,
-  icon: Icon,
-  label,
-  onClick,
-  tone,
-}: {
-  active: boolean;
-  count: number;
-  description: string;
-  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
-  label: string;
-  onClick: () => void;
-  tone: "danger" | "warning";
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "group min-w-0 cursor-pointer rounded-lg border bg-card p-4 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        "hover:border-primary/50 hover:bg-muted/30",
-        active && "border-primary bg-primary/5 ring-1 ring-primary/20"
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <span
-          className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-full",
-            tone === "danger"
-              ? "bg-red-500/10 text-red-700 dark:text-red-400"
-              : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-          )}
-        >
-          <Icon className="h-4 w-4" aria-hidden />
-        </span>
-        <span className="text-2xl font-semibold tracking-tight tabular-nums">{count}</span>
-      </div>
-      <p className="mt-3 text-sm font-semibold">{label}</p>
-      <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{description}</p>
-    </button>
-  );
-}
-
-function InsightBrief({ data, staleRate }: { data: StaleResponse; staleRate: number }) {
-  const topBottleneck = data.bottleneck[0];
-  const topReason = useMemo(() => {
-    const counts = new Map<string, { label: string; count: number }>();
-    for (const task of data.tasks) {
-      const current = counts.get(task.staleReason) ?? { label: task.staleReasonLabel, count: 0 };
-      current.count += 1;
-      counts.set(task.staleReason, current);
-    }
-    return [...counts.values()].sort((a, b) => b.count - a.count)[0];
-  }, [data.tasks]);
-  const healthLabel =
-    staleRate >= 30 ? "Cần can thiệp ngay" : staleRate >= 15 ? "Đang tích tụ rủi ro" : "Trong tầm kiểm soát";
-  const recommendation =
-    data.summary.totalHigh > 0
-      ? `Xử lý ${data.summary.totalHigh} task khẩn cấp trước, bắt đầu từ các mục quá hạn hoặc đang bị chặn.`
-      : data.summary.totalBlocked > 0
-      ? `Tổ chức tháo gỡ ${data.summary.totalBlocked} task bị chặn trước khi nhận thêm WIP.`
-      : data.summary.totalNoAssignee > 0
-      ? `Phân công chủ sở hữu cho ${data.summary.totalNoAssignee} task để tránh tiếp tục già hóa.`
-      : "Ưu tiên các task vượt SLA lâu nhất và xác nhận bước tiếp theo với người xử lý.";
-  return (
-    <Card className="overflow-hidden border-primary/20 bg-primary/[0.035] shadow-none">
-      <CardContent className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)] lg:p-6">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-            <Sparkles className="h-4 w-4" aria-hidden /> Tóm tắt điều hành
-          </div>
-          <h2 className="mt-3 text-xl font-semibold tracking-tight">{healthLabel}</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{recommendation}</p>
-          <div className="mt-5">
-            <div className="mb-2 flex items-center justify-between text-xs">
-              <span className="font-medium">Tỷ lệ task vượt SLA</span>
-              <span className="font-semibold tabular-nums">{staleRate}%</span>
-            </div>
-            <div
-              className="h-2 overflow-hidden rounded-full bg-muted"
-              role="progressbar"
-              aria-label="Tỷ lệ task vượt SLA"
-              aria-valuenow={staleRate}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <div
-                className={cn(
-                  "h-full rounded-full transition-[width] duration-200",
-                  staleRate >= 30 ? "bg-red-500" : staleRate >= 15 ? "bg-amber-500" : "bg-primary"
-                )}
-                style={{ width: `${Math.min(100, staleRate)}%` }}
-              />
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {data.summary.totalStale} trên {data.summary.totalActive} task đang hoạt động trong phạm vi chọn.
-            </p>
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-          <div className="rounded-lg border bg-background/70 p-3.5">
-            <p className="text-xs text-muted-foreground">Điểm nghẽn lớn nhất</p>
-            <p className="mt-1 truncate text-sm font-semibold">{topBottleneck?.status ?? "Chưa ghi nhận"}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {topBottleneck
-                ? `${topBottleneck.count} task · trung bình ${topBottleneck.avgStateAge} ngày`
-                : "Không có dữ liệu"}
-            </p>
-          </div>
-          <div className="rounded-lg border bg-background/70 p-3.5">
-            <p className="text-xs text-muted-foreground">Nguyên nhân phổ biến nhất</p>
-            <p className="mt-1 truncate text-sm font-semibold">{topReason?.label ?? "Chưa ghi nhận"}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {topReason ? `${topReason.count} task cần cùng một kiểu can thiệp` : "Không có dữ liệu"}
-            </p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ActionQueue({ tasks, focus }: { tasks: Task[]; focus: FocusMode }) {
-  return (
-    <Card className="shadow-none">
-      <CardHeader className="gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
-        <div>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Target className="h-4 w-4 text-primary" aria-hidden />{" "}
-            {focus === "all" ? "Kế hoạch can thiệp hôm nay" : "Hàng đợi theo lăng kính đã chọn"}
-          </CardTitle>
-          <CardDescription className="mt-1 text-xs">
-            Xếp hạng minh bạch theo mức độ, quá hạn, bị chặn, thiếu người xử lý và số ngày vượt SLA.
-          </CardDescription>
-        </div>
-        <Badge variant="outline" className="shrink-0">
-          {Math.min(6, tasks.length)} việc đầu tiên
-        </Badge>
-      </CardHeader>
-      <CardContent className="p-0">
-        {tasks.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-              <Inbox className="h-5 w-5 text-muted-foreground" aria-hidden />
-            </span>
-            <p className="text-sm font-medium">Không có task trong lăng kính này</p>
-            <p className="text-xs text-muted-foreground">Chọn một lăng kính khác để tiếp tục phân loại.</p>
-          </div>
-        ) : (
-          <div className="divide-y">
-            {tasks.slice(0, 6).map((task, index) => (
-              <Link
-                key={task.jiraKey}
-                href={`/issue/${task.jiraKey}`}
-                className="group grid cursor-pointer gap-3 px-5 py-4 transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[2rem_minmax(0,1fr)_auto] sm:items-center"
-              >
-                <span className="hidden h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-semibold tabular-nums text-muted-foreground sm:flex">
-                  {index + 1}
-                </span>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-xs font-semibold text-primary">{task.jiraKey}</span>
-                    <SeverityBadge severity={task.severity} />
-                    {task.overdueDays > 0 && <Badge variant="danger">Quá hạn {task.overdueDays} ngày</Badge>}
-                    {!task.assigneeJira && <Badge variant="warning">Chưa phân công</Badge>}
-                  </div>
-                  <p className="mt-1 line-clamp-1 text-sm font-medium">{task.summary || "Task chưa đặt tên"}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {task.status} · {task.assigneeJira ?? "Chưa có người xử lý"}
-                  </p>
-                </div>
-                <div className="flex items-center justify-between gap-4 sm:justify-end">
-                  <div className="text-left sm:text-right">
-                    <p className="text-xs font-semibold">
-                      {ACTION_BY_REASON[task.staleReason] ?? "Kiểm tra bước tiếp theo"}
-                    </p>
-                    <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                      {task.stateAgeDays}/{task.slaDays} ngày · vượt {task.overByDays} ngày
-                    </p>
-                  </div>
-                  <ArrowRight
-                    className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-foreground motion-reduce:transform-none"
-                    aria-hidden
-                  />
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function AgingDistribution({ tasks }: { tasks: Task[] }) {
-  const bands = [
-    { label: "Mới vượt", hint: "1–2 ngày", count: tasks.filter((task) => task.overByDays <= 2).length, color: "bg-sky-500" },
-    { label: "Cần can thiệp", hint: "3–5 ngày", count: tasks.filter((task) => task.overByDays >= 3 && task.overByDays <= 5).length, color: "bg-amber-500" },
-    { label: "Rủi ro cao", hint: "6–10 ngày", count: tasks.filter((task) => task.overByDays >= 6 && task.overByDays <= 10).length, color: "bg-orange-500" },
-    { label: "Nợ kéo dài", hint: ">10 ngày", count: tasks.filter((task) => task.overByDays > 10).length, color: "bg-red-500" },
-  ];
-  const max = Math.max(1, ...bands.map((band) => band.count));
-  return (
-    <div className="space-y-4">
-      {bands.map((band) => (
-        <div key={band.label}>
-          <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
-            <span className="font-medium">
-              {band.label} <span className="font-normal text-muted-foreground">· {band.hint}</span>
-            </span>
-            <span className="font-semibold tabular-nums">{band.count}</span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
-            <div
-              className={cn("h-full rounded-full transition-[width] duration-200", band.color)}
-              style={{ width: `${(band.count / max) * 100}%` }}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
+    />
   );
 }
 
@@ -1096,18 +295,13 @@ export function StaleClient() {
 
   return (
     <div className="mx-auto flex max-w-[1440px] flex-col gap-5">
-      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-            <CircleGauge className="h-4 w-4" aria-hidden /> Sức khỏe luồng công việc
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Phân tích task tồn đọng</h1>
-          <p className="mt-1.5 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Biến cảnh báo vượt SLA và thiếu tiêu chuẩn dữ liệu thành kế hoạch hành động cụ thể để tháo gỡ điểm nghẽn.
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-          {dataUpdatedAt > 0 && (
+      <PageHeader
+        eyebrow="Sức khỏe luồng công việc"
+        icon={CircleGauge}
+        title="Phân tích task tồn đọng"
+        description="Biến cảnh báo vượt SLA và thiếu tiêu chuẩn dữ liệu thành kế hoạch hành động cụ thể để tháo gỡ điểm nghẽn."
+        meta={
+          dataUpdatedAt > 0 ? (
             <span className="hidden sm:inline">
               Cập nhật lúc{" "}
               {new Date(dataUpdatedAt).toLocaleTimeString("vi-VN", {
@@ -1115,7 +309,9 @@ export function StaleClient() {
                 minute: "2-digit",
               })}
             </span>
-          )}
+          ) : undefined
+        }
+        actions={
           <Button
             className="cursor-pointer"
             variant="outline"
@@ -1126,8 +322,8 @@ export function StaleClient() {
           >
             <RefreshCw className={cn(isFetching && "animate-spin motion-reduce:animate-none")} aria-hidden /> Làm mới
           </Button>
-        </div>
-      </header>
+        }
+      />
 
       {/* Main View Switcher: Việc của tôi vs Toàn dự án */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1238,8 +434,11 @@ export function StaleClient() {
       {/* Global Project / Assignee Scope Filter */}
       <Card className="shadow-none">
         <CardContent className="p-4">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div className="flex items-center gap-2 text-sm font-semibold xl:mr-2">
+          <FilterBar
+            activeCount={[project, assignee, status, reason, severity].filter((v) => v !== ALL).length}
+            onReset={clearFilters}
+          >
+            <div className="flex items-center gap-2 text-sm font-semibold">
               <Filter className="h-4 w-4 text-muted-foreground" aria-hidden /> Phạm vi phân tích
             </div>
             <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
@@ -1350,17 +549,7 @@ export function StaleClient() {
                 </SelectContent>
               </Select>
             </div>
-            {hasAnyFilter && (
-              <Button
-                className="cursor-pointer self-start xl:self-auto"
-                variant="ghost"
-                size="sm"
-                onClick={clearFilters}
-              >
-                <RotateCcw aria-hidden className="h-3.5 w-3.5 mr-1.5" /> Xóa lọc
-              </Button>
-            )}
-          </div>
+          </FilterBar>
         </CardContent>
       </Card>
 
@@ -1379,22 +568,11 @@ export function StaleClient() {
 
       {/* Error Card */}
       {!isLoading && error && !data && (
-        <Card className="border-red-500/30 shadow-none">
-          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
-              <AlertCircle className="h-6 w-6 text-red-700 dark:text-red-400" aria-hidden />
-            </span>
-            <div>
-              <p className="text-sm font-semibold">Không thể tải dữ liệu phân tích tồn đọng</p>
-              <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-                {error instanceof Error ? error.message : "Vui lòng thử lại."}
-              </p>
-            </div>
-            <Button className="cursor-pointer" variant="outline" size="sm" onClick={() => void refetch()}>
-              <RefreshCw aria-hidden className="h-3.5 w-3.5 mr-1.5" /> Thử lại
-            </Button>
-          </CardContent>
-        </Card>
+        <ErrorState
+          title="Không thể tải dữ liệu phân tích tồn đọng"
+          message={error instanceof Error ? error.message : undefined}
+          onRetry={() => void refetch()}
+        />
       )}
 
       {/* VIEW: MY WORK -> TAB: STANDARDIZATION */}
@@ -1615,18 +793,12 @@ export function StaleClient() {
             <CardContent className="p-4">
               <div className="flex flex-col gap-3">
                 <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                  <div className="relative min-w-0">
-                    <Search
-                      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                      aria-hidden
-                    />
-                    <Input
-                      value={stdSearch}
-                      onChange={(e) => setStdSearch(e.target.value)}
-                      className="pl-9 text-xs"
-                      placeholder="Tìm mã Jira, tên task…"
-                    />
-                  </div>
+                  <SearchField
+                    value={stdSearch}
+                    onChange={setStdSearch}
+                    placeholder="Tìm mã Jira, tên task…"
+                    ariaLabel="Tìm trong task chuẩn hóa"
+                  />
 
                   <Select
                     value={stdMissingFilter}
@@ -1773,7 +945,7 @@ export function StaleClient() {
                     </Button>
                   </div>
                 ) : (
-                  <EmptyState
+                  <StaleEmptyState
                     filtered={hasStdFilters}
                     onClear={clearStdFilters}
                     title={hasStdFilters ? "Không có task nào khớp với bộ lọc" : "Không có task đang hoạt động"}
@@ -2374,22 +1546,16 @@ export function StaleClient() {
                     </CardDescription>
                   </div>
                   <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-                    <div className="relative min-w-0 sm:w-72">
-                      <Search
-                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                        aria-hidden
-                      />
-                      <Input
-                        value={query}
-                        onChange={(event) => {
-                          setQuery(event.target.value);
-                          setVisibleCount(50);
-                        }}
-                        className="pl-9"
-                        placeholder="Tìm key, nội dung, người xử lý…"
-                        aria-label="Tìm trong task tồn đọng"
-                      />
-                    </div>
+                    <SearchField
+                      value={query}
+                      onChange={(v) => {
+                        setQuery(v);
+                        setVisibleCount(50);
+                      }}
+                      placeholder="Tìm key, nội dung, người xử lý…"
+                      ariaLabel="Tìm trong task tồn đọng"
+                      className="min-w-0 sm:w-72"
+                    />
                     <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
                       <SelectTrigger className="cursor-pointer sm:w-52" aria-label="Sắp xếp task tồn đọng">
                         <SelectValue />
@@ -2405,7 +1571,7 @@ export function StaleClient() {
                 </CardHeader>
                 <CardContent className="p-0">
                   {visibleTasks.length === 0 ? (
-                    <EmptyState filtered onClear={clearFilters} />
+                    <StaleEmptyState filtered onClear={clearFilters} />
                   ) : (
                     <>
                       <div className="divide-y lg:hidden">
@@ -2652,7 +1818,7 @@ export function StaleClient() {
                 onViewStandardization={() => handleTabChange("standardization")}
               />
             ) : (
-              <EmptyState filtered={hasAnyFilter} onClear={clearFilters} />
+              <StaleEmptyState filtered={hasAnyFilter} onClear={clearFilters} />
             )
           )}
         </>

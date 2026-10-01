@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { notifyKeys } from "@/lib/query-keys";
+import { useNotificationPreferences } from "@/hooks/use-settings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   CheckCircle2,
@@ -172,7 +174,6 @@ const HOURS = Array.from({ length: 24 }, (_, i) => ({
 }));
 
 export function NotificationPreferences() {
-  const qc = useQueryClient();
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [testSent, setTestSent] = useState(false);
   const [testSending, setTestSending] = useState(false);
@@ -192,15 +193,16 @@ export function NotificationPreferences() {
     queryFn: () => api<Preferences>("/api/notify/preferences"),
   });
 
-  const mutation = useMutation({
-    mutationFn: (body: Partial<Preferences>) =>
-      api<Preferences>("/api/notify/preferences", { method: "PATCH", body }),
-    onSuccess: (next) => {
-      qc.setQueryData(notifyKeys.preferences, next);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-    },
-  });
+  const mutation = useNotificationPreferences();
+
+  function mutatePrefs(body: Partial<Preferences>) {
+    mutation.mutate(body, {
+      onSuccess: () => {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      },
+    });
+  }
 
   const values: Preferences = data ?? {
     disabledTypes: [],
@@ -231,16 +233,16 @@ export function NotificationPreferences() {
     const disabledTypes = values.disabledTypes.includes(typeKey)
       ? values.disabledTypes.filter((t) => t !== typeKey)
       : [...values.disabledTypes, typeKey];
-    mutation.mutate({ disabledTypes });
+    mutatePrefs({ disabledTypes });
   };
 
   // Bulk toggle in-app
   const enableAllInApp = () => {
-    mutation.mutate({ disabledTypes: [] });
+    mutatePrefs({ disabledTypes: [] });
   };
 
   const disableAllInApp = () => {
-    mutation.mutate({ disabledTypes: [...knownTypes] });
+    mutatePrefs({ disabledTypes: [...knownTypes] });
   };
 
   // Toggle push master switch
@@ -248,7 +250,7 @@ export function NotificationPreferences() {
     if (checked) {
       try {
         await subscribePush();
-        mutation.mutate({ pushEnabled: true });
+        mutatePrefs({ pushEnabled: true });
       } catch {
         // subscribePush sets error
       }
@@ -258,7 +260,7 @@ export function NotificationPreferences() {
       } catch {
         // ignore
       }
-      mutation.mutate({ pushEnabled: false });
+      mutatePrefs({ pushEnabled: false });
     }
   };
 
@@ -267,16 +269,16 @@ export function NotificationPreferences() {
     const pushDisabledTypes = values.pushDisabledTypes.includes(typeKey)
       ? values.pushDisabledTypes.filter((t) => t !== typeKey)
       : [...values.pushDisabledTypes, typeKey];
-    mutation.mutate({ pushDisabledTypes });
+    mutatePrefs({ pushDisabledTypes });
   };
 
   // Bulk toggle push
   const enableAllPush = () => {
-    mutation.mutate({ pushDisabledTypes: [] });
+    mutatePrefs({ pushDisabledTypes: [] });
   };
 
   const disableAllPush = () => {
-    mutation.mutate({ pushDisabledTypes: [...knownTypes] });
+    mutatePrefs({ pushDisabledTypes: [...knownTypes] });
   };
 
   const handleTestPush = async () => {
@@ -295,13 +297,13 @@ export function NotificationPreferences() {
 
   // Toggle delivery mode
   const handleDeliveryModeChange = (mode: "instant" | "digest") => {
-    mutation.mutate({ deliveryMode: mode });
+    mutatePrefs({ deliveryMode: mode });
   };
 
   const handleDigestHourChange = (hour: string) => {
     const parsed = parseInt(hour, 10);
     if (!isNaN(parsed)) {
-      mutation.mutate({ digestHour: parsed });
+      mutatePrefs({ digestHour: parsed });
     }
   };
 
@@ -467,10 +469,9 @@ export function NotificationPreferences() {
           )}
 
           {mutation.isError && (
-            <div className="flex items-center gap-2 text-xs text-destructive mt-2 p-2 rounded-md bg-destructive/10 border border-destructive/20">
-              <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>Lưu thay đổi thất bại. Vui lòng kiểm tra lại kết nối.</span>
-            </div>
+            <FeedbackBanner tone="destructive" className="text-xs mt-2">
+              Lưu thay đổi thất bại. Vui lòng kiểm tra lại kết nối.
+            </FeedbackBanner>
           )}
         </CardContent>
       </Card>

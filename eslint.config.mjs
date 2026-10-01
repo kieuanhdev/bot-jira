@@ -13,6 +13,31 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // Import boundary: shared/ must not import from route/domain/hook layers.
+  {
+    files: ["src/components/shared/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/app/*", "@/app/**"],
+              message: "shared/ components must not import from route files (@/app).",
+            },
+            {
+              group: ["@/hooks/*", "@/hooks/**"],
+              message: "shared/ components must not import domain hooks. Pass callbacks via props.",
+            },
+            {
+              group: ["@/lib/releases/*", "@/lib/releases/**", "@/lib/branches/*", "@/lib/branches/**", "@/lib/board/*", "@/lib/board/**"],
+              message: "shared/ components must not import domain lib. Keep domain logic out of the shared layer.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

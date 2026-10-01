@@ -4,8 +4,20 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
-import { transitionsKeys, branchesForKeys, meKeys, issuesKeys, staleKeys } from "@/lib/query-keys";
+import { api, getErrorMessage } from "@/lib/api-client";
+import { useBranchLink } from "@/hooks/use-branches";
+import {
+  useIssueFieldMutation,
+  useIssueTransition,
+  useIssueWatch,
+  useIssueAiScore,
+  useIssueAiDecision,
+  useIssueComment,
+  useIssueCreateBranch,
+  useIssueWorklog,
+} from "@/hooks/use-issue-detail";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
+import { transitionsKeys, branchesForKeys, meKeys, issuesKeys } from "@/lib/query-keys";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,8 +73,6 @@ import {
   Flag,
   Plus,
   ChevronDown,
-  CornerDownLeft,
-  ExternalLink,
   Clock,
   Loader2,
 } from "lucide-react";
@@ -70,7 +80,6 @@ import {
   parseJiraDuration,
   formatJiraDuration,
   isSafeReturnUrl,
-  type CreateWorklogResult,
 } from "@/lib/worklogs/schema";
 
 import { IssueDependencies } from "@/components/issue-dependencies";
@@ -136,11 +145,13 @@ type BranchRow = {
   checkedAt?: string;
 };
 
+type MsgState = { tone: "success" | "destructive" | "info"; text: string } | null;
+
 export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
   const [issue, setIssue] = useState<IssueDetail>(initial);
   const [watched, setWatched] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<MsgState>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [commenting, setCommenting] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -185,6 +196,15 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
   });
 
   const queryClient = useQueryClient();
+  const branchLink = useBranchLink();
+  const fieldMutation = useIssueFieldMutation(issue.jiraKey);
+  const transitionMutation = useIssueTransition(issue.jiraKey);
+  const watchMutation = useIssueWatch(issue.jiraKey);
+  const aiScoreMutation = useIssueAiScore(issue.jiraKey);
+  const aiDecisionMutation = useIssueAiDecision(issue.jiraKey);
+  const commentMutation = useIssueComment(issue.jiraKey);
+  const createBranchMutation = useIssueCreateBranch(issue.jiraKey);
+  const worklogMutation = useIssueWorklog(issue.jiraKey);
 
   const { data: me } = useQuery({
     queryKey: meKeys.status,
@@ -213,34 +233,35 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
     staleTime: 15_000,
   });
 
-  async function handleConfirmBranch(branchId: string) {
-    try {
-      const res = await fetch(`/api/branches/${branchId}/link`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "confirm" }),
-      });
-      if (!res.ok) throw new Error("Không thể xác nhận");
-      await queryClient.invalidateQueries({ queryKey: branchesForKeys.forIssue(issue.jiraKey) });
-      setMsg("Đã xác nhận liên kết nhánh");
-    } catch (e) {
-      setMsg(`Lỗi: ${(e as Error).message}`);
-    }
+  async function refreshIssue() {
+    const fresh = await api<{ issue: IssueDetail }>(`/api/issues/${issue.jiraKey}`);
+    setIssue(fresh.issue);
   }
 
-  async function handleRejectBranch(branchId: string) {
-    try {
-      const res = await fetch(`/api/branches/${branchId}/link`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reject" }),
-      });
-      if (!res.ok) throw new Error("Không thể từ chối");
-      await queryClient.invalidateQueries({ queryKey: branchesForKeys.forIssue(issue.jiraKey) });
-      setMsg("Đã từ chối gợi ý liên kết");
-    } catch (e) {
-      setMsg(`Lỗi: ${(e as Error).message}`);
-    }
+  function handleConfirmBranch(branchId: string) {
+    branchLink.mutate(
+      { branchId, body: { action: "confirm" } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: branchesForKeys.forIssue(issue.jiraKey) });
+          setMsg({ tone: "success", text: "Đã xác nhận liên kết nhánh" });
+        },
+        onError: (err) => setMsg({ tone: "destructive", text: getErrorMessage(err, "Không thể xác nhận") }),
+      }
+    );
+  }
+
+  function handleRejectBranch(branchId: string) {
+    branchLink.mutate(
+      { branchId, body: { action: "reject" } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: branchesForKeys.forIssue(issue.jiraKey) });
+          setMsg({ tone: "success", text: "Đã từ chối gợi ý liên kết" });
+        },
+        onError: (err) => setMsg({ tone: "destructive", text: getErrorMessage(err, "Không thể từ chối") }),
+      }
+    );
   }
 
   async function handleSubmitWorklog() {
@@ -271,15 +292,12 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
     setWorklogError(null);
 
     try {
-      const res = await api<CreateWorklogResult>(`/api/issues/${issue.jiraKey}/worklogs`, {
-        method: "POST",
-        body: {
-          timeSpent: trimmedDuration,
-          startedAt: startedDate.toISOString(),
-          comment: logComment.trim() || undefined,
-          adjustEstimate: "leave",
-          idempotencyKey: worklogIdempotencyKey,
-        },
+      const res = await worklogMutation.mutateAsync({
+        timeSpent: trimmedDuration,
+        startedAt: startedDate.toISOString(),
+        comment: logComment.trim() || undefined,
+        adjustEstimate: "leave",
+        idempotencyKey: worklogIdempotencyKey,
       });
 
       const addedSeconds = res.timeSpentSeconds ?? parsed;
@@ -291,10 +309,7 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
       const syncNote = res.cacheSynced === false
         ? " (Jira đã ghi nhận, dữ liệu tổng hợp đang chờ đồng bộ)"
         : "";
-      setMsg(`Đã ghi nhận ${trimmedDuration} lên Jira thành công!${syncNote}`);
-
-      queryClient.invalidateQueries({ queryKey: issuesKeys.all });
-      queryClient.invalidateQueries({ queryKey: staleKeys.all });
+      setMsg({ tone: "success", text: `Đã ghi nhận ${trimmedDuration} lên Jira thành công!${syncNote}` });
 
       setLogWorkOpen(false);
       setLogTimeSpent("");
@@ -305,34 +320,32 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
         router.push(returnToParam);
       }
     } catch (err) {
-      setWorklogError((err as Error).message || "Có lỗi xảy ra khi ghi worklog lên Jira.");
+      setWorklogError(getErrorMessage(err, "Có lỗi xảy ra khi ghi worklog lên Jira."));
     } finally {
       setSubmittingWorklog(false);
     }
   }
 
-  async function doAction(fn: () => Promise<unknown>, message: string) {
+  async function withBusy(fn: () => Promise<void>) {
     setBusy(true);
     setMsg(null);
     try {
       await fn();
-      setMsg(message);
-      // Refresh the issue from the cache after the mutation invalidated it.
-      const fresh = await api<{ issue: IssueDetail }>(`/api/issues/${issue.jiraKey}`);
-      setIssue(fresh.issue);
-      await queryClient.invalidateQueries({ queryKey: issuesKeys.all });
-    } catch (e) {
-      setMsg(`Lỗi: ${(e as Error).message}`);
     } finally {
       setBusy(false);
     }
   }
 
   async function handleMutateField(patch: Record<string, unknown>, successMsg?: string) {
-    await doAction(
-      () => api(`/api/issues/${issue.jiraKey}`, { method: "PATCH", body: patch }),
-      successMsg ?? "Đã cập nhật task thành công"
-    );
+    await withBusy(async () => {
+      try {
+        await fieldMutation.mutateAsync(patch);
+        setMsg({ tone: "success", text: successMsg ?? "Đã cập nhật task thành công" });
+        await refreshIssue();
+      } catch (err) {
+        setMsg({ tone: "destructive", text: getErrorMessage(err) });
+      }
+    });
   }
 
   async function handleAssign(assignee: string | null) {
@@ -375,48 +388,48 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
     setCreatingBranch(true);
     setMsg(null);
     try {
-      const res = await api<{ ok: boolean; branch?: string; error?: string }>(
-        `/api/issues/${issue.jiraKey}/branches`,
-        { method: "POST", body: {} }
-      );
-      await queryClient.invalidateQueries({ queryKey: branchesForKeys.forIssue(issue.jiraKey) });
-      setMsg(`Đã tạo thành công nhánh: ${res.branch}`);
-    } catch (e) {
-      setMsg(`Lỗi tạo nhánh: ${(e as Error).message}`);
+      const res = await createBranchMutation.mutateAsync();
+      setMsg({ tone: "success", text: `Đã tạo thành công nhánh: ${res.branch}` });
+    } catch (err) {
+      setMsg({ tone: "destructive", text: getErrorMessage(err, "Lỗi tạo nhánh") });
     } finally {
       setCreatingBranch(false);
     }
   }
 
   async function onTransition(t: Transition) {
-    await doAction(
-      () =>
-        api(`/api/issues/${issue.jiraKey}/transition`, {
-          method: "POST",
-          body: { transitionId: t.id },
-        }),
-      `Đã chuyển sang ${transitionTo(t)}`
-    );
+    await withBusy(async () => {
+      try {
+        await transitionMutation.mutateAsync(t.id);
+        setMsg({ tone: "success", text: `Đã chuyển sang ${transitionTo(t)}` });
+        await refreshIssue();
+      } catch (err) {
+        setMsg({ tone: "destructive", text: getErrorMessage(err) });
+      }
+    });
   }
 
   async function onToggleWatch() {
-    await doAction(
-      () => api(`/api/issues/${issue.jiraKey}/watch`, { method: "POST", body: {} }),
-      watched ? "Đã bỏ theo dõi" : "Đang theo dõi"
-    );
+    await withBusy(async () => {
+      try {
+        await watchMutation.mutateAsync();
+        setMsg({ tone: "success", text: watched ? "Đã bỏ theo dõi" : "Đang theo dõi" });
+      } catch (err) {
+        setMsg({ tone: "destructive", text: getErrorMessage(err) });
+      }
+    });
     setWatched((w) => !w);
   }
 
   async function onAiScore() {
     setBusy(true);
-    setMsg("Đang chấm điểm AI…");
+    setMsg({ tone: "info", text: "Đang chấm điểm AI…" });
     try {
-      await api(`/api/issues/${issue.jiraKey}/ai-score`, { method: "POST", body: {} });
-      const fresh = await api<{ issue: IssueDetail }>(`/api/issues/${issue.jiraKey}`);
-      setIssue(fresh.issue);
-      setMsg("Điểm AI đã sẵn sàng");
-    } catch (e) {
-      setMsg(`Lỗi: ${(e as Error).message}`);
+      await aiScoreMutation.mutateAsync();
+      await refreshIssue();
+      setMsg({ tone: "success", text: "Điểm AI đã sẵn sàng" });
+    } catch (err) {
+      setMsg({ tone: "destructive", text: getErrorMessage(err) });
     } finally {
       setBusy(false);
     }
@@ -430,14 +443,15 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
         : decision === "edited"
           ? `Đã đặt điểm thành ${points} → Jira`
           : "Đã từ chối ước tính AI (Jira không thay đổi)";
-    await doAction(
-      () =>
-        api(`/api/issues/${issue.jiraKey}/ai-score/decision`, {
-          method: "POST",
-          body: { decision, points },
-        }),
-      done
-    );
+    await withBusy(async () => {
+      try {
+        await aiDecisionMutation.mutateAsync({ decision, points });
+        setMsg({ tone: "success", text: done });
+        await refreshIssue();
+      } catch (err) {
+        setMsg({ tone: "destructive", text: getErrorMessage(err) });
+      }
+    });
     if (decision !== "rejected") {
       setEditMode(false);
       setEditPoints("");
@@ -456,16 +470,12 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
     setCommenting(true);
     setMsg(null);
     try {
-      await api(`/api/issues/${issue.jiraKey}/comments`, {
-        method: "POST",
-        body: { body: text },
-      });
+      await commentMutation.mutateAsync({ body: text });
       setCommentDraft("");
-      setMsg("Đã gửi bình luận lên Jira");
-      const fresh = await api<{ issue: IssueDetail }>(`/api/issues/${issue.jiraKey}`);
-      setIssue(fresh.issue);
-    } catch (e) {
-      setMsg(`Lỗi: ${(e as Error).message}`);
+      setMsg({ tone: "success", text: "Đã gửi bình luận lên Jira" });
+      await refreshIssue();
+    } catch (err) {
+      setMsg({ tone: "destructive", text: getErrorMessage(err) });
     } finally {
       setCommenting(false);
     }
@@ -797,7 +807,9 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
       </div>
 
       {msg && (
-        <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">{msg}</div>
+        <FeedbackBanner tone={msg.tone === "success" ? "success" : msg.tone === "destructive" ? "destructive" : "info"}>
+          {msg.text}
+        </FeedbackBanner>
       )}
 
       <Tabs defaultValue="detail">
@@ -1187,10 +1199,9 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
             </div>
 
             {worklogError && (
-              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>{worklogError}</span>
-              </div>
+              <FeedbackBanner tone="destructive" className="text-xs">
+                {worklogError}
+              </FeedbackBanner>
             )}
 
             <div className="space-y-1.5">

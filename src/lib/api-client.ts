@@ -47,3 +47,18 @@ export async function api<T = unknown>(
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
+
+/**
+ * Normalize an unknown thrown value into a safe, display-ready message.
+ *
+ * Keeps structured `ApiError`s intact (they already carry a server-provided
+ * message) and falls back to a neutral string for anything else (null, an object,
+ * a plain string, ...). Centralizing this here means error display does not depend
+ * on the error being an `Error` instance and never renders a raw `[object Object]`.
+ */
+export function getErrorMessage(error: unknown, fallback = "Đã xảy ra lỗi"): string {
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string" && error.trim() !== "") return error;
+  return fallback;
+}

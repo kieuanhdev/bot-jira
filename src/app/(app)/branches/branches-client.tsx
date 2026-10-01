@@ -4,12 +4,17 @@ import { useState, useTransition, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
+import { api, getErrorMessage } from "@/lib/api-client";
 import { branchesKeys } from "@/lib/query-keys";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useBranchSync, useBranchLink } from "@/hooks/use-branches";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
+import { PageContainer } from "@/components/shared/page-container";
+import { PageHeader } from "@/components/shared/page-header";
+import { ErrorState } from "@/components/shared/async-state";
+import { EmptyState } from "@/components/shared/empty-state";
+import { ListSkeleton } from "@/components/shared/skeleton";
 import { RefreshCw, AlertCircle, ChevronLeft, ChevronRight, Inbox, GitBranch } from "lucide-react";
 
 import { BranchToolbar } from "./branch-toolbar";
@@ -38,9 +43,11 @@ export function BranchesClient() {
   const [, startTransition] = useTransition();
 
   const [toast, setToast] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
   const [selectedBranchForDrawer, setSelectedBranchForDrawer] = useState<BranchRowItem | null>(null);
   const [selectedBranchForLink, setSelectedBranchForLink] = useState<BranchRowItem | null>(null);
+
+  const syncMutation = useBranchSync();
+  const linkMutation = useBranchLink();
 
   const toBranchRow = useCallback((item: {
     id: string;
@@ -202,77 +209,46 @@ export function BranchesClient() {
   const repoOptions = facetQueryResult.data?.facets.repositories ?? [];
 
   // Handle manual "Sync now"
-  const handleSyncNow = async () => {
-    setSyncing(true);
-    try {
-      const res = await fetch("/api/branches/sync", { method: "POST" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Yêu cầu đồng bộ thất bại");
-      showToast(json.queued ? "Đã đưa tác vụ đồng bộ vào hàng đợi nền" : "Đồng bộ nhánh thành công");
-      await Promise.all([taskQueryResult.refetch(), branchQueryResult.refetch()]);
-    } catch (e) {
-      showToast(`Đồng bộ thất bại: ${(e as Error).message}`);
-    } finally {
-      setSyncing(false);
-    }
+  const handleSyncNow = () => {
+    syncMutation.mutate(undefined, {
+      onSuccess: (data) =>
+        showToast(data.queued ? "Đã đưa tác vụ đồng bộ vào hàng đợi nền" : "Đồng bộ nhánh thành công"),
+      onError: (err) => showToast(`Đồng bộ thất bại: ${getErrorMessage(err)}`),
+    });
   };
 
   // Confirm suggestion
   const handleConfirmSuggestion = async (branchId: string) => {
     try {
-      const res = await fetch(`/api/branches/${branchId}/link`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "confirm" }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "Không thể xác nhận gợi ý");
-      }
+      await linkMutation.mutateAsync({ branchId, body: { action: "confirm" } });
       showToast("Đã xác nhận liên kết Jira task thành công");
-      await Promise.all([taskQueryResult.refetch(), branchQueryResult.refetch()]);
-    } catch (e) {
-      showToast((e as Error).message);
+    } catch (err) {
+      showToast(getErrorMessage(err));
     }
   };
 
   // Reject suggestion
   const handleRejectSuggestion = async (branchId: string) => {
     try {
-      const res = await fetch(`/api/branches/${branchId}/link`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reject" }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "Không thể từ chối gợi ý");
-      }
+      await linkMutation.mutateAsync({ branchId, body: { action: "reject" } });
       showToast("Đã từ chối gợi ý liên kết");
-      await Promise.all([taskQueryResult.refetch(), branchQueryResult.refetch()]);
-    } catch (e) {
-      showToast((e as Error).message);
+    } catch (err) {
+      showToast(getErrorMessage(err));
     }
   };
 
   // Unlink branch
-  const handleUnlinkBranch = async (branchId: string) => {
-    try {
-      const res = await fetch(`/api/branches/${branchId}/link`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "unlink" }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "Không thể hủy liên kết");
+  const handleUnlinkBranch = (branchId: string) => {
+    linkMutation.mutate(
+      { branchId, body: { action: "unlink" } },
+      {
+        onSuccess: () => {
+          showToast("Đã hủy liên kết Jira task");
+          setSelectedBranchForDrawer(null);
+        },
+        onError: (err) => showToast(getErrorMessage(err)),
       }
-      showToast("Đã hủy liên kết Jira task");
-      await Promise.all([taskQueryResult.refetch(), branchQueryResult.refetch()]);
-      setSelectedBranchForDrawer(null);
-    } catch (e) {
-      showToast((e as Error).message);
-    }
+    );
   };
 
   const activePage = isTechnicalView
@@ -282,6 +258,7 @@ export function BranchesClient() {
   const counts = taskQueryResult.data?.counts;
 
   return (
+    <PageContainer size="wide">
     <div className="relative flex flex-col gap-5 pb-10">
       {/* Toast Feedback */}
       {toast && (
@@ -295,40 +272,31 @@ export function BranchesClient() {
       )}
 
       {/* Page Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-foreground">Workspace Nhánh & Delivery</h1>
-            {freshness?.lastSuccessAt && (
-              <span className="text-xs text-muted-foreground">
-                • Đã đồng bộ {timeAgo(freshness.lastSuccessAt)}
-              </span>
+      <PageHeader
+        title="Workspace Nhánh & Delivery"
+        meta={freshness?.lastSuccessAt ? `• Đã đồng bộ ${timeAgo(freshness.lastSuccessAt)}` : undefined}
+        description="Theo dõi tiến độ phân phối phần mềm theo Jira Task, quản lý nhánh Bitbucket và duyệt gợi ý liên kết."
+        actions={
+          <>
+            {freshness?.stale && (
+              <Badge variant="warning" className="gap-1 text-xs">
+                <AlertCircle className="h-3.5 w-3.5" /> Dữ liệu đồng bộ có thể đã cũ
+              </Badge>
             )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Theo dõi tiến độ phân phối phần mềm theo Jira Task, quản lý nhánh Bitbucket và duyệt gợi ý liên kết.
-          </p>
-        </div>
 
-        <div className="flex items-center gap-2">
-          {freshness?.stale && (
-            <Badge variant="warning" className="gap-1 text-xs">
-              <AlertCircle className="h-3.5 w-3.5" /> Dữ liệu đồng bộ có thể đã cũ
-            </Badge>
-          )}
-
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={syncing}
-            onClick={handleSyncNow}
-            className="h-8 gap-1.5 text-xs text-foreground cursor-pointer"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin text-teal-400" : ""}`} />
-            {syncing ? "Đang đồng bộ..." : "Đồng bộ Bitbucket"}
-          </Button>
-        </div>
-      </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={syncMutation.isPending}
+              onClick={handleSyncNow}
+              className="h-8 gap-1.5 text-xs text-foreground cursor-pointer"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${syncMutation.isPending ? "animate-spin text-primary" : ""}`} />
+              {syncMutation.isPending ? "Đang đồng bộ..." : "Đồng bộ Bitbucket"}
+            </Button>
+          </>
+        }
+      />
 
       {/* Toolbar with Navigation Tabs & Filters */}
       <BranchToolbar
@@ -342,26 +310,16 @@ export function BranchesClient() {
       />
 
       {/* Loading Skeleton */}
-      {isLoading && !activePage && (
-        <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-card p-4">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-xl" />
-          ))}
-        </div>
-      )}
+      {isLoading && !activePage && <ListSkeleton rows={6} />}
 
       {/* Error state */}
       {isError && (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-red-500/30 bg-red-500/5 py-10 text-center">
-          <AlertCircle className="h-8 w-8 text-red-500" />
-          <div className="space-y-1">
-            <h3 className="text-sm font-semibold text-foreground">Không thể tải dữ liệu workspace</h3>
-            <p className="text-xs text-muted-foreground">{(error as Error).message}</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => refetch()} className="text-xs cursor-pointer">
-            Thử lại
-          </Button>
-        </div>
+        <ErrorState
+          title="Không thể tải dữ liệu workspace"
+          message={getErrorMessage(error)}
+          onRetry={refetch}
+          retryLabel="Thử lại"
+        />
       )}
 
       {/* View Content Rendering */}
@@ -371,22 +329,18 @@ export function BranchesClient() {
           {(filters.view === "my-work" || filters.view === "needs-attention") && (
             <>
               {filters.view === "my-work" && taskQueryResult.data?.jiraNotConfigured ? (
-                <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border py-14 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                    <GitBranch className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-semibold text-foreground">Chưa liên kết tài khoản Jira</h3>
-                    <p className="max-w-sm text-xs text-muted-foreground">
-                      Bạn chưa cấu hình thông tin Jira cá nhân. Vui lòng vào Cài đặt để kết nối tài khoản và xem các nhánh/công việc được giao cho bạn.
-                    </p>
-                  </div>
-                  <Link href="/settings">
-                    <Button variant="outline" size="sm" className="mt-2 text-xs">
-                      Đi đến Cài đặt tích hợp
-                    </Button>
-                  </Link>
-                </div>
+                <EmptyState
+                  icon={GitBranch}
+                  title="Chưa liên kết tài khoản Jira"
+                  hint="Bạn chưa cấu hình thông tin Jira cá nhân. Vui lòng vào Cài đặt để kết nối tài khoản và xem các nhánh/công việc được giao cho bạn."
+                  action={
+                    <Link href="/settings">
+                      <Button variant="outline" size="sm" className="text-xs">
+                        Đi đến Cài đặt tích hợp
+                      </Button>
+                    </Link>
+                  }
+                />
               ) : taskQueryResult.data?.tasks && taskQueryResult.data.tasks.length > 0 ? (
                 <TaskDeliveryList
                   tasks={taskQueryResult.data.tasks}
@@ -414,15 +368,11 @@ export function BranchesClient() {
                   }
                 />
               ) : (
-                <div className="p-12 text-center border border-dashed border-border rounded-xl space-y-2">
-                  <div className="w-10 h-10 rounded-full bg-teal-500/10 text-teal-400 flex items-center justify-center mx-auto">
-                    <Inbox className="w-5 h-5" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-foreground">Không có gợi ý chờ duyệt</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Tất cả các nhánh Bitbucket đã được xác nhận hoặc chưa có ứng viên mới từ Pull Request.
-                  </p>
-                </div>
+                <EmptyState
+                  icon={Inbox}
+                  title="Không có gợi ý chờ duyệt"
+                  hint="Tất cả các nhánh Bitbucket đã được xác nhận hoặc chưa có ứng viên mới từ Pull Request."
+                />
               )}
             </>
           )}
@@ -438,15 +388,11 @@ export function BranchesClient() {
                   }
                 />
               ) : (
-                <div className="p-12 text-center border border-dashed border-border rounded-xl space-y-2">
-                  <div className="w-10 h-10 rounded-full bg-teal-500/10 text-teal-400 flex items-center justify-center mx-auto">
-                    <GitBranch className="w-5 h-5" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-foreground">Tất cả các nhánh đã có Jira task</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Không tìm thấy work branch nào chưa được liên kết với Jira.
-                  </p>
-                </div>
+                <EmptyState
+                  icon={GitBranch}
+                  title="Tất cả các nhánh đã có Jira task"
+                  hint="Không tìm thấy work branch nào chưa được liên kết với Jira."
+                />
               )}
             </>
           )}
@@ -524,10 +470,9 @@ export function BranchesClient() {
           onOpenChange={(open) => {
             if (!open) setSelectedBranchForLink(null);
           }}
-          onSuccess={async () => {
+          onSuccess={() => {
             showToast("Cập nhật liên kết Jira task thành công");
             setSelectedBranchForLink(null);
-            await Promise.all([taskQueryResult.refetch(), branchQueryResult.refetch()]);
           }}
         />
       )}
@@ -546,5 +491,6 @@ export function BranchesClient() {
         />
       )}
     </div>
+    </PageContainer>
   );
 }

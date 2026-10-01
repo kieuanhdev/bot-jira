@@ -36,31 +36,6 @@ export function useUnreadCount() {
   return data?.unread ?? 0;
 }
 
-export function useNotifications(options: {
-  limit?: number;
-  enabled?: boolean;
-  unreadOnly?: boolean;
-  type?: string;
-  cursor?: string;
-} = {}) {
-  const { limit = 20, enabled = true, unreadOnly, type, cursor } = options;
-
-  const params = new URLSearchParams();
-  params.set("limit", String(limit));
-  if (unreadOnly) params.set("unreadOnly", "1");
-  if (type) params.set("type", type);
-  if (cursor) params.set("cursor", cursor);
-
-  return useQuery({
-    queryKey: notificationsKeys.list({ limit, unreadOnly, type, cursor }),
-    queryFn: () => api<NotificationResponse>(`/api/notify?${params.toString()}`),
-    enabled,
-    refetchInterval: enabled ? 3000 : false,
-    refetchOnWindowFocus: true,
-    retry: 1,
-  });
-}
-
 export function useMarkNotifications() {
   const qc = useQueryClient();
 

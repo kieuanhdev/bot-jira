@@ -21,6 +21,7 @@ import {
   FileText,
   ListTodo,
 } from "lucide-react";
+import { useSaveReleaseNotes } from "@/hooks/use-releases";
 import { ReleaseTaskList } from "./release-task-list";
 import { ReleasePublishDialog } from "./release-publish-dialog";
 import type { TaskReadinessResult, ReleaseReadinessState } from "@/lib/releases/release-readiness";
@@ -63,30 +64,18 @@ export function ReleaseCard({
   const [expanded, setExpanded] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [notes, setNotes] = useState(release.notes || "");
-  const [savingNotes, setSavingNotes] = useState(false);
   const [activeTab, setActiveTab] = useState("tasks");
+
+  const notesMutation = useSaveReleaseNotes();
 
   const isReleased = release.status === "released" || release.readiness === "released";
   const isReady = !isReleased && !release.archived && release.readiness === "ready";
-  const isEmpty = release.taskCount === 0;
 
   const jiraPct = release.taskCount > 0 ? Math.round((release.doneCount / release.taskCount) * 100) : 0;
   const deliveryPct = release.taskCount > 0 ? Math.round((release.deliveryReadyCount / release.taskCount) * 100) : 0;
 
-  const handleSaveNotes = async () => {
-    setSavingNotes(true);
-    try {
-      await fetch(`/api/releases/${release.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notes }),
-      });
-      onRefresh();
-    } catch {
-      // Best effort
-    } finally {
-      setSavingNotes(false);
-    }
+  const handleSaveNotes = () => {
+    notesMutation.mutate({ id: release.id, notes }, { onSuccess: onRefresh });
   };
 
   return (
@@ -252,7 +241,7 @@ export function ReleaseCard({
                       placeholder="Ghi chú nội bộ hoặc changelog phát hành..."
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      disabled={!canManage || savingNotes}
+                      disabled={!canManage || notesMutation.isPending}
                       className="min-h-[100px] text-xs font-mono"
                     />
                     {canManage && (
@@ -260,10 +249,10 @@ export function ReleaseCard({
                         <Button
                           size="sm"
                           onClick={handleSaveNotes}
-                          disabled={savingNotes || notes === (release.notes || "")}
+                          disabled={notesMutation.isPending || notes === (release.notes || "")}
                           className="gap-1.5 text-xs"
                         >
-                          {savingNotes ? (
+                          {notesMutation.isPending ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                           ) : (
                             <Save className="h-3.5 w-3.5" aria-hidden="true" />

@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Bell, UserRound, Webhook } from "lucide-react";
-import { api } from "@/lib/api-client";
+import { api, getErrorMessage } from "@/lib/api-client";
 import { chatKeys } from "@/lib/query-keys";
+import { useSaveDiscordIntegration, useRemoveDiscordIntegration } from "@/hooks/use-settings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type DestinationType = "webhook" | "user_id";
@@ -22,7 +24,6 @@ type Integration = {
 };
 
 export function ChatLinking() {
-  const queryClient = useQueryClient();
   const [selectedType, setSelectedType] = useState<DestinationType | null>(null);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [enteredDiscordUserId, setEnteredDiscordUserId] = useState<string | null>(null);
@@ -36,33 +37,21 @@ export function ChatLinking() {
   const destinationType = selectedType ?? integration?.destinationType ?? "webhook";
   const discordUserId = enteredDiscordUserId ?? integration?.discordUserId ?? "";
 
-  const saveMutation = useMutation({
-    mutationFn: () => api("/api/discord/integration", {
-      method: "PUT",
-      body: { destinationType, webhookUrl, discordUserId },
-    }),
-    onSuccess: async () => {
-      setWebhookUrl("");
-      setMessage("Đã lưu. Thông báo mới sẽ được gửi đến Discord riêng của bạn.");
-      await queryClient.invalidateQueries({ queryKey: chatKeys.identity });
-    },
-  });
-
-  const removeMutation = useMutation({
-    mutationFn: () => api("/api/discord/integration", { method: "DELETE" }),
-    onSuccess: async () => {
-      setWebhookUrl("");
-      setEnteredDiscordUserId("");
-      setSelectedType("webhook");
-      setMessage("Đã tắt thông báo Discord.");
-      await queryClient.invalidateQueries({ queryKey: chatKeys.identity });
-    },
-  });
+  const saveMutation = useSaveDiscordIntegration();
+  const removeMutation = useRemoveDiscordIntegration();
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
     setMessage(null);
-    saveMutation.mutate();
+    saveMutation.mutate(
+      { destinationType, webhookUrl, discordUserId },
+      {
+        onSuccess: () => {
+          setWebhookUrl("");
+          setMessage("Đã lưu. Thông báo mới sẽ được gửi đến Discord riêng của bạn.");
+        },
+      }
+    );
   }
 
   const error = saveMutation.error ?? removeMutation.error ?? query.error;
@@ -145,8 +134,8 @@ export function ChatLinking() {
                 Đích hiện tại: {integration.destinationType === "webhook" ? "webhook riêng (đã ẩn)" : `Discord ID ${integration.discordUserId}`}
               </div>
             )}
-            {message && <p className="text-sm text-emerald-700 dark:text-emerald-400">{message}</p>}
-            {error && <p className="text-sm text-destructive">{String(error)}</p>}
+            {message && <FeedbackBanner tone="success">{message}</FeedbackBanner>}
+            {error && <FeedbackBanner tone="destructive">{getErrorMessage(error)}</FeedbackBanner>}
 
             <div className="flex flex-wrap gap-2">
               <Button type="submit" className="cursor-pointer" disabled={!canSave || saveMutation.isPending}>
@@ -157,7 +146,16 @@ export function ChatLinking() {
                   type="button"
                   variant="outline"
                   className="cursor-pointer"
-                  onClick={() => removeMutation.mutate()}
+                  onClick={() =>
+                    removeMutation.mutate(undefined, {
+                      onSuccess: () => {
+                        setWebhookUrl("");
+                        setEnteredDiscordUserId("");
+                        setSelectedType("webhook");
+                        setMessage("Đã tắt thông báo Discord.");
+                      },
+                    })
+                  }
                   disabled={removeMutation.isPending}
                 >
                   {removeMutation.isPending ? "Đang tắt…" : "Tắt tích hợp"}

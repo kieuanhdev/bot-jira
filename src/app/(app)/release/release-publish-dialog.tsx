@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,13 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import {
   Rocket,
   AlertTriangle,
-  CheckCircle2,
-  GitPullRequest,
-  CheckSquare,
   Loader2,
   ExternalLink,
 } from "lucide-react";
-import type { ReleaseBlocker } from "@/lib/releases/release-readiness";
+import { getErrorMessage } from "@/lib/api-client";
+import { usePublishRelease, ReleasePublishError } from "@/hooks/use-releases";
 
 interface ReleasePublishDialogProps {
   open: boolean;
@@ -45,57 +42,27 @@ export function ReleasePublishDialog({
   taskCount,
   doneCount,
   gitCompleteCount,
-  deliveryReadyCount,
   releaseDate,
   onSuccess,
 }: ReleasePublishDialogProps) {
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [blockers, setBlockers] = useState<ReleaseBlocker[]>([]);
+  const publishMutation = usePublishRelease();
 
-  const handlePublish = async () => {
-    setLoading(true);
-    setErrorMsg(null);
-    setBlockers([]);
+  const errorMsg = publishMutation.error
+    ? getErrorMessage(publishMutation.error)
+    : null;
+  const blockers =
+    publishMutation.error instanceof ReleasePublishError
+      ? publishMutation.error.blockers
+      : [];
 
-    try {
-      const res = await fetch(`/api/releases/${releaseId}/release`, {
-        method: "POST",
-      });
-
-      const data = await res.json();
-
-      if (res.status === 409) {
-        setErrorMsg(
-          data.error === "EMPTY_RELEASE"
-            ? "Phiên bản chưa có task nào được gán trên Jira."
-            : "Chưa thể phát hành do còn task chưa hoàn thành hoặc chưa merge."
-        );
-        setBlockers(data.blockers || []);
-        return;
-      }
-
-      if (res.status === 428) {
-        setErrorMsg(data.error || "Bạn cần cấu hình token Jira cá nhân trong Cài đặt.");
-        return;
-      }
-
-      if (!res.ok) {
-        setErrorMsg(data.detail || data.error || "Không thể phát hành bản này trên Jira.");
-        return;
-      }
-
-      // Success
-      onSuccess();
-      onOpenChange(false);
-    } catch (err) {
-      setErrorMsg((err as Error).message || "Lỗi mạng khi phát hành");
-    } finally {
-      setLoading(false);
-    }
+  const handlePublish = () => {
+    publishMutation.mutate(releaseId, {
+      onSuccess: () => {
+        onSuccess();
+        onOpenChange(false);
+      },
+    });
   };
-
-  const isReady = taskCount > 0 && deliveryReadyCount === taskCount;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -186,17 +153,17 @@ export function ReleasePublishDialog({
             type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={loading}
+            disabled={publishMutation.isPending}
           >
             Hủy
           </Button>
           <Button
             type="button"
             onClick={handlePublish}
-            disabled={loading}
+            disabled={publishMutation.isPending}
             className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
           >
-            {loading ? (
+            {publishMutation.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 Đang xử lý...

@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import { settingsKeys } from "@/lib/query-keys";
+import { useSetUserRole } from "@/hooks/use-settings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,9 +33,9 @@ type Health = {
 };
 
 export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boolean }) {
-  const qc = useQueryClient();
   const [health, setHealth] = useState<Health | null>(null);
   const [checking, setChecking] = useState(false);
+  const setRoleMutation = useSetUserRole();
 
   async function checkHealth() {
     setChecking(true);
@@ -46,11 +45,6 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
     } finally {
       setChecking(false);
     }
-  }
-
-  async function setUserRole(id: string, role: "member" | "admin") {
-    await api(`/api/users/${id}/role`, { method: "PATCH", body: { role } });
-    qc.invalidateQueries({ queryKey: settingsKeys.users });
   }
 
   const serviceKeys = ["db", "jira", "bitbucket", "sentry", "openai", "ollama"] as const;
@@ -127,7 +121,7 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
                     <td>
                       <Select
                         value={u.role}
-                        onValueChange={(v) => setUserRole(u.id, v as "member" | "admin")}
+                        onValueChange={(v) => setRoleMutation.mutate({ id: u.id, role: v as "member" | "admin" })}
                       >
                         <SelectTrigger className="h-8 w-32">
                           <SelectValue />

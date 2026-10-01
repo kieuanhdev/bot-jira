@@ -13,9 +13,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { Unplug } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { releasesKeys } from "@/lib/query-keys";
+import { api, getErrorMessage } from "@/lib/api-client";
+import { useSaveCredentials, useDisconnectCredential } from "@/hooks/use-settings";
 
 type Status = { ok: boolean; detail?: string };
 type Integrations = {
@@ -26,23 +29,11 @@ type Integrations = {
   bitbucketRepoCount?: number;
 };
 
-type SaveResult = {
-  ok: boolean;
-  verify: {
-    jira: { ok: boolean; detail?: string };
-    bitbucket: { ok: boolean; detail?: string };
-  };
-  jiraLinked: boolean;
-  bitbucketLinked: boolean;
-};
-
 export function MyIntegrations() {
   const queryClient = useQueryClient();
   const [data, setData] = useState<Integrations | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  // Empty token fields keep the user's currently stored credentials unchanged.
   const [jiraUser, setJiraUser] = useState("");
   const [jiraToken, setJiraToken] = useState("");
   const [jiraAuth, setJiraAuth] = useState<"Bearer" | "basic">("Bearer");
@@ -51,30 +42,32 @@ export function MyIntegrations() {
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [disconnecting, setDisconnecting] = useState<"jira" | "bitbucket" | null>(null);
 
-  async function disconnect(service: "jira" | "bitbucket") {
+  const saveMutation = useSaveCredentials();
+  const disconnectMutation = useDisconnectCredential();
+
+  function disconnect(service: "jira" | "bitbucket") {
     if (!confirm(`Ngắt kết nối ${service === "jira" ? "Jira" : "Bitbucket"}?`)) return;
     setDisconnecting(service);
     setSaveMsg(null);
-    try {
-      await fetch("/api/me/credentials", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(service === "jira" ? { disconnectJira: true } : { disconnectBitbucket: true }),
-      });
-      if (service === "jira") {
-        queryClient.invalidateQueries({ queryKey: releasesKeys.permissionsAll() });
-      }
-      await load();
-      setSaveMsg({ ok: true, text: `Đã ngắt kết nối ${service === "jira" ? "Jira" : "Bitbucket"}.` });
-    } finally {
-      setDisconnecting(null);
-    }
+    disconnectMutation.mutate(service, {
+      onSuccess: () => {
+        if (service === "jira") {
+          queryClient.invalidateQueries({ queryKey: releasesKeys.permissionsAll() });
+        }
+        load();
+        setSaveMsg({ ok: true, text: `Đã ngắt kết nối ${service === "jira" ? "Jira" : "Bitbucket"}.` });
+      },
+      onError: (err) => {
+        setFormError(getErrorMessage(err, "Ngắt kết nối thất bại"));
+      },
+      onSettled: () => setDisconnecting(null),
+    });
   }
 
   async function load() {
     try {
-      const res = await fetch("/api/me/integrations", { cache: "no-store" });
-      if (res.ok) setData((await res.json()) as Integrations);
+      const d = await api<Integrations>("/api/me/integrations");
+      setData(d);
     } catch {
       /* ignore */
     }
@@ -84,53 +77,50 @@ export function MyIntegrations() {
     load();
   }, []);
 
-  async function save(e: React.FormEvent) {
+  function save(e: React.FormEvent) {
     e.preventDefault();
     if (bbToken && !bbUser.trim()) {
-      setError("Username Bitbucket là bắt buộc khi cập nhật token.");
+      setFormError("Username Bitbucket là bắt buộc khi cập nhật token.");
       return;
     }
-    setError(null);
+    setFormError(null);
     setSaveMsg(null);
-    setSaving(true);
-    try {
-      const res = await fetch("/api/me/credentials", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jiraUser: jiraToken ? jiraUser : null,
-          jiraToken: jiraToken || null,
-          jiraAuth,
-          bitbucketUser: bbToken ? bbUser : null,
-          bitbucketToken: bbToken || null,
-        }),
-      });
-      const result = (await res.json()) as SaveResult & { error?: string };
-      if (!res.ok || !result.ok) {
-        setError(result.error ?? "Lưu thất bại");
-        return;
+    const hadJiraToken = Boolean(jiraToken);
+    saveMutation.mutate(
+      {
+        jiraUser: jiraToken ? jiraUser : null,
+        jiraToken: jiraToken || null,
+        jiraAuth,
+        bitbucketUser: bbToken ? bbUser : null,
+        bitbucketToken: bbToken || null,
+      },
+      {
+        onSuccess: (result) => {
+          if (!result.ok) {
+            setFormError("Lưu thất bại");
+            return;
+          }
+          const j = result.verify.jira;
+          const b = result.verify.bitbucket;
+          const parts: string[] = [];
+          parts.push(j.ok ? `Jira ✓ (${j.detail})` : `Jira ✗ ${j.detail ?? "chưa liên kết"}`);
+          if (b.detail) parts.push(b.ok ? `Bitbucket ✓ (${b.detail})` : `Bitbucket ✗ ${b.detail}`);
+          setSaveMsg({
+            ok: j.ok && (!result.bitbucketLinked || b.ok),
+            text: parts.join(" · "),
+          });
+          if (hadJiraToken) {
+            queryClient.invalidateQueries({ queryKey: releasesKeys.permissionsAll() });
+          }
+          setJiraToken("");
+          setBbToken("");
+          load();
+        },
+        onError: (err) => {
+          setFormError(getErrorMessage(err, "Lưu thất bại"));
+        },
       }
-      const j = result.verify.jira;
-      const b = result.verify.bitbucket;
-      const parts: string[] = [];
-      parts.push(j.ok ? `Jira ✓ (${j.detail})` : `Jira ✗ ${j.detail ?? "chưa liên kết"}`);
-      if (b.detail) parts.push(b.ok ? `Bitbucket ✓ (${b.detail})` : `Bitbucket ✗ ${b.detail}`);
-      setSaveMsg({
-        ok: j.ok && (!result.bitbucketLinked || b.ok),
-        text: parts.join(" · "),
-      });
-      // Clear token fields so the user doesn't re-send them next time.
-      if (jiraToken) {
-        queryClient.invalidateQueries({ queryKey: releasesKeys.permissionsAll() });
-      }
-      setJiraToken("");
-      setBbToken("");
-      await load();
-    } catch {
-      setError("Lỗi kết nối mạng");
-    } finally {
-      setSaving(false);
-    }
+    );
   }
 
   return (
@@ -269,17 +259,13 @@ export function MyIntegrations() {
           ) : null}
         </div>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {formError && <FeedbackBanner tone="destructive">{formError}</FeedbackBanner>}
         {saveMsg && (
-          <p
-            className={`text-sm ${saveMsg.ok ? "text-success" : "text-amber-600"}`}
-          >
-            {saveMsg.text}
-          </p>
+          <FeedbackBanner tone={saveMsg.ok ? "success" : "warning"}>{saveMsg.text}</FeedbackBanner>
         )}
 
-        <Button type="submit" onClick={save} disabled={saving} className="w-fit">
-          {saving ? "Đang lưu & xác minh…" : "Lưu & xác minh"}
+        <Button type="submit" onClick={save} disabled={saveMutation.isPending} className="w-fit">
+          {saveMutation.isPending ? "Đang lưu & xác minh…" : "Lưu & xác minh"}
         </Button>
       </CardContent>
     </Card>

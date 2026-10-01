@@ -15,14 +15,6 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -31,6 +23,12 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/shared/page-header";
+import { FilterBar } from "@/components/shared/filter-bar";
+import { SearchField } from "@/components/shared/search-field";
+import { SegmentedControl } from "@/components/shared/segmented-control";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import {
   CheckCheck,
   CheckCircle2,
@@ -46,7 +44,6 @@ import {
   Search,
   RefreshCw,
   X,
-  TriangleAlert,
   PackageOpen,
   ExternalLink,
   Clock,
@@ -56,234 +53,30 @@ import {
   Filter,
 } from "lucide-react";
 import { parseJiraDuration, formatJiraDuration } from "@/lib/worklogs/schema";
-
-export type BulkFieldValues = {
-  assignee?: string | null;
-  labels?: string[];
-  priority?: string;
-  points?: number | null;
-  estimate?: string;
-  dueDate?: string | null;
-  fixVersions?: string[];
-};
-
-type BulkAction =
-  | {
-      kind: "update-fields";
-      value: BulkFieldValues;
-    }
-  | {
-      kind: "log-work";
-      value: { timeSpent: string; started?: string; comment?: string };
-    };
-
-type PreviewItem = {
-  jiraKey: string;
-  before: Record<string, unknown>;
-  after: Record<string, unknown>;
-  warning: string | null;
-  skipReason: string | null;
-  transitionName: string | null;
-  branchName: string | null;
-  targetField: { id: string; name: string } | null;
-  targetVersionId: string | null;
-  exists: boolean;
-};
-
-type Preview = {
-  operationId: string;
-  type: string;
-  total: number;
-  actionable: number;
-  skipped: number;
-  items: PreviewItem[];
-};
-
-type BulkVersionOption = {
-  name: string;
-  projects: string[];
-  releasedProjects: string[];
-  archivedProjects: string[];
-};
-
-type ProjectFieldOption = {
-  id: "assignee" | "labels" | "priority" | "points" | "estimate" | "dueDate" | "fixVersions";
-  jiraFieldId: string;
-  name: string;
-  available: boolean;
-};
-
-type OpListItem = {
-  id: string;
-  type: string;
-  state: string;
-  total: number;
-  succeeded: number;
-  failed: number;
-  createdAt: string;
-  startedAt: string | null;
-  completedAt: string | null;
-};
-
-type OpDetail = {
-  operation: {
-    id: string;
-    type: string;
-    state: string;
-    total: number;
-    succeeded: number;
-    failed: number;
-    items: {
-      jiraKey: string;
-      status: string;
-      error: string | null;
-      attemptCount: number;
-      before: Record<string, unknown> | null;
-      after: Record<string, unknown> | null;
-    }[];
-  };
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  "update-fields": "Cập nhật nhiều trường",
-  assign: "Gán người phụ trách",
-  "add-labels": "Thêm nhãn",
-  "remove-labels": "Xóa nhãn",
-  "set-points": "Đặt Story/Task Points",
-  "set-estimate": "Đặt Estimate",
-  "log-work": "Ghi Worklog",
-  "set-due-date": "Đặt Due date",
-  "set-priority": "Đặt độ ưu tiên",
-  transition: "Chuyển trạng thái",
-  "add-fix-version": "Thêm Fix Version",
-  "remove-fix-version": "Xóa Fix Version",
-  "add-comment": "Thêm bình luận",
-  "create-branches": "Tạo nhánh Bitbucket",
-};
-
-type PreviewBucket = "changes" | "unchanged" | "warnings" | "blocked";
-
-function itemHasChange(item: PreviewItem): boolean {
-  return Object.keys(item.after).some(
-    (key) => item.after[key] !== undefined && JSON.stringify(item.before[key]) !== JSON.stringify(item.after[key])
-  );
-}
-
-function previewBucket(item: PreviewItem): PreviewBucket {
-  if (item.skipReason === "no_change" || item.skipReason === "branch_exists") return "unchanged";
-  if (item.skipReason) return "blocked";
-  if (["not_in_cache", "no_transition"].includes(item.warning ?? "")) return "blocked";
-  if (item.warning) return "warnings";
-  return itemHasChange(item) ? "changes" : "unchanged";
-}
-
-function stateVariant(state: string) {
-  switch (state) {
-    case "completed":
-      return "success" as const;
-    case "partially_failed":
-      return "warning" as const;
-    case "failed":
-      return "danger" as const;
-    case "running":
-    case "queued":
-      return "info" as const;
-    default:
-      return "secondary" as const;
-  }
-}
-
-function itemVariant(status: string) {
-  switch (status) {
-    case "succeeded":
-      return "success" as const;
-    case "failed":
-      return "danger" as const;
-    case "skipped":
-      return "secondary" as const;
-    default:
-      return "info" as const;
-  }
-}
-
-const SKIP_LABELS: Record<string, string> = {
-  not_in_cache: "không có trong cache",
-  no_change: "không thay đổi (no-op)",
-  no_transition: "không có luồng chuyển trạng thái",
-  auth_error: "lỗi xác thực Jira",
-  rate_limited: "Jira giới hạn tần suất",
-  upstream_unavailable: "Jira không phản hồi",
-  unverified: "chưa thể xác thực",
-  field_unavailable: "trường không khả dụng trên màn hình Jira",
-  points_field_unavailable: "trường điểm không khả dụng trên màn hình Jira",
-  estimate_field_unavailable: "trường estimate không khả dụng trên màn hình Jira",
-  duedate_field_unavailable: "trường due date không khả dụng trên màn hình Jira",
-  fixversions_field_unavailable: "trường fix versions không khả dụng trên màn hình Jira",
-  version_not_found: "version không tồn tại trong dự án",
-  version_unverified: "chưa xác thực được version trong Jira",
-  bulk_field_update_requires_single_project: "tất cả task phải thuộc cùng một dự án",
-};
-
-function warningVariant(warning: string): "warning" | "danger" {
-  return warning === "stale_data" ? "warning" : "danger";
-}
-
-const CATEGORY_DOTS: Record<string, string[]> = {
-  new: ["bg-sky-400", "bg-cyan-500", "bg-blue-400", "bg-indigo-400", "bg-teal-400", "bg-sky-600", "bg-cyan-400", "bg-blue-500"],
-  indeterminate: ["bg-primary", "bg-cyan-500", "bg-sky-600", "bg-blue-500", "bg-indigo-500", "bg-primary/70"],
-  done: ["bg-emerald-500", "bg-green-500", "bg-teal-500", "bg-lime-500", "bg-emerald-400", "bg-green-400"],
-};
-const CATEGORY_TEXT: Record<string, string> = {
-  new: "text-sky-600 dark:text-sky-400",
-  indeterminate: "text-primary",
-  done: "text-emerald-600 dark:text-emerald-400",
-};
-
-function categoryOf(status: string, statusCategory?: string): string {
-  const c = (statusCategory || "").toLowerCase();
-  if (c === "new" || c === "indeterminate" || c === "done") return c;
-  const s = status.toLowerCase();
-  if (/(done|resolved|closed|complete|released)/.test(s)) return "done";
-  if (/(in progress|progress|doing|review|active|deploy)/.test(s)) return "indeterminate";
-  return "new";
-}
-
-function statusDot(status: string, category?: string): string {
-  const cat = category ?? categoryOf(status);
-  const arr = CATEGORY_DOTS[cat] ?? CATEGORY_DOTS.new;
-  let h = 0;
-  const s = status.toLowerCase();
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return arr[h % arr.length];
-}
-
-function formatTime(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-}
-
-function labelList(v: unknown): string {
-  if (Array.isArray(v)) return v.join(", ") || "—";
-  return v ? String(v) : "—";
-}
-
-function formatSecondsToJira(seconds: unknown): string {
-  if (typeof seconds !== "number" || Number.isNaN(seconds) || seconds <= 0) return "—";
-  const hours = Math.floor(seconds / 3600);
-  const days = Math.floor(hours / 8);
-  const remainingHours = hours % 8;
-  const minutes = Math.floor((seconds % 3600) / 60);
-
-  const parts: string[] = [];
-  if (days > 0) parts.push(`${days}d`);
-  if (remainingHours > 0) parts.push(`${remainingHours}h`);
-  if (minutes > 0) parts.push(`${minutes}m`);
-  return parts.join(" ") || `${seconds}s`;
-}
+import {
+  ACTION_LABELS,
+  CATEGORY_TEXT,
+  SKIP_LABELS,
+  type BulkFieldValues,
+  type BulkAction,
+  type Preview,
+  type BulkVersionOption,
+  type ProjectFieldOption,
+  type OpListItem,
+  type PreviewBucket,
+} from "./lib/bulk-types";
+import {
+  previewBucket,
+  stateVariant,
+  warningVariant,
+  categoryOf,
+  statusDot,
+  formatTime,
+  labelList,
+  formatSecondsToJira,
+} from "./lib/bulk-utils";
+import { AssigneeInput } from "./bulk-assignee-input";
+import { OperationDetail } from "./bulk-operation-detail";
 
 function fieldRow(label: string, before: Record<string, unknown> | null, after: Record<string, unknown> | null, key: string) {
   const b = before?.[key];
@@ -859,6 +652,14 @@ export function BulkClient() {
       : `Cập nhật ${preview.actionable} task`
     : "Xác nhận thay đổi";
 
+  const activeFilterCount = [filterStatus, filterAssignee, taskSearch].filter(Boolean).length;
+
+  function resetTaskFilters() {
+    setFilterStatus("");
+    setFilterAssignee("");
+    setTaskSearch("");
+  }
+
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
       {/* Top Navigation Switcher */}
@@ -879,28 +680,24 @@ export function BulkClient() {
         </Link>
       </div>
 
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="mb-1 flex items-center gap-2 text-primary">
-            <ListChecks className="h-5 w-5" aria-hidden="true" />
-            <span className="text-xs font-semibold uppercase tracking-wider">Không gian làm việc Jira</span>
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight">Thao tác hàng loạt theo dự án</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Chọn dự án, lọc task, bật nhiều trường cần cập nhật và kiểm tra bản xem trước trước khi thực thi an toàn.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {filterProject && (
-            <Badge variant="outline" className="px-3 py-1 font-mono text-xs">
-              Dự án: {filterProject}
+      <PageHeader
+        eyebrow="Không gian làm việc Jira"
+        icon={ListChecks}
+        title="Thao tác hàng loạt theo dự án"
+        description="Chọn dự án, lọc task, bật nhiều trường cần cập nhật và kiểm tra bản xem trước trước khi thực thi an toàn."
+        actions={
+          <>
+            {filterProject && (
+              <Badge variant="outline" className="px-3 py-1 font-mono text-xs">
+                Dự án: {filterProject}
+              </Badge>
+            )}
+            <Badge variant={effectiveCount > 0 ? "info" : "secondary"} className="w-fit px-3 py-1">
+              {effectiveCount} task sẽ được cập nhật
             </Badge>
-          )}
-          <Badge variant={effectiveCount > 0 ? "info" : "secondary"} className="w-fit px-3 py-1">
-            {effectiveCount} task sẽ được cập nhật
-          </Badge>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {/* Progress Steps */}
       <ol aria-label="Tiến trình thao tác hàng loạt" className="grid grid-cols-3 overflow-hidden rounded-lg border bg-card">
@@ -1015,92 +812,62 @@ export function BulkClient() {
             <>
               {/* Task filters */}
               <div className="flex flex-col gap-3 border-b p-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="inline-flex w-fit rounded-lg border bg-muted/40 p-1" aria-label="Chế độ chọn">
-                  <button
-                    type="button"
-                    aria-pressed={selectionMode === "pick"}
-                    onClick={() => setSelectionMode("pick")}
-                    className={cn(
-                      "h-8 cursor-pointer rounded-md px-3 text-xs font-medium transition-colors",
-                      selectionMode === "pick"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    Chọn từng task
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={selectionMode === "filter"}
-                    onClick={() => setSelectionMode("filter")}
-                    className={cn(
-                      "h-8 cursor-pointer rounded-md px-3 text-xs font-medium transition-colors",
-                      selectionMode === "filter"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    Tất cả khớp bộ lọc
-                  </button>
-                </div>
-                <div className="relative w-full sm:max-w-xs">
-                  <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  <Input
-                    value={taskSearch}
-                    onChange={(event) => setTaskSearch(event.target.value)}
-                    className="pl-9"
-                    placeholder={`Tìm kiếm trong ${filterProject}…`}
-                    aria-label="Tìm kiếm task"
-                  />
-                </div>
+                <SegmentedControl
+                  aria-label="Chế độ chọn"
+                  tone="neutral"
+                  value={selectionMode}
+                  onChange={setSelectionMode}
+                  items={[
+                    { value: "pick", label: "Chọn từng task" },
+                    { value: "filter", label: "Tất cả khớp bộ lọc" },
+                  ]}
+                />
+                <SearchField
+                  value={taskSearch}
+                  onChange={setTaskSearch}
+                  placeholder={`Tìm kiếm trong ${filterProject}…`}
+                  ariaLabel="Tìm kiếm task"
+                  className="w-full sm:max-w-xs"
+                />
               </div>
 
-              <div className="grid grid-cols-1 gap-2 border-b p-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-muted-foreground">Trạng thái</span>
-                  <Select value={filterStatus || "ALL"} onValueChange={(value) => setFilterStatus(value === "ALL" ? "" : value)}>
-                    <SelectTrigger aria-label="Lọc theo trạng thái"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-                      {statusOptions.map((itemStatus) => <SelectItem key={itemStatus} value={itemStatus}>{itemStatus}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-muted-foreground">Người phụ trách</span>
-                  <Select value={filterAssignee || "ALL"} onValueChange={(value) => setFilterAssignee(value === "ALL" ? "" : value)}>
-                    <SelectTrigger aria-label="Lọc theo người phụ trách"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">Tất cả người phụ trách</SelectItem>
-                      {session?.user?.jiraUsername && (
-                        <SelectItem value="ME">Của tôi (@{session.user.jiraUsername})</SelectItem>
-                      )}
-                      <SelectItem value="UNASSIGNED">Chưa giao (Unassigned)</SelectItem>
-                      {availableAssignees.map((a) => (
-                        <SelectItem key={a} value={a}>{a}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center justify-between sm:col-span-2 pt-1">
-                  <p className="text-[11px] text-muted-foreground">
+              <FilterBar
+                activeCount={activeFilterCount}
+                onReset={resetTaskFilters}
+                className="border-b p-3"
+              >
+                <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground">Trạng thái</span>
+                    <Select value={filterStatus || "ALL"} onValueChange={(value) => setFilterStatus(value === "ALL" ? "" : value)}>
+                      <SelectTrigger aria-label="Lọc theo trạng thái"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
+                        {statusOptions.map((itemStatus) => <SelectItem key={itemStatus} value={itemStatus}>{itemStatus}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground">Người phụ trách</span>
+                    <Select value={filterAssignee || "ALL"} onValueChange={(value) => setFilterAssignee(value === "ALL" ? "" : value)}>
+                      <SelectTrigger aria-label="Lọc theo người phụ trách"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">Tất cả người phụ trách</SelectItem>
+                        {session?.user?.jiraUsername && (
+                          <SelectItem value="ME">Của tôi (@{session.user.jiraUsername})</SelectItem>
+                        )}
+                        <SelectItem value="UNASSIGNED">Chưa giao (Unassigned)</SelectItem>
+                        {availableAssignees.map((a) => (
+                          <SelectItem key={a} value={a}>{a}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="pt-1 text-[11px] text-muted-foreground sm:col-span-2">
                     Có {filteredIssues.length} task khớp bộ lọc trong dự án {filterProject}.
                   </p>
-                  {(filterStatus || filterAssignee || taskSearch) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFilterStatus("");
-                        setFilterAssignee("");
-                        setTaskSearch("");
-                      }}
-                      className="cursor-pointer text-[11px] text-primary hover:underline"
-                    >
-                      Đặt lại bộ lọc
-                    </button>
-                  )}
                 </div>
-              </div>
+              </FilterBar>
 
               {selectionMode === "pick" && (
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 bg-muted/10">
@@ -1521,6 +1288,7 @@ export function BulkClient() {
                 </div>
               )}
 
+
               {enabledFields.has("points") && (
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between">
@@ -1666,10 +1434,7 @@ export function BulkClient() {
               Xem trước {effectiveCount > 0 ? `${effectiveCount} ` : ""}thay đổi
             </Button>
             {previewError && (
-              <div role="alert" className="flex gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>{previewError}</span>
-              </div>
+              <FeedbackBanner tone="destructive">{previewError}</FeedbackBanner>
             )}
           </div>
         </CardContent>
@@ -1692,13 +1457,12 @@ export function BulkClient() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4 p-4 sm:p-5">
             {previewOutdated && (
-              <div role="alert" className="flex flex-col gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300 sm:flex-row sm:items-center sm:justify-between">
-                <span className="flex gap-2">
-                  <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                  Danh sách chọn hoặc thao tác đã thay đổi sau khi tạo bản xem trước này.
-                </span>
-                <Button size="sm" variant="outline" onClick={doPreview}>Làm mới xem trước</Button>
-              </div>
+              <FeedbackBanner
+                tone="warning"
+                action={<Button size="sm" variant="outline" onClick={doPreview}>Làm mới xem trước</Button>}
+              >
+                Danh sách chọn hoặc thao tác đã thay đổi sau khi tạo bản xem trước này.
+              </FeedbackBanner>
             )}
 
             {isLogWorkOp && (
@@ -1886,242 +1650,48 @@ export function BulkClient() {
       </Card>
 
       {/* Confirmation Dialog */}
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {isLogWorkOp ? (
-                <Clock className="h-5 w-5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-              ) : (
-                <CheckCheck className="h-5 w-5 text-primary" aria-hidden="true" />
-              )}
-              {isLogWorkOp ? "Xác nhận ghi Worklog hàng loạt" : "Xác nhận cập nhật nhiều trường"}
-            </DialogTitle>
-            <DialogDescription>
-              {isLogWorkOp
-                ? `Bạn sắp ghi ${worklogDuration} cho mỗi task. Tổng cộng ${formatJiraDuration(
-                    (preview?.actionable ?? 0) * (parseJiraDuration(worklogDuration) ?? 0)
-                  )} sẽ được ghi lên ${preview?.actionable ?? 0} task thuộc dự án ${filterProject}.`
-                : `Bạn sắp cập nhật các trường đã chọn cho ${preview?.actionable ?? 0} task thuộc dự án ${filterProject}.`}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="rounded-md border bg-muted/40 p-3 text-sm">
-            <p className="font-medium">Lưu ý trước khi thực thi</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
-              {isLogWorkOp ? (
-                <>
-                  <li>Mỗi task sẽ được tạo một worklog mới với danh tính Jira của bạn.</li>
-                  <li>Remaining Estimate sẽ được giữ nguyên (adjustEstimate = leave).</li>
-                  <li>Nếu một task gặp lỗi, các task còn lại vẫn tiếp tục được thực hiện.</li>
-                  <li>Dữ liệu chuẩn hóa và thời gian đã ghi sẽ tự động được làm mới khi hoàn tất.</li>
-                </>
-              ) : (
-                <>
-                  <li>Hệ thống sẽ cập nhật từng task trên Jira và cập nhật lại cache.</li>
-                  <li>Nếu một task gặp lỗi, các task còn lại vẫn tiếp tục được thực hiện.</li>
-                  <li>Bạn có thể theo dõi tiến trình trực tiếp bên dưới.</li>
-                </>
-              )}
-            </ul>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setConfirmOpen(false)}>Quay lại</Button>
-            <Button
-              onClick={() => {
-                setConfirmOpen(false);
-                void doConfirm();
-              }}
-              disabled={confirming || (preview?.actionable ?? 0) === 0}
-              className={cn(isLogWorkOp && "bg-teal-600 hover:bg-teal-700 text-white")}
-            >
-              {confirmLabel}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-/**
- * Autocomplete text input for a Jira assignee username. Free-typed values are
- * allowed (the cache may not contain every user), but known assignees from the
- * project scope are offered as suggestions to avoid typos.
- */
-function AssigneeInput({
-  value,
-  onChange,
-  options,
-  disabled = false,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: string[];
-  disabled?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [highlight, setHighlight] = useState(0);
-  const q = value.trim().toLowerCase();
-  const matches = (q ? options.filter((o) => o.toLowerCase().includes(q)) : options).slice(0, 8);
-
-  function pick(opt: string) {
-    onChange(opt);
-    setOpen(false);
-  }
-
-  return (
-    <div className="relative">
-      <Input
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded={open}
-        aria-controls="bulk-assignee-options"
-        value={value}
-        disabled={disabled}
-        placeholder="jira username"
-        onChange={(e) => {
-          onChange(e.target.value);
-          setOpen(true);
-          setHighlight(0);
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        className="sm:max-w-lg"
+        icon={isLogWorkOp ? Clock : CheckCheck}
+        title={isLogWorkOp ? "Xác nhận ghi Worklog hàng loạt" : "Xác nhận cập nhật nhiều trường"}
+        description={
+          isLogWorkOp
+            ? `Bạn sắp ghi ${worklogDuration} cho mỗi task. Tổng cộng ${formatJiraDuration(
+                (preview?.actionable ?? 0) * (parseJiraDuration(worklogDuration) ?? 0)
+              )} sẽ được ghi lên ${preview?.actionable ?? 0} task thuộc dự án ${filterProject}.`
+            : `Bạn sắp cập nhật các trường đã chọn cho ${preview?.actionable ?? 0} task thuộc dự án ${filterProject}.`
+        }
+        onConfirm={() => {
+          setConfirmOpen(false);
+          void doConfirm();
         }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
-        onKeyDown={(e) => {
-          if (!open || matches.length === 0) return;
-          if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setHighlight((h) => (h + 1) % matches.length);
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setHighlight((h) => (h - 1 + matches.length) % matches.length);
-          } else if (e.key === "Enter") {
-            e.preventDefault();
-            pick(matches[highlight]);
-          } else if (e.key === "Escape") {
-            setOpen(false);
-          }
-        }}
-      />
-      {open && matches.length > 0 && (
-        <ul id="bulk-assignee-options" role="listbox" className="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded-md border bg-popover shadow-md">
-          {matches.map((opt, i) => (
-            <li key={opt}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={i === highlight}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  pick(opt);
-                }}
-                className={cn(
-                  "w-full cursor-pointer px-3 py-1.5 text-left text-sm",
-                  i === highlight ? "bg-accent text-accent-foreground" : "hover:bg-accent/60"
-                )}
-              >
-                {opt}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: string }) {
-  const qc = useQueryClient();
-  const searchParams = useSearchParams();
-  const returnTo = searchParams?.get("returnTo");
-  const returnToTarget =
-    returnTo === "standardization"
-      ? "/stale?view=my-work&tab=standardization"
-      : returnTo?.startsWith("/")
-        ? returnTo
-        : null;
-
-  const { data, isFetching, refetch } = useQuery({
-    queryKey: bulkKeys.op(id),
-    queryFn: () => api<OpDetail>(`/api/bulk/operations/${id}`),
-    refetchInterval: (query) =>
-      ["running", "queued"].includes(query.state.data?.operation.state ?? "") ? 2000 : false,
-  });
-  const op = data?.operation;
-
-  const opState = op?.state;
-  useEffect(() => {
-    if (opState && ["completed", "partially_failed", "failed", "cancelled"].includes(opState)) {
-      qc.invalidateQueries({ queryKey: issuesKeys.all });
-      qc.invalidateQueries({ queryKey: staleKeys.all });
-    }
-  }, [opState, qc]);
-
-  if (!op) {
-    return (
-      <div className="mb-3 flex items-center gap-2 rounded-md border border-border p-3 text-sm">
-        {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-        Đang tải chi tiết thao tác…
-      </div>
-    );
-  }
-
-  const done = op.succeeded + op.failed;
-  const pct = op.total > 0 ? Math.round((done / op.total) * 100) : 0;
-  const isTerminal = ["completed", "partially_failed", "failed", "cancelled"].includes(op.state);
-
-  return (
-    <div className="mb-4 rounded-md border border-border p-3">
-      <div className="mb-2 flex items-center gap-2">
-        <Badge variant={stateVariant(op.state)}>{op.state.replace("_", " ")}</Badge>
-        <span className="text-sm font-medium">{ACTION_LABELS[op.type] ?? op.type}</span>
-        <span className="ml-auto text-xs text-muted-foreground">
-          {done}/{op.total} hoàn thành
-        </span>
-      </div>
-      <div className="mb-3 h-2 w-full overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full bg-primary transition-all duration-300"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto text-sm">
-        {op.items.map((it) => (
-          <li key={it.jiraKey} className="flex items-center gap-2">
-            <Badge variant={itemVariant(it.status)}>{it.status}</Badge>
-            {jiraBaseUrl ? (
-              <a
-                href={`${jiraBaseUrl}/browse/${it.jiraKey}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group/link inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline"
-                title={`Mở ${it.jiraKey} trên Jira`}
-              >
-                {it.jiraKey}
-                <ExternalLink className="h-2.5 w-2.5 opacity-0 transition-opacity group-hover/link:opacity-100" aria-hidden />
-              </a>
+        confirmLabel={confirmLabel}
+        cancelLabel="Quay lại"
+        pending={confirming}
+        disabled={(preview?.actionable ?? 0) === 0}
+      >
+        <div className="rounded-md border bg-muted/40 p-3 text-sm">
+          <p className="font-medium">Lưu ý trước khi thực thi</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+            {isLogWorkOp ? (
+              <>
+                <li>Mỗi task sẽ được tạo một worklog mới với danh tính Jira của bạn.</li>
+                <li>Remaining Estimate sẽ được giữ nguyên (adjustEstimate = leave).</li>
+                <li>Nếu một task gặp lỗi, các task còn lại vẫn tiếp tục được thực hiện.</li>
+                <li>Dữ liệu chuẩn hóa và thời gian đã ghi sẽ tự động được làm mới khi hoàn tất.</li>
+              </>
             ) : (
-              <span className="font-mono text-xs">{it.jiraKey}</span>
+              <>
+                <li>Hệ thống sẽ cập nhật từng task trên Jira và cập nhật lại cache.</li>
+                <li>Nếu một task gặp lỗi, các task còn lại vẫn tiếp tục được thực hiện.</li>
+                <li>Bạn có thể theo dõi tiến trình trực tiếp bên dưới.</li>
+              </>
             )}
-            {it.attemptCount > 1 && <span className="text-[11px] text-muted-foreground">({it.attemptCount} lần thử)</span>}
-            {it.error && <span className="truncate text-xs text-destructive">{it.error}</span>}
-          </li>
-        ))}
-      </ul>
-      <div className="mt-3 flex items-center justify-between border-t pt-2.5">
-        {returnToTarget && isTerminal ? (
-          <Button asChild size="sm" variant="default" className="cursor-pointer gap-1.5 text-xs">
-            <Link href={returnToTarget}>
-              <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-              {returnTo === "standardization" ? "Quay lại danh sách chuẩn hóa" : "Quay lại"}
-            </Link>
-          </Button>
-        ) : (
-          <div />
-        )}
-        <Button size="sm" variant="ghost" onClick={() => refetch()} disabled={isFetching}>
-          <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} aria-hidden /> Làm mới
-        </Button>
-      </div>
+          </ul>
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }

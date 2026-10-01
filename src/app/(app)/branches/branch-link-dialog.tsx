@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, Link2, Unlink } from "lucide-react";
+import { getErrorMessage } from "@/lib/api-client";
+import { useBranchLink } from "@/hooks/use-branches";
 import type { BranchRowItem } from "./branch-types";
 
 type BranchLinkDialogProps = {
@@ -30,36 +32,28 @@ export function BranchLinkDialog({
 }: BranchLinkDialogProps) {
   const [jiraKeyInput, setJiraKeyInput] = useState(branch?.suggestedJiraKey ?? branch?.jiraKey ?? "");
   const [reasonInput, setReasonInput] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const linkMutation = useBranchLink();
 
   if (!branch) return null;
 
-  const handleSave = async (unlink = false) => {
-    setSubmitting(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/branches/${branch.id}/link`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jiraKey: unlink ? null : jiraKeyInput.trim().toUpperCase() || null,
-          reason: reasonInput.trim() || undefined,
-        }),
-      });
+  const error = linkMutation.error ? getErrorMessage(linkMutation.error) : null;
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error ?? "Failed to update link");
+  const handleSave = (unlink = false) => {
+    linkMutation.mutate(
+      {
+        branchId: branch.id,
+        body: unlink
+          ? { jiraKey: null }
+          : { jiraKey: jiraKeyInput.trim().toUpperCase() || null, reason: reasonInput.trim() || undefined },
+      },
+      {
+        onSuccess: () => {
+          onSuccess();
+          onOpenChange(false);
+          linkMutation.reset();
+        },
       }
-
-      onSuccess();
-      onOpenChange(false);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSubmitting(false);
-    }
+    );
   };
 
   return (
@@ -93,7 +87,7 @@ export function BranchLinkDialog({
               onChange={(e) => setJiraKeyInput(e.target.value.toUpperCase())}
               placeholder="Ví dụ: EPM-3395"
               className="font-mono text-sm uppercase"
-              disabled={submitting}
+              disabled={linkMutation.isPending}
             />
             <span className="text-[11px] text-muted-foreground">
               Mã task phải tồn tại trong bộ nhớ đệm Jira.
@@ -110,7 +104,7 @@ export function BranchLinkDialog({
               onChange={(e) => setReasonInput(e.target.value)}
               placeholder="Ví dụ: điều chỉnh liên kết thủ công"
               className="text-xs"
-              disabled={submitting}
+              disabled={linkMutation.isPending}
             />
           </div>
         </div>
@@ -121,7 +115,7 @@ export function BranchLinkDialog({
               type="button"
               variant="outline"
               size="sm"
-              disabled={submitting}
+              disabled={linkMutation.isPending}
               onClick={() => handleSave(true)}
               className="border-red-500/30 text-red-600 hover:bg-red-500/10 dark:text-red-400"
             >
@@ -136,7 +130,7 @@ export function BranchLinkDialog({
               type="button"
               variant="ghost"
               size="sm"
-              disabled={submitting}
+              disabled={linkMutation.isPending}
               onClick={() => onOpenChange(false)}
             >
               Hủy
@@ -144,10 +138,10 @@ export function BranchLinkDialog({
             <Button
               type="button"
               size="sm"
-              disabled={submitting || !jiraKeyInput.trim()}
+              disabled={linkMutation.isPending || !jiraKeyInput.trim()}
               onClick={() => handleSave(false)}
             >
-              {submitting ? "Đang lưu..." : "Lưu liên kết"}
+              {linkMutation.isPending ? "Đang lưu..." : "Lưu liên kết"}
             </Button>
           </div>
         </DialogFooter>

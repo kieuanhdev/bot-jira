@@ -45,8 +45,8 @@ export function FreshnessBanner() {
       className={
         "flex items-center gap-2 border-b px-4 py-2 text-sm " +
         (down
-          ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-300/40"
-          : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-300/40")
+          ? "bg-destructive/10 text-destructive border-destructive/30"
+          : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30")
       }
       role="status"
     >
