@@ -263,6 +263,7 @@ export function BulkClient() {
   const [label, setLabel] = useState("");
   const [clearLabels, setClearLabels] = useState(false);
   const [priority, setPriority] = useState("");
+  const [issueType, setIssueType] = useState("");
   const [points, setPoints] = useState("");
   const [clearPoints, setClearPoints] = useState(false);
   const [estimate, setEstimate] = useState("");
@@ -364,6 +365,7 @@ export function BulkClient() {
     setLabel("");
     setClearLabels(false);
     setPriority("");
+    setIssueType("");
     setPoints("");
     setClearPoints(false);
     setEstimate("");
@@ -522,6 +524,10 @@ export function BulkClient() {
     if (enabledFields.has("priority")) {
       if (!priority) return null;
       value.priority = priority;
+    }
+    if (enabledFields.has("issueType")) {
+      if (!issueType) return null;
+      value.issueType = issueType;
     }
     if (enabledFields.has("points")) {
       if (clearPoints) {
@@ -1153,6 +1159,7 @@ export function BulkClient() {
                 { id: "assignee", label: "Người phụ trách" },
                 { id: "labels", label: "Nhãn" },
                 { id: "priority", label: "Độ ưu tiên" },
+                { id: "issueType", label: "Type" },
                 { id: "points", label: "Story/Task Points" },
                 { id: "estimate", label: "Original Estimate" },
                 { id: "dueDate", label: "Due date" },
@@ -1288,6 +1295,20 @@ export function BulkClient() {
                 </div>
               )}
 
+              {enabledFields.has("issueType") && (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs font-semibold text-foreground">Type</span>
+                  <Select value={issueType} onValueChange={(value) => { setIssueType(value === "NONE" ? "" : value); resetPreview(); }}>
+                    <SelectTrigger><SelectValue placeholder="Chọn Type" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NONE">— Chưa chọn —</SelectItem>
+                      {(availableFieldMap.get("issueType")?.options ?? []).map((option) => (
+                        <SelectItem key={option} value={option}>{option}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {enabledFields.has("points") && (
                 <div className="flex flex-col gap-1.5">
@@ -1549,6 +1570,7 @@ export function BulkClient() {
                     <div className="flex flex-col gap-1 border-t pt-2 mt-1">
                       {fieldRow("Người phụ trách", item.before, item.after, "assignee")}
                       {fieldRow("Độ ưu tiên", item.before, item.after, "priority")}
+                      {fieldRow("Type", item.before, item.after, "issueType")}
                       {fieldRow("Story/Task Points", item.before, item.after, "points")}
                       {fieldRow("Original Estimate", item.before, item.after, "estimateSeconds")}
                       {fieldRow("Due date", item.before, item.after, "dueDate")}

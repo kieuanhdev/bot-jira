@@ -34,6 +34,7 @@ export type BulkFieldValues = {
   assignee?: string | null;
   labels?: string[];
   priority?: string;
+  issueType?: string;
   points?: number | null;
   estimate?: string;
   dueDate?: string | null;
@@ -83,6 +84,7 @@ type IssueRow = {
   fixVersionIds: string[];
   fixVersionNames: string[];
   priority: string;
+  type: string;
   points: number | null;
   dueDate?: Date | null;
   originalEstimateSeconds?: number | null;
@@ -248,6 +250,10 @@ export function validateBulkRequest(body: unknown): ValidationResult {
           if ("priority" in v) {
             if (isNonEmptyString(v.priority) && v.priority.length <= MAX_STRING_FIELD) fields.priority = v.priority.trim();
             else errors.push("update-fields.value.priority must be a non-empty string");
+          }
+          if ("issueType" in v) {
+            if (isNonEmptyString(v.issueType) && v.issueType.length <= MAX_STRING_FIELD) fields.issueType = v.issueType.trim();
+            else errors.push("update-fields.value.issueType must be a non-empty string");
           }
           if ("points" in v) {
             if (v.points === null || (typeof v.points === "number" && Number.isInteger(v.points) && v.points >= 0)) fields.points = v.points as number | null;
@@ -540,6 +546,7 @@ export function classifyAction(
           fields.labels.slice().sort().join(",") === issue.labels.slice().sort().join(",")
         )) &&
         (fields.priority === undefined || fields.priority === issue.priority) &&
+        (fields.issueType === undefined || fields.issueType === issue.type) &&
         (fields.points === undefined || fields.points === issue.points) &&
         (fields.dueDate === undefined || fields.dueDate === (issue.dueDate?.toISOString().slice(0, 10) ?? null)) &&
         (fields.estimate === undefined) &&
@@ -609,6 +616,7 @@ export function computePreview(
     assignee: issue.assigneeJira,
     labels: issue.labels,
     priority: issue.priority,
+    issueType: issue.type,
     points: issue.points,
     estimateSeconds: issue.originalEstimateSeconds,
     worklogSeconds: issue.timeSpentSeconds,
@@ -626,6 +634,7 @@ export function computePreview(
       if (fields.assignee !== undefined) after.assignee = fields.assignee;
       if (fields.labels !== undefined) after.labels = fields.labels;
       if (fields.priority !== undefined) after.priority = fields.priority;
+      if (fields.issueType !== undefined) after.issueType = fields.issueType;
       if (fields.points !== undefined) after.points = fields.points;
       if (fields.estimate !== undefined) after.estimateSeconds = fields.estimate;
       if (fields.dueDate !== undefined) after.dueDate = fields.dueDate;
@@ -689,7 +698,7 @@ export function computePreview(
  */
 type TransitionGetter = {
   getTransitions: (key: string) => Promise<{ to?: { name?: string } }[]>;
-  getEditMeta?: (key: string) => Promise<{ fields: Record<string, { name: string }> }>;
+  getEditMeta?: (key: string) => Promise<{ fields: Record<string, { name: string; allowedValues?: { id?: string; name?: string }[] }> }>;
   resolvePointsField?: (key: string) => Promise<{ id: string; name: string } | null>;
   resolveVersionId?: (projectKey: string, name: string) => Promise<string | null>;
 };
@@ -824,10 +833,18 @@ export async function previewBulk(
       if (
         fieldAvailable !== false &&
         jira.getEditMeta &&
-        (value.estimate !== undefined || value.dueDate !== undefined || value.fixVersions !== undefined)
+        (value.issueType !== undefined || value.estimate !== undefined || value.dueDate !== undefined || value.fixVersions !== undefined)
       ) {
         try {
           const meta = await jira.getEditMeta(key);
+          if (value.issueType !== undefined) {
+            const issueTypeField = meta.fields?.issuetype;
+            const allowed = issueTypeField?.allowedValues;
+            if (!issueTypeField || (allowed?.length && !allowed.some((type) => type.name === value.issueType))) {
+              fieldAvailable = false;
+              fieldSkipReason = "field_unavailable";
+            }
+          }
           if (value.estimate !== undefined && !meta.fields?.timetracking) {
             fieldAvailable = false;
             fieldSkipReason = "field_unavailable";
@@ -939,6 +956,7 @@ export async function previewBulk(
       fixVersionIds: issue.fixVersionIds,
       fixVersionNames: issue.fixVersionNames,
       priority: issue.priority,
+      type: issue.type,
       points: issue.points,
       dueDate: issue.dueDate,
       originalEstimateSeconds:
@@ -1163,12 +1181,13 @@ async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
       case "update-fields": {
         const issue = await getIssue(jira, key);
         const patch: {
-          assignee?: string | null; labels?: string[]; priority?: string; points?: number | null;
+          assignee?: string | null; labels?: string[]; priority?: string; issueType?: string; points?: number | null;
           fixVersions?: string[]; dueDate?: string | null; originalEstimate?: string;
         } = {};
         if (a.value.assignee !== undefined) patch.assignee = a.value.assignee;
         if (a.value.labels !== undefined) patch.labels = a.value.labels;
         if (a.value.priority !== undefined) patch.priority = a.value.priority;
+        if (a.value.issueType !== undefined) patch.issueType = a.value.issueType;
         if (a.value.points !== undefined) patch.points = a.value.points;
         if (a.value.dueDate !== undefined) patch.dueDate = a.value.dueDate;
         if (a.value.estimate !== undefined) patch.originalEstimate = a.value.estimate;

@@ -56,6 +56,7 @@ const baseIssue = {
   fixVersionIds: ["1"],
   fixVersionNames: ["1.0"],
   priority: "Medium",
+  type: "Task",
   points: 3,
   updatedAt: new Date(),
   lastSyncedAt: new Date(), // fresh, not stale
@@ -274,6 +275,7 @@ describe("validateBulkRequest (BULK-004)", () => {
           assignee: "dev_user",
           labels: ["frontend", "release-1.4"],
           priority: "High",
+          issueType: "Bug",
           points: 5,
           dueDate: "2026-10-15",
           fixVersions: ["1.4.0", "1.5.0"],

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   issueCache: vi.fn(),
   getEditMeta: vi.fn(),
   resolvePointsField: vi.fn(),
+  getCreateMetaIssueTypes: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getSession: mocks.session }));
@@ -25,6 +26,7 @@ vi.mock("@/lib/jira/client", () => ({
   jiraWith: () => ({
     getEditMeta: mocks.getEditMeta,
     resolvePointsField: mocks.resolvePointsField,
+    getCreateMetaIssueTypes: mocks.getCreateMetaIssueTypes,
   }),
 }));
 
@@ -41,12 +43,14 @@ describe("GET /api/bulk/fields", () => {
         assignee: { name: "Assignee" },
         labels: { name: "Labels" },
         priority: { name: "Priority" },
+        issuetype: { name: "Issue Type" },
         timetracking: { name: "Time Tracking" },
         duedate: { name: "Due Date" },
         fixVersions: { name: "Fix Version/s" },
       },
     });
     mocks.resolvePointsField.mockResolvedValue({ id: "customfield_10502", name: "Task Points" });
+    mocks.getCreateMetaIssueTypes.mockResolvedValue({ values: [{ id: "1", name: "Task" }, { id: "2", name: "Bug" }] });
   });
 
   it("returns editable fields metadata for the selected project", async () => {
@@ -62,6 +66,7 @@ describe("GET /api/bulk/fields", () => {
         expect.objectContaining({ id: "assignee", available: true }),
         expect.objectContaining({ id: "labels", available: true }),
         expect.objectContaining({ id: "priority", available: true }),
+        expect.objectContaining({ id: "issueType", available: true, options: ["Task", "Bug"] }),
         expect.objectContaining({ id: "points", available: true, jiraFieldId: "customfield_10502" }),
         expect.objectContaining({ id: "estimate", available: true, jiraFieldId: "timetracking" }),
         expect.objectContaining({ id: "dueDate", available: true, jiraFieldId: "duedate" }),
@@ -88,6 +93,7 @@ describe("GET /api/bulk/fields", () => {
         expect.objectContaining({ id: "assignee", available: true }),
         expect.objectContaining({ id: "labels", available: true }),
         expect.objectContaining({ id: "priority", available: false }),
+        expect.objectContaining({ id: "issueType", available: false }),
         expect.objectContaining({ id: "points", available: false }),
         expect.objectContaining({ id: "estimate", available: false }),
         expect.objectContaining({ id: "dueDate", available: false }),

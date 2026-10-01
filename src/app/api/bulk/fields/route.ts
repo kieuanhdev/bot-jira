@@ -6,10 +6,11 @@ import { jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 
 export type BulkFieldOption = {
-  id: "assignee" | "labels" | "priority" | "points" | "estimate" | "dueDate" | "fixVersions";
+  id: "assignee" | "labels" | "priority" | "issueType" | "points" | "estimate" | "dueDate" | "fixVersions";
   jiraFieldId: string;
   name: string;
   available: boolean;
+  options?: string[];
 };
 
 /**
@@ -69,6 +70,7 @@ export async function GET(req: Request) {
     { id: "assignee", jiraFieldId: "assignee", name: "Người phụ trách", available: true },
     { id: "labels", jiraFieldId: "labels", name: "Nhãn", available: true },
     { id: "priority", jiraFieldId: "priority", name: "Độ ưu tiên", available: true },
+    { id: "issueType", jiraFieldId: "issuetype", name: "Type", available: true },
     { id: "points", jiraFieldId: "points", name: "Story/Task Points", available: true },
     { id: "estimate", jiraFieldId: "timetracking", name: "Original Estimate", available: true },
     { id: "dueDate", jiraFieldId: "duedate", name: "Due date", available: true },
@@ -85,9 +87,10 @@ export async function GET(req: Request) {
   }
 
   try {
-    const [editMeta, pointsField] = await Promise.all([
+    const [editMeta, pointsField, issueTypes] = await Promise.all([
       client.getEditMeta(sampleKey).catch(() => null),
       client.resolvePointsField(sampleKey).catch(() => null),
+      client.getCreateMetaIssueTypes(project).catch(() => null),
     ]);
 
     if (!editMeta?.fields) {
@@ -104,6 +107,11 @@ export async function GET(req: Request) {
       { id: "assignee", jiraFieldId: "assignee", name: m.assignee?.name ?? "Người phụ trách", available: Boolean(m.assignee) },
       { id: "labels", jiraFieldId: "labels", name: m.labels?.name ?? "Nhãn", available: Boolean(m.labels) },
       { id: "priority", jiraFieldId: "priority", name: m.priority?.name ?? "Độ ưu tiên", available: Boolean(m.priority) },
+      {
+        id: "issueType", jiraFieldId: "issuetype", name: m.issuetype?.name ?? "Type",
+        available: Boolean(m.issuetype),
+        options: (issueTypes?.values ?? []).map((type) => type.name).filter((name): name is string => Boolean(name)),
+      },
       { id: "points", jiraFieldId: pointsField?.id ?? "points", name: pointsField?.name ?? "Story/Task Points", available: Boolean(pointsField) },
       { id: "estimate", jiraFieldId: "timetracking", name: m.timetracking?.name ?? "Original Estimate", available: Boolean(m.timetracking) },
       { id: "dueDate", jiraFieldId: "duedate", name: m.duedate?.name ?? "Due date", available: Boolean(m.duedate) },

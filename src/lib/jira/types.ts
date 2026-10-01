@@ -105,6 +105,7 @@ export type JiraEditField = {
   required?: boolean;
   operations?: string[];
   schema?: JiraFieldDefinition["schema"];
+  allowedValues?: { id?: string; name?: string; subtask?: boolean }[];
 };
 
 export type JiraEditMeta = {

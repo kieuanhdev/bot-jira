@@ -459,6 +459,7 @@ export function jiraWith(auth?: JiraAuth) {
         assignee?: string | null;
         labels?: string[];
         priority?: string;
+        issueType?: string;
         points?: number | null;
         fixVersions?: string[];
         dueDate?: string | null;
@@ -472,6 +473,7 @@ export function jiraWith(auth?: JiraAuth) {
         fields.assignee = patch.assignee === null ? null : { name: patch.assignee };
       if (patch.labels !== undefined) fields.labels = patch.labels;
       if (patch.priority !== undefined) fields.priority = { name: patch.priority };
+      if (patch.issueType !== undefined) fields.issuetype = { name: patch.issueType };
       if (patch.points !== undefined) {
         const pointField = await (async () => {
           const meta = await request<JiraEditMeta>(

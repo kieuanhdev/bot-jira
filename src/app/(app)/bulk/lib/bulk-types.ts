@@ -2,6 +2,7 @@ export type BulkFieldValues = {
   assignee?: string | null;
   labels?: string[];
   priority?: string;
+  issueType?: string;
   points?: number | null;
   estimate?: string;
   dueDate?: string | null;
@@ -48,7 +49,7 @@ export type BulkVersionOption = {
 };
 
 export type ProjectFieldOption = {
-  id: "assignee" | "labels" | "priority" | "points" | "estimate" | "dueDate" | "fixVersions";
+  id: "assignee" | "labels" | "priority" | "issueType" | "points" | "estimate" | "dueDate" | "fixVersions";
   jiraFieldId: string;
   name: string;
   available: boolean;
