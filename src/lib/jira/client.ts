@@ -31,6 +31,9 @@ const BASE_ISSUE_FIELDS = [
   "description",
   "status",
   "statuscategorychangedate",
+  "resolutiondate",
+  "customfield_10706", // Done At (Jira SDS custom field)
+  "customfield_10709", // Work Start At (Jira SDS custom field)
   "assignee",
   "labels",
   "fixVersions",

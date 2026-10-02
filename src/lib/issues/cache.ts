@@ -27,7 +27,11 @@ export function issueCacheData(issue: JiraIssue) {
     status: f.status?.name ?? "",
     statusId: f.status?.id ?? null,
     statusCategory: f.status?.statusCategory?.key?.toLowerCase() ?? "unknown",
-    statusChangedAt: parseJiraDate(f.statuscategorychangedate) ?? null,
+    statusChangedAt:
+      parseJiraDate((f as Record<string, unknown>).customfield_10706 as string | undefined) ??
+      parseJiraDate((f as Record<string, unknown>).resolutiondate as string | undefined) ??
+      parseJiraDate(f.statuscategorychangedate) ??
+      null,
     assigneeJira: f.assignee?.name ?? null,
     labels: f.labels ?? [],
     fixVersionIds: fixVersions.flatMap((v) => (v.id ? [v.id] : [])),

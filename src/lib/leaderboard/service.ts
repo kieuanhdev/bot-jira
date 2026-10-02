@@ -114,6 +114,7 @@ export async function getLeaderboardData(options: GetLeaderboardOptions): Promis
       points: true,
       priority: true,
       projectKey: true,
+      raw: true,
     },
     orderBy: { updatedAt: "desc" },
     take: 5000,
@@ -185,7 +186,11 @@ export async function getLeaderboardData(options: GetLeaderboardOptions): Promis
     }
 
     const isDone = issue.statusCategory.toLowerCase() === "done";
-    const completionDate = issue.statusChangedAt ?? issue.updatedAt ?? issue.createdAt;
+    const raw = issue.raw as Record<string, unknown> | null;
+    const rawDoneAt = raw && typeof raw.customfield_10706 === "string" ? new Date(raw.customfield_10706) : null;
+    const rawResolution = raw && typeof raw.resolutiondate === "string" ? new Date(raw.resolutiondate) : null;
+    // Ưu tiên Done At (customfield_10706) -> resolutiondate -> statusChangedAt -> updatedAt -> createdAt
+    const completionDate = rawDoneAt ?? rawResolution ?? issue.statusChangedAt ?? issue.updatedAt ?? issue.createdAt;
 
     const taskItem: LeaderboardTaskItem = {
       jiraKey: issue.jiraKey,
@@ -213,8 +218,9 @@ export async function getLeaderboardData(options: GetLeaderboardOptions): Promis
         member.tasks.push(taskItem);
       }
     } else {
-      // For active/in-progress tasks, attribute them to current period
-      if (period.isCurrentPeriod) {
+      // Khi xem theo kỳ có mốc thời gian (tháng, quý, năm): CHỈ tính các task đã hoàn thành trong kỳ đó.
+      // Chỉ khi xem "all" (toàn bộ thời gian), mới ghi nhận các task đang làm dở (inProgressPoints) để tham khảo.
+      if (timeframe === "all") {
         member.inProgressPoints += pts;
         member.inProgressTasks += 1;
         member.tasks.push(taskItem);
@@ -228,7 +234,7 @@ export async function getLeaderboardData(options: GetLeaderboardOptions): Promis
   // Filter out users who have 0 activity in all-time/specific periods if there are many,
   // but keep anyone with points or tasks, and keep current user
   const activeMembers = allMembersList.filter(
-    (m) => m.completedPoints > 0 || m.inProgressPoints > 0 || m.isCurrentUser
+    (m) => m.completedPoints > 0 || (timeframe === "all" && m.inProgressPoints > 0) || m.isCurrentUser
   );
 
   activeMembers.sort((a, b) => {

@@ -76,3 +76,66 @@ describe("Leaderboard Period Bounds", () => {
     expect(all.endDate).toBeNull();
   });
 });
+
+describe("Leaderboard Monthly Task Completion Logic", () => {
+  const period = computePeriodBounds("month", 2026, 9); // Tháng 9/2026
+
+  function shouldIncludeTaskInPeriod(
+    statusCategory: string,
+    statusChangedAt: Date | null,
+    rawResolutionDate: string | null,
+    updatedAt: Date | null,
+    createdAt: Date | null,
+    timeframe: "month" | "all"
+  ): boolean {
+    const isDone = statusCategory.toLowerCase() === "done";
+    const rawRes = rawResolutionDate ? new Date(rawResolutionDate) : null;
+    const completionDate = statusChangedAt ?? rawRes ?? updatedAt ?? createdAt;
+
+    if (isDone) {
+      if (!period.startDate || !period.endDate) return true;
+      return Boolean(
+        completionDate &&
+        completionDate.getTime() >= period.startDate.getTime() &&
+        completionDate.getTime() <= period.endDate.getTime()
+      );
+    }
+
+    // In-progress tasks are only tracked in "all" timeframe, never in month-specific leaderboard
+    return timeframe === "all";
+  }
+
+  it("includes task completed within target month", () => {
+    const doneInSep = new Date("2026-09-15T10:00:00.000Z");
+    const included = shouldIncludeTaskInPeriod("done", doneInSep, null, doneInSep, doneInSep, "month");
+    expect(included).toBe(true);
+  });
+
+  it("excludes task completed in previous month even if updated in current month", () => {
+    const doneInAug = new Date("2026-08-25T10:00:00.000Z");
+    const updatedInSep = new Date("2026-09-05T10:00:00.000Z"); // Commented or re-synced in Sep
+    const included = shouldIncludeTaskInPeriod("done", doneInAug, null, updatedInSep, doneInAug, "month");
+    expect(included).toBe(false);
+  });
+
+  it("excludes in-progress task from month leaderboard", () => {
+    const statusChangedInSep = new Date("2026-09-10T10:00:00.000Z");
+    const included = shouldIncludeTaskInPeriod(
+      "indeterminate",
+      statusChangedInSep,
+      null,
+      statusChangedInSep,
+      statusChangedInSep,
+      "month"
+    );
+    expect(included).toBe(false);
+  });
+
+  it("prioritizes resolutiondate when statusChangedAt is null", () => {
+    const updatedInOct = new Date("2026-10-01T10:00:00.000Z");
+    const resolvedInSep = "2026-09-20T10:00:00.000Z";
+    const included = shouldIncludeTaskInPeriod("done", null, resolvedInSep, updatedInOct, null, "month");
+    expect(included).toBe(true);
+  });
+});
+
