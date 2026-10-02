@@ -36,8 +36,27 @@ async function main() {
       validJiraKeys: validKeys,
     });
 
-    if (resolved.jiraKey && resolved.linkConfidence === 95) {
+    if (resolved.jiraKey) {
       autoLinked++;
+      if (!validKeys.has(resolved.jiraKey)) {
+        await prisma.issueCache.upsert({
+          where: { jiraKey: resolved.jiraKey },
+          create: {
+            jiraKey: resolved.jiraKey,
+            projectKey: resolved.jiraKey.split("-")[0] || "",
+            summary: resolved.jiraKey,
+            status: "Unknown",
+            statusCategory: "unknown",
+            priority: "Medium",
+            type: "Task",
+            fixVersionIds: [],
+            fixVersionNames: [],
+            labels: [],
+          },
+          update: {},
+        });
+        validKeys.add(resolved.jiraKey);
+      }
     } else if (resolved.suggestedJiraKey) {
       suggested++;
     } else {
@@ -50,6 +69,7 @@ async function main() {
         jiraKey: resolved.jiraKey,
         linkSource: resolved.linkSource,
         linkConfidence: resolved.linkConfidence,
+        linkState: resolved.linkState,
         suggestedJiraKey: resolved.suggestedJiraKey,
       },
     });

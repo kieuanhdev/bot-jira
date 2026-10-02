@@ -6,7 +6,43 @@
 const JIRA_KEY_REGEX = /(?:^|[^A-Za-z0-9]|_)([A-Z][A-Z0-9]+-\d+)(?=[^0-9]|$)/gi;
 
 /**
- * Extract all unique uppercase Jira keys from any text string (e.g. branch name, PR title).
+ * Common prefixes in git branch names and versions that look like Jira keys but are not
+ * (e.g. hot-fix-5.9.2 -> FIX-5, release-4.8.1 -> RELEASE-4, fix/api-error-handling-500 -> HANDLING-500).
+ */
+export const IGNORED_JIRA_PREFIXES = new Set([
+  "FIX",
+  "HOTFIX",
+  "RELEASE",
+  "HANDLING",
+  "UI",
+  "UX",
+  "TEST",
+  "TESTS",
+  "BUG",
+  "BUGS",
+  "BUILD",
+  "TAG",
+  "PATCH",
+  "VER",
+  "VERSION",
+  "DOC",
+  "DOCS",
+  "CHORE",
+  "FEAT",
+  "FEATURE",
+  "REFACTOR",
+  "PERF",
+  "CI",
+  "CD",
+  "API",
+  "HTTP",
+  "HTTPS",
+  "WIP",
+]);
+
+/**
+ * Extract all unique uppercase Jira keys from any text string (e.g. branch name, PR title),
+ * filtering out known false-positive version/word prefixes.
  */
 export function extractJiraKeys(text: string | null | undefined): string[] {
   if (!text) return [];
@@ -15,7 +51,11 @@ export function extractJiraKeys(text: string | null | undefined): string[] {
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) !== null) {
     if (match[1]) {
-      matches.add(match[1].toUpperCase());
+      const key = match[1].toUpperCase();
+      const prefix = key.split("-")[0];
+      if (!IGNORED_JIRA_PREFIXES.has(prefix)) {
+        matches.add(key);
+      }
     }
   }
   return Array.from(matches);
@@ -45,9 +85,10 @@ export type ResolveBranchLinkInput = {
  * Resolves Jira key linkage and confidence according to the precedence rules:
  * 1. manual_unlinked / rejected: always preserved, never auto-linked by subsequent sync.
  * 2. manual / explicit: always preserved as confirmed (confidence 100).
- * 3. branch_name: exact key matching in IssueCache -> auto-link confirmed (confidence 95).
- * 4. pr_title: exact key matching in IssueCache -> suggested (confidence 80).
- * 5. ambiguous or key not in cache -> unlinked or suggested with confidence 0.
+ * 3. branch_name: exact key -> auto-linked and confirmed by default (confidence 95).
+ * 4. pr_title: exact key -> auto-linked and confirmed by default (confidence 85).
+ * 5. ambiguous candidate keys -> suggested (confidence 0).
+ * 6. no candidates -> unlinked.
  */
 export function resolveBranchLink(input: ResolveBranchLinkInput): LinkResolutionResult {
   const { branch, prTitle, existingJiraKey, existingLinkSource, existingLinkState, validJiraKeys } = input;
@@ -94,26 +135,14 @@ export function resolveBranchLink(input: ResolveBranchLinkInput): LinkResolution
 
   if (branchCandidates.length === 1) {
     const candidate = branchCandidates[0];
-    const isValid = !validJiraKeys || validJiraKeys.has(candidate);
-    if (isValid) {
-      return {
-        jiraKey: candidate,
-        linkSource: "branch_name",
-        linkConfidence: 95,
-        linkState: "confirmed",
-        suggestedJiraKey: null,
-      };
-    } else {
-      // Found key in branch name, but not found in active Jira cache
-      return {
-        jiraKey: null,
-        linkSource: null,
-        linkConfidence: 0,
-        linkState: "suggested",
-        suggestedJiraKey: candidate,
-        reason: `Key ${candidate} not found in Jira cache`,
-      };
-    }
+    const isCached = !validJiraKeys || validJiraKeys.has(candidate);
+    return {
+      jiraKey: candidate,
+      linkSource: "branch_name",
+      linkConfidence: isCached ? 95 : 90,
+      linkState: "confirmed",
+      suggestedJiraKey: null,
+    };
   } else if (branchCandidates.length > 1) {
     const validCandidates = validJiraKeys
       ? branchCandidates.filter((k) => validJiraKeys.has(k))
@@ -128,7 +157,7 @@ export function resolveBranchLink(input: ResolveBranchLinkInput): LinkResolution
         suggestedJiraKey: null,
       };
     }
-    // Ambiguous
+    // Ambiguous: multiple candidate keys in branch name
     return {
       jiraKey: null,
       linkSource: null,
@@ -139,7 +168,7 @@ export function resolveBranchLink(input: ResolveBranchLinkInput): LinkResolution
     };
   }
 
-  // 4. Fallback to PR title
+  // 4. Candidate from PR title (fallback when branch name has no key)
   const prCandidates = extractJiraKeys(prTitle);
   if (prCandidates.length > 0) {
     const validPrCandidates = validJiraKeys
@@ -148,30 +177,32 @@ export function resolveBranchLink(input: ResolveBranchLinkInput): LinkResolution
 
     if (validPrCandidates.length === 1) {
       return {
-        jiraKey: null,
+        jiraKey: validPrCandidates[0],
+        linkSource: "pr_title",
+        linkConfidence: 85,
+        linkState: "confirmed",
+        suggestedJiraKey: null,
+        reason: `Auto-linked from PR title "${prTitle}"`,
+      };
+    } else if (prCandidates.length === 1) {
+      return {
+        jiraKey: prCandidates[0],
         linkSource: "pr_title",
         linkConfidence: 80,
-        linkState: "suggested",
-        suggestedJiraKey: validPrCandidates[0],
-        reason: `Suggested from PR title "${prTitle}"`,
-      };
-    } else if (validPrCandidates.length > 1) {
-      return {
-        jiraKey: null,
-        linkSource: null,
-        linkConfidence: 0,
-        linkState: "suggested",
-        suggestedJiraKey: validPrCandidates[0],
-        reason: `Multiple candidate keys in PR title: ${prCandidates.join(", ")}`,
+        linkState: "confirmed",
+        suggestedJiraKey: null,
+        reason: `Auto-linked from PR title "${prTitle}"`,
       };
     } else {
+      // Multiple candidates in PR title
+      const picked = validPrCandidates[0] ?? prCandidates[0];
       return {
-        jiraKey: null,
-        linkSource: null,
-        linkConfidence: 0,
-        linkState: "suggested",
-        suggestedJiraKey: prCandidates[0],
-        reason: `PR title candidate ${prCandidates[0]} not in Jira cache`,
+        jiraKey: picked,
+        linkSource: "pr_title",
+        linkConfidence: 75,
+        linkState: "confirmed",
+        suggestedJiraKey: null,
+        reason: `Selected from multiple keys in PR title: ${prCandidates.join(", ")}`,
       };
     }
   }

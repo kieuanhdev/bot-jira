@@ -40,6 +40,27 @@ export async function runCheckBranches(): Promise<WorkerLog> {
           validJiraKeys: validKeys,
         });
 
+        // Ensure issue exists in IssueCache so foreign key is satisfied
+        if (linkRes.jiraKey && !validKeys.has(linkRes.jiraKey)) {
+          await prisma.issueCache.upsert({
+            where: { jiraKey: linkRes.jiraKey },
+            create: {
+              jiraKey: linkRes.jiraKey,
+              projectKey: linkRes.jiraKey.split("-")[0] || "",
+              summary: linkRes.jiraKey,
+              status: "Unknown",
+              statusCategory: "unknown",
+              priority: "Medium",
+              type: "Task",
+              fixVersionIds: [],
+              fixVersionNames: [],
+              labels: [],
+            },
+            update: {},
+          });
+          validKeys.add(linkRes.jiraKey);
+        }
+
         await prisma.branchInfo.upsert({
           where: { repo_branch: { repo, branch: s.branch.name } },
           update: {

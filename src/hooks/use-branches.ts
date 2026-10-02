@@ -5,7 +5,7 @@ import { api } from "@/lib/api-client";
 
 type SyncResult = { queued?: boolean };
 type LinkBody =
-  | { action: "confirm" | "reject" | "unlink" }
+  | { action: "confirm" | "reject" | "unlink" | "confirm_all" }
   | { jiraKey: string | null; reason?: string };
 
 export function useBranchSync() {

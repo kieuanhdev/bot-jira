@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import {
   confirmBranchLink,
+  confirmAllBranchSuggestions,
   rejectBranchSuggestion,
   manualRelinkBranch,
   manualUnlinkBranch,
@@ -19,6 +20,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const reason = typeof body.reason === "string" ? body.reason : undefined;
 
   // Determine intent
+  if (action === "confirm_all" || id === "all") {
+    if (!can(session, "branch.confirm")) {
+      return NextResponse.json({ error: "forbidden: requires branch.confirm" }, { status: 403 });
+    }
+    const res = await confirmAllBranchSuggestions(session.user.id, session.user.email ?? undefined);
+    if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+    return NextResponse.json({ ok: true, count: res.count });
+  }
+
   if (action === "confirm") {
     if (!can(session, "branch.confirm")) {
       return NextResponse.json({ error: "forbidden: requires branch.confirm" }, { status: 403 });

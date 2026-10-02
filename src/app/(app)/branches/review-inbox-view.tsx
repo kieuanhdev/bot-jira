@@ -24,6 +24,7 @@ type ReviewInboxViewProps = {
   onConfirm: (branchId: string) => Promise<void>;
   onReject: (branchId: string) => Promise<void>;
   onRelink: (item: ReviewSuggestionItem) => void;
+  onConfirmAll?: () => Promise<void>;
 };
 
 export function ReviewInboxView({
@@ -33,8 +34,10 @@ export function ReviewInboxView({
   onConfirm,
   onReject,
   onRelink,
+  onConfirmAll,
 }: ReviewInboxViewProps) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [isConfirmingAll, setIsConfirmingAll] = useState(false);
 
   const handleConfirm = async (id: string) => {
     setLoadingId(id);
@@ -54,14 +57,40 @@ export function ReviewInboxView({
     }
   };
 
+  const handleConfirmAll = async () => {
+    if (!onConfirmAll) return;
+    setIsConfirmingAll(true);
+    try {
+      await onConfirmAll();
+    } finally {
+      setIsConfirmingAll(false);
+    }
+  };
+
   return (
     <div className="space-y-3">
-      <div className="p-3 bg-teal-500/10 border border-teal-500/20 rounded-xl text-xs text-teal-300 flex items-center gap-2">
-        <Sparkles className="w-4 h-4 shrink-0 text-teal-400" />
-        <span>
-          Các branch dưới đây được gợi ý liên kết Jira task tự động dựa trên tiêu đề Pull Request hoặc ghi chú.
-          Xác nhận để liên kết chính thức hoặc Từ chối để loại bỏ khỏi danh sách.
-        </span>
+      <div className="p-3 bg-teal-500/10 border border-teal-500/20 rounded-xl text-xs text-teal-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 shrink-0 text-teal-400" />
+          <span>
+            Các branch dưới đây được gợi ý liên kết Jira task tự động. Nhấn Xác nhận để gắn nhánh cho task trong hệ thống này (không ghi đè lên Jira).
+          </span>
+        </div>
+        {onConfirmAll && items.length > 0 && (
+          <Button
+            size="sm"
+            disabled={isConfirmingAll || !!loadingId}
+            onClick={handleConfirmAll}
+            className="shrink-0 bg-teal-600 hover:bg-teal-500 text-white font-medium text-xs gap-1.5 cursor-pointer"
+          >
+            {isConfirmingAll ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Check className="w-3.5 h-3.5" />
+            )}
+            <span>Gắn tất cả ({items.length})</span>
+          </Button>
+        )}
       </div>
 
       {items.map((item) => {

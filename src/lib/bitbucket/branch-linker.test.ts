@@ -24,6 +24,12 @@ describe("extractJiraKeys", () => {
   it("extracts multiple unique keys", () => {
     expect(extractJiraKeys("merge-EPM-100-and-EPM-200-task")).toEqual(["EPM-100", "EPM-200"]);
   });
+  it("filters out false positive prefixes like FIX, RELEASE, HOTFIX, UI, HANDLING", () => {
+    expect(extractJiraKeys("hot-fix-5.9.2")).toEqual([]);
+    expect(extractJiraKeys("release-4.8.1")).toEqual([]);
+    expect(extractJiraKeys("fix/api-error-handling-500")).toEqual([]);
+    expect(extractJiraKeys("feature/update-ui-1")).toEqual([]);
+  });
 });
 
 describe("resolveBranchLink", () => {
@@ -83,33 +89,33 @@ describe("resolveBranchLink", () => {
     });
   });
 
-  it("treats key not in cache as unlinked / suggested with confidence 0", () => {
+  it("defaults to auto-linking branch name even if key not in cache with confidence 90", () => {
     const res = resolveBranchLink({
       branch: "feature/EPM-9999-not-cached",
       validJiraKeys: cache,
     });
-    expect(res.jiraKey).toBeNull();
-    expect(res.linkConfidence).toBe(0);
-    expect(res.linkState).toBe("suggested");
-    expect(res.suggestedJiraKey).toBe("EPM-9999");
+    expect(res.jiraKey).toBe("EPM-9999");
+    expect(res.linkConfidence).toBe(90);
+    expect(res.linkState).toBe("confirmed");
+    expect(res.suggestedJiraKey).toBeNull();
   });
 
-  it("suggests from PR title if branch name has no key with confidence 80", () => {
+  it("defaults to auto-linking from PR title when branch name has no key with confidence 85", () => {
     const res = resolveBranchLink({
       branch: "feature/payment-refactor",
       prTitle: "EPM-3395: refactor checkout payment",
       validJiraKeys: cache,
     });
-    expect(res.jiraKey).toBeNull();
-    expect(res.suggestedJiraKey).toBe("EPM-3395");
+    expect(res.jiraKey).toBe("EPM-3395");
+    expect(res.suggestedJiraKey).toBeNull();
     expect(res.linkSource).toBe("pr_title");
-    expect(res.linkConfidence).toBe(80);
-    expect(res.linkState).toBe("suggested");
+    expect(res.linkConfidence).toBe(85);
+    expect(res.linkState).toBe("confirmed");
   });
 
   it("marks multiple conflicting branch candidates as ambiguous", () => {
     const res = resolveBranchLink({
-      branch: "feature/EPM-1-and-EPM-2",
+      branch: "feature/EPM-10-and-EPM-20",
       validJiraKeys: cache,
     });
     expect(res.jiraKey).toBeNull();

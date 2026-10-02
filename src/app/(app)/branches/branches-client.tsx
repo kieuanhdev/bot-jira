@@ -245,6 +245,16 @@ export function BranchesClient() {
     }
   };
 
+  // Confirm all suggestions
+  const handleConfirmAll = async () => {
+    try {
+      await linkMutation.mutateAsync({ branchId: "all", body: { action: "confirm_all" } });
+      showToast("Đã gắn tất cả các nhánh gợi ý vào hệ thống thành công");
+    } catch (err) {
+      showToast(getErrorMessage(err));
+    }
+  };
+
   // Reject suggestion
   const handleRejectSuggestion = async (branchId: string) => {
     try {
@@ -388,6 +398,7 @@ export function BranchesClient() {
                   onRelink={(item: ReviewSuggestionItem) =>
                     setSelectedBranchForLink(toBranchRow(item))
                   }
+                  onConfirmAll={handleConfirmAll}
                 />
               ) : (
                 <EmptyState

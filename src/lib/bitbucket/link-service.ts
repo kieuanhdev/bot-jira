@@ -25,9 +25,23 @@ export async function confirmBranchLink(
     return { ok: false, error: "Branch has no suggested Jira key to confirm" };
   }
 
-  const issue = await prisma.issueCache.findUnique({ where: { jiraKey: targetKey } });
+  // Ensure issue exists in IssueCache so foreign key is satisfied
+  let issue = await prisma.issueCache.findUnique({ where: { jiraKey: targetKey } });
   if (!issue) {
-    return { ok: false, error: `Issue "${targetKey}" not found in Jira cache` };
+    issue = await prisma.issueCache.create({
+      data: {
+        jiraKey: targetKey,
+        projectKey: targetKey.split("-")[0] || "",
+        summary: targetKey,
+        status: "Unknown",
+        statusCategory: "unknown",
+        priority: "Medium",
+        type: "Task",
+        fixVersionIds: [],
+        fixVersionNames: [],
+        labels: [],
+      },
+    });
   }
 
   const before = {
@@ -155,12 +169,22 @@ export async function manualRelinkBranch(
   if (!branch) return { ok: false, error: "Branch not found" };
 
   const normalizedKey = targetJiraKey.trim().toUpperCase();
-  const issue = await prisma.issueCache.findUnique({ where: { jiraKey: normalizedKey } });
+  let issue = await prisma.issueCache.findUnique({ where: { jiraKey: normalizedKey } });
   if (!issue) {
-    return {
-      ok: false,
-      error: `Issue "${normalizedKey}" not found in Jira cache. Please verify key or sync issues.`,
-    };
+    issue = await prisma.issueCache.create({
+      data: {
+        jiraKey: normalizedKey,
+        projectKey: normalizedKey.split("-")[0] || "",
+        summary: normalizedKey,
+        status: "Unknown",
+        statusCategory: "unknown",
+        priority: "Medium",
+        type: "Task",
+        fixVersionIds: [],
+        fixVersionNames: [],
+        labels: [],
+      },
+    });
   }
 
   const before = {
@@ -310,5 +334,79 @@ export async function recordExplicitBranchLink(
     });
   } catch {
     // Best-effort non-blocking
+  }
+}
+
+/**
+ * Bulk confirm all pending branch suggestions in the database.
+ */
+export async function confirmAllBranchSuggestions(
+  actorId: string,
+  actorEmail?: string
+): Promise<{ ok: boolean; count: number; error?: string }> {
+  try {
+    const pendingBranches = await prisma.branchInfo.findMany({
+      where: {
+        deletedAt: null,
+        jiraKey: null,
+        suggestedJiraKey: { not: null },
+        linkState: { notIn: ["rejected", "manual_unlinked"] },
+      },
+    });
+
+    let confirmedCount = 0;
+    for (const b of pendingBranches) {
+      if (!b.suggestedJiraKey) continue;
+      const targetKey = b.suggestedJiraKey.trim().toUpperCase();
+
+      // Ensure IssueCache stub exists
+      await prisma.issueCache.upsert({
+        where: { jiraKey: targetKey },
+        create: {
+          jiraKey: targetKey,
+          projectKey: targetKey.split("-")[0] || "",
+          summary: targetKey,
+          status: "Unknown",
+          statusCategory: "unknown",
+          priority: "Medium",
+          type: "Task",
+          fixVersionIds: [],
+          fixVersionNames: [],
+          labels: [],
+        },
+        update: {},
+      });
+
+      await prisma.branchInfo.update({
+        where: { id: b.id },
+        data: {
+          jiraKey: targetKey,
+          suggestedJiraKey: null,
+          linkState: "confirmed",
+          linkSource: b.linkSource ?? "pr_title",
+          linkConfidence: b.linkConfidence ?? 85,
+          linkReason: "Auto-confirmed suggestion",
+          linkReviewedAt: new Date(),
+          linkReviewedById: actorId,
+        },
+      });
+
+      confirmedCount++;
+    }
+
+    if (confirmedCount > 0) {
+      await audit({
+        actorId,
+        actorEmail,
+        action: "branch.confirm_all",
+        source: "web",
+        target: "all_pending",
+        after: { confirmedCount },
+      });
+    }
+
+    return { ok: true, count: confirmedCount };
+  } catch (err) {
+    return { ok: false, count: 0, error: (err as Error).message };
   }
 }
