@@ -33,6 +33,15 @@ vi.mock("@/lib/prisma", () => ({
     user: {
       findMany: vi.fn(),
     },
+    branchInfo: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    issueCache: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    watch: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   },
 }));
 
@@ -144,6 +153,63 @@ describe("notifyPrComment", () => {
 
       expect(result.notifiedCount).toBe(0);
       expect(notifyUser).not.toHaveBeenCalled();
+    });
+
+    it("notifies assignee and watcher of the Jira task linked to the PR branch", async () => {
+      // Mock finding branch info
+      vi.mocked(prisma.branchInfo.findMany).mockResolvedValueOnce([
+        { jiraKey: "EPM-500", branch: "feature/EPM-500-checkout" } as any,
+      ]);
+
+      // Mock finding issues
+      vi.mocked(prisma.issueCache.findMany).mockResolvedValueOnce([
+        { jiraKey: "EPM-500", assigneeJira: "anhnk_mb" } as any,
+      ]);
+
+      // Mock finding users for assignee
+      vi.mocked(prisma.user.findMany).mockResolvedValueOnce([
+        userRow("user-anhnk", "anhnk_mb", "anhnk@team.com"),
+      ]);
+
+      // Mock finding watchers
+      vi.mocked(prisma.watch.findMany).mockResolvedValueOnce([
+        { userId: "user-watcher" } as any,
+      ]);
+
+      // Mock user verification query for filtering comment author
+      vi.mocked(prisma.user.findMany).mockResolvedValueOnce([
+        userRow("user-anhnk", "anhnk_mb", "anhnk@team.com"),
+        userRow("user-watcher", "watcher_jira", "watcher@team.com"),
+      ]);
+
+      vi.mocked(notifyUser).mockResolvedValue({ id: "notif-branch" } as any);
+
+      const result = await notifyPrComment({
+        repo: "EPM/easy_pos",
+        pr: {
+          id: 55,
+          title: "PR for feature checkout",
+          branch: "feature/EPM-500-checkout",
+        },
+        comment: {
+          id: 201,
+          text: "Please review checkout flow",
+          author: { name: "reviewer_extern", displayName: "External Reviewer" },
+        },
+      });
+
+      expect(notifyUser).toHaveBeenCalledTimes(2);
+      expect(notifyUser).toHaveBeenCalledWith("user-anhnk", expect.objectContaining({
+        type: "comment",
+        title: expect.stringContaining("PR #55"),
+        body: expect.stringContaining("External Reviewer: Please review checkout flow"),
+      }));
+      expect(notifyUser).toHaveBeenCalledWith("user-watcher", expect.objectContaining({
+        type: "comment",
+      }));
+      expect(result.notifiedCount).toBe(2);
+      expect(result.targetUserIds).toContain("user-anhnk");
+      expect(result.targetUserIds).toContain("user-watcher");
     });
   });
 });

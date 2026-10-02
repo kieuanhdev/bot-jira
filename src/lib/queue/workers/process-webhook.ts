@@ -134,6 +134,7 @@ async function handleBitbucket(json: unknown): Promise<Record<string, unknown>> 
       pullRequest?: {
         id?: number;
         title?: string;
+        url?: string;
         state?: string;
         fromRef?: { branch?: string };
         toRef?: { branch?: string; repository?: { slug?: string; project?: { key?: string } } };
@@ -151,6 +152,7 @@ async function handleBitbucket(json: unknown): Promise<Record<string, unknown>> 
     pullRequest?: {
       id?: number;
       title?: string;
+      url?: string;
       state?: string;
       fromRef?: { branch?: string };
       toRef?: { branch?: string; repository?: { slug?: string; project?: { key?: string } } };
@@ -197,6 +199,8 @@ async function handleBitbucket(json: unknown): Promise<Record<string, unknown>> 
         pr: {
           id: pr.id,
           title: fullPr.title ?? pr.title,
+          branch: fullPr.fromRef?.branch ?? pr.fromRef?.branch,
+          url: fullPr.url ?? pr.url,
           author: fullPr.author as { user: BbUser } | undefined,
           reviewers: fullPr.reviewers as Array<{ user: BbUser }> | undefined,
         },

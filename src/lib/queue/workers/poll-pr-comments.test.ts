@@ -87,6 +87,28 @@ describe("isPrCandidate", () => {
     } as unknown as BbPullRequest;
     expect(isPrCandidate(pr, new Set(["anhnk_mb"]))).toBe(false);
   });
+
+  it("includes MERGED PRs if branch name contains a registered Jira key", () => {
+    const pr = {
+      id: 5,
+      state: "MERGED",
+      author: { user: { name: "someone_else" } },
+      fromRef: { branch: "feature/EPM-999-fix" },
+      updatedDate: Date.now() - 1000 * 3600,
+    } as unknown as BbPullRequest;
+    expect(isPrCandidate(pr, new Set(), new Set(["EPM-999"]))).toBe(true);
+  });
+
+  it("includes MERGED PRs if PR title contains a registered Jira key", () => {
+    const pr = {
+      id: 6,
+      state: "DECLINED",
+      author: { user: { name: "someone_else" } },
+      title: "Fix bug EPM-888 in checkout",
+      updatedDate: Date.now() - 1000 * 3600,
+    } as unknown as BbPullRequest;
+    expect(isPrCandidate(pr, new Set(), new Set(["EPM-888"]))).toBe(true);
+  });
 });
 
 describe("runPollPrComments", () => {

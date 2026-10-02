@@ -19,19 +19,25 @@ function extractComments(activity: BbPrActivity): BbPrComment[] {
   return result;
 }
 
+import { extractJiraKeys } from "@/lib/bitbucket/branch-linker";
+
 const MAX_CLOSED_PR_AGE_MS = 180 * 24 * 3600 * 1000; // 180 days (~6 months)
 
 /**
  * Determine if a pull request should be scanned for comments.
  * - Always scan OPEN PRs.
- * - For MERGED/DECLINED PRs: only scan if the PR was updated within the last 180 days
- *   AND its author or at least one reviewer matches a registered bot-jira user.
- *   (Comments on closed PRs where none of our users participate cannot trigger notifications anyway).
+ * - For MERGED/DECLINED PRs: scan if the PR was updated within the last 180 days
+ *   AND (its author or at least one reviewer matches a registered bot-jira user,
+ *        OR its branch/title links to a registered user's Jira task/watched issue).
  */
-export function isPrCandidate(pr: BbPullRequest, userTokens: Set<string>): boolean {
+export function isPrCandidate(
+  pr: BbPullRequest,
+  userTokens: Set<string>,
+  registeredJiraKeys: Set<string> = new Set()
+): boolean {
   if (pr.state === "OPEN" || !pr.state) return true;
 
-  if (userTokens.size === 0) return false;
+  if (userTokens.size === 0 && registeredJiraKeys.size === 0) return false;
 
   if (pr.updatedDate && Date.now() - pr.updatedDate > MAX_CLOSED_PR_AGE_MS) {
     return false;
@@ -59,6 +65,13 @@ export function isPrCandidate(pr: BbPullRequest, userTokens: Set<string>): boole
     }
   }
 
+  if (registeredJiraKeys.size > 0) {
+    const keysInBranch = extractJiraKeys(pr.fromRef?.branch);
+    if (keysInBranch.some((k) => registeredJiraKeys.has(k.toUpperCase()))) return true;
+    const keysInTitle = extractJiraKeys(pr.title);
+    if (keysInTitle.some((k) => registeredJiraKeys.has(k.toUpperCase()))) return true;
+  }
+
   return false;
 }
 
@@ -78,8 +91,9 @@ export async function runPollPrComments(): Promise<WorkerLog> {
     return guard(false, "Bitbucket not configured in env or user settings");
   }
 
-  // Build a lookup set of registered user usernames/aliases/emails
+  // Build a lookup set of registered user usernames/aliases/emails and associated Jira keys
   const userTokens = new Set<string>();
+  const registeredJiraKeys = new Set<string>();
   try {
     const registeredUsers = await prisma.user.findMany({
       select: { id: true, jiraUsername: true, email: true, bitbucketUserEnc: true },
@@ -100,6 +114,25 @@ export async function runPollPrComments(): Promise<WorkerLog> {
             userTokens.add(a.toLowerCase());
           }
         }
+      }
+    }
+
+    if (prisma.issueCache && userTokens.size > 0) {
+      const issues = await prisma.issueCache.findMany({
+        where: { assigneeJira: { in: Array.from(userTokens) } },
+        select: { jiraKey: true },
+      });
+      for (const i of issues) {
+        registeredJiraKeys.add(i.jiraKey.toUpperCase());
+      }
+    }
+
+    if (prisma.watch) {
+      const watched = await prisma.watch.findMany({
+        select: { jiraKey: true },
+      });
+      for (const w of watched) {
+        registeredJiraKeys.add(w.jiraKey.toUpperCase());
       }
     }
   } catch {
@@ -126,7 +159,7 @@ export async function runPollPrComments(): Promise<WorkerLog> {
         ? await bitbucket.listPullRequests(repo, creds, 2)
         : await bitbucket.listOpenPullRequests(repo, creds);
 
-      const candidatePrs = prs.filter((pr) => isPrCandidate(pr, userTokens));
+      const candidatePrs = prs.filter((pr) => isPrCandidate(pr, userTokens, registeredJiraKeys));
       checkedPrs += candidatePrs.length;
 
       const baselineCursor = cursorRecord?.cursor ? Number(cursorRecord.cursor) : 0;
@@ -153,7 +186,18 @@ export async function runPollPrComments(): Promise<WorkerLog> {
               if (commentTime > baselineCursor) {
                 nextCursor = Math.max(nextCursor, commentTime);
                 if (!isInitialRun) {
-                  const res = await notifyPrComment({ repo, pr, comment });
+                  const res = await notifyPrComment({
+                    repo,
+                    pr: {
+                      id: pr.id,
+                      title: pr.title,
+                      branch: pr.fromRef?.branch,
+                      url: pr.url,
+                      author: pr.author,
+                      reviewers: pr.reviewers,
+                    },
+                    comment,
+                  });
                   newCommentsNotified += res.notifiedCount;
                 }
               }
