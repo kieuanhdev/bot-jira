@@ -221,6 +221,37 @@ async function handleBitbucket(json: unknown): Promise<Record<string, unknown>> 
     return { skipped: true, reason: "incomplete comment payload" };
   }
 
+  const rawCommit = (j as any).commit ?? (j as any).data?.commit;
+  const commitId = typeof rawCommit === "string" ? rawCommit : rawCommit?.id;
+
+  // Handle Commit comment events (e.g. repo:comment:added)
+  if (
+    (j.eventKey?.startsWith("repo:comment:") || (comment?.id && comment?.text && commitId)) &&
+    !pr?.id
+  ) {
+    if (comment?.id && comment.text && commitId) {
+      const { notifyCommitComment } = await import("@/lib/bitbucket/notify-commit-comment");
+      const res = await notifyCommitComment({
+        repo,
+        commit: { id: commitId },
+        comment: {
+          id: comment.id,
+          text: comment.text,
+          author: comment.author as BbUser,
+          anchor: (comment as any).anchor,
+        },
+      });
+
+      return {
+        repo,
+        commitId,
+        commentId: comment.id,
+        notifiedCount: res.notifiedCount,
+      };
+    }
+    return { skipped: true, reason: "incomplete commit comment payload" };
+  }
+
   const updates: Record<string, unknown> = { repo };
   if (pr?.fromRef?.branch) {
     await prisma.branchInfo.upsert({

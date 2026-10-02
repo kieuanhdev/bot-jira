@@ -68,6 +68,10 @@ vi.mock("@/lib/bitbucket/notify-pr-comment", () => ({
   notifyPrComment: vi.fn().mockResolvedValue({ notifiedCount: 1, targetUserIds: ["u-1"] }),
 }));
 
+vi.mock("@/lib/bitbucket/notify-commit-comment", () => ({
+  notifyCommitComment: vi.fn().mockResolvedValue({ notifiedCount: 1, targetUserIds: ["u-2"] }),
+}));
+
 vi.mock("@/lib/jira/client", () => ({
   jiraIssueFields: vi.fn(() => "summary,status,updated"),
   jiraPointsFromFields: () => ({ points: null, fieldId: null }),
@@ -124,6 +128,31 @@ describe("process-webhook for Bitbucket", () => {
       repo: "EPM/app-core",
       pr: expect.objectContaining({ id: 99, title: "Optimize queries" }),
       comment: expect.objectContaining({ id: 888, text: "Can we use an index here?" }),
+    });
+  });
+
+  it("handles repo:comment:added webhook event for commit comments and notifies commit author", async () => {
+    const { notifyCommitComment } = await import("@/lib/bitbucket/notify-commit-comment");
+    vi.mocked(prisma.integrationEvent.findUnique).mockResolvedValue(
+      eventRow({
+        eventKey: "repo:comment:added",
+        repository: { slug: "sds_feedback", project: { key: "SMA" } },
+        commit: "501630298ae1179c02241a5024966b789e5b4b73",
+        comment: {
+          id: 358407,
+          text: "navigate",
+          author: { name: "ngocdv", displayName: "ngocdv" },
+        },
+      })
+    );
+
+    const result = await runProcessWebhook({ source: "bitbucket", eventId: "ev-commit-1" });
+
+    expect(result.ok).toBe(true);
+    expect(notifyCommitComment).toHaveBeenCalledWith({
+      repo: "SMA/sds_feedback",
+      commit: { id: "501630298ae1179c02241a5024966b789e5b4b73" },
+      comment: expect.objectContaining({ id: 358407, text: "navigate" }),
     });
   });
 });

@@ -42,14 +42,20 @@ function bbExternalId(json: unknown): string {
   const pr = j.pullRequest ?? j.data?.pullRequest;
   const comment = j.comment ?? j.data?.comment;
   const branch = j.data?.branches?.[0]?.name;
+  const rawCommit = (j as any).commit ?? (j as any).data?.commit;
+  const commitId = typeof rawCommit === "string" ? rawCommit : rawCommit?.id;
 
   let subject = "event";
   if (comment?.id && pr?.id) {
     subject = `pr-${pr.id}-comment-${comment.id}`;
+  } else if (comment?.id && commitId) {
+    subject = `commit-${commitId.slice(0, 12)}-comment-${comment.id}`;
   } else if (pr) {
     subject = `pr-${pr.id}-${pr.state ?? ""}`;
   } else if (branch) {
     subject = `branch-${branch}`;
+  } else if (commitId) {
+    subject = `commit-${commitId.slice(0, 12)}`;
   }
 
   return `${j.eventKey ?? "event"}:${repo}:${subject}`;

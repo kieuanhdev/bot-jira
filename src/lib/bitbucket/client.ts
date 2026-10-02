@@ -34,6 +34,15 @@ export type BbPrComment = {
   comments?: BbPrComment[];
 };
 
+export type BbCommit = {
+  id: string;
+  displayId?: string;
+  message?: string;
+  author?: BbUser;
+  committer?: BbUser;
+  authorTimestamp?: number;
+};
+
 export type BbPrActivity = {
   id: number;
   createdDate?: number;
@@ -275,6 +284,26 @@ export const bitbucket = {
       },
       creds
     );
+  },
+
+  async getCommit(
+    repo: string,
+    commitId: string,
+    creds?: BbCreds
+  ): Promise<BbCommit | null> {
+    try {
+      const res = await request<BbCommit>(
+        repo,
+        `commits/${encodeURIComponent(commitId)}`,
+        {},
+        creds
+      );
+      return res;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("404")) return null;
+      throw e;
+    }
   },
 
   async listPullRequests(
