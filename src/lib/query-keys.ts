@@ -130,4 +130,7 @@ export const bulkKeys = {
   /** `["bulk-create-template", <projectKey>, <issueKey>]`. */
   createTemplate: (projectKey: string, issueKey: string) =>
     ["bulk-create-template", projectKey, issueKey] as const,
+  /** `["bulk-create-template-issues", <projectKey>, <query>]`. */
+  createTemplateIssues: (projectKey: string, query: string) =>
+    ["bulk-create-template-issues", projectKey, query] as const,
 };

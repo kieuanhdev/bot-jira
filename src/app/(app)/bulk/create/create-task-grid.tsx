@@ -182,16 +182,39 @@ export function CreateTaskGrid({
     }
   }
 
-  function handleTemplateItem(templateRow: BulkCreateRowInput) {
-    if (items.length >= MAX_BULK_CREATE_ITEMS) return;
+  function handleTemplateItem(templateInput: BulkCreateRowInput | BulkCreateRowInput[]) {
+    const rows = Array.isArray(templateInput) ? templateInput : [templateInput];
+    if (items.length + rows.length > MAX_BULK_CREATE_ITEMS) return;
+
     const existingRefs = new Set(items.map((i) => i.clientRef).filter(Boolean));
-    const newRef = generateUniqueClientRef(existingRefs, "tpl");
-    const newRow: BulkCreateRowInput = {
-      ...templateRow,
-      clientRef: newRef,
-    };
+    const refMap = new Map<string, string>();
+    const preparedRows: BulkCreateRowInput[] = [];
+
+    for (const row of rows) {
+      const placeholderRef = row.clientRef || "tpl";
+      const newRef = generateUniqueClientRef(existingRefs, placeholderRef.startsWith("tpl-") ? placeholderRef : "tpl");
+      existingRefs.add(newRef);
+      if (row.clientRef) {
+        refMap.set(row.clientRef, newRef);
+      }
+      preparedRows.push({
+        ...row,
+        clientRef: newRef,
+      });
+    }
+
+    // Remap batch parent clientRefs if referencing an added row
+    for (const row of preparedRows) {
+      if (row.parent?.type === "batch" && refMap.has(row.parent.clientRef)) {
+        row.parent = {
+          type: "batch",
+          clientRef: refMap.get(row.parent.clientRef)!,
+        };
+      }
+    }
+
     const nonBlank = filterBlankPlaceholderItems(items);
-    onChange(ensureUniqueClientRefs([...nonBlank, newRow]).slice(0, MAX_BULK_CREATE_ITEMS));
+    onChange(ensureUniqueClientRefs([...nonBlank, ...preparedRows]).slice(0, MAX_BULK_CREATE_ITEMS));
   }
 
   async function handleDownloadExcelTemplate() {

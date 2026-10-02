@@ -3,42 +3,22 @@ import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { userJiraAuth } from "@/lib/user-creds";
 import { jiraWith, JiraRequestError, jiraIssueFields } from "@/lib/jira/client";
-import type { BulkCreateProjectMetadata } from "@/lib/bulk/create-types";
 
 /**
- * BC-SMART-303 — Read a Jira issue and return a DTO suitable for Bulk Create.
+ * BC-SMART-303 — Read a Jira issue or search issues to use as Bulk Create templates.
  *
- * GET /api/bulk/create/templates/from-issue?project=ABC&issueKey=ABC-123
+ * GET /api/bulk/create/templates?project=ABC&issueKey=ABC-123
+ * -> Returns { template: BulkCreateTemplateRow }
  *
- * Response is a normalised `BulkCreateTemplateRow` — only allowlisted fields
- * that are valid for the project's create metadata are included. System-only
- * fields (key, id, status, resolution, reporter, etc.) are never returned.
+ * GET /api/bulk/create/templates?project=ABC&q=search&limit=15
+ * -> Returns { issues: BulkCreateTemplateIssueItem[] }
  */
 
-/** Fields that should NEVER be copied from a source issue. */
-const DENY_FIELDS = new Set([
-  "key",
-  "id",
-  "status",
-  "resolution",
-  "created",
-  "updated",
-  "reporter",
-  "creator",
-  "comment",
-  "attachment",
-  "worklog",
-  "changelog",
-  "watcher",
-  "votes",
-  "issuelinks",
-  "sprint",
-  "rank",
-  "timetracking",
-  "timespent",
-  "aggregatetimespent",
-  "aggregatetimeoriginalestimate",
-]);
+const TEMPLATE_SEARCH_CACHE_TTL_MS = 30_000;
+const templateSearchCache = new Map<
+  string,
+  { issues: BulkCreateTemplateIssueItem[]; expiresAt: number }
+>();
 
 export type BulkCreateTemplateRow = {
   summary: string;
@@ -58,9 +38,105 @@ export type BulkCreateTemplateRow = {
   customFields?: Record<string, unknown>;
   /** Fields that were skipped because they are not valid for create. */
   skippedFields?: Array<{ field: string; reason: string }>;
-  /** Whether the source issue is a sub-task (parent is NOT copied). */
+  /** Whether the source issue is a sub-task. */
   sourceIsSubtask?: boolean;
+  /** Parent Jira key if the source issue is a sub-task. */
+  parentKey?: string;
+  /** Parent issue summary. */
+  parentSummary?: string;
+  /** Parent issue type ID. */
+  parentIssueTypeId?: string;
+  /** Parent issue type name. */
+  parentIssueTypeName?: string;
+  /** Full parent template row if user wants to import both parent and subtask into the batch. */
+  parentTemplate?: BulkCreateTemplateRow;
 };
+
+export type BulkCreateTemplateIssueItem = {
+  key: string;
+  summary: string;
+  issueTypeId: string;
+  issueTypeName: string;
+  isSubtask: boolean;
+  parentKey?: string;
+  parentSummary?: string;
+  status: string;
+  assignee?: string;
+  updated?: string;
+};
+
+const pointFieldCandidates = ["story_points", "customfield_10016", "customfield_10028"];
+
+function buildTemplateRowFromFields(
+  fields: Record<string, unknown>,
+  skippedFields: Array<{ field: string; reason: string }> = []
+): BulkCreateTemplateRow {
+  const template: BulkCreateTemplateRow = {
+    summary: (fields.summary as string) ?? "",
+  };
+
+  if (fields.description) {
+    template.description = fields.description as string;
+  }
+
+  const issueType = fields.issuetype as { id?: string; name?: string } | undefined;
+  if (issueType?.id) {
+    template.issueTypeId = issueType.id;
+    template.issueTypeName = issueType.name;
+  }
+
+  const assignee = fields.assignee as { name?: string; key?: string; displayName?: string } | undefined;
+  if (assignee) {
+    template.assignee = assignee.name ?? assignee.key ?? null;
+    template.assigneeDisplayName = assignee.displayName;
+  }
+
+  const priority = fields.priority as { id?: string; name?: string } | undefined;
+  if (priority?.id) {
+    template.priorityId = priority.id;
+    template.priorityName = priority.name;
+  }
+
+  if (Array.isArray(fields.labels) && fields.labels.length > 0) {
+    template.labels = fields.labels as string[];
+  }
+
+  const rawDueDate = fields.duedate as string | undefined | null;
+  if (rawDueDate) {
+    template.dueDate = rawDueDate;
+  }
+
+  const rawEstimate = fields.timeoriginalestimate ?? (fields as Record<string, unknown>)["timeoriginalestimate"];
+  if (rawEstimate != null && typeof rawEstimate === "number") {
+    const seconds = rawEstimate;
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const parts: string[] = [];
+    if (h > 0) parts.push(`${h}h`);
+    if (m > 0) parts.push(`${m}m`);
+    template.originalEstimate = parts.join(" ") || undefined;
+  }
+
+  if (Array.isArray(fields.fixVersions) && fields.fixVersions.length > 0) {
+    template.fixVersionIds = fields.fixVersions
+      .filter((v: { id?: string }) => v.id)
+      .map((v: { id?: string }) => v.id!);
+    template.fixVersionNames = fields.fixVersions.map(
+      (v: { name?: string }) => v.name ?? ""
+    );
+  }
+
+  for (const candidate of pointFieldCandidates) {
+    const val = fields[candidate];
+    if (val != null && typeof val === "number" && Number.isFinite(val)) {
+      template.points = val;
+      break;
+    }
+  }
+
+  template.skippedFields = skippedFields;
+  return template;
+}
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -74,14 +150,6 @@ export async function GET(req: Request) {
 
   if (!project) {
     return NextResponse.json({ error: "Missing project query parameter" }, { status: 400 });
-  }
-  if (!issueKey) {
-    return NextResponse.json({ error: "Missing issueKey query parameter" }, { status: 400 });
-  }
-
-  // Validate key format
-  if (!/^[A-Z][A-Z0-9_]+-\d+$/.test(issueKey)) {
-    return NextResponse.json({ error: "Định dạng issue key không hợp lệ" }, { status: 400 });
   }
 
   const user = await prisma.user.findUnique({
@@ -99,122 +167,96 @@ export async function GET(req: Request) {
 
   const jira = jiraWith(auth);
 
-  try {
-    // Fetch the issue with full fields
-    const issue = await jira.getIssue(issueKey, jiraIssueFields());
-    const fields = issue.fields ?? {};
-
-    // Verify issue belongs to the same project
-    const issueProject = fields.project?.key?.toUpperCase();
-    if (issueProject !== project) {
-      return NextResponse.json(
-        { error: `Issue ${issueKey} thuộc dự án ${issueProject}, không phải ${project}` },
-        { status: 400 }
-      );
+  // If issueKey is provided, return full template details for that issue
+  if (issueKey) {
+    if (!/^[A-Z][A-Z0-9_]+-\d+$/.test(issueKey)) {
+      return NextResponse.json({ error: "Định dạng issue key không hợp lệ" }, { status: 400 });
     }
 
-    const skippedFields: Array<{ field: string; reason: string }> = [];
-    const sourceIsSubtask = (fields.issuetype as Record<string, unknown> | undefined)?.subtask === true;
+    try {
+      const issue = await jira.getIssue(issueKey, jiraIssueFields());
+      const fields = (issue.fields ?? {}) as Record<string, unknown>;
 
-    // Build template row — only allowlisted fields
-    const template: BulkCreateTemplateRow = {
-      summary: fields.summary ?? "",
-    };
-
-    // Description
-    if (fields.description) {
-      template.description = fields.description;
-    }
-
-    // Issue type
-    if (fields.issuetype?.id) {
-      template.issueTypeId = fields.issuetype.id;
-      template.issueTypeName = fields.issuetype.name;
-    }
-
-    // Assignee
-    if (fields.assignee) {
-      template.assignee = fields.assignee.name ?? fields.assignee.key ?? null;
-      template.assigneeDisplayName = fields.assignee.displayName;
-    }
-
-    // Priority
-    if (fields.priority?.id) {
-      template.priorityId = fields.priority.id;
-      template.priorityName = fields.priority.name;
-    }
-
-    // Labels
-    if (Array.isArray(fields.labels) && fields.labels.length > 0) {
-      template.labels = fields.labels;
-    }
-
-    // Due date
-    const rawDueDate = fields.duedate as string | undefined | null;
-    if (rawDueDate) {
-      template.dueDate = rawDueDate;
-    }
-
-    // Original estimate
-    const rawEstimate = fields.timeoriginalestimate ?? (fields as Record<string, unknown>)["timeoriginalestimate"];
-    if (rawEstimate != null && typeof rawEstimate === "number") {
-      // Convert seconds to Jira duration string
-      const seconds = rawEstimate;
-      const h = Math.floor(seconds / 3600);
-      const m = Math.floor((seconds % 3600) / 60);
-      const parts: string[] = [];
-      if (h > 0) parts.push(`${h}h`);
-      if (m > 0) parts.push(`${m}m`);
-      template.originalEstimate = parts.join(" ") || undefined;
-    }
-
-    // Fix Versions
-    if (Array.isArray(fields.fixVersions) && fields.fixVersions.length > 0) {
-      template.fixVersionIds = fields.fixVersions
-        .filter((v: { id?: string }) => v.id)
-        .map((v: { id?: string }) => v.id!);
-      template.fixVersionNames = fields.fixVersions.map(
-        (v: { name?: string }) => v.name ?? ""
-      );
-    }
-
-    // Story points — check all known point field IDs
-    // Try common field patterns
-    const pointFieldCandidates = ["story_points", "customfield_10016", "customfield_10028"];
-    for (const candidate of pointFieldCandidates) {
-      const val = fields[candidate];
-      if (val != null && typeof val === "number" && Number.isFinite(val)) {
-        template.points = val;
-        break;
+      const issueProject = (fields.project as { key?: string } | undefined)?.key?.toUpperCase();
+      if (issueProject !== project) {
+        return NextResponse.json(
+          { error: `Issue ${issueKey} thuộc dự án ${issueProject}, không phải ${project}` },
+          { status: 400 }
+        );
       }
+
+      const skippedFields: Array<{ field: string; reason: string }> = [];
+      const template = buildTemplateRowFromFields(fields, skippedFields);
+
+      // Check if subtask or has parent
+      const parentObj = fields.parent as
+        | { id?: string; key?: string; fields?: Record<string, unknown> }
+        | undefined;
+      const isSubtaskType =
+        (fields.issuetype as { subtask?: boolean; name?: string } | undefined)?.subtask === true ||
+        (fields.issuetype as { name?: string } | undefined)?.name?.toLowerCase() === "sub-task";
+
+      if (isSubtaskType || Boolean(parentObj?.key)) {
+        template.sourceIsSubtask = true;
+        if (parentObj?.key) {
+          template.parentKey = parentObj.key;
+          template.parentSummary = (parentObj.fields?.summary as string) || "";
+          const parentType = parentObj.fields?.issuetype as { id?: string; name?: string } | undefined;
+          template.parentIssueTypeId = parentType?.id;
+          template.parentIssueTypeName = parentType?.name;
+
+          // Fetch full parent issue so user can clone both parent and subtask if desired
+          try {
+            const parentIssue = await jira.getIssue(parentObj.key, jiraIssueFields());
+            if (parentIssue?.fields) {
+              template.parentTemplate = buildTemplateRowFromFields(
+                parentIssue.fields as Record<string, unknown>
+              );
+            }
+          } catch {
+            // Parent basic details already captured
+          }
+        }
+      }
+
+      return NextResponse.json({ template });
+    } catch (err) {
+      if (err instanceof JiraRequestError) {
+        if (err.status === 404) {
+          return NextResponse.json(
+            { error: `Không tìm thấy issue ${issueKey} hoặc bạn không có quyền browse.` },
+            { status: 404 }
+          );
+        }
+        if (err.status === 403) {
+          return NextResponse.json(
+            { error: `Bạn không có quyền xem issue ${issueKey}.` },
+            { status: 403 }
+          );
+        }
+        return NextResponse.json({ error: err.message }, { status: err.status || 500 });
+      }
+      return NextResponse.json({ error: (err as Error).message }, { status: 500 });
     }
+  }
 
-    // Source is subtask warning
-    if (sourceIsSubtask) {
-      template.sourceIsSubtask = true;
-      skippedFields.push({
-        field: "parent",
-        reason: "Issue gốc là sub-task. Parent không được sao chép — bạn cần chọn parent mới.",
-      });
-    }
+  // Otherwise, list recent issues or search by query
+  const rawQuery = url.searchParams.get("q")?.trim() ?? "";
+  const query = rawQuery.slice(0, 100);
+  const limit = Math.min(Math.max(1, parseInt(url.searchParams.get("limit") ?? "15", 10)), 30);
 
-    template.skippedFields = skippedFields;
+  const cacheKey = `${auth.token.slice(0, 8)}:${project}:${query.toLowerCase()}:${limit}`;
+  const cached = templateSearchCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return NextResponse.json({ issues: cached.issues });
+  }
 
-    return NextResponse.json({ template });
+  try {
+    const issues = await jira.searchTemplateIssues(project, query, limit);
+    templateSearchCache.set(cacheKey, { issues, expiresAt: Date.now() + TEMPLATE_SEARCH_CACHE_TTL_MS });
+    return NextResponse.json({ issues });
   } catch (err) {
     if (err instanceof JiraRequestError) {
-      if (err.status === 404) {
-        return NextResponse.json(
-          { error: `Không tìm thấy issue ${issueKey} hoặc bạn không có quyền browse.` },
-          { status: 404 }
-        );
-      }
-      if (err.status === 403) {
-        return NextResponse.json(
-          { error: `Bạn không có quyền xem issue ${issueKey}.` },
-          { status: 403 }
-        );
-      }
       return NextResponse.json({ error: err.message }, { status: err.status || 500 });
     }
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });

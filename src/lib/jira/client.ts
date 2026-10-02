@@ -26,6 +26,7 @@ import type {
 
 const BASE_ISSUE_FIELDS = [
   "project",
+  "parent",
   "summary",
   "description",
   "status",
@@ -833,6 +834,81 @@ export function jiraWith(auth?: JiraAuth) {
           issueTypeName: issue.fields.issuetype?.name ?? "Unknown",
           status: issue.fields.status?.name ?? "Unknown",
         }));
+    },
+
+    /**
+     * Search issues in a project to use as templates (both standard issues and subtasks).
+     * If query is empty, returns the most recently updated issues in the project.
+     */
+    searchTemplateIssues: async (
+      projectKey: string,
+      query: string,
+      limit: number
+    ): Promise<Array<{
+      key: string;
+      summary: string;
+      issueTypeName: string;
+      issueTypeId: string;
+      isSubtask: boolean;
+      parentKey?: string;
+      parentSummary?: string;
+      status: string;
+      assignee?: string;
+      updated?: string;
+    }>> => {
+      const maxResults = Math.min(Math.max(1, limit), 50);
+      let jql: string;
+      if (query) {
+        if (/^[A-Z][A-Z0-9_]+-\d+$/i.test(query)) {
+          jql = `project = "${projectKey}" AND key = "${query.toUpperCase()}"`;
+        } else {
+          const escaped = query.replace(/["\\]/g, '\\$&');
+          jql = `project = "${projectKey}" AND (key ~ "${escaped}*" OR summary ~ "${escaped}") ORDER BY updated DESC`;
+        }
+      } else {
+        jql = `project = "${projectKey}" ORDER BY updated DESC`;
+      }
+
+      let res: JiraSearchResult;
+      try {
+        res = await request<JiraSearchResult>(
+          `/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=${maxResults}&fields=summary,issuetype,status,assignee,updated,parent`,
+          {},
+          auth
+        );
+      } catch {
+        const fallbackJql = query
+          ? `project = "${projectKey}" AND summary ~ "${query.replace(/["\\]/g, '\\$&')}" ORDER BY updated DESC`
+          : `project = "${projectKey}" ORDER BY updated DESC`;
+        res = await request<JiraSearchResult>(
+          `/rest/api/2/search?jql=${encodeURIComponent(fallbackJql)}&maxResults=${maxResults}&fields=summary,issuetype,status,assignee,updated,parent`,
+          {},
+          auth
+        );
+      }
+
+      return (res.issues ?? []).map((issue) => {
+        const isSubtask =
+          (issue.fields.issuetype as { subtask?: boolean } | undefined)?.subtask === true ||
+          issue.fields.issuetype?.name?.toLowerCase() === "sub-task" ||
+          Boolean(issue.fields.parent);
+        const parent = issue.fields.parent as
+          | { key?: string; fields?: { summary?: string } }
+          | undefined;
+
+        return {
+          key: issue.key,
+          summary: issue.fields.summary ?? "",
+          issueTypeId: issue.fields.issuetype?.id ?? "",
+          issueTypeName: issue.fields.issuetype?.name ?? "Unknown",
+          isSubtask,
+          parentKey: parent?.key,
+          parentSummary: parent?.fields?.summary,
+          status: issue.fields.status?.name ?? "Unknown",
+          assignee: issue.fields.assignee?.displayName ?? issue.fields.assignee?.name,
+          updated: issue.fields.updated,
+        };
+      });
     },
 
     /**
