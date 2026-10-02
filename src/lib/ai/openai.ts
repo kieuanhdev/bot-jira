@@ -22,11 +22,12 @@ import {
 export class OpenAIProvider implements LLMProvider {
   readonly name = `openai:${env.openaiModel}`;
 
-  private async generate(prompt: string): Promise<string> {
+  private async generate(prompt: string, timeoutMs = 25_000): Promise<string> {
     if (!hasOpenAiConfig()) throw new Error("OpenAI not configured");
     const url = `${env.openaiBaseUrl.replace(/\/$/, "")}/chat/completions`;
     const res = await fetch(url, {
       method: "POST",
+      signal: AbortSignal.timeout(timeoutMs),
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${env.openaiApiKey}`,
@@ -35,7 +36,7 @@ export class OpenAIProvider implements LLMProvider {
         model: env.openaiModel,
         stream: false,
         temperature: 0.2,
-        max_tokens: 512,
+        max_tokens: 1536,
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -53,10 +54,11 @@ export class OpenAIProvider implements LLMProvider {
 
   async estimate(input: AiScoreInput) {
     try {
+      // Limit to 2 retries × 25s = max ~50s, safely under Cloudflare's 100s timeout.
       return await withJsonRetry(
         () => this.generate(buildScorePrompt(input)),
         parseAiScore,
-        3
+        2
       );
     } catch (e) {
       throw new AiUnavailableError(

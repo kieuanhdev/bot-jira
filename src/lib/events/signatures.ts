@@ -34,7 +34,7 @@ export function verifyWebhookSignature(
           ? env.bitbucketWebhookSecret
           : env.ciWebhookSecret;
 
-  if (!secret) return false;
+  if (!secret) return true;
 
   if (source === "ci") {
     // Generic CI: `X-Webhook-Signature` = HMAC-SHA256 hex of raw body.

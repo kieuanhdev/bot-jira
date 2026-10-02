@@ -86,7 +86,8 @@ describe("Leaderboard Monthly Task Completion Logic", () => {
     rawResolutionDate: string | null,
     updatedAt: Date | null,
     createdAt: Date | null,
-    timeframe: "month" | "all"
+    timeframe: "month" | "all",
+    isCurrentPeriod = false
   ): boolean {
     const isDone = statusCategory.toLowerCase() === "done";
     const rawRes = rawResolutionDate ? new Date(rawResolutionDate) : null;
@@ -101,34 +102,46 @@ describe("Leaderboard Monthly Task Completion Logic", () => {
       );
     }
 
-    // In-progress tasks are only tracked in "all" timeframe, never in month-specific leaderboard
-    return timeframe === "all";
+    // In-progress tasks (bế quan) are tracked for the current period or in "all" timeframe
+    return isCurrentPeriod || timeframe === "all";
   }
 
   it("includes task completed within target month", () => {
     const doneInSep = new Date("2026-09-15T10:00:00.000Z");
-    const included = shouldIncludeTaskInPeriod("done", doneInSep, null, doneInSep, doneInSep, "month");
+    const included = shouldIncludeTaskInPeriod("done", doneInSep, null, doneInSep, doneInSep, "month", false);
     expect(included).toBe(true);
   });
 
   it("excludes task completed in previous month even if updated in current month", () => {
     const doneInAug = new Date("2026-08-25T10:00:00.000Z");
     const updatedInSep = new Date("2026-09-05T10:00:00.000Z"); // Commented or re-synced in Sep
-    const included = shouldIncludeTaskInPeriod("done", doneInAug, null, updatedInSep, doneInAug, "month");
+    const included = shouldIncludeTaskInPeriod("done", doneInAug, null, updatedInSep, doneInAug, "month", false);
     expect(included).toBe(false);
   });
 
-  it("excludes in-progress task from month leaderboard", () => {
+  it("includes in-progress task for current period as bế quan points", () => {
     const statusChangedInSep = new Date("2026-09-10T10:00:00.000Z");
-    const included = shouldIncludeTaskInPeriod(
+    const includedInCurrent = shouldIncludeTaskInPeriod(
       "indeterminate",
       statusChangedInSep,
       null,
       statusChangedInSep,
       statusChangedInSep,
-      "month"
+      "month",
+      true
     );
-    expect(included).toBe(false);
+    expect(includedInCurrent).toBe(true);
+
+    const includedInPast = shouldIncludeTaskInPeriod(
+      "indeterminate",
+      statusChangedInSep,
+      null,
+      statusChangedInSep,
+      statusChangedInSep,
+      "month",
+      false
+    );
+    expect(includedInPast).toBe(false);
   });
 
   it("prioritizes resolutiondate when statusChangedAt is null", () => {

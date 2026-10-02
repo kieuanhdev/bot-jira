@@ -218,9 +218,8 @@ export async function getLeaderboardData(options: GetLeaderboardOptions): Promis
         member.tasks.push(taskItem);
       }
     } else {
-      // Khi xem theo kỳ có mốc thời gian (tháng, quý, năm): CHỈ tính các task đã hoàn thành trong kỳ đó.
-      // Chỉ khi xem "all" (toàn bộ thời gian), mới ghi nhận các task đang làm dở (inProgressPoints) để tham khảo.
-      if (timeframe === "all") {
+      // Đối với task chưa hoàn thành (đang bế quan): ghi nhận vào inProgressPoints ở kỳ hiện tại hoặc khi xem toàn thời gian
+      if (period.isCurrentPeriod || timeframe === "all") {
         member.inProgressPoints += pts;
         member.inProgressTasks += 1;
         member.tasks.push(taskItem);
@@ -229,13 +228,8 @@ export async function getLeaderboardData(options: GetLeaderboardOptions): Promis
   }
 
   // 6. Calculate totals and sort
-  const allMembersList = Array.from(memberMap.values());
-
-  // Filter out users who have 0 activity in all-time/specific periods if there are many,
-  // but keep anyone with points or tasks, and keep current user
-  const activeMembers = allMembersList.filter(
-    (m) => m.completedPoints > 0 || (timeframe === "all" && m.inProgressPoints > 0) || m.isCurrentUser
-  );
+  // Giữ lại tất cả thành viên trong team để bảng xếp hạng luôn hiển thị đầy đủ mọi người
+  const activeMembers = Array.from(memberMap.values());
 
   activeMembers.sort((a, b) => {
     if (b.completedPoints !== a.completedPoints) {
