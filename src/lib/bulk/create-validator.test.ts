@@ -120,6 +120,7 @@ describe("Bulk Create - Validator and Normalizer", () => {
         summary: "Overridden",
         priorityId: "1",
         labels: ["custom"],
+        parent: { type: "jira", jiraKey: "EPM-10" },
       },
       {
         issueTypeId: "10001",
@@ -134,6 +135,7 @@ describe("Bulk Create - Validator and Normalizer", () => {
     expect(merged.priorityId).toBe("1"); // overridden
     expect(merged.labels).toEqual(["custom"]); // replaced, not concatenated
     expect(merged.points).toBe(5); // inherited
+    expect(merged.parent).toEqual({ type: "jira", jiraKey: "EPM-10" });
   });
 
   it("validates item and marks ready when valid", () => {
@@ -157,6 +159,23 @@ describe("Bulk Create - Validator and Normalizer", () => {
     );
     expect(res.classification).toBe("blocked");
     expect(res.errors.some((e) => e.code === "PARENT_REQUIRED")).toBe(true);
+  });
+
+  it("keeps a selected parent when defaults are present", () => {
+    const res = validateAndNormalizeItem(
+      {
+        clientRef: "row-1",
+        summary: "Subtask with parent",
+        issueTypeId: "Sub-task",
+        parent: { type: "jira", jiraKey: "EPM-10" },
+      },
+      0,
+      {},
+      mockMeta
+    );
+    expect(res.classification).toBe("ready");
+    expect(res.errors.some((e) => e.code === "PARENT_REQUIRED")).toBe(false);
+    expect(res.normalizedFields.parent).toEqual({ type: "jira", jiraKey: "EPM-10" });
   });
 
   it("blocks item if required field is missing", () => {

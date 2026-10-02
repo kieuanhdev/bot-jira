@@ -105,6 +105,7 @@ export function mergeDefaultsWithRow(
     clientRef: row.clientRef,
     summary: row.summary,
     issueTypeId: row.issueTypeId !== undefined ? row.issueTypeId : defaults.issueTypeId,
+    parent: row.parent,
     description: row.description !== undefined ? row.description : defaults.description,
     assignee: row.assignee !== undefined ? row.assignee : defaults.assignee,
     priorityId: row.priorityId !== undefined ? row.priorityId : defaults.priorityId,
@@ -398,6 +399,23 @@ export function validateAndNormalizeItem(
       if (reqField.id === "issuetype") continue;
       if (reqField.id === "project") continue;
 
+      // Jira assigns the authenticated user as reporter when it is omitted.
+      if (reqField.id === "reporter") continue;
+
+      // Parent is validated above with the issue type sub-task rules.
+      if (reqField.id === "parent") continue;
+
+      if (reqField.id === "labels") {
+        if (labels.length === 0) {
+          errors.push({
+            field: "labels",
+            code: "REQUIRED_FIELD_MISSING",
+            message: `Trường bắt buộc "${reqField.name}" chưa có dữ liệu`,
+          });
+        }
+        continue;
+      }
+
       if (reqField.id === "description" && !description) {
         errors.push({
           field: "description",
@@ -420,6 +438,47 @@ export function validateAndNormalizeItem(
           code: "REQUIRED_FIELD_MISSING",
           message: `Trường bắt buộc "${reqField.name}" chưa có dữ liệu`,
         });
+        continue;
+      }
+
+      if (reqField.id === "assignee") {
+        if (!assignee) {
+          errors.push({
+            field: "assignee",
+            code: "REQUIRED_FIELD_MISSING",
+            message: `Trường bắt buộc "${reqField.name}" chưa có dữ liệu`,
+          });
+        }
+        continue;
+      }
+      if (reqField.id === "fixVersions") {
+        if (fixVersionIds.length === 0) {
+          errors.push({
+            field: "fixVersionIds",
+            code: "REQUIRED_FIELD_MISSING",
+            message: `Trường bắt buộc "${reqField.name}" chưa có dữ liệu`,
+          });
+        }
+        continue;
+      }
+      if (reqField.id === "timetracking") {
+        if (!originalEstimate) {
+          errors.push({
+            field: "originalEstimate",
+            code: "REQUIRED_FIELD_MISSING",
+            message: `Trường bắt buộc "${reqField.name}" chưa có dữ liệu`,
+          });
+        }
+        continue;
+      }
+      if (reqField.id === meta.pointsFieldId) {
+        if (points === undefined || points === null) {
+          errors.push({
+            field: "points",
+            code: "REQUIRED_FIELD_MISSING",
+            message: `Trường bắt buộc "${reqField.name}" chưa có dữ liệu`,
+          });
+        }
         continue;
       }
 
