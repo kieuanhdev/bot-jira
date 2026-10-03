@@ -6,7 +6,7 @@ import {
   SHEET_NAME_TASKS,
   SHEET_NAME_CATALOG,
   SHEET_NAME_GUIDE,
-  EXCEL_SCHEMA_VERSION,
+  SHEET_NAME_EXAMPLES,
 } from "./excel-schema";
 
 describe("excel-template", () => {
@@ -60,10 +60,12 @@ describe("excel-template", () => {
     const tasksSheet = workbook.getWorksheet(SHEET_NAME_TASKS);
     const catalogSheet = workbook.getWorksheet(SHEET_NAME_CATALOG);
     const guideSheet = workbook.getWorksheet(SHEET_NAME_GUIDE);
+    const examplesSheet = workbook.getWorksheet(SHEET_NAME_EXAMPLES);
 
     expect(tasksSheet).toBeDefined();
     expect(catalogSheet).toBeDefined();
     expect(guideSheet).toBeDefined();
+    expect(examplesSheet).toBeDefined();
 
     // 2. Verify sheet properties
     expect(catalogSheet?.state).toBe("hidden");
@@ -81,6 +83,12 @@ describe("excel-template", () => {
     expect(tasksSheet?.rowCount).toBeGreaterThanOrEqual(101);
     expect(tasksSheet?.getRow(2).getCell(1).text).toBe("TASK-001");
     expect(tasksSheet?.getRow(101).getCell(1).text).toBe("TASK-100");
+
+    // Named ranges keep cross-sheet dropdowns compatible with desktop Excel.
+    expect(tasksSheet?.getRow(2).getCell(3).dataValidation.formulae).toEqual(["IssueTypes"]);
+    expect(tasksSheet?.getRow(2).getCell(4).dataValidation.formulae).toEqual(["TaskClientRefs"]);
+    expect(tasksSheet?.getRow(2).getCell(12).dataValidation.type).toBe("date");
+    expect(examplesSheet?.getCell("A1").text).toContain("VÍ DỤ THAM KHẢO");
 
     // 5. Verify catalog content
     expect(catalogSheet?.getCell("A2").text).toBe("Task [10001]");

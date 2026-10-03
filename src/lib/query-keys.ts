@@ -134,3 +134,12 @@ export const bulkKeys = {
   createTemplateIssues: (projectKey: string, query: string) =>
     ["bulk-create-template-issues", projectKey, query] as const,
 };
+
+export const reportsKeys = {
+  all: ["reports"] as const,
+  portfolio: (params?: Record<string, unknown>) => ["reports", "portfolio", params ?? {}] as const,
+  project: (projectKey: string, params?: Record<string, unknown>) =>
+    ["reports", "project", projectKey, params ?? {}] as const,
+  risks: (projectKey: string, params?: Record<string, unknown>) =>
+    ["reports", "risks", projectKey, params ?? {}] as const,
+};

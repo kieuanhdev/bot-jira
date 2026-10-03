@@ -3,7 +3,7 @@
  * Reference: docs/BULK_CREATE_EXCEL_TEMPLATE_PLAN.md
  */
 
-import { type BulkCreateProjectMetadata, type BulkCreateRowInput } from "./create-types";
+import { type BulkCreateProjectMetadata } from "./create-types";
 
 export const EXCEL_SCHEMA_VERSION = 1;
 export const MAX_EXCEL_ITEMS = 100;
@@ -11,6 +11,7 @@ export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 export const SHEET_NAME_TASKS = "Tasks";
 export const SHEET_NAME_CATALOG = "Danh_muc";
 export const SHEET_NAME_GUIDE = "Huong_dan";
+export const SHEET_NAME_EXAMPLES = "Vi_du";
 
 export interface ExcelTemplateManifest {
   schemaVersion: number;

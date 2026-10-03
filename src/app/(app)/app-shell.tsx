@@ -18,6 +18,7 @@ import {
   LogOut,
   Menu,
   X,
+  ChartNoAxesCombined,
 } from "lucide-react";
 import { useUnreadCount } from "@/hooks/use-notifications";
 import { FreshnessBanner } from "./freshness-banner";
@@ -26,6 +27,7 @@ import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/board", label: "Bảng công việc", icon: LayoutGrid },
+  { href: "/reports/projects", label: "Báo cáo", icon: ChartNoAxesCombined },
   { href: "/leaderboard", label: "Bảng xếp hạng", icon: Trophy },
   { href: "/bulk", label: "Thao tác hàng loạt", icon: ListChecks },
   { href: "/release", label: "Phát hành", icon: Rocket },

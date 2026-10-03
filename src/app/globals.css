@@ -24,6 +24,11 @@
   --ring: oklch(0.6 0.108 184.7);
   --radius: 0.625rem;
   --sidebar: oklch(0.975 0.005 200);
+  --chart-1: oklch(0.6 0.108 184.7);
+  --chart-2: oklch(0.65 0.15 145);
+  --chart-3: oklch(0.7 0.14 75);
+  --chart-4: oklch(0.65 0.15 230);
+  --chart-5: oklch(0.6 0.22 25);
 }
 
 .dark {
@@ -47,6 +52,11 @@
   --input: oklch(0.37 0.019 263.9);
   --ring: oklch(0.6 0.108 184.7);
   --sidebar: oklch(0.238 0.019 263.9);
+  --chart-1: oklch(0.65 0.12 184.7);
+  --chart-2: oklch(0.7 0.16 145);
+  --chart-3: oklch(0.75 0.15 75);
+  --chart-4: oklch(0.7 0.16 230);
+  --chart-5: oklch(0.65 0.22 25);
 }
 
 @theme inline {
@@ -70,6 +80,11 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --radius-sm: calc(var(--radius) - 4px);

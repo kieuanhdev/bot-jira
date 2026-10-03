@@ -20,7 +20,7 @@ import {
 } from "@/lib/bulk/create-types";
 import {
   Upload,
-  FileText,
+
   FileSpreadsheet,
   CheckCircle2,
   AlertTriangle,
@@ -272,9 +272,11 @@ export function CsvImportDialog({
   const rawItems = excelResult ? excelResult.items : parsed ? parsed.items : [];
   const itemsToImport = rawItems.slice(0, remainingCapacity);
   const hasTruncation = rawItems.length > remainingCapacity;
+  const excelHasErrors = Boolean(excelResult?.errors?.length);
   const isImportDisabled =
     (!parsed && !excelResult) ||
     itemsToImport.length === 0 ||
+    excelHasErrors ||
     (hasTruncation && !confirmTruncation);
 
   function handleConfirmImport() {
@@ -674,6 +676,7 @@ export function CsvImportDialog({
                     <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
                     Các dòng có lỗi ({excelResult.errors.length} lỗi):
                   </div>
+                  <p>Hãy sửa các ô này trong file Excel rồi tải lại. Nút nhập được mở khi file không còn lỗi.</p>
                   <ul className="list-disc pl-5 space-y-0.5 max-h-24 overflow-y-auto">
                     {excelResult.errors.slice(0, 10).map((err, i) => (
                       <li key={i}>{err.message}</li>
@@ -689,7 +692,10 @@ export function CsvImportDialog({
               {excelResult.warnings && excelResult.warnings.length > 0 && (
                 <div className="space-y-1 text-[11px] text-amber-700 dark:text-amber-400">
                   {excelResult.warnings.map((w, i) => (
-                    <p key={i}>⚠️ {w}</p>
+                    <p key={i} className="flex items-start gap-1.5">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <span>{w}</span>
+                    </p>
                   ))}
                 </div>
               )}

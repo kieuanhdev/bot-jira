@@ -44,10 +44,13 @@ export type Permission =
   | "branch.view"
   | "branch.confirm"
   | "branch.manage"
-  | "branch.sync";
+  | "branch.sync"
+  | "report.view"
+  | "report.export"
+  | "report.configure";
 
 /**
- * Permission matrix (REL-01, BR-005):
+ * Permission matrix (REL-01, BR-005, RPT-103):
  *
  *  | action            | member | release_manager | admin |
  *  |-------------------|--------|-----------------|-------|
@@ -62,6 +65,9 @@ export type Permission =
  *  | branch.confirm    |  yes   |      yes        |  yes  |
  *  | branch.manage     |  no    |      yes        |  yes  |
  *  | branch.sync       |  no    |      yes        |  yes  |
+ *  | report.view       |  yes   |      yes        |  yes  |
+ *  | report.export     |  yes   |      yes        |  yes  |
+ *  | report.configure  |  no    |      no         |  yes  |
  */
 export function can(session: { user?: { role?: string } } | null | undefined, perm: Permission): boolean {
   const r = roleOf(session);
@@ -69,6 +75,8 @@ export function can(session: { user?: { role?: string } } | null | undefined, pe
     case "release.view":
     case "branch.view":
     case "branch.confirm":
+    case "report.view":
+    case "report.export":
       return true; // any signed-in user
     case "release.check":
     case "release.manage":
@@ -79,6 +87,7 @@ export function can(session: { user?: { role?: string } } | null | undefined, pe
       return r === "release_manager" || r === "admin";
     case "admin.users":
     case "admin.integrations":
+    case "report.configure":
       return r === "admin";
     default:
       return false;

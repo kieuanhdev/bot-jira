@@ -9,6 +9,7 @@ import { markEventFailed, markEventProcessed, type Source } from "@/lib/events/s
 import type { BbUser } from "@/lib/bitbucket/client";
 import { env, hasJiraConfig, hasBitbucketConfig, hasSentryConfig } from "../guard";
 import type { WorkerLog } from "../guard";
+import { normalizeStatusToGroup } from "@/lib/reports/status";
 
 export type ProcessWebhookJobData = {
   source: Source;
@@ -99,10 +100,47 @@ async function handleJira(json: unknown): Promise<Record<string, unknown>> {
 
   await refreshIssue(key, authorName);
 
-  // If the changelog indicates issue link changes, also refresh any linked issue keys mentioned
   const items = legacyEnvelope?.changelog?.items ?? j.changelog?.items ?? [];
+
+  // If the changelog indicates status transition, ingest into IssueTransitionEvent
+  const statusItem = items.find(
+    (i: { field?: string; from?: string; to?: string; fromString?: string; toString?: string }) =>
+      (i.field ?? "").toLowerCase() === "status"
+  );
+  if (statusItem) {
+    const fromStatus = statusItem.fromString ?? statusItem.from ?? null;
+    const toStatus = statusItem.toString ?? statusItem.to ?? "";
+    if (toStatus) {
+      const projectKey = key.split("-")[0];
+      const changelogId = (j.changelog as { id?: string } | undefined)?.id ?? `${Date.now()}`;
+      const eventKey = `${key}:status:${changelogId}:${fromStatus ?? "none"}->${toStatus}`;
+      const fromStatusGroup = fromStatus ? normalizeStatusToGroup(fromStatus) : null;
+      const toStatusGroup = normalizeStatusToGroup(toStatus);
+      const updatedStr = (j as { issue?: { fields?: { updated?: string } } })?.issue?.fields?.updated;
+      const occurredAt = updatedStr ? new Date(updatedStr) : new Date();
+
+      await prisma.issueTransitionEvent.upsert({
+        where: { eventKey },
+        create: {
+          eventKey,
+          jiraKey: key,
+          projectKey,
+          occurredAt,
+          fromStatus,
+          toStatus,
+          fromStatusGroup,
+          toStatusGroup,
+          assigneeJira: authorName,
+          source: "jira_webhook",
+        },
+        update: {},
+      }).catch(() => null);
+    }
+  }
+
+  // If the changelog indicates issue link changes, also refresh any linked issue keys mentioned
   const linkItems = items.filter(
-    (i) => (i.field ?? "").toLowerCase() === "link" || (i.field ?? "").toLowerCase() === "issuelinks"
+    (i: { field?: string }) => (i.field ?? "").toLowerCase() === "link" || (i.field ?? "").toLowerCase() === "issuelinks"
   );
   const otherRefreshed: string[] = [];
   if (linkItems.length > 0) {

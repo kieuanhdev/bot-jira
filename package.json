@@ -8,7 +8,7 @@
     "start": "next start -p 3100",
     "worker": "tsx --env-file-if-exists=.env src/worker.ts",
     "lint": "eslint src scripts prisma",
-    "typecheck": "tsc --noEmit --incremental false",
+    "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
@@ -42,6 +42,7 @@
     "pg-boss": "^12.33.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "recharts": "^3.10.1",
     "tailwind-merge": "^3.7.0",
     "web-push": "^3.6.7",
     "zustand": "^5.0.15"

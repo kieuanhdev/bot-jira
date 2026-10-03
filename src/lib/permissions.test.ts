@@ -71,6 +71,21 @@ describe("can — permission matrix (REL-01)", () => {
     expect(can(session("admin"), "branch.manage")).toBe(true);
     expect(can(session("admin"), "branch.sync")).toBe(true);
   });
+
+  it("evaluates report permissions per RPT-103", () => {
+    // any user can view and export reports
+    expect(can(session("member"), "report.view")).toBe(true);
+    expect(can(session("member"), "report.export")).toBe(true);
+    expect(can(session("release_manager"), "report.view")).toBe(true);
+    expect(can(session("release_manager"), "report.export")).toBe(true);
+    expect(can(session("admin"), "report.view")).toBe(true);
+    expect(can(session("admin"), "report.export")).toBe(true);
+
+    // only admin can configure reports
+    expect(can(session("member"), "report.configure")).toBe(false);
+    expect(can(session("release_manager"), "report.configure")).toBe(false);
+    expect(can(session("admin"), "report.configure")).toBe(true);
+  });
 });
 
 describe("ROLES", () => {

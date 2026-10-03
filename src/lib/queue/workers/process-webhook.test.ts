@@ -50,6 +50,9 @@ vi.mock("@/lib/prisma", () => ({
       update: vi.fn(),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
+    issueTransitionEvent: {
+      upsert: vi.fn().mockResolvedValue({}),
+    },
   },
 }));
 

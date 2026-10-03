@@ -180,4 +180,49 @@ describe("excel-parser", () => {
     expect(parsed.projectKeyMatch).toBe(false);
     expect(parsed.errors.some((e) => e.message.includes("không khớp với dự án"))).toBe(true);
   });
+
+  it("reports duplicate and missing parent references instead of silently accepting broken links", async () => {
+    const templateBuffer = await generateBulkCreateExcelTemplate({ metadata: mockMetadata });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(templateBuffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    const tasksSheet = workbook.getWorksheet("Tasks")!;
+
+    tasksSheet.getRow(2).getCell(2).value = "Parent A";
+    tasksSheet.getRow(2).getCell(3).value = "Task [10001]";
+    tasksSheet.getRow(3).getCell(1).value = "TASK-001";
+    tasksSheet.getRow(3).getCell(2).value = "Duplicate ref";
+    tasksSheet.getRow(3).getCell(3).value = "Task [10001]";
+    tasksSheet.getRow(4).getCell(2).value = "Orphan subtask";
+    tasksSheet.getRow(4).getCell(3).value = "Sub-task [10002]";
+    tasksSheet.getRow(4).getCell(4).value = "TASK-999";
+
+    const parsed = await parseBulkCreateExcel(Buffer.from(await workbook.xlsx.writeBuffer()), {
+      targetProjectKey: "EPM",
+      currentMetadata: mockMetadata,
+    });
+
+    expect(parsed.errors.filter((error) => error.col === "Client Ref")).toHaveLength(2);
+    expect(parsed.errors.some((error) => error.message.includes('Không tìm thấy Parent Ref "TASK-999"'))).toBe(true);
+  });
+
+  it("rejects stale catalog values and preserves legitimate leading punctuation", async () => {
+    const templateBuffer = await generateBulkCreateExcelTemplate({ metadata: mockMetadata });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(templateBuffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    const row = workbook.getWorksheet("Tasks")!.getRow(2);
+    row.getCell(2).value = "- Cập nhật tài liệu";
+    row.getCell(3).value = "Removed Type [99999]";
+    row.getCell(8).value = "Removed Priority [999]";
+    row.getCell(13).value = "Removed Version [888]";
+
+    const parsed = await parseBulkCreateExcel(Buffer.from(await workbook.xlsx.writeBuffer()), {
+      targetProjectKey: "EPM",
+      currentMetadata: mockMetadata,
+    });
+
+    expect(parsed.items[0].summary).toBe("- Cập nhật tài liệu");
+    expect(parsed.errors.map((error) => error.col)).toEqual(
+      expect.arrayContaining(["Issue Type", "Priority", "Fix Versions"])
+    );
+  });
 });

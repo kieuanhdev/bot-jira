@@ -438,9 +438,7 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
                       <td className="px-3 py-3">
                         {item.jiraKey ? (
                           <Link
-                            href={`https://jira.example.com/browse/${item.jiraKey}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            href={`/issue/${item.jiraKey}`}
                             className="inline-flex items-center gap-1 font-mono font-semibold text-primary hover:underline"
                           >
                             {item.jiraKey}

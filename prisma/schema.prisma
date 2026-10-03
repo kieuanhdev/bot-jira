@@ -832,4 +832,49 @@ model JiraProject {
   @@index([name])
 }
 
+model ProjectReportSnapshot {
+  id                   String    @id @default(cuid())
+  snapshotDate         DateTime
+  timezone             String
+  projectKey           String
+  jiraVersionId        String    @default("")
+  versionName          String    @default("")
+  unit                 String
+  statusGroups         Json
+  totalCount           Int
+  doneCount            Int
+  totalPoints          Int?
+  donePoints           Int?
+  totalEstimateSeconds Int?
+  doneEstimateSeconds  Int?
+  blockedCount         Int
+  overdueCount         Int
+  overSlaCount         Int
+  unassignedCount      Int
+  sourceLastSyncedAt   DateTime?
+  capturedAt           DateTime  @default(now())
+
+  @@unique([snapshotDate, projectKey, jiraVersionId])
+  @@index([projectKey, jiraVersionId, snapshotDate])
+}
+
+model IssueTransitionEvent {
+  id              String   @id @default(cuid())
+  eventKey        String   @unique
+  jiraKey         String
+  projectKey      String
+  occurredAt      DateTime
+  fromStatus      String?
+  toStatus        String
+  fromStatusGroup String?
+  toStatusGroup   String
+  assigneeJira    String?
+  source          String   @default("jira_webhook") // jira_webhook | changelog_backfill | sync_inferred
+  capturedAt      DateTime @default(now())
+
+  @@index([projectKey, occurredAt])
+  @@index([jiraKey, occurredAt])
+  @@index([assigneeJira, occurredAt])
+}
+
 

@@ -86,13 +86,9 @@ function getSafeCellValue(cell: ExcelJS.Cell): { text: string; isFormula: boolea
     };
   }
 
-  const str = String(cell.value).trim();
-  const startsWithDangerousChar = /^[=+\-@]/.test(str);
-
-  return {
-    text: startsWithDangerousChar ? str.replace(/^[=+\-@]+/, "") : str,
-    isFormula: startsWithDangerousChar,
-  };
+  // Plain strings in a parsed .xlsx cell are not formulas. Preserve leading
+  // punctuation so values such as "- cập nhật tài liệu" are not corrupted.
+  return { text: String(cell.value).trim(), isFormula: false };
 }
 
 /**
@@ -140,7 +136,7 @@ export async function parseBulkCreateExcel(
   }
 
   let projectKeyMatch = true;
-  let fileProjectKey: string | undefined = manifest?.projectKey;
+  const fileProjectKey: string | undefined = manifest?.projectKey;
   let isStaleMetadata = false;
 
   if (manifest) {
@@ -256,6 +252,7 @@ export async function parseBulkCreateExcel(
 
   // 5. Read Data Rows
   const parsedItems: BulkCreateRowInput[] = [];
+  const sourceRows: number[] = [];
   let skippedEmptyCount = 0;
   let totalDataRowsRead = 0;
 
@@ -410,7 +407,15 @@ export async function parseBulkCreateExcel(
     } else if (rowParentRef) {
       parentRefObj = { type: "batch", clientRef: rowParentRef.trim() };
     } else if (rowParentKey) {
-      parentRefObj = { type: "jira", jiraKey: rowParentKey.trim().toUpperCase() };
+      const normalizedParentKey = rowParentKey.trim().toUpperCase();
+      if (!/^[A-Z][A-Z0-9_]*-\d+$/.test(normalizedParentKey)) {
+        errors.push({
+          row: r,
+          col: "Parent Jira Key",
+          message: `Dòng ${r}: Jira key cha "${rowParentKey}" không hợp lệ (ví dụ đúng: ${targetProjectKey || "PROJ"}-123).`,
+        });
+      }
+      parentRefObj = { type: "jira", jiraKey: normalizedParentKey };
     }
 
     // Issue Type mapping
@@ -423,6 +428,18 @@ export async function parseBulkCreateExcel(
         const lower = extracted.name.toLowerCase();
         mappedIssueTypeId = issueTypesByName.get(lower) || issueTypesById.get(lower) || extracted.name;
       }
+      if (currentMetadata && mappedIssueTypeId && !issueTypesById.has(mappedIssueTypeId.toLowerCase())) {
+        errors.push({
+          row: r,
+          col: "Issue Type",
+          message: `Dòng ${r}: Loại task "${rowIssueType}" không tồn tại trong cấu hình hiện tại của dự án.`,
+        });
+      }
+    } else if (currentMetadata?.defaultIssueTypeId) {
+      mappedIssueTypeId = currentMetadata.defaultIssueTypeId;
+      warnings.push(`Dòng ${r}: Issue Type để trống, hệ thống dùng loại mặc định của dự án.`);
+    } else {
+      errors.push({ row: r, col: "Issue Type", message: `Dòng ${r}: Issue Type là bắt buộc.` });
     }
 
     // Priority mapping
@@ -434,6 +451,13 @@ export async function parseBulkCreateExcel(
       } else {
         const lower = extracted.name.toLowerCase();
         mappedPriorityId = prioritiesByName.get(lower) || prioritiesById.get(lower) || extracted.name;
+      }
+      if (currentMetadata && mappedPriorityId && !prioritiesById.has(mappedPriorityId.toLowerCase())) {
+        errors.push({
+          row: r,
+          col: "Priority",
+          message: `Dòng ${r}: Priority "${rowPriority}" không tồn tại trong cấu hình hiện tại của dự án.`,
+        });
       }
     }
 
@@ -459,10 +483,22 @@ export async function parseBulkCreateExcel(
       const rawParts = rowFixVersionsStr.split(",").map((p) => p.trim()).filter(Boolean);
       mappedFixVersionIds = rawParts.map((part) => {
         const extracted = extractIdFromDropdownValue(part);
-        if (extracted.id) return extracted.id;
+        if (extracted.id) return versionsById.get(extracted.id.toLowerCase()) || extracted.id;
         const lower = extracted.name.toLowerCase();
         return versionsByName.get(lower) || versionsById.get(lower) || extracted.name;
       });
+      if (currentMetadata) {
+        rawParts.forEach((part, index) => {
+          const mappedId = mappedFixVersionIds?.[index];
+          if (mappedId && !versionsById.has(mappedId.toLowerCase())) {
+            errors.push({
+              row: r,
+              col: "Fix Versions",
+              message: `Dòng ${r}: Phiên bản "${part}" không tồn tại trong cấu hình hiện tại của dự án.`,
+            });
+          }
+        });
+      }
     }
 
     const item: BulkCreateRowInput = {
@@ -481,7 +517,50 @@ export async function parseBulkCreateExcel(
     };
 
     parsedItems.push(item);
+    sourceRows.push(r);
   }
+
+  // Validate references before client refs are normalized for the editor.
+  const refRows = new Map<string, number[]>();
+  parsedItems.forEach((item, index) => {
+    const ref = item.clientRef.trim().toLowerCase();
+    if (!ref) return;
+    const rows = refRows.get(ref) || [];
+    rows.push(sourceRows[index]);
+    refRows.set(ref, rows);
+  });
+
+  for (const [ref, rows] of refRows) {
+    if (rows.length <= 1) continue;
+    rows.forEach((row) => {
+      errors.push({
+        row,
+        col: "Client Ref",
+        message: "Dòng " + row + ": Client Ref \"" + ref + "\" bị trùng ở các dòng " + rows.join(", ") + ". Hãy dùng mã duy nhất để liên kết task cha–con chính xác.",
+      });
+    });
+  }
+
+  const knownRefs = new Set(refRows.keys());
+  parsedItems.forEach((item, index) => {
+    if (item.parent?.type !== "batch") return;
+    const parentRef = item.parent.clientRef.trim().toLowerCase();
+    const ownRef = item.clientRef.trim().toLowerCase();
+    const row = sourceRows[index];
+    if (parentRef === ownRef) {
+      errors.push({
+        row,
+        col: "Parent Ref",
+        message: "Dòng " + row + ": Task không thể tự làm task cha của chính nó.",
+      });
+    } else if (!knownRefs.has(parentRef)) {
+      errors.push({
+        row,
+        col: "Parent Ref",
+        message: "Dòng " + row + ": Không tìm thấy Parent Ref \"" + item.parent.clientRef + "\" trong file.",
+      });
+    }
+  });
 
   // Handle overflow (cap at MAX_BULK_CREATE_ITEMS = 100)
   let overflowCount = 0;

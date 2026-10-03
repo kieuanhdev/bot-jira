@@ -20,6 +20,7 @@ import type { WorkerLog } from "./guard";
 import { scheduledJiraJobAgeMs, shouldSkipStaleJiraJob } from "./jira-job-policy";
 
 import { runRefreshBoardMembership, type RefreshBoardMembershipJobData } from "./workers/refresh-board-membership";
+import { captureProjectReportSnapshots } from "@/lib/reports/snapshot";
 
 const globalForBoss = globalThis as unknown as { boss?: PgBoss; bossStart?: Promise<PgBoss> };
 let watchTimer: ReturnType<typeof setInterval> | undefined;
@@ -40,6 +41,7 @@ export const JOB_NAMES = [
   "process-webhook",
   "deliver-notifications",
   "health-alert",
+  "capture-project-report-snapshots",
 ] as const;
 
 export function getBoss(): PgBoss {
@@ -322,6 +324,13 @@ export async function registerJobs(): Promise<PgBoss> {
   await boss.schedule("deliver-notifications", "* * * * *", null, { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 3, retryDelay: 15, retryBackoff: true });
   // OPS-03 / Watchdog — freshness/health alerting and self-healing recovery, runs every minute.
   await boss.schedule("health-alert", "* * * * *", null, { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 2, retryDelay: 10 });
+  // RPT-403 — Project reporting snapshots, runs daily at 00:15
+  await boss.schedule("capture-project-report-snapshots", "15 0 * * *", null, {
+    singletonSeconds: 3600,
+    expireInSeconds: 1800,
+    retryLimit: 2,
+    retryDelay: 60,
+  });
 
   await boss.work<PollJiraDispatchJobData>("poll-jira-dispatch", async (jobs) => {
     const job = jobs[0];
@@ -427,6 +436,13 @@ export async function registerJobs(): Promise<PgBoss> {
       runRefreshBoardMembership(job.data)
     );
   });
+  // RPT-403 — Project reporting snapshots worker
+  await boss.work("capture-project-report-snapshots", async () =>
+    recordRun("capture-project-report-snapshots", async () => {
+      const stats = await captureProjectReportSnapshots();
+      return { ok: true, stats: stats as unknown as Record<string, unknown> };
+    })
+  );
   // M5 — webhook processing: one-off jobs enqueued by the webhook endpoints.
   await boss.work<ProcessWebhookJobData>("process-webhook", { pollingIntervalSeconds: 0.5 }, async (jobs) => {
     const data = jobs[0]?.data ?? { source: "jira", eventId: "" };

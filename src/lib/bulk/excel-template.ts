@@ -11,28 +11,14 @@ import {
   SHEET_NAME_TASKS,
   SHEET_NAME_CATALOG,
   SHEET_NAME_GUIDE,
+  SHEET_NAME_EXAMPLES,
   type ExcelTemplateManifest,
   getActiveColumnsForProject,
-  type ExcelColumnDef,
 } from "./excel-schema";
 
 export interface GenerateTemplateOptions {
   metadata: BulkCreateProjectMetadata;
   assignees?: Array<{ username: string; displayName: string }>;
-}
-
-/**
- * Convert 1-based column number to Excel column letters (1 -> A, 26 -> Z, 27 -> AA, etc.)
- */
-function getColumnLetter(colIndex: number): string {
-  let temp = colIndex;
-  let letter = "";
-  while (temp > 0) {
-    const rem = (temp - 1) % 26;
-    letter = String.fromCharCode(65 + rem) + letter;
-    temp = Math.floor((temp - 1) / 26);
-  }
-  return letter;
 }
 
 /**
@@ -172,12 +158,26 @@ export async function generateBulkCreateExcelTemplate(
   // Store manifest in hidden cell Z1 of Danh_muc sheet
   catalogSheet.getCell("Z1").value = `_MANIFEST_:${JSON.stringify(manifest)}`;
 
-  // Map dropdown column keys to catalog sheet ranges
+  // Cross-sheet validation lists are reliable when backed by workbook names.
+  const addCatalogName = (name: string, column: string, itemCount: number) => {
+    if (itemCount === 0) return null;
+    workbook.definedNames.add(
+      `${SHEET_NAME_CATALOG}!$${column}$2:$${column}$${itemCount + 1}`,
+      name
+    );
+    return name;
+  };
+
+  workbook.definedNames.add(
+    `${SHEET_NAME_TASKS}!$A$2:$A$${MAX_EXCEL_ITEMS + 1}`,
+    "TaskClientRefs"
+  );
+
   const catalogRangeMap: Record<string, string | null> = {
-    issueTypes: catalogIssueTypes.length > 0 ? `Danh_muc!$A$2:$A$${catalogIssueTypes.length + 1}` : null,
-    priorities: catalogPriorities.length > 0 ? `Danh_muc!$B$2:$B$${catalogPriorities.length + 1}` : null,
-    assignees: catalogAssignees.length > 0 ? `Danh_muc!$C$2:$C$${catalogAssignees.length + 1}` : null,
-    fixVersions: catalogFixVersions.length > 0 ? `Danh_muc!$D$2:$D$${catalogFixVersions.length + 1}` : null,
+    issueTypes: addCatalogName("IssueTypes", "A", catalogIssueTypes.length),
+    priorities: addCatalogName("Priorities", "B", catalogPriorities.length),
+    assignees: addCatalogName("Assignees", "C", catalogAssignees.length),
+    fixVersions: addCatalogName("FixVersions", "D", catalogFixVersions.length),
   };
 
   // Pre-populate 100 rows in Tasks sheet
@@ -217,13 +217,22 @@ export async function generateBulkCreateExcelTemplate(
         if (rangeFormula) {
           cell.dataValidation = {
             type: "list",
-            allowBlank: true,
+            allowBlank: !colDef.required,
             formulae: [rangeFormula],
             showErrorMessage: true,
             errorTitle: "Giá trị không hợp lệ",
             error: "Vui lòng chọn giá trị từ danh sách dropdown hoặc điền chính xác mã ID.",
           };
         }
+      } else if (colDef.key === "parentRef") {
+        cell.dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: ["TaskClientRefs"],
+          showErrorMessage: true,
+          errorTitle: "Task cha không hợp lệ",
+          error: "Chọn Client Ref của task cha trong cùng file. Task cha đã có trên Jira phải nhập ở cột Parent Jira Key.",
+        };
       } else if (colDef.key === "points") {
         cell.dataValidation = {
           type: "whole",
@@ -236,12 +245,74 @@ export async function generateBulkCreateExcelTemplate(
         };
       } else if (colDef.key === "dueDate") {
         cell.numFmt = "yyyy-mm-dd";
+        cell.dataValidation = {
+          type: "date",
+          operator: "between",
+          formulae: [new Date(2000, 0, 1), new Date(2100, 11, 31)],
+          allowBlank: true,
+          showErrorMessage: true,
+          errorTitle: "Ngày không hợp lệ",
+          error: "Nhập ngày hợp lệ theo định dạng YYYY-MM-DD.",
+        };
       }
     });
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 3. Sheet `Huong_dan` (Instructions sheet)
+  // 3. Sheet `Vi_du` contains examples only; the importer reads `Tasks`.
+  // ─────────────────────────────────────────────────────────────────────────────
+  const examplesSheet = workbook.addWorksheet(SHEET_NAME_EXAMPLES, {
+    views: [{ state: "frozen", ySplit: 3, activeCell: "A4" }],
+  });
+  examplesSheet.columns = [
+    { key: "clientRef", width: 16 },
+    { key: "summary", width: 40 },
+    { key: "issueType", width: 24 },
+    { key: "parentRef", width: 18 },
+    { key: "parentKey", width: 20 },
+    { key: "note", width: 52 },
+  ];
+  examplesSheet.mergeCells("A1:F1");
+  examplesSheet.getCell("A1").value = "VÍ DỤ THAM KHẢO — KHÔNG NHẬP DỮ LIỆU THẬT Ở SHEET NÀY";
+  examplesSheet.getCell("A1").font = { bold: true, color: { argb: "FF92400E" } };
+  examplesSheet.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF3C7" } };
+  examplesSheet.getCell("A1").alignment = { horizontal: "center" };
+  examplesSheet.mergeCells("A2:F2");
+  examplesSheet.getCell("A2").value = "Điền dữ liệu thật tại sheet Tasks. Các dòng dưới chỉ minh hoạ cách liên kết task cha–con.";
+  examplesSheet.getRow(3).values = ["Client Ref", "Summary", "Issue Type", "Parent Ref", "Parent Jira Key", "Giải thích"];
+  examplesSheet.getRow(3).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  examplesSheet.getRow(3).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0D9488" } };
+  const standardType = metadata.issueTypes.find((item) => !item.subtask) || metadata.issueTypes[0];
+  const subtaskType = metadata.issueTypes.find((item) => item.subtask);
+  examplesSheet.getRow(4).values = [
+    "TASK-001",
+    "Xây dựng API đăng nhập",
+    standardType ? standardType.name + " [" + standardType.id + "]" : "Task",
+    "",
+    "",
+    "Task thường, không cần task cha.",
+  ];
+  if (subtaskType) {
+    examplesSheet.getRow(5).values = [
+      "TASK-002",
+      "Viết kiểm thử API đăng nhập",
+      subtaskType.name + " [" + subtaskType.id + "]",
+      "TASK-001",
+      "",
+      "Sub-task trỏ đến task cha trong cùng file bằng Parent Ref.",
+    ];
+    examplesSheet.getRow(6).values = [
+      "TASK-003",
+      "Bổ sung tài liệu",
+      subtaskType.name + " [" + subtaskType.id + "]",
+      "",
+      metadata.project.key + "-123",
+      "Sub-task trỏ đến task cha đã có trên Jira bằng Parent Jira Key.",
+    ];
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 4. Sheet `Huong_dan` (Instructions sheet)
   // ─────────────────────────────────────────────────────────────────────────────
   const guideSheet = workbook.addWorksheet(SHEET_NAME_GUIDE);
   guideSheet.views = [{ showGridLines: true }];
@@ -270,7 +341,7 @@ export async function generateBulkCreateExcelTemplate(
   const instructions = [
     {
       col: "Quy tắc chung",
-      text: "Không đổi tên sheet 'Tasks' hoặc thay đổi vị trí / tên các cột tiêu đề. Mỗi dòng đại diện cho một task.",
+      text: "Chỉ nhập dữ liệu thật trong sheet 'Tasks'. Sheet 'Vi_du' chỉ để tham khảo. Không đổi tên sheet Tasks hoặc tên các cột tiêu đề. Mỗi dòng đại diện cho một task.",
     },
     {
       col: "Client Ref *",
