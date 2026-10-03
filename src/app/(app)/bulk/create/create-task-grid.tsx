@@ -505,12 +505,10 @@ export function CreateTaskGrid({
                       value={item.issueTypeId || ""}
                       onValueChange={(val) => {
                         const newType = val || undefined;
-                        const isSub = newType ? subtaskIssueTypeIds.has(newType) : false;
+                        const isEpic = newType ? metadata.issueTypes.find((t) => t.id === newType)?.name.toLowerCase() === "epic" : false;
                         const patch: Partial<BulkCreateRowInput> = { issueTypeId: newType };
-                        if (!isSub) {
+                        if (isEpic) {
                           patch.parent = null;
-                        } else if (!item.parent) {
-                          patch.parent = undefined;
                         }
                         updateItem(idx, patch);
                       }}
@@ -706,12 +704,10 @@ export function CreateTaskGrid({
                         value={item.issueTypeId || ""}
                         onValueChange={(val) => {
                           const newType = val || undefined;
-                          const isSubtask = newType ? subtaskIssueTypeIds.has(newType) : false;
+                          const isEpic = newType ? metadata.issueTypes.find((t) => t.id === newType)?.name.toLowerCase() === "epic" : false;
                           const patch: Partial<BulkCreateRowInput> = { issueTypeId: newType };
-                          if (!isSubtask) {
+                          if (isEpic) {
                             patch.parent = null;
-                          } else if (!item.parent) {
-                            patch.parent = undefined;
                           }
                           updateItem(idx, patch);
                         }}

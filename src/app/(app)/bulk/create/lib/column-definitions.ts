@@ -8,6 +8,7 @@ export type ColumnId =
   | "parent"
   | "priority"
   | "assignee"
+  | "components"
   | "labels"
   | "points"
   | "originalEstimate"
@@ -95,6 +96,16 @@ export const ALL_COLUMNS: ColumnDefinition[] = [
     canToggle: true,
     defaultVisible: true,
     isAvailable: () => true,
+  },
+  {
+    id: "components",
+    label: "Hợp phần (Components)",
+    shortLabel: "Components",
+    minWidth: 140,
+    width: 160,
+    canToggle: true,
+    defaultVisible: true,
+    isAvailable: (meta) => Boolean(meta.components && meta.components.length > 0),
   },
   {
     id: "labels",

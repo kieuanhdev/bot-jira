@@ -33,6 +33,7 @@ export type BulkCreateFieldDefaults = {
   originalEstimate?: string;
   dueDate?: string | null;
   fixVersionIds?: string[];
+  componentIds?: string[];
   description?: string;
   customFields?: Record<string, unknown>;
 };
@@ -50,6 +51,7 @@ export type BulkCreateRowInput = {
   originalEstimate?: string;
   dueDate?: string | null;
   fixVersionIds?: string[];
+  componentIds?: string[];
   customFields?: Record<string, unknown>;
 };
 
@@ -83,6 +85,7 @@ export type CanonicalCreateItem = {
   originalEstimateSeconds?: number;
   dueDate?: string | null;
   fixVersionIds: string[];
+  componentIds: string[];
   customFields?: Record<string, unknown>;
 };
 
@@ -163,7 +166,9 @@ export type BulkCreateProjectMetadata = {
   >;
   priorityOptions: Array<{ id: string; name: string }>;
   versionOptions: Array<{ id: string; name: string; archived?: boolean; released?: boolean }>;
+  components?: Array<{ id: string; name: string; description?: string }>;
   pointsFieldId: string | null;
+  epicLinkFieldId?: string | null;
   supportsTimeTracking: boolean;
   supportsDueDate: boolean;
   /** Whether the project has any sub-task issue types. */
@@ -179,6 +184,7 @@ export type BulkCreateProjectMetadata = {
     priority: BulkCreateFieldCapability;
     fixVersions: BulkCreateFieldCapability;
     points: BulkCreateFieldCapability;
+    components?: BulkCreateFieldCapability;
   };
   fetchedAt: string;
   fingerprint: string;

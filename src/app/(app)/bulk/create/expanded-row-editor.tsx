@@ -22,6 +22,8 @@ import {
 import { AssigneeCombobox } from "./assignee-combobox";
 import { ParentCombobox } from "./parent-combobox";
 import { LabelCombobox } from "./label-combobox";
+import { ComponentsCombobox } from "./components-combobox";
+import { DynamicCustomFields } from "./dynamic-custom-fields";
 import {
   ChevronUp,
   ExternalLink,
@@ -273,9 +275,9 @@ export function ExpandedRowEditor({
                 value={item.issueTypeId || ""}
                 onValueChange={(val) => {
                   const newType = val || undefined;
-                  const isSub = newType ? subtaskIssueTypeIds.has(newType) : false;
+                  const isEpic = newType ? metadata.issueTypes.find((t) => t.id === newType)?.name.toLowerCase() === "epic" : false;
                   const patch: Partial<BulkCreateRowInput> = { issueTypeId: newType };
-                  if (!isSub) patch.parent = null;
+                  if (isEpic) patch.parent = null;
                   onChange(patch);
                 }}
               >
@@ -298,24 +300,22 @@ export function ExpandedRowEditor({
               </Select>
             </div>
 
-            {/* Parent (if subtask or has subtasks) */}
-            {metadata.hasSubtaskTypes && (
-              <div className="space-y-1">
-                <span className="text-[11px] font-medium text-foreground">
-                  Task cha {isSubtask && <span className="text-destructive">*</span>}
-                </span>
-                <ParentCombobox
-                  projectKey={projectKey}
-                  value={item.parent}
-                  onChange={(parent) => onChange({ parent })}
-                  batchItems={allItems}
-                  currentClientRef={item.clientRef}
-                  subtaskIssueTypeIds={subtaskIssueTypeIds}
-                  placeholder={isSubtask ? "Bắt buộc *" : "—"}
-                  className="w-full"
-                />
-              </div>
-            )}
+            {/* Parent / Epic */}
+            <div className="space-y-1">
+              <span className="text-[11px] font-medium text-foreground">
+                Task cha / Epic {isSubtask && <span className="text-destructive">*</span>}
+              </span>
+              <ParentCombobox
+                projectKey={projectKey}
+                value={item.parent}
+                onChange={(parent) => onChange({ parent })}
+                batchItems={allItems}
+                currentClientRef={item.clientRef}
+                subtaskIssueTypeIds={subtaskIssueTypeIds}
+                placeholder={isSubtask ? "Bắt buộc *" : "Chọn Epic / Task cha (tùy chọn)"}
+                className="w-full"
+              />
+            </div>
 
             {/* Priority */}
             <div className="space-y-1">
@@ -353,6 +353,27 @@ export function ExpandedRowEditor({
                 placeholder={defaults.assignee || "Chưa gán"}
               />
             </div>
+
+            {/* Components */}
+            {metadata.components && metadata.components.length > 0 && (
+              <div className="space-y-1">
+                <span className="text-[11px] font-medium text-foreground">Hợp phần (Components)</span>
+                <ComponentsCombobox
+                  options={metadata.components}
+                  value={item.componentIds}
+                  onChange={(componentIds) => onChange({ componentIds })}
+                  placeholder={
+                    defaults.componentIds && defaults.componentIds.length > 0
+                      ? metadata.components
+                          .filter((c) => defaults.componentIds!.includes(c.id))
+                          .map((c) => c.name)
+                          .join(", ") + " (mặc định)"
+                      : "Chọn hợp phần…"
+                  }
+                  compact={true}
+                />
+              </div>
+            )}
 
             {/* Points */}
             {metadata.pointsFieldId && (
@@ -437,6 +458,17 @@ export function ExpandedRowEditor({
                 onChange={(labels) => onChange({ labels })}
                 placeholder={defaults.labels?.length ? defaults.labels.join(", ") : "Thêm nhãn..."}
                 compact
+              />
+            </div>
+
+            {/* Dynamic Custom Fields */}
+            <div className={cn(isFullWidth ? "col-span-2 sm:col-span-4" : "sm:col-span-2")}>
+              <DynamicCustomFields
+                metadata={metadata}
+                issueTypeId={item.issueTypeId}
+                defaults={defaults}
+                values={item.customFields}
+                onChange={(customFields) => onChange({ customFields })}
               />
             </div>
           </div>

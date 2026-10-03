@@ -9,6 +9,7 @@ import type {
   JiraProjectStatus,
   JiraCommentPage,
   JiraVersion,
+  JiraComponent,
   JiraFieldDefinition,
   JiraEditMeta,
   JiraWorklog,
@@ -706,6 +707,13 @@ export function jiraWith(auth?: JiraAuth) {
     /** Get a single Fix Version by ID. */
     getVersion: (versionId: string) =>
       request<JiraVersion>(`/rest/api/2/version/${encodeURIComponent(versionId)}`, {}, auth),
+    /** List the components of a project. */
+    getProjectComponents: (projectKey: string) =>
+      request<JiraComponent[]>(
+        `/rest/api/2/project/${encodeURIComponent(projectKey)}/components`,
+        {},
+        auth
+      ),
     /**
      * Query effective permissions of the authenticated user for a specific project.
      * Backed by Jira REST v2 `GET /rest/api/2/mypermissions?projectKey={key}`.

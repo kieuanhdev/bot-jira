@@ -192,4 +192,55 @@ describe("executeBulkCreateOperation worker execution", () => {
       })
     );
   });
+
+  it("passes components to Jira createIssue when present", async () => {
+    mocks.bulkOperationFindUnique.mockResolvedValue({
+      id: "op-3",
+      requestedBy: "user-1",
+      state: "queued",
+      payload: { projectKey: "EPM" },
+      total: 1,
+      createItems: [],
+    });
+    mocks.bulkOperationUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.userFindUnique.mockResolvedValue({ id: "user-1" });
+
+    mocks.bulkCreateItemFindMany
+      .mockResolvedValueOnce([
+        {
+          id: "item-3",
+          rowIndex: 0,
+          clientRef: "row-3",
+          status: "pending",
+          requested: { summary: "Task with comp", issueTypeId: "10001", componentIds: ["comp-1"] },
+          attemptCount: 0,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    mocks.bulkCreateItemFindUnique.mockResolvedValue({
+      id: "item-3",
+      status: "running",
+      clientRef: "row-3",
+      requested: { summary: "Task with comp", issueTypeId: "10001", componentIds: ["comp-1"] },
+      attemptCount: 0,
+    });
+    mocks.bulkCreateItemUpdateMany.mockResolvedValue({ count: 1 });
+
+    mocks.findIssueByBulkMarker.mockResolvedValue(null);
+    mocks.createIssue.mockResolvedValue({ id: "1002", key: "EPM-101", self: "url" });
+    mocks.bulkCreateItemGroupBy.mockResolvedValue([
+      { status: "succeeded", _count: { _all: 1 } },
+    ]);
+
+    await executeBulkCreateOperation("op-3");
+
+    expect(mocks.createIssue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectKey: "EPM",
+        fields: expect.objectContaining({
+          components: [{ id: "comp-1" }],
+        }),
+      })
+    );
+  });
 });

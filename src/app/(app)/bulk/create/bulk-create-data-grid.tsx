@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { AssigneeCombobox } from "./assignee-combobox";
 import { ParentCombobox } from "./parent-combobox";
 import { LabelCombobox } from "./label-combobox";
+import { ComponentsCombobox } from "./components-combobox";
 import { ExpandedRowEditor } from "./expanded-row-editor";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { BulkSelectionToolbar } from "./bulk-selection-toolbar";
@@ -509,6 +510,13 @@ export function BulkCreateDataGrid({
                 </th>
               )}
 
+              {/* Components */}
+              {isColVisible("components") && (
+                <th className="w-40 px-2.5 py-3 border-r border-border/30">
+                  Hợp phần (Components)
+                </th>
+              )}
+
               {/* Labels */}
               {isColVisible("labels") && (
                 <th className="w-40 px-2.5 py-3 border-r border-border/30">
@@ -722,6 +730,26 @@ export function BulkCreateDataGrid({
                         value={item.assignee ?? null}
                         onChange={(username) => updateItem(idx, { assignee: username })}
                         placeholder={defaults.assignee || "Chưa gán"}
+                      />
+                    </td>
+                  )}
+
+                  {/* Components */}
+                  {isColVisible("components") && (
+                    <td className={`px-2.5 ${cellPadding} border-r border-border/30`}>
+                      <ComponentsCombobox
+                        options={metadata.components || []}
+                        value={item.componentIds}
+                        onChange={(componentIds) => updateItem(idx, { componentIds })}
+                        placeholder={
+                          defaults.componentIds && defaults.componentIds.length > 0
+                            ? (metadata.components ?? [])
+                                .filter((c) => defaults.componentIds?.includes(c.id))
+                                .map((c) => c.name)
+                                .join(", ") || "—"
+                            : "—"
+                        }
+                        compact
                       />
                     </td>
                   )}

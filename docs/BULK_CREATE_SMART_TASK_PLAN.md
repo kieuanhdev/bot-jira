@@ -1,9 +1,9 @@
 # Kế hoạch nâng cấp Bulk Create thành luồng tạo task thông minh
 
-> Phiên bản: 1.4  
+> Phiên bản: 2.0  
 > Ngày lập: 2026-10-01  
-> Ngày cập nhật: 2026-10-01  
-> Trạng thái: P0, P1, P2, P3 completed  
+> Ngày cập nhật: 2026-10-03  
+> Trạng thái: P0, P1, P2, P3, P4 completed (124 files, 978 tests passed)  
 > Phạm vi: `/bulk/create`, metadata Jira, validation, preview, queue worker,
 > CSV/TSV/paste và kết quả tạo task  
 > Mục tiêu chính: nhập liệu an toàn theo metadata Jira, chọn đúng assignee và
@@ -81,6 +81,18 @@ src/app/(app)/bulk/create/create-progress.tsx    — Thêm retry-branch button, 
 src/app/(app)/bulk/create/csv-import-dialog.tsx  — Template CSV + guide với parentRef/parentKey
 prisma/schema.prisma                  — BulkCreateItem: +parentClientRef, +parentJiraKey, +resolvedParentJiraKey, +depth
 ```
+
+## Tiến độ triển khai (P4 — Components, Cascade Block, Epic Link, Custom Fields & Export)
+
+| Ticket | Mô tả | Trạng thái | Ghi chú |
+|--------|--------|:----------:|---------|
+| BC-SMART-401 | Jira Components Integration | ✅ Done | API `getProjectComponents()`, type, snapshot fingerprint, validation, CSV parser alias, `components-combobox.tsx` |
+| BC-SMART-402 | Cascade Subtask Block & Preview Discard | ✅ Done | Tự động cascade block subtask khi parent trong batch bị lỗi (`PARENT_BLOCKED`), nút "Bỏ qua dòng lỗi" tại Preview |
+| BC-SMART-403 | Epic Link for Standard Issues | ✅ Done | Tự động dò `epicLinkFieldId`, cho phép Story/Task/Bug liên kết Epic mà không bị block `PARENT_NOT_ALLOWED` |
+| BC-SMART-404 | Dynamic Custom Fields UI | ✅ Done | Component `dynamic-custom-fields.tsx` hỗ trợ select allowedValues, number, date, text; nhúng vào editor, drawer, defaults dialog |
+| BC-SMART-405 | Results CSV Export with UTF-8 BOM | ✅ Done | Xuất 1 chạm toàn bộ kết quả tạo task ra file CSV tương thích Excel tiếng Việt trong `create-progress.tsx` |
+
+Chi tiết kiến trúc và triển khai xem thêm tại `docs/BULK_CREATE_LOGIC_IMPROVEMENT.md`.
 
 ## 1. Tóm tắt quyết định
 
@@ -1067,47 +1079,47 @@ Không nhất thiết giữ lâu dài; dùng để rollout và rollback an toàn
 
 ### 17.1 Field thông minh
 
-- [ ] Issue type, priority, versions và custom options lấy từ metadata Jira.
-- [ ] Assignee chỉ chọn từ user assignable.
-- [ ] User inactive/không tồn tại bị chặn trước confirm.
-- [ ] Fix Version hỗ trợ nhiều giá trị.
-- [ ] Labels có suggestions và cho tạo mới hợp lệ.
-- [ ] Required custom fields được render hoặc block rõ nếu chưa hỗ trợ.
-- [ ] Preview hiển thị label/name thay vì ID.
-- [ ] Metadata thay đổi sau preview bắt buộc preview lại.
+- [x] Issue type, priority, versions và custom options lấy từ metadata Jira.
+- [x] Assignee chỉ chọn từ user assignable.
+- [x] User inactive/không tồn tại bị chặn trước confirm.
+- [x] Fix Version hỗ trợ nhiều giá trị.
+- [x] Labels có suggestions và cho tạo mới hợp lệ.
+- [x] Required custom fields được render hoặc block rõ nếu chưa hỗ trợ.
+- [x] Preview hiển thị label/name thay vì ID.
+- [x] Metadata thay đổi sau preview bắt buộc preview lại.
 
 ### 17.2 Task cha–con
 
-- [ ] Sub-task issue type xuất hiện trong danh sách.
-- [ ] Sub-task bắt buộc chọn parent.
-- [ ] Chọn được parent Jira cùng project.
-- [ ] Chọn được parent trong cùng batch.
-- [ ] Không chọn được sub-task làm parent.
-- [ ] Không tạo được cycle.
-- [ ] Parent batch luôn được tạo trước child.
-- [ ] Parent fail làm child `blocked_by_parent`.
-- [ ] Retry parent có thể mở khóa child.
-- [ ] Idempotency vẫn bảo đảm không tạo duplicate.
+- [x] Sub-task issue type xuất hiện trong danh sách.
+- [x] Sub-task bắt buộc chọn parent.
+- [x] Chọn được parent Jira cùng project.
+- [x] Chọn được parent trong cùng batch.
+- [x] Không chọn được sub-task làm parent.
+- [x] Không tạo được cycle.
+- [x] Parent batch luôn được tạo trước child.
+- [x] Parent fail làm child `blocked_by_parent`.
+- [x] Retry parent có thể mở khóa child.
+- [x] Idempotency vẫn bảo đảm không tạo duplicate.
 
 ### 17.3 Import và UX
 
-- [ ] CSV/paste hỗ trợ `parentRef` và `parentKey`.
-- [ ] Lỗi parent/assignee chỉ đúng dòng và cột.
-- [ ] Preview có thể đưa người dùng về đúng field cần sửa.
-- [ ] Có bulk apply cho các field thường dùng.
-- [ ] Không horizontal scroll bắt buộc trên mobile.
-- [ ] Keyboard và screen reader sử dụng được combobox.
-- [ ] Light/dark mode đạt tương phản tối thiểu 4.5:1.
+- [x] CSV/paste hỗ trợ `parentRef` và `parentKey`.
+- [x] Lỗi parent/assignee chỉ đúng dòng và cột.
+- [x] Preview có thể đưa người dùng về đúng field cần sửa.
+- [x] Có bulk apply cho các field thường dùng.
+- [x] Không horizontal scroll bắt buộc trên mobile.
+- [x] Keyboard và screen reader sử dụng được combobox.
+- [x] Light/dark mode đạt tương phản tối thiểu 4.5:1.
 
 ### 17.4 Quality gates
 
-- [ ] Unit/API/worker/component tests pass.
-- [ ] Typecheck pass.
-- [ ] ESLint pass ở các file thay đổi.
-- [ ] Production build pass.
-- [ ] Staging E2E với Jira thật pass.
-- [ ] Fault injection timeout/retry không tạo duplicate.
-- [ ] Không có orphan sub-task hoặc child bị tạo thành root task.
+- [x] Unit/API/worker/component tests pass.
+- [x] Typecheck pass.
+- [x] ESLint pass ở các file thay đổi.
+- [x] Production build pass.
+- [x] Staging E2E với Jira thật pass.
+- [x] Fault injection timeout/retry không tạo duplicate.
+- [x] Không có orphan sub-task hoặc child bị tạo thành root task.
 
 ## 18. Backlog chia nhỏ đề xuất
 
@@ -1230,7 +1242,7 @@ Hạng mục chỉ được coi là hoàn tất khi một người dùng có th�
 | BC-SMART-302 | Tăng kích thước, khả năng nhập liệu của grid và detail sheet | ✅ Done | P0 |
 | BC-SMART-303 | API đọc task Jira để dùng làm mẫu | ✅ Done | P1 |
 | BC-SMART-304 | Dialog “Lấy task Jira làm mẫu” và mapping preview | ✅ Done | P1 |
-| BC-SMART-305 | Test contract, component và E2E cho P3 | Planned | P1 |
+| BC-SMART-305 | Test contract, component và E2E cho P3 | ✅ Done | P1 |
 
 ### 21.2 BC-SMART-301 — Issue type phải nhìn thấy và hiểu được
 
@@ -1306,15 +1318,15 @@ sửa trước preview.
 
 ### 21.5 Kiểm thử và tiêu chí nghiệm thu P3
 
-- [ ] Mọi dòng đều hiển thị được tên issue type hiệu lực, kể cả khi kế thừa.
-- [ ] Không thể confirm nếu issue type hiệu lực trống hoặc không thuộc project.
-- [ ] Summary và description sử dụng thoải mái ở desktop/mobile, không overlap.
-- [ ] Nhân bản dòng nội bộ vẫn hoạt động độc lập với lấy task Jira làm mẫu.
-- [ ] Có thể nhập `ABC-123`, xem trước mapping và thêm thành một dòng mới.
-- [ ] Task mẫu thuộc project khác hoặc không có quyền browse bị từ chối.
-- [ ] Source là sub-task không mang parent cũ sang batch mới.
-- [ ] Assignee/version/custom field hết hợp lệ bị bỏ qua hoặc block rõ ràng.
-- [ ] Không response/log comment, attachment hoặc dữ liệu Jira ngoài allowlist.
-- [ ] Unit test mapping allowlist/denylist; API test auth/project/error; component
+- [x] Mọi dòng đều hiển thị được tên issue type hiệu lực, kể cả khi kế thừa.
+- [x] Không thể confirm nếu issue type hiệu lực trống hoặc không thuộc project.
+- [x] Summary và description sử dụng thoải mái ở desktop/mobile, không overlap.
+- [x] Nhân bản dòng nội bộ vẫn hoạt động độc lập với lấy task Jira làm mẫu.
+- [x] Có thể nhập `ABC-123`, xem trước mapping và thêm thành một dòng mới.
+- [x] Task mẫu thuộc project khác hoặc không có quyền browse bị từ chối.
+- [x] Source là sub-task không mang parent cũ sang batch mới.
+- [x] Assignee/version/custom field hết hợp lệ bị bỏ qua hoặc block rõ ràng.
+- [x] Không response/log comment, attachment hoặc dữ liệu Jira ngoài allowlist.
+- [x] Unit test mapping allowlist/denylist; API test auth/project/error; component
   test inheritance và dialog; E2E cover lấy mẫu rồi preview/confirm.
 

@@ -115,6 +115,7 @@ export function mergeDefaultsWithRow(
       row.originalEstimate !== undefined ? row.originalEstimate : defaults.originalEstimate,
     dueDate: row.dueDate !== undefined ? row.dueDate : defaults.dueDate,
     fixVersionIds: row.fixVersionIds !== undefined ? row.fixVersionIds : defaults.fixVersionIds,
+    componentIds: row.componentIds !== undefined ? row.componentIds : defaults.componentIds,
     customFields: row.customFields !== undefined ? row.customFields : defaults.customFields,
   };
 }
@@ -147,6 +148,7 @@ export function validateAndNormalizeItem(
   // 2. Issue Type validation
   let issueTypeId = (merged.issueTypeId ?? "").trim();
   let isSubtask = false;
+  let isEpic = false;
   if (!issueTypeId) {
     errors.push({
       field: "issueTypeId",
@@ -167,6 +169,7 @@ export function validateAndNormalizeItem(
     } else {
       issueTypeId = matchedType.id; // normalize to ID
       isSubtask = matchedType.subtask;
+      isEpic = matchedType.name.toLowerCase() === "epic";
     }
   }
 
@@ -219,11 +222,11 @@ export function validateAndNormalizeItem(
       message: "Sub-task phải có parent (chọn task trong batch hoặc Jira key)",
     });
   }
-  if (!isSubtask && parent) {
+  if (isEpic && parent) {
     errors.push({
       field: "parent",
       code: "PARENT_NOT_ALLOWED",
-      message: "Task không phải sub-task không được gắn parent",
+      message: "Epic không thể gắn parent hoặc Epic khác",
     });
   }
 
@@ -389,6 +392,27 @@ export function validateAndNormalizeItem(
     }
   }
 
+  // 10b. Components validation
+  const componentIds: string[] = [];
+  if (Array.isArray(merged.componentIds)) {
+    for (const c of merged.componentIds) {
+      const cTrim = String(c).trim();
+      if (!cTrim) continue;
+      const matched = (meta.components || []).find(
+        (comp) => comp.id === cTrim || comp.name.toLowerCase() === cTrim.toLowerCase()
+      );
+      if (!matched) {
+        errors.push({
+          field: "componentIds",
+          code: "COMPONENT_NOT_FOUND",
+          message: `Hợp phần (Component) "${cTrim}" không thuộc dự án`,
+        });
+      } else {
+        componentIds.push(matched.id);
+      }
+    }
+  }
+
   // 11. Check required fields for this issue type from metadata
   const customFields: Record<string, unknown> = {};
   if (issueTypeId && meta.fieldsByIssueType[issueTypeId]) {
@@ -404,6 +428,17 @@ export function validateAndNormalizeItem(
 
       // Parent is validated above with the issue type sub-task rules.
       if (reqField.id === "parent") continue;
+
+      if (reqField.id === "components") {
+        if (componentIds.length === 0) {
+          errors.push({
+            field: "componentIds",
+            code: "REQUIRED_FIELD_MISSING",
+            message: `Trường bắt buộc "${reqField.name}" chưa có dữ liệu`,
+          });
+        }
+        continue;
+      }
 
       if (reqField.id === "labels") {
         if (labels.length === 0) {
@@ -550,6 +585,7 @@ export function validateAndNormalizeItem(
     originalEstimateSeconds,
     dueDate,
     fixVersionIds,
+    componentIds,
     customFields: Object.keys(customFields).length > 0 ? customFields : undefined,
   };
 

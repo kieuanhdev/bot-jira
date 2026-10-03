@@ -37,6 +37,9 @@ const mockMetadata: BulkCreateProjectMetadata = {
   versionOptions: [
     { id: "20001", name: "v1.0.0", archived: false, released: false },
   ],
+  components: [
+    { id: "c1", name: "FE" },
+  ],
   fieldsByIssueType: {},
 };
 
@@ -135,6 +138,7 @@ describe("Bulk Create - Column Definitions", () => {
     expect(defaultCols).toContain("summary");
     expect(defaultCols).toContain("issueType");
     expect(defaultCols).toContain("parent");
+    expect(defaultCols).toContain("components");
     expect(defaultCols).toContain("points");
     expect(defaultCols).toContain("originalEstimate");
     expect(defaultCols).toContain("dueDate");
@@ -147,6 +151,7 @@ describe("Bulk Create - Column Definitions", () => {
     expect(toggleables.some((c) => c.id === "summary")).toBe(false); // cannot toggle summary
     expect(toggleables.some((c) => c.id === "priority")).toBe(true);
     expect(toggleables.some((c) => c.id === "assignee")).toBe(true);
+    expect(toggleables.some((c) => c.id === "components")).toBe(true);
     expect(toggleables.some((c) => c.id === "description")).toBe(true);
   });
 });

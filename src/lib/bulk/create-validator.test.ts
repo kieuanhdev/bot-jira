@@ -53,6 +53,7 @@ describe("Bulk Create - Validator and Normalizer", () => {
       { id: "10001", name: "Task", subtask: false },
       { id: "10002", name: "Bug", subtask: false },
       { id: "10003", name: "Sub-task", subtask: true },
+      { id: "10004", name: "Epic", subtask: false },
     ],
     fieldsByIssueType: {
       "10001": [
@@ -73,6 +74,10 @@ describe("Bulk Create - Validator and Normalizer", () => {
     versionOptions: [
       { id: "20001", name: "v1.0", archived: false },
       { id: "20002", name: "v0.9", archived: true },
+    ],
+    components: [
+      { id: "c1", name: "Backend" },
+      { id: "c2", name: "Frontend" },
     ],
     pointsFieldId: "customfield_10004",
     supportsTimeTracking: true,
@@ -199,6 +204,71 @@ describe("Bulk Create - Validator and Normalizer", () => {
     );
     expect(res.classification).toBe("blocked");
     expect(res.errors.some((e) => e.code === "VERSION_ARCHIVED")).toBe(true);
+  });
+
+  it("validates components against project metadata", () => {
+    // Valid by ID and by Name
+    const validRes = validateAndNormalizeItem(
+      {
+        clientRef: "row-1",
+        summary: "Task with components",
+        issueTypeId: "10001",
+        componentIds: ["c1", "Frontend"],
+      },
+      0,
+      undefined,
+      mockMeta
+    );
+    expect(validRes.classification).toBe("ready");
+    expect(validRes.normalizedFields.componentIds).toEqual(["c1", "c2"]);
+
+    // Invalid component
+    const invalidRes = validateAndNormalizeItem(
+      {
+        clientRef: "row-2",
+        summary: "Task with invalid component",
+        issueTypeId: "10001",
+        componentIds: ["NonExistent"],
+      },
+      1,
+      undefined,
+      mockMeta
+    );
+    expect(invalidRes.classification).toBe("blocked");
+    expect(invalidRes.errors.some((e) => e.code === "COMPONENT_NOT_FOUND")).toBe(true);
+  });
+
+  it("allows standard task (Task / Story) to link to parent / Epic", () => {
+    const res = validateAndNormalizeItem(
+      {
+        clientRef: "row-1",
+        summary: "Standard task linking to Epic",
+        issueTypeId: "10001",
+        parent: { type: "jira", jiraKey: "EPM-50" },
+      },
+      0,
+      undefined,
+      mockMeta
+    );
+    expect(res.classification).toBe("ready");
+    expect(res.errors.length).toBe(0);
+    expect(res.normalizedFields.parent).toEqual({ type: "jira", jiraKey: "EPM-50" });
+  });
+
+  it("blocks Epic from having a parent", () => {
+    const res = validateAndNormalizeItem(
+      {
+        clientRef: "row-1",
+        summary: "Epic with parent",
+        issueTypeId: "10004",
+        parent: { type: "jira", jiraKey: "EPM-50" },
+      },
+      0,
+      undefined,
+      mockMeta
+    );
+    expect(res.classification).toBe("blocked");
+    expect(res.errors.some((e) => e.code === "PARENT_NOT_ALLOWED")).toBe(true);
   });
 
   it("generates stable idempotency marker", () => {

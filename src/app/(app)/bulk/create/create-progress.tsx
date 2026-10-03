@@ -20,6 +20,7 @@ import {
   RefreshCw,
   PlusCircle,
   GitBranch,
+  Download,
 } from "lucide-react";
 
 interface OperationDetailResponse {
@@ -137,6 +138,39 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  function handleExportCsv() {
+    if (!items || items.length === 0) return;
+    const projectKey = op?.payload?.projectKey || "";
+    const headers = ["STT", "Client Ref", "Jira Key", "Summary", "Trạng thái", "Lỗi / Chi tiết"];
+    const rows = items.map((item, idx) => {
+      const stt = String(idx + 1);
+      const clientRef = item.clientRef || "";
+      const jiraKey = item.jiraKey || "";
+      const summary = (item.requested?.summary || "").replace(/"/g, '""');
+      const statusText =
+        item.status === "succeeded"
+          ? "Thành công"
+          : item.status === "failed"
+            ? "Thất bại"
+            : item.status === "blocked_by_parent"
+              ? "Chờ task cha"
+              : item.status;
+      const errorText = (item.error || "").replace(/"/g, '""');
+      return `"${stt}","${clientRef}","${jiraKey}","${summary}","${statusText}","${errorText}"`;
+    });
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `bulk-create-${projectKey || "jira"}-${operationId.slice(-6)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   function toggleRetryItem(id: string) {
     const next = new Set(selectedRetryIds);
     if (next.has(id)) next.delete(id);
@@ -207,6 +241,20 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
                       Sao chép {allKeys.length} Jira keys
                     </>
                   )}
+                </Button>
+              )}
+
+              {items.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportCsv}
+                  className="h-8 gap-1.5 text-xs cursor-pointer text-foreground"
+                  title="Tải xuống toàn bộ kết quả tạo task ra file CSV"
+                >
+                  <Download className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                  <span>Xuất CSV ({items.length})</span>
                 </Button>
               )}
 

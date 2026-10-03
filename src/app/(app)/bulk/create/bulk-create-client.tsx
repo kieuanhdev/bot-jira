@@ -191,13 +191,13 @@ export function BulkCreateClient() {
 
   // Preview mutation: pass object directly without double JSON.stringify
   const previewMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (overrideItems?: BulkCreateRowInput[]) =>
       api<BulkCreatePreviewResult>("/api/bulk/create", {
         method: "POST",
         body: {
           projectKey,
           defaults,
-          items: items.filter((i) => i.summary.trim().length > 0),
+          items: (overrideItems || items).filter((i) => i.summary.trim().length > 0),
           metadataFingerprint: metadata?.fingerprint,
           source,
         },
@@ -237,6 +237,29 @@ export function BulkCreateClient() {
       { clientRef: "row-3", summary: "" },
     ]);
     setDefaults({});
+  }
+
+  function handleDiscardBlockedRows() {
+    if (!previewData) return;
+    const blockedIndices = new Set(
+      previewData.items.filter((i) => i.classification === "blocked").map((i) => i.rowIndex)
+    );
+    if (blockedIndices.size === 0) return;
+
+    const remaining = items.filter((_, idx) => !blockedIndices.has(idx));
+    if (remaining.length === 0) {
+      setItems([
+        { clientRef: "row-1", summary: "" },
+        { clientRef: "row-2", summary: "" },
+        { clientRef: "row-3", summary: "" },
+      ]);
+      setPreviewData(null);
+      setStep("input");
+      return;
+    }
+
+    setItems(remaining);
+    previewMutation.mutate(remaining);
   }
 
   function handleProjectSelect(newKey: string) {
@@ -602,6 +625,7 @@ export function BulkCreateClient() {
             setIsEditorFullscreen(true);
             setStep("input");
           }}
+          onDiscardBlockedRows={handleDiscardBlockedRows}
         />
       )}
 

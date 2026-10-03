@@ -23,6 +23,7 @@ import {
   ShieldAlert,
   Wrench,
   Crosshair,
+  Trash2,
 } from "lucide-react";
 
 interface CreatePreviewProps {
@@ -34,6 +35,7 @@ interface CreatePreviewProps {
   confirmError?: string | null;
   onResetConfirmError?: () => void;
   onFixRow?: (rowIndex: number, field?: string) => void;
+  onDiscardBlockedRows?: () => void;
 }
 
 export function CreatePreview({
@@ -45,6 +47,7 @@ export function CreatePreview({
   confirmError,
   onResetConfirmError,
   onFixRow,
+  onDiscardBlockedRows,
 }: CreatePreviewProps) {
   const [filterTab, setFilterTab] = useState<"all" | "ready" | "warning" | "blocked">("all");
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -138,6 +141,21 @@ export function CreatePreview({
             >
               <Crosshair className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Sửa lỗi đầu tiên</span>
+            </Button>
+          )}
+
+          {onDiscardBlockedRows && blockedItems.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onDiscardBlockedRows}
+              disabled={isConfirming}
+              className="gap-1.5 cursor-pointer text-xs h-8 text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+              title="Loại bỏ các dòng bị lỗi khỏi batch và chỉ giữ lại các dòng hợp lệ"
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Bỏ qua {blockedItems.length} dòng lỗi</span>
             </Button>
           )}
         </div>

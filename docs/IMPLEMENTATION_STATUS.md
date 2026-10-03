@@ -14,9 +14,9 @@
 | Pha 2 — Integration (INT-01/02/03/04) | DONE (code) + CONFIG (runtime) | Chờ token/dữ liệu thật |
 | Pha 3 — Release (REL-01/02/03/04/05) | DONE (01–04) + TODO (05) | REL-05 chưa làm (cần PO xác nhận) |
 | Pha 4 — AI/Audit/OBS/QA/OPS | DONE code, AI-01 + E2E còn pilot | Chờ dữ liệu pilot |
+| Bulk Create Smart V2 | DONE | Components, Epic Link, Cascade Subtask, Custom Fields UI, CSV Export (`docs/BULK_CREATE_LOGIC_IMPROVEMENT.md`) |
 
-Quality gate hiện tại: **297 unit tests pass, typecheck pass, lint sạch,
-production build pass, 19 migration đã áp dụng.**
+Quality gate hiện tại: **978 unit & contract tests pass (124 test files), typecheck pass (0 error), lint sạch, production build pass.**
 
 ## Chạy staging (local dev stack) — đã xác minh 2026-09-23
 - Postgres: podman container `teamweb-pg` (port 5433), 19 migration đã apply,

@@ -66,6 +66,12 @@ const CANONICAL_FIELD_MAP: Record<string, keyof BulkCreateRowInput | "parentRef"
   nhan: "labels",
   "nhãn": "labels",
 
+  components: "componentIds",
+  component: "componentIds",
+  "component ids": "componentIds",
+  "hợp phần": "componentIds",
+  "thành phần": "componentIds",
+
   points: "points",
   point: "points",
   "story points": "points",
@@ -397,6 +403,7 @@ export function parseBulkCreateCsv(
     let originalEstimate: string | undefined;
     let dueDate: string | null | undefined;
     let fixVersionIds: string[] | undefined;
+    let componentIds: string[] | undefined;
     let parentRef: string | undefined;
     let parentKey: string | undefined;
     const rowErrors: string[] = [];
@@ -460,6 +467,14 @@ export function parseBulkCreateCsv(
             fixVersionIds = trimmed
               .split(/[,;]+/)
               .map((v) => v.trim())
+              .filter(Boolean);
+          }
+          break;
+        case "componentIds":
+          if (trimmed) {
+            componentIds = trimmed
+              .split(/[,;]+/)
+              .map((c) => c.trim())
               .filter(Boolean);
           }
           break;
@@ -532,6 +547,7 @@ export function parseBulkCreateCsv(
       originalEstimate,
       dueDate,
       fixVersionIds,
+      componentIds,
     });
     validCount++;
   });

@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { SlidersHorizontal, ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
 import { AssigneeCombobox } from "./assignee-combobox";
 import { LabelCombobox } from "./label-combobox";
+import { ComponentsCombobox } from "./components-combobox";
 
 interface CreateDefaultsFormProps {
   metadata: BulkCreateProjectMetadata;
@@ -38,6 +39,7 @@ export function CreateDefaultsForm({
     defaults.issueTypeId,
     defaults.assignee,
     defaults.priorityId,
+    defaults.componentIds?.length ? true : null,
     defaults.labels?.length ? true : null,
     defaults.points != null ? true : null,
     defaults.originalEstimate,
@@ -164,6 +166,19 @@ export function CreateDefaultsForm({
                 placeholder="Tìm assignee…"
               />
             </div>
+
+            {/* Components */}
+            {metadata.components && metadata.components.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">Hợp phần mặc định (Components)</Label>
+                <ComponentsCombobox
+                  options={metadata.components}
+                  value={defaults.componentIds}
+                  onChange={(componentIds) => updateField("componentIds", componentIds)}
+                  placeholder="Chọn hợp phần mặc định…"
+                />
+              </div>
+            )}
 
             {/* Labels */}
             <div className="space-y-1.5">

@@ -19,6 +19,12 @@ export type JiraIssueLink = {
   outwardIssue?: { id?: string; key: string };
 };
 
+export type JiraComponent = {
+  id: string;
+  name: string;
+  description?: string;
+};
+
 export type JiraFields = {
   summary?: string;
   description?: string;

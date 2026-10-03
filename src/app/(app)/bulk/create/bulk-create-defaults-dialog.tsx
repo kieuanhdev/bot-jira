@@ -26,6 +26,8 @@ import {
 } from "@/components/ui/select";
 import { AssigneeCombobox } from "./assignee-combobox";
 import { LabelCombobox } from "./label-combobox";
+import { ComponentsCombobox } from "./components-combobox";
+import { DynamicCustomFields } from "./dynamic-custom-fields";
 import { SlidersHorizontal, RotateCcw, Check } from "lucide-react";
 
 interface BulkCreateDefaultsDialogProps {
@@ -60,6 +62,7 @@ export function BulkCreateDefaultsDialog({
     defaults.issueTypeId,
     defaults.assignee,
     defaults.priorityId,
+    defaults.componentIds?.length ? true : null,
     defaults.labels?.length ? true : null,
     defaults.points != null ? true : null,
     defaults.originalEstimate,
@@ -135,6 +138,19 @@ export function BulkCreateDefaultsDialog({
                 placeholder="Chọn người thực hiện mặc định..."
               />
             </div>
+
+            {/* Components */}
+            {metadata.components && metadata.components.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-foreground">Hợp phần mặc định (Components)</Label>
+                <ComponentsCombobox
+                  options={metadata.components}
+                  value={defaults.componentIds}
+                  onChange={(componentIds) => updateField("componentIds", componentIds)}
+                  placeholder="Chọn hợp phần mặc định…"
+                />
+              </div>
+            )}
 
             {/* Story points */}
             {metadata.pointsFieldId && (
@@ -230,6 +246,16 @@ export function BulkCreateDefaultsDialog({
                 value={defaults.description ?? ""}
                 onChange={(e) => updateField("description", e.target.value || undefined)}
                 className="text-xs resize-y min-h-[140px]"
+              />
+            </div>
+
+            {/* Dynamic Custom Fields */}
+            <div className="sm:col-span-2">
+              <DynamicCustomFields
+                metadata={metadata}
+                issueTypeId={defaults.issueTypeId}
+                values={defaults.customFields}
+                onChange={(customFields) => updateField("customFields", Object.keys(customFields).length > 0 ? customFields : undefined)}
               />
             </div>
           </div>

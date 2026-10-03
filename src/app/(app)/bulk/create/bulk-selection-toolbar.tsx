@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/select";
 import { LabelCombobox } from "./label-combobox";
 import { AssigneeCombobox } from "./assignee-combobox";
-import { X, User, Tag, Calendar, Trash2, Eraser } from "lucide-react";
+import { ComponentsCombobox } from "./components-combobox";
+import { X, User, Tag, Calendar, Trash2, Eraser, Layers } from "lucide-react";
 
 interface BulkSelectionToolbarProps {
   selectedCount: number;
@@ -84,6 +85,38 @@ export function BulkSelectionToolbar({
           </Button>
         )}
       </div>
+
+      {/* Components */}
+      {metadata.components && metadata.components.length > 0 && (
+        <div className="flex items-center gap-1">
+          <Layers className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+          {activeAction === "components" ? (
+            <div className="w-48">
+              <ComponentsCombobox
+                options={metadata.components}
+                value={[]}
+                onChange={(componentIds) => {
+                  if (componentIds && componentIds.length > 0) {
+                    applyField({ componentIds });
+                  }
+                }}
+                placeholder="Chọn hợp phần..."
+                compact
+              />
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setActiveAction("components")}
+              className="h-7 text-xs cursor-pointer"
+            >
+              Gán hợp phần
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Priority */}
       <div className="flex items-center gap-1">
@@ -167,9 +200,9 @@ export function BulkSelectionToolbar({
         value=""
         onValueChange={(val) => {
           if (val) {
-            const isSubtask = metadata.issueTypes.find((t) => t.id === val)?.subtask;
+            const isEpic = metadata.issueTypes.find((t) => t.id === val)?.name.toLowerCase() === "epic";
             const patch: Partial<BulkCreateRowInput> = { issueTypeId: val };
-            if (!isSubtask) patch.parent = null;
+            if (isEpic) patch.parent = null;
             applyField(patch);
           }
         }}

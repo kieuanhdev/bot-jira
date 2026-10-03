@@ -21,6 +21,8 @@ import {
 import { AssigneeCombobox } from "./assignee-combobox";
 import { ParentCombobox } from "./parent-combobox";
 import { LabelCombobox } from "./label-combobox";
+import { ComponentsCombobox } from "./components-combobox";
+import { DynamicCustomFields } from "./dynamic-custom-fields";
 import { FileText } from "lucide-react";
 
 interface TaskDetailSheetProps {
@@ -85,9 +87,9 @@ export function TaskDetailSheet({
             value={item.issueTypeId || ""}
             onValueChange={(val) => {
               const newType = val || undefined;
-              const isSubtask = newType ? subtaskIssueTypeIds.has(newType) : false;
+              const isEpic = newType ? metadata.issueTypes.find((t) => t.id === newType)?.name.toLowerCase() === "epic" : false;
               const patch: Partial<BulkCreateRowInput> = { issueTypeId: newType };
-              if (!isSubtask) patch.parent = null;
+              if (isEpic) patch.parent = null;
               update(patch);
             }}
           >
@@ -120,26 +122,24 @@ export function TaskDetailSheet({
           </Select>
         </div>
 
-        {/* Parent */}
-        {metadata.hasSubtaskTypes && (
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-foreground">
-              Parent
-              {item.issueTypeId && subtaskIssueTypeIds.has(item.issueTypeId) && (
-                <span className="ml-1 text-destructive">*</span>
-              )}
-            </Label>
-            <ParentCombobox
-              projectKey={projectKey}
-              value={item.parent}
-              onChange={(parent) => update({ parent })}
-              batchItems={items}
-              currentClientRef={item.clientRef}
-              subtaskIssueTypeIds={subtaskIssueTypeIds}
-              placeholder={item.issueTypeId && subtaskIssueTypeIds.has(item.issueTypeId) ? "Bắt buộc *" : "Không có parent"}
-            />
-          </div>
-        )}
+        {/* Parent / Epic */}
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium text-foreground">
+            Task cha / Epic
+            {item.issueTypeId && subtaskIssueTypeIds.has(item.issueTypeId) && (
+              <span className="ml-1 text-destructive">*</span>
+            )}
+          </Label>
+          <ParentCombobox
+            projectKey={projectKey}
+            value={item.parent}
+            onChange={(parent) => update({ parent })}
+            batchItems={items}
+            currentClientRef={item.clientRef}
+            subtaskIssueTypeIds={subtaskIssueTypeIds}
+            placeholder={item.issueTypeId && subtaskIssueTypeIds.has(item.issueTypeId) ? "Bắt buộc *" : "Chọn Epic / Task cha (tùy chọn)"}
+          />
+        </div>
 
         {/* Assignee */}
         <div className="space-y-1.5">
@@ -171,6 +171,26 @@ export function TaskDetailSheet({
             </SelectContent>
           </Select>
         </div>
+
+        {/* Components */}
+        {metadata.components && metadata.components.length > 0 && (
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-foreground">Hợp phần (Components)</Label>
+            <ComponentsCombobox
+              options={metadata.components}
+              value={item.componentIds}
+              onChange={(componentIds) => update({ componentIds })}
+              placeholder={
+                defaults.componentIds && defaults.componentIds.length > 0
+                  ? metadata.components
+                      .filter((c) => defaults.componentIds!.includes(c.id))
+                      .map((c) => c.name)
+                      .join(", ") + " (mặc định)"
+                  : "Chọn hợp phần…"
+              }
+            />
+          </div>
+        )}
 
         {/* Labels */}
         <div className="space-y-1.5">
@@ -272,6 +292,15 @@ export function TaskDetailSheet({
             className="resize-y text-sm min-h-[240px]"
           />
         </div>
+
+        {/* Dynamic Custom Fields */}
+        <DynamicCustomFields
+          metadata={metadata}
+          issueTypeId={item.issueTypeId}
+          defaults={defaults}
+          values={item.customFields}
+          onChange={(customFields) => update({ customFields })}
+        />
 
         {/* Client Ref (read-only) */}
         <div className="space-y-1.5 border-t border-border pt-3">

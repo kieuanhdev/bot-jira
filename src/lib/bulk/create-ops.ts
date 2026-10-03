@@ -111,6 +111,7 @@ export async function fetchBulkCreateMetadata(
     { id: string; name: string; archived?: boolean; released?: boolean }
   >();
   let pointsFieldId: string | null = env.jiraPointsFieldId || null;
+  let epicLinkFieldId: string | null = null;
   let supportsTimeTracking = false;
   let supportsDueDate = false;
 
@@ -139,6 +140,16 @@ export async function fetchBulkCreateMetadata(
         fDef.schema?.type === "number"
       ) {
         pointsFieldId = fId;
+      }
+
+      // Detect Epic Link field
+      if (
+        !epicLinkFieldId &&
+        (lowerName === "epic link" ||
+          lowerName === "epic" ||
+          (fDef.schema as { custom?: string })?.custom === "com.pyxis.greenhopper.jira:gh-epic-link")
+      ) {
+        epicLinkFieldId = fId;
       }
 
       // Detect timetracking and duedate
@@ -192,6 +203,19 @@ export async function fetchBulkCreateMetadata(
     // Non-fatal, use whatever fixVersions allowedValues had
   }
 
+  // Fetch components from project components API
+  let components: Array<{ id: string; name: string; description?: string }> = [];
+  try {
+    const rawComps = await jira.getProjectComponents(projectKey);
+    components = (rawComps || []).map((c) => ({
+      id: String(c.id),
+      name: c.name,
+      description: c.description,
+    }));
+  } catch {
+    // Non-fatal if project has no components or API error
+  }
+
   // Do NOT fallback to assumed priority IDs. If Jira metadata doesn't provide
   // allowed values, the field is unavailable and Jira's default will apply.
   const priorityOptions = Array.from(priorityOptionsMap.values());
@@ -209,8 +233,10 @@ export async function fetchBulkCreateMetadata(
     projectKey,
     issueTypes: issueTypes.map((t) => ({ id: t.id, name: t.name, subtask: t.subtask })),
     pointsFieldId,
+    epicLinkFieldId,
     priorities: priorityOptions.map((p) => p.id),
     versions: versionOptions.map((v) => v.id),
+    components: components.map((c) => c.id),
   });
   const fingerprint = `sha256:${sha256(fingerprintRaw)}`;
 
@@ -226,7 +252,9 @@ export async function fetchBulkCreateMetadata(
     fieldsByIssueType,
     priorityOptions,
     versionOptions,
+    components,
     pointsFieldId,
+    epicLinkFieldId,
     supportsTimeTracking,
     supportsDueDate,
     hasSubtaskTypes,
@@ -245,6 +273,10 @@ export async function fetchBulkCreateMetadata(
       points: {
         available: pointsFieldId !== null,
         reason: pointsFieldId === null ? "Không tìm thấy trường Story Points" : undefined,
+      },
+      components: {
+        available: components.length > 0,
+        reason: components.length === 0 ? "Dự án chưa có Hợp phần (Components)" : undefined,
       },
     },
     fetchedAt,
@@ -357,6 +389,31 @@ export async function previewBulkCreate(
     }
   }
 
+  // 2.55. Cascade block subtasks whose batch parent is blocked
+  let newlyBlocked = true;
+  while (newlyBlocked) {
+    newlyBlocked = false;
+    for (const item of previewItems) {
+      if (item.classification === "blocked") continue;
+      const parentRef =
+        item.normalizedFields.parent?.type === "batch"
+          ? item.normalizedFields.parent.clientRef
+          : null;
+      if (parentRef) {
+        const parentItem = previewItems.find((pi) => pi.clientRef === parentRef);
+        if (parentItem && parentItem.classification === "blocked") {
+          item.classification = "blocked";
+          item.errors.push({
+            field: "parent",
+            code: "PARENT_BLOCKED",
+            message: `Task cha "${parentRef}" trong batch đang bị lỗi, không thể tạo subtask này`,
+          });
+          newlyBlocked = true;
+        }
+      }
+    }
+  }
+
   // 2.6. Build dependency graph for execution ordering
   const depGraph = buildDependencyGraph(
     previewItems.map((pi) => ({
@@ -381,6 +438,7 @@ export async function previewBulkCreate(
         projectKey: req.projectKey,
         metadataFingerprint: meta.fingerprint,
         pointsFieldId: meta.pointsFieldId,
+        epicLinkFieldId: meta.epicLinkFieldId,
         defaults: (req.defaults ?? {}) as Prisma.InputJsonValue,
         source: req.source ?? { type: "grid", fileName: null },
         hasDependencies: depGraph.children.size > 0,
@@ -597,9 +655,16 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
   }
 
   const jira = jiraWith(auth);
-  const payload = op.payload as { projectKey: string; metadataFingerprint?: string; pointsFieldId?: string | null; hasDependencies?: boolean };
+  const payload = op.payload as {
+    projectKey: string;
+    metadataFingerprint?: string;
+    pointsFieldId?: string | null;
+    epicLinkFieldId?: string | null;
+    hasDependencies?: boolean;
+  };
   const projectKey = payload.projectKey;
   const pointsFieldId = payload.pointsFieldId ?? env.jiraPointsFieldId ?? null;
+  const epicLinkFieldId = payload.epicLinkFieldId ?? null;
 
   // Concurrency cap: default 2, max 4
   const envConcurrency = Number(process.env.BULK_CREATE_CONCURRENCY) || 2;
@@ -632,7 +697,14 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
         if (!item) break;
         const itemStart = Date.now();
         const success = await processCreateItem(
-          operationId, item.id, item.rowIndex, projectKey, auth, jira, pointsFieldId
+          operationId,
+          item.id,
+          item.rowIndex,
+          projectKey,
+          auth,
+          jira,
+          pointsFieldId,
+          epicLinkFieldId
         );
         const itemLatency = Date.now() - itemStart;
         itemLatenciesMs.push(itemLatency);
@@ -738,7 +810,8 @@ async function processCreateItem(
   projectKey: string,
   auth: JiraAuth,
   jira: ReturnType<typeof jiraWith>,
-  pointsFieldId?: string | null
+  pointsFieldId?: string | null,
+  epicLinkFieldId?: string | null
 ): Promise<boolean> {
   const current = await prisma.bulkCreateItem.findUnique({ where: { id: itemId } });
   if (!current || current.status === "succeeded") return true;
@@ -813,6 +886,9 @@ async function processCreateItem(
       if (reqData.fixVersionIds && reqData.fixVersionIds.length > 0) {
         extraFields.fixVersions = reqData.fixVersionIds.map((id) => ({ id }));
       }
+      if (reqData.componentIds && reqData.componentIds.length > 0) {
+        extraFields.components = reqData.componentIds.map((id) => ({ id }));
+      }
       if (reqData.points !== undefined && reqData.points !== null && pointsFieldId) {
         extraFields[pointsFieldId] = reqData.points;
       }
@@ -824,9 +900,17 @@ async function processCreateItem(
         }
       }
 
-      // 3. Create issue on Jira (with parent if subtask)
+      // 3. Create issue on Jira (with parent if subtask, or epic/parent if standard task)
       if (resolvedParentKey) {
-        extraFields.parent = { key: resolvedParentKey };
+        if (reqData.isSubtask) {
+          extraFields.parent = { key: resolvedParentKey };
+        } else {
+          if (epicLinkFieldId) {
+            extraFields[epicLinkFieldId] = resolvedParentKey;
+          } else {
+            extraFields.parent = { key: resolvedParentKey };
+          }
+        }
       }
 
       const created = await jira.createIssue({
