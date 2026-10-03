@@ -5,6 +5,7 @@ import {
   listActiveProjects,
   normalizeProjectKey,
 } from "@/lib/jira/project-catalog";
+import { extractEpicKey } from "@/lib/bulk/ops";
 
 /**
  * Distinct filter options (assignees, labels, priorities) for the current
@@ -97,7 +98,7 @@ export async function GET(req: Request) {
     // scope, not a fixed issue cap.
     prisma.issueCache.findMany({
       where: { ...base },
-      select: { labels: true },
+      select: { labels: true, raw: true },
     }),
   ]);
 
@@ -117,10 +118,13 @@ export async function GET(req: Request) {
   }
 
   const labelSet = new Set<string>();
+  const epicSet = new Set<string>();
   for (const row of labelRows) {
     for (const l of row.labels ?? []) {
       if (l) labelSet.add(l);
     }
+    const epic = extractEpicKey(row.raw);
+    if (epic) epicSet.add(epic);
   }
 
   return NextResponse.json({
@@ -128,5 +132,6 @@ export async function GET(req: Request) {
     statuses: [...statusSet].sort(),
     labels: [...labelSet].sort(),
     priorities: [...prioritySet].sort(),
+    epics: [...epicSet].sort(),
   });
 }

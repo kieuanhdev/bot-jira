@@ -56,6 +56,7 @@ describe("board-storage unit tests", () => {
         statuses: [],
         labels: ["backend"],
         priorities: ["High"],
+        epics: [],
         includeDone: false,
       };
 
@@ -72,6 +73,7 @@ describe("board-storage unit tests", () => {
         statuses: [],
         labels: ["backend"],
         priorities: ["High"],
+        epics: [],
         includeDone: false,
       });
     });
@@ -89,6 +91,7 @@ describe("board-storage unit tests", () => {
         statuses: [],
         labels: ["test"],
         priorities: [],
+        epics: [],
         includeDone: true,
       });
     });

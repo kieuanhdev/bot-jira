@@ -4,6 +4,7 @@ import {
   mergeDefaultsWithRow,
   validateAndNormalizeItem,
   generateBulkCreateMarker,
+  normalizeJiraCustomFieldValue,
 } from "./create-validator";
 import { parseBulkCreateCsv } from "./csv-parser";
 import type { BulkCreateProjectMetadata } from "./create-types";
@@ -274,5 +275,128 @@ describe("Bulk Create - Validator and Normalizer", () => {
   it("generates stable idempotency marker", () => {
     const marker = generateBulkCreateMarker("cuid12345678", 5);
     expect(marker).toBe("ttw-bulk-12345678-5");
+  });
+
+  describe("Custom field normalization", () => {
+    it("normalizes array<version> (Affects Version/s) from string and array to Jira REST format", () => {
+      const fieldDef = {
+        id: "versions",
+        name: "Affects Version/s",
+        required: false,
+        schemaType: "array",
+        schemaItems: "version",
+        schemaSystem: "versions",
+        allowedValues: [
+          { id: "11200", name: "v1.0" },
+          { id: "11201", name: "v1.1" },
+        ],
+      };
+
+      // String ID
+      expect(normalizeJiraCustomFieldValue(fieldDef, "11200")).toEqual([{ id: "11200" }]);
+      // Array of string IDs
+      expect(normalizeJiraCustomFieldValue(fieldDef, ["11200", "11201"])).toEqual([
+        { id: "11200" },
+        { id: "11201" },
+      ]);
+      // Version name mapped to ID via allowedValues
+      expect(normalizeJiraCustomFieldValue(fieldDef, "v1.0")).toEqual([{ id: "11200" }]);
+      // Idempotent: already object
+      expect(normalizeJiraCustomFieldValue(fieldDef, [{ id: "11200" }])).toEqual([{ id: "11200" }]);
+    });
+
+    it("normalizes single user picker from string username to Jira REST object", () => {
+      const fieldDef = {
+        id: "customfield_10300",
+        name: "Approver",
+        required: false,
+        schemaType: "user",
+        schemaCustom: "com.atlassian.jira.plugin.system.customfieldtypes:userpicker",
+      };
+
+      expect(normalizeJiraCustomFieldValue(fieldDef, "vunt")).toEqual({ name: "vunt" });
+      // Idempotent: already object
+      expect(normalizeJiraCustomFieldValue(fieldDef, { name: "vunt" })).toEqual({ name: "vunt" });
+    });
+
+    it("normalizes multi-user picker to array of user objects", () => {
+      const fieldDef = {
+        id: "customfield_10501",
+        name: "Assignee Tester",
+        required: false,
+        schemaType: "array",
+        schemaItems: "user",
+        schemaCustom: "com.atlassian.jira.plugin.system.customfieldtypes:multiuserpicker",
+      };
+
+      expect(normalizeJiraCustomFieldValue(fieldDef, "hunglm")).toEqual([{ name: "hunglm" }]);
+      expect(normalizeJiraCustomFieldValue(fieldDef, ["hunglm", "vunt"])).toEqual([
+        { name: "hunglm" },
+        { name: "vunt" },
+      ]);
+      expect(normalizeJiraCustomFieldValue(fieldDef, [{ name: "hunglm" }])).toEqual([
+        { name: "hunglm" },
+      ]);
+    });
+
+    it("normalizes MHRM project custom fields in validateAndNormalizeItem", () => {
+      const mhrmMeta: BulkCreateProjectMetadata = {
+        ...mockMeta,
+        project: { key: "MHRM", name: "MHRM Project" },
+        fieldsByIssueType: {
+          "10001": [
+            { id: "summary", name: "Summary", required: true },
+            { id: "issuetype", name: "Issue Type", required: true },
+            {
+              id: "versions",
+              name: "Affects Version/s",
+              required: false,
+              schemaType: "array",
+              schemaItems: "version",
+              schemaSystem: "versions",
+              allowedValues: [{ id: "11200", name: "1.0.0" }],
+            },
+            {
+              id: "customfield_10300",
+              name: "Approver",
+              required: false,
+              schemaType: "user",
+              schemaCustom: "com.atlassian.jira.plugin.system.customfieldtypes:userpicker",
+            },
+            {
+              id: "customfield_10501",
+              name: "Assignee Tester",
+              required: false,
+              schemaType: "user",
+              schemaCustom: "com.atlassian.jira.plugin.system.customfieldtypes:userpicker",
+            },
+          ],
+        },
+      };
+
+      const res = validateAndNormalizeItem(
+        {
+          clientRef: "row-1",
+          summary: "MHRM task",
+          issueTypeId: "10001",
+          customFields: {
+            versions: "11200",
+            customfield_10300: "vunt",
+            customfield_10501: "hunglm",
+          },
+        },
+        0,
+        undefined,
+        mhrmMeta
+      );
+
+      expect(res.classification).toBe("ready");
+      expect(res.errors).toHaveLength(0);
+      expect(res.normalizedFields.customFields).toEqual({
+        versions: [{ id: "11200" }],
+        customfield_10300: { name: "vunt" },
+        customfield_10501: { name: "hunglm" },
+      });
+    });
   });
 });

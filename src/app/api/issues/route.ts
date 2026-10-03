@@ -8,6 +8,7 @@ import {
   normalizeProjectKey,
 } from "@/lib/jira/project-catalog";
 import { jiraUsernameAliases, userJiraUsername } from "@/lib/user-creds";
+import { extractEpicKey } from "@/lib/bulk/ops";
 
 function positiveLimit(raw: string | null): number {
   const parsed = Number.parseInt(raw ?? "300", 10);
@@ -281,6 +282,7 @@ export async function GET(req: Request) {
               prMerged: item.branches.some((b) => (b.prState ?? "").toUpperCase() === "MERGED" || b.merged),
             }
           : null,
+        epic: extractEpicKey(item.raw),
       })),
       total,
       sync: {

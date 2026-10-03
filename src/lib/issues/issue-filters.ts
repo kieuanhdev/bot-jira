@@ -20,6 +20,7 @@ export type IssueFilters = {
   statuses: string[];
   labels: string[];
   priorities: string[];
+  epics: string[];
   includeDone: boolean;
 };
 
@@ -34,6 +35,7 @@ export const DEFAULT_BOARD_FILTERS: IssueFilters = {
   statuses: [],
   labels: [],
   priorities: [],
+  epics: [],
   includeDone: true,
 };
 
@@ -48,6 +50,7 @@ export const DEFAULT_BULK_FILTERS: IssueFilters = {
   statuses: [],
   labels: [],
   priorities: [],
+  epics: [],
   includeDone: true,
 };
 
@@ -143,6 +146,7 @@ export function normalizeIssueFilters(
     statuses: normalizeStringArray(input.statuses),
     labels: normalizeStringArray(input.labels),
     priorities: normalizeStringArray(input.priorities),
+    epics: normalizeStringArray(input.epics ?? []),
     includeDone: Boolean(input.includeDone),
   };
 }
@@ -209,6 +213,15 @@ export function countActiveIssueFilters(
     count += value.priorities.length;
   }
 
+  // Epics
+  if (
+    value.epics &&
+    value.epics.length > 0 &&
+    value.epics.slice().sort().join(",") !== (defaults.epics ?? []).slice().sort().join(",")
+  ) {
+    count += value.epics.length;
+  }
+
   if (value.includeDone !== defaults.includeDone) {
     count++;
   }
@@ -271,6 +284,14 @@ export function serializeIssueFilters(
     value.priorities.slice().sort().join(",") !== defaults.priorities.slice().sort().join(",")
   ) {
     params.set("priority", [...value.priorities].sort().join(","));
+  }
+
+  if (
+    value.epics &&
+    value.epics.length > 0 &&
+    value.epics.slice().sort().join(",") !== (defaults.epics ?? []).slice().sort().join(",")
+  ) {
+    params.set("epic", [...value.epics].sort().join(","));
   }
 
   if (value.includeDone !== defaults.includeDone) {
@@ -348,6 +369,12 @@ export function parseIssueFilters(
     ? rawPriorities.split(",").map((s) => s.trim()).filter(Boolean)
     : defaults.priorities;
 
+  // Epics
+  const rawEpics = params.get("epic") ?? params.get("epics");
+  const epics = rawEpics
+    ? rawEpics.split(",").map((s) => s.trim()).filter(Boolean)
+    : defaults.epics ?? [];
+
   // includeDone
   const rawDone = params.get("includeDone");
   const includeDone =
@@ -361,6 +388,7 @@ export function parseIssueFilters(
       statuses,
       labels,
       priorities,
+      epics,
       includeDone,
     },
     myUsername

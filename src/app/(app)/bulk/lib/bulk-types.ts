@@ -7,12 +7,17 @@ export type BulkFieldValues = {
   estimate?: string;
   dueDate?: string | null;
   fixVersions?: string[];
+  epic?: string | null;
 };
 
 export type BulkAction =
   | {
       kind: "update-fields";
       value: BulkFieldValues;
+    }
+  | {
+      kind: "transition";
+      value: string;
     }
   | {
       kind: "log-work";
@@ -49,7 +54,7 @@ export type BulkVersionOption = {
 };
 
 export type ProjectFieldOption = {
-  id: "assignee" | "labels" | "priority" | "issueType" | "points" | "estimate" | "dueDate" | "fixVersions";
+  id: "assignee" | "labels" | "priority" | "issueType" | "points" | "estimate" | "dueDate" | "fixVersions" | "epic";
   jiraFieldId: string;
   name: string;
   available: boolean;
@@ -97,6 +102,7 @@ export const ACTION_LABELS: Record<string, string> = {
   "log-work": "Ghi Worklog",
   "set-due-date": "Đặt Due date",
   "set-priority": "Đặt độ ưu tiên",
+  "set-epic": "Gán Epic",
   transition: "Chuyển trạng thái",
   "add-fix-version": "Thêm Fix Version",
   "remove-fix-version": "Xóa Fix Version",

@@ -139,6 +139,17 @@ export type BulkCreateFieldCapability = {
   reason?: string;
 };
 
+export type BulkCreateFieldMetadata = {
+  id: string;
+  name: string;
+  required: boolean;
+  schemaType?: string;
+  schemaItems?: string;
+  schemaCustom?: string;
+  schemaSystem?: string;
+  allowedValues?: Array<{ id: string; name?: string; value?: string }>;
+};
+
 export type BulkCreateProjectMetadata = {
   project: {
     key: string;
@@ -154,16 +165,7 @@ export type BulkCreateProjectMetadata = {
     description?: string;
     iconUrl?: string;
   }>;
-  fieldsByIssueType: Record<
-    string,
-    Array<{
-      id: string;
-      name: string;
-      required: boolean;
-      schemaType?: string;
-      allowedValues?: Array<{ id: string; name?: string; value?: string }>;
-    }>
-  >;
+  fieldsByIssueType: Record<string, BulkCreateFieldMetadata[]>;
   priorityOptions: Array<{ id: string; name: string }>;
   versionOptions: Array<{ id: string; name: string; archived?: boolean; released?: boolean }>;
   components?: Array<{ id: string; name: string; description?: string }>;

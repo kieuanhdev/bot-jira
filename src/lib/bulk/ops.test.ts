@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { validateBulkRequest, previewBulk } from "./ops";
+import { validateBulkRequest, previewBulk, extractEpicKey, computePreview, resolveFilterKeys } from "./ops";
 import { prisma } from "@/lib/prisma";
 import * as depModule from "@/lib/issues/dependencies";
 
@@ -132,6 +132,73 @@ describe("Bulk operations dependency expansion & safe removal (DEP-06, DEP-07, D
         expect(clearValues.action.value.labels).toEqual([]);
         expect(clearValues.action.value.fixVersions).toEqual([]);
       }
+    });
+
+    it("validates epic assignment and unlink in update-fields and set-epic", () => {
+      const validUpdate = validateBulkRequest({
+        keys: ["EPM-1"],
+        action: {
+          kind: "update-fields",
+          value: { epic: "EPM-100" },
+        },
+      });
+      expect(validUpdate.ok).toBe(true);
+      if (validUpdate.ok && validUpdate.action.kind === "update-fields") {
+        expect(validUpdate.action.value.epic).toBe("EPM-100");
+      }
+
+      const unlinkUpdate = validateBulkRequest({
+        keys: ["EPM-1"],
+        action: {
+          kind: "update-fields",
+          value: { epic: null },
+        },
+      });
+      expect(unlinkUpdate.ok).toBe(true);
+      if (unlinkUpdate.ok && unlinkUpdate.action.kind === "update-fields") {
+        expect(unlinkUpdate.action.value.epic).toBeNull();
+      }
+
+      const invalidEpicKey = validateBulkRequest({
+        keys: ["EPM-1"],
+        action: {
+          kind: "update-fields",
+          value: { epic: "invalid-key" },
+        },
+      });
+      expect(invalidEpicKey.ok).toBe(false);
+
+      const validSetEpic = validateBulkRequest({
+        keys: ["EPM-1"],
+        action: {
+          kind: "set-epic",
+          value: "EPM-50",
+        },
+      });
+      expect(validSetEpic.ok).toBe(true);
+      if (validSetEpic.ok && validSetEpic.action.kind === "set-epic") {
+        expect(validSetEpic.action.value).toBe("EPM-50");
+      }
+
+      const unlinkSetEpic = validateBulkRequest({
+        keys: ["EPM-1"],
+        action: {
+          kind: "set-epic",
+          value: null,
+        },
+      });
+      expect(unlinkSetEpic.ok).toBe(true);
+      if (unlinkSetEpic.ok && unlinkSetEpic.action.kind === "set-epic") {
+        expect(unlinkSetEpic.action.value).toBeNull();
+      }
+    });
+
+    it("extracts epic key correctly from raw Jira issue representations", () => {
+      expect(extractEpicKey(null)).toBeNull();
+      expect(extractEpicKey({})).toBeNull();
+      expect(extractEpicKey({ parent: { key: "EPM-99" } })).toBe("EPM-99");
+      expect(extractEpicKey({ epic: { key: "EPM-88" } })).toBe("EPM-88");
+      expect(extractEpicKey({ customfield_10014: "EPM-77" })).toBe("EPM-77");
     });
   });
 
@@ -447,6 +514,25 @@ describe("Bulk operations dependency expansion & safe removal (DEP-06, DEP-07, D
 
       const depItem2 = resultWithProp.items.find((i) => i.jiraKey === "PROJ-101");
       expect(depItem2?.skipReason).toBeNull();
+    });
+  });
+
+  describe("resolveFilterKeys with epics", () => {
+    it("filters issues by epic key and none/unassigned", async () => {
+      vi.mocked(prisma.issueCache.findMany).mockResolvedValue([
+        { jiraKey: "EPM-1", raw: { parent: { key: "EPM-10" } } },
+        { jiraKey: "EPM-2", raw: { epic: { key: "EPM-20" } } },
+        { jiraKey: "EPM-3", raw: {} },
+      ] as never);
+
+      const resEpic10 = await resolveFilterKeys("EPM", { epics: ["EPM-10"] });
+      expect(resEpic10).toEqual(["EPM-1"]);
+
+      const resNone = await resolveFilterKeys("EPM", { epics: ["none"] });
+      expect(resNone).toEqual(["EPM-3"]);
+
+      const resMultiple = await resolveFilterKeys("EPM", { epics: ["EPM-10", "EPM-20"] });
+      expect(resMultiple).toEqual(["EPM-1", "EPM-2"]);
     });
   });
 });

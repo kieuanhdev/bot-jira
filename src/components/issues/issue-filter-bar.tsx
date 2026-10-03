@@ -1,11 +1,10 @@
-"use client";
-
 import * as React from "react";
-import { useMemo } from "react";
-import { Filter, Check, ChevronDown, X } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Filter, Check, ChevronDown, X, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { SearchField } from "@/components/shared/search-field";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -34,16 +33,20 @@ export type IssueFilterCapabilities = {
   search?: boolean;
   assignee?: false | "single" | "multi";
   status?: false | "single" | "multi";
+  epic?: false | "single" | "multi";
   label?: false | "single" | "multi";
   priority?: false | "single" | "multi";
   quickSwitch?: boolean;
 };
 
+export type FacetOption = string | { value: string; label?: string; count?: number };
+
 export type IssueFilterOptions = {
   assignees?: (string | AssigneeOption)[];
-  statuses?: string[];
-  labels?: string[];
-  priorities?: string[];
+  statuses?: (string | FacetOption)[];
+  epics?: (string | FacetOption)[];
+  labels?: (string | FacetOption)[];
+  priorities?: (string | FacetOption)[];
 };
 
 export interface IssueFilterBarProps {
@@ -64,6 +67,7 @@ const DEFAULT_CAPABILITIES: IssueFilterCapabilities = {
   search: true,
   assignee: "multi",
   status: false,
+  epic: false,
   label: "single",
   priority: "single",
   quickSwitch: true,
@@ -75,30 +79,61 @@ function FacetMultiSelect({
   selected,
   onChange,
   className,
+  searchable = false,
+  searchPlaceholder,
+  allowCustom = false,
 }: {
   title: string;
-  options: string[];
+  options: (string | FacetOption)[];
   selected: string[];
   onChange: (next: string[]) => void;
   className?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  allowCustom?: boolean;
 }) {
+  const [search, setSearch] = useState("");
   const isAll = selected.length === 0;
 
-  const toggle = (opt: string) => {
-    if (selected.includes(opt)) {
-      onChange(selected.filter((item) => item !== opt));
+  const normalizedOptions = useMemo<{ value: string; label: string; count?: number }[]>(() => {
+    return options.map((opt) =>
+      typeof opt === "string"
+        ? { value: opt, label: opt }
+        : { value: opt.value, label: opt.label ?? opt.value, count: opt.count }
+    );
+  }, [options]);
+
+  const toggle = (optVal: string) => {
+    if (selected.includes(optVal)) {
+      onChange(selected.filter((item) => item !== optVal));
     } else {
-      onChange([...selected, opt]);
+      onChange([...selected, optVal]);
     }
   };
 
   const label = useMemo(() => {
     if (isAll) return `Tất cả ${title.toLowerCase()}`;
-    if (selected.length === 1) return selected[0];
-    return selected[0];
-  }, [isAll, selected, title]);
+    const firstMatch = normalizedOptions.find(
+      (o) => o.value.toLowerCase() === selected[0].toLowerCase()
+    );
+    return firstMatch ? firstMatch.label : selected[0];
+  }, [isAll, selected, title, normalizedOptions]);
 
   const extraCount = Math.max(0, selected.length - 1);
+
+  const filteredOptions = useMemo(() => {
+    if (!search.trim()) return normalizedOptions;
+    const q = search.trim().toLowerCase();
+    return normalizedOptions.filter(
+      (o) => o.value.toLowerCase().includes(q) || o.label.toLowerCase().includes(q)
+    );
+  }, [normalizedOptions, search]);
+
+  const canAddCustom = useMemo(() => {
+    if (!allowCustom || !search.trim()) return false;
+    const q = search.trim().toLowerCase();
+    return !normalizedOptions.some((o) => o.value.toLowerCase() === q);
+  }, [allowCustom, search, normalizedOptions]);
 
   return (
     <div
@@ -137,30 +172,63 @@ function FacetMultiSelect({
           </button>
         </DropdownMenuTrigger>
 
-        <DropdownMenuContent align="start" className="w-56 p-1 max-h-60 overflow-y-auto">
+        <DropdownMenuContent align="start" className="w-64 p-1 max-h-72 overflow-y-auto">
           <DropdownMenuLabel className="px-2 py-1 text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
             {title}
           </DropdownMenuLabel>
+          {searchable && (
+            <div className="p-1 pb-1.5 border-b border-border/50 sticky top-0 bg-popover z-10">
+              <div className="relative flex items-center">
+                <Search className="absolute left-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" aria-hidden="true" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={searchPlaceholder ?? `Tìm ${title.toLowerCase()}…`}
+                  className="h-7 text-xs pl-7 pr-2"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+          )}
           <DropdownMenuSeparator className="my-1" />
-          {options.map((opt) => {
-            const checked = selected.includes(opt);
+          {filteredOptions.map((opt) => {
+            const checked = selected.includes(opt.value);
             return (
               <DropdownMenuItem
-                key={opt}
+                key={opt.value}
                 onSelect={(e) => {
                   e.preventDefault();
-                  toggle(opt);
+                  toggle(opt.value);
                 }}
                 className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs"
               >
                 <Checkbox checked={checked} className="pointer-events-none" />
-                <span className="truncate flex-1">{opt}</span>
+                <span className="truncate flex-1">{opt.label}</span>
+                {typeof opt.count === "number" && (
+                  <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                    {opt.count}
+                  </span>
+                )}
               </DropdownMenuItem>
             );
           })}
-          {options.length === 0 && (
+          {canAddCustom && (
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                const customVal = search.trim().toUpperCase();
+                toggle(customVal);
+                setSearch("");
+              }}
+              className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs text-primary font-medium border-t border-border/40 mt-1"
+            >
+              <span>+ Lọc theo &ldquo;{search.trim().toUpperCase()}&rdquo;</span>
+            </DropdownMenuItem>
+          )}
+          {filteredOptions.length === 0 && !canAddCustom && (
             <div className="py-3 text-center text-xs text-muted-foreground">
-              Không có lựa chọn
+              Không có lựa chọn phù hợp
             </div>
           )}
         </DropdownMenuContent>
@@ -182,6 +250,14 @@ function FacetMultiSelect({
       )}
     </div>
   );
+}
+
+function getFacetValue(opt: string | FacetOption): string {
+  return typeof opt === "string" ? opt : opt.value;
+}
+
+function getFacetLabel(opt: string | FacetOption): string {
+  return typeof opt === "string" ? opt : opt.label ?? opt.value;
 }
 
 export function IssueFilterBar({
@@ -213,6 +289,7 @@ export function IssueFilterBar({
   const showSearch = capabilities.search !== false;
   const showAssignee = capabilities.assignee !== false;
   const showStatus = Boolean(capabilities.status);
+  const showEpic = Boolean(capabilities.epic);
   const showLabel = Boolean(capabilities.label);
   const showPriority = Boolean(capabilities.priority);
   const showQuickSwitch =
@@ -221,6 +298,7 @@ export function IssueFilterBar({
     value.assigneeScope.roster.length >= 2;
 
   const statusOptions = options.statuses ?? [];
+  const epicOptions = options.epics ?? [];
   const labelOptions = options.labels ?? [];
   const priorityOptions = options.priorities ?? [
     "Low",
@@ -279,8 +357,41 @@ export function IssueFilterBar({
               <SelectContent>
                 <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
                 {statusOptions.map((st) => (
-                  <SelectItem key={st} value={st}>
-                    {st}
+                  <SelectItem key={getFacetValue(st)} value={getFacetValue(st)}>
+                    {getFacetLabel(st)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ))}
+
+        {/* Epic Filter */}
+        {showEpic &&
+          (capabilities.epic === "multi" ? (
+            <FacetMultiSelect
+              title="Epic"
+              options={epicOptions}
+              selected={value.epics ?? []}
+              onChange={(epics) => onChange({ ...value, epics })}
+              searchable={epicOptions.length > 4}
+              searchPlaceholder="Tìm mã hoặc tên Epic…"
+              allowCustom
+            />
+          ) : (
+            <Select
+              value={value.epics?.[0] || "ALL"}
+              onValueChange={(v) =>
+                onChange({ ...value, epics: v === "ALL" ? [] : [v] })
+              }
+            >
+              <SelectTrigger className="w-36 h-8 text-xs">
+                <SelectValue placeholder="Epic" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả Epic</SelectItem>
+                {epicOptions.map((ep) => (
+                  <SelectItem key={getFacetValue(ep)} value={getFacetValue(ep)}>
+                    {getFacetLabel(ep)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -295,6 +406,7 @@ export function IssueFilterBar({
               options={labelOptions}
               selected={value.labels}
               onChange={(labels) => onChange({ ...value, labels })}
+              searchable={labelOptions.length > 5}
             />
           ) : (
             <Select
@@ -309,8 +421,8 @@ export function IssueFilterBar({
               <SelectContent>
                 <SelectItem value="ALL">Tất cả nhãn</SelectItem>
                 {labelOptions.map((lb) => (
-                  <SelectItem key={lb} value={lb}>
-                    {lb}
+                  <SelectItem key={getFacetValue(lb)} value={getFacetValue(lb)}>
+                    {getFacetLabel(lb)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -339,8 +451,8 @@ export function IssueFilterBar({
               <SelectContent>
                 <SelectItem value="ALL">Tất cả độ ưu tiên</SelectItem>
                 {priorityOptions.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {p}
+                  <SelectItem key={getFacetValue(p)} value={getFacetValue(p)}>
+                    {getFacetLabel(p)}
                   </SelectItem>
                 ))}
               </SelectContent>

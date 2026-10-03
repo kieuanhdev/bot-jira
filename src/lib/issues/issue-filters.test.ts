@@ -152,6 +152,7 @@ describe("issue-filters unit tests", () => {
         statuses: ["In Progress", "Review"],
         labels: ["core"],
         priorities: ["High"],
+        epics: ["EPM-10"],
         includeDone: false,
       };
 
@@ -160,6 +161,7 @@ describe("issue-filters unit tests", () => {
       expect(params.get("assignee")).toBe("bob,me,unassigned");
       expect(params.get("assigneeView")).toBe("bob");
       expect(params.get("status")).toBe("In Progress,Review");
+      expect(params.get("epic")).toBe("EPM-10");
       expect(params.get("includeDone")).toBe("0");
 
       const parsed = parseIssueFilters(params, DEFAULT_BOARD_FILTERS);
@@ -171,6 +173,7 @@ describe("issue-filters unit tests", () => {
       expect(parsed.statuses).toEqual(["In Progress", "Review"]);
       expect(parsed.labels).toEqual(["core"]);
       expect(parsed.priorities).toEqual(["High"]);
+      expect(parsed.epics).toEqual(["EPM-10"]);
       expect(parsed.includeDone).toBe(false);
     });
 

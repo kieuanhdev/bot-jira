@@ -6,6 +6,7 @@ import {
   type BulkCreatePreviewItem,
   type BulkCreateValidationError,
   type BulkCreateValidationWarning,
+  type BulkCreateFieldMetadata,
   type BulkCreateProjectMetadata,
   MAX_BULK_CREATE_ITEMS,
   MAX_DESCRIPTION_LENGTH,
@@ -15,6 +16,137 @@ import {
 } from "./create-types";
 import { parseJiraDuration } from "@/lib/worklogs/schema";
 import { isValidIsoDate } from "./csv-parser";
+
+function customFieldScalar(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const objectValue = value as Record<string, unknown>;
+    for (const key of ["id", "name", "value", "key", "accountId"]) {
+      const candidate = objectValue[key];
+      if (typeof candidate === "string" || typeof candidate === "number") {
+        const trimmed = String(candidate).trim();
+        if (trimmed) return trimmed;
+      }
+    }
+  }
+  return null;
+}
+
+function matchAllowedValue(field: BulkCreateFieldMetadata, value: unknown) {
+  const scalar = customFieldScalar(value);
+  if (scalar === null) return undefined;
+  return field.allowedValues?.find(
+    (allowed) => allowed.id === scalar || allowed.name === scalar || allowed.value === scalar
+  );
+}
+
+export function isAllowedCustomFieldValue(field: BulkCreateFieldMetadata, val: unknown): boolean {
+  if (!field.allowedValues || field.allowedValues.length === 0) return true;
+  const entries = Array.isArray(val) ? val : [val];
+  for (const entry of entries) {
+    if (entry === null || entry === undefined || entry === "") continue;
+    const scalar = customFieldScalar(entry);
+    if (!scalar) return false;
+    const matched = field.allowedValues.find(
+      (v) => v.id === scalar || v.name === scalar || v.value === scalar
+    );
+    if (!matched) return false;
+  }
+  return true;
+}
+
+/** Convert editor-friendly scalar values into the shapes expected by Jira REST v2. */
+export function normalizeJiraCustomFieldValue(
+  field: BulkCreateFieldMetadata | undefined,
+  value: unknown
+): unknown {
+  if (!field || value === undefined || value === null || value === "") return value;
+
+  const normalizeReference = (entry: unknown, referenceType?: string): unknown => {
+    if (entry && typeof entry === "object" && !Array.isArray(entry)) return entry;
+    const scalar = customFieldScalar(entry);
+    if (scalar === null) return entry;
+    const allowed = matchAllowedValue(field, entry);
+    if (referenceType === "user" || referenceType === "group") {
+      return { name: allowed?.name ?? allowed?.value ?? scalar };
+    }
+    return { id: allowed?.id ?? scalar };
+  };
+
+  const isMultiUser =
+    (field.schemaType === "array" && (field.schemaItems === "user" || field.schemaCustom?.includes("user"))) ||
+    Boolean(field.schemaCustom?.includes(":multiuserpicker"));
+
+  const isMultiGroup =
+    (field.schemaType === "array" && (field.schemaItems === "group" || field.schemaCustom?.includes("group"))) ||
+    Boolean(field.schemaCustom?.includes(":multigrouppicker"));
+
+  const isMultiVersion =
+    (field.schemaType === "array" && (field.schemaItems === "version" || field.schemaCustom?.includes("version") || field.schemaSystem === "versions")) ||
+    Boolean(field.schemaCustom?.includes(":multiversion"));
+
+  const isArray = field.schemaType === "array" || isMultiUser || isMultiGroup || isMultiVersion;
+
+  if (isArray) {
+    let rawEntries: unknown[];
+    if (Array.isArray(value)) {
+      rawEntries = value;
+    } else if (typeof value === "string") {
+      rawEntries = value.trim() ? [value.trim()] : [];
+    } else {
+      rawEntries = [value];
+    }
+    const filtered = rawEntries.filter((e) => e !== null && e !== undefined && e !== "");
+    if (filtered.length === 0) return [];
+
+    if (field.schemaItems === "string" && !isMultiUser && !isMultiGroup) {
+      return filtered.map((entry) => String(entry));
+    }
+    if (isMultiUser || field.schemaItems === "user") {
+      return filtered.map((entry) => normalizeReference(entry, "user"));
+    }
+    if (isMultiGroup || field.schemaItems === "group") {
+      return filtered.map((entry) => normalizeReference(entry, "group"));
+    }
+    if (
+      isMultiVersion ||
+      field.schemaItems === "version" ||
+      field.schemaItems === "component" ||
+      field.schemaItems === "option" ||
+      field.schemaCustom?.includes("multiselect") ||
+      field.schemaCustom?.includes("multicheckboxes") ||
+      field.schemaItems ||
+      (field.allowedValues && field.allowedValues.length > 0)
+    ) {
+      return filtered.map((entry) => normalizeReference(entry));
+    }
+    return filtered;
+  }
+
+  // Single references:
+  if (field.schemaType === "user" || field.schemaCustom?.includes(":userpicker")) {
+    return normalizeReference(value, "user");
+  }
+  if (field.schemaType === "group" || field.schemaCustom?.includes(":grouppicker")) {
+    return normalizeReference(value, "group");
+  }
+  if (
+    ["option", "version", "component", "project", "issuetype"].includes(field.schemaType ?? "") ||
+    field.schemaCustom?.includes(":select") ||
+    field.schemaCustom?.includes(":version") ||
+    field.schemaCustom?.includes(":radiobuttons") ||
+    (field.allowedValues && field.allowedValues.length > 0 && field.schemaType !== "string")
+  ) {
+    return normalizeReference(value);
+  }
+
+  return value;
+}
 
 export type BatchValidationResult =
   | { ok: true; data: BulkCreateRequest }
@@ -520,20 +652,14 @@ export function validateAndNormalizeItem(
       // Custom / unknown required fields
       const customValue = merged.customFields?.[reqField.id];
       if (customValue !== undefined && customValue !== null && customValue !== "") {
-        customFields[reqField.id] = customValue;
+        customFields[reqField.id] = normalizeJiraCustomFieldValue(reqField, customValue);
         // Validate allowedValues for option fields
-        if (reqField.allowedValues && reqField.allowedValues.length > 0) {
-          const strVal = String(customValue);
-          const matched = reqField.allowedValues.find(
-            (v) => v.id === strVal || v.name === strVal || v.value === strVal
-          );
-          if (!matched) {
-            errors.push({
-              field: reqField.id,
-              code: "FIELD_VALUE_NOT_ALLOWED",
-              message: `Giá trị cho "${reqField.name}" không nằm trong danh sách được phép`,
-            });
-          }
+        if (!isAllowedCustomFieldValue(reqField, customValue)) {
+          errors.push({
+            field: reqField.id,
+            code: "FIELD_VALUE_NOT_ALLOWED",
+            message: `Giá trị cho "${reqField.name}" không nằm trong danh sách được phép`,
+          });
         }
       } else {
         errors.push({
@@ -549,20 +675,14 @@ export function validateAndNormalizeItem(
       for (const [fieldId, val] of Object.entries(merged.customFields)) {
         if (val === undefined || val === null || val === "") continue;
         if (fieldId in customFields) continue; // already validated above
-        customFields[fieldId] = val;
         const fieldDef = meta.fieldsByIssueType[issueTypeId]?.find((f) => f.id === fieldId);
-        if (fieldDef?.allowedValues && fieldDef.allowedValues.length > 0) {
-          const strVal = String(val);
-          const matched = fieldDef.allowedValues.find(
-            (v) => v.id === strVal || v.name === strVal || v.value === strVal
-          );
-          if (!matched) {
-            errors.push({
-              field: fieldId,
-              code: "FIELD_VALUE_NOT_ALLOWED",
-              message: `Giá trị cho "${fieldDef.name}" không nằm trong danh sách được phép`,
-            });
-          }
+        customFields[fieldId] = normalizeJiraCustomFieldValue(fieldDef, val);
+        if (fieldDef && !isAllowedCustomFieldValue(fieldDef, val)) {
+          errors.push({
+            field: fieldId,
+            code: "FIELD_VALUE_NOT_ALLOWED",
+            message: `Giá trị cho "${fieldDef.name}" không nằm trong danh sách được phép`,
+          });
         }
       }
     }

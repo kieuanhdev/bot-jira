@@ -46,6 +46,8 @@ import {
   Eye,
   ArrowRight,
   ArrowLeft,
+  ArrowUpDown,
+  ArrowRightLeft,
   History,
   ListChecks,
   Search,
@@ -83,6 +85,7 @@ import {
   formatSecondsToJira,
 } from "./lib/bulk-utils";
 import { AssigneeInput } from "./bulk-assignee-input";
+import { EpicInput } from "./bulk-epic-input";
 import { OperationDetail } from "./bulk-operation-detail";
 
 function fieldRow(label: string, before: Record<string, unknown> | null, after: Record<string, unknown> | null, key: string) {
@@ -113,6 +116,9 @@ function fieldRow(label: string, before: Record<string, unknown> | null, after: 
   } else if (key === "points") {
     bText = b != null ? `${b}pt` : "—";
     aText = a === null ? "(Xóa điểm)" : (a != null ? `${a}pt` : "—");
+  } else if (key === "epic") {
+    bText = b ? String(b) : "—";
+    aText = a === null ? "(Gỡ Epic)" : (a ? String(a) : "—");
   } else {
     bText = b == null ? "—" : String(b);
     aText = a == null ? "—" : String(a);
@@ -223,7 +229,7 @@ export function BulkClient() {
   const { data: filtersData } = useQuery({
     queryKey: issuesKeys.filters(filterProject || "bulk"),
     queryFn: () =>
-      api<{ assignees: string[]; statuses?: string[]; labels: string[]; priorities: string[] }>(
+      api<{ assignees: string[]; statuses?: string[]; labels: string[]; priorities: string[]; epics?: string[] }>(
         `/api/issues/filters?project=${encodeURIComponent(filterProject)}`
       ),
     enabled: Boolean(filterProject),
@@ -299,6 +305,46 @@ export function BulkClient() {
     return (values.length > 0 ? values : ["Low", "Medium", "High", "Highest", "Blocker"]).sort((a, b) => a.localeCompare(b));
   }, [filtersData?.priorities, projectIssues]);
 
+  const epicOptions = useMemo(() => {
+    const set = new Set<string>();
+    if (filtersData?.epics && filtersData.epics.length > 0) {
+      for (const e of filtersData.epics) {
+        if (e) set.add(e);
+      }
+    }
+    for (const issue of projectIssues) {
+      if (issue.epic) set.add(issue.epic);
+    }
+    const myUsername = session?.user?.jiraUsername?.toLowerCase();
+    const sortedEpics = Array.from(set).sort((a, b) => a.localeCompare(b));
+
+    const myEpics = new Set<string>();
+    if (myUsername) {
+      for (const issue of projectIssues) {
+        if (issue.epic && issue.assigneeJira?.toLowerCase() === myUsername) {
+          myEpics.add(issue.epic);
+        }
+      }
+    }
+
+    const hasNoEpic = projectIssues.some((issue) => !issue.epic);
+    const options: { value: string; label: string }[] = [];
+
+    if (hasNoEpic) {
+      options.push({ value: "none", label: "Không có Epic" });
+    }
+
+    for (const ep of sortedEpics) {
+      const isMine = myEpics.has(ep);
+      options.push({
+        value: ep,
+        label: isMine ? `${ep} (Của tôi)` : ep,
+      });
+    }
+
+    return options;
+  }, [filtersData?.epics, projectIssues, session?.user?.jiraUsername]);
+
   // Selected task keys
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initialKeys));
 
@@ -336,16 +382,30 @@ export function BulkClient() {
   const [clearDueDate, setClearDueDate] = useState(false);
   const [fixVersions, setFixVersions] = useState<string[]>([]);
   const [clearFixVersions, setClearFixVersions] = useState(false);
+  const [epic, setEpic] = useState("");
+  const [clearEpic, setClearEpic] = useState(false);
 
-  // Operation Kind: "update-fields" | "log-work"
-  const [operationKind, setOperationKind] = useState<"update-fields" | "log-work">(() =>
-    searchParams?.get("action") === "log-work" ? "log-work" : "update-fields"
-  );
+  // Sorting option for tasks
+  const [sortOption, setSortOption] = useState<
+    "default" | "name-asc" | "name-desc" | "created-desc" | "created-asc" | "updated-desc"
+  >("default");
+
+  // Operation Kind: "update-fields" | "transition" | "log-work"
+  const [operationKind, setOperationKind] = useState<"update-fields" | "transition" | "log-work">(() => {
+    const act = searchParams?.get("action");
+    if (act === "log-work") return "log-work";
+    if (act === "transition") return "transition";
+    return "update-fields";
+  });
   useEffect(() => {
     const act = searchParams?.get("action");
     if (act === "log-work") setOperationKind("log-work");
+    else if (act === "transition") setOperationKind("transition");
     else if (act) setOperationKind("update-fields");
   }, [searchParams]);
+
+  // Target status for transition mode
+  const [targetStatus, setTargetStatus] = useState("");
 
   const [worklogDuration, setWorklogDuration] = useState("");
   const [worklogStarted, setWorklogStarted] = useState(() => {
@@ -425,6 +485,8 @@ export function BulkClient() {
     setSelected(new Set());
     setTaskFilters(DEFAULT_BULK_FILTERS);
     setFilterOnlySelected(false);
+    setSortOption("default");
+    setTargetStatus("");
     resetPreview();
     setEnabledFields(new Set());
     setAssignee("");
@@ -440,14 +502,56 @@ export function BulkClient() {
     setClearDueDate(false);
     setFixVersions([]);
     setClearFixVersions(false);
+    setEpic("");
+    setClearEpic(false);
   }
+
+  // Fetch workflow statuses for the selected project
+  const { data: boardStatusesData } = useQuery({
+    queryKey: ["board", "statuses", filterProject],
+    queryFn: () =>
+      api<{ items: { name: string; category: string }[] }>(
+        `/api/board/statuses?project=${encodeURIComponent(filterProject)}`
+      ),
+    enabled: Boolean(filterProject),
+    staleTime: 5 * 60_000,
+    retry: 0,
+  });
+
+  const allProjectStatuses = useMemo(() => {
+    const map = new Map<string, string>();
+    boardStatusesData?.items?.forEach((s) => {
+      if (s.name) map.set(s.name, s.category || "indeterminate");
+    });
+    filtersData?.statuses?.forEach((s) => {
+      if (s && !map.has(s)) map.set(s, "indeterminate");
+    });
+    projectIssues.forEach((issue) => {
+      if (issue.status && !map.has(issue.status)) {
+        map.set(issue.status, categoryOf(issue.status, issue.statusCategory));
+      }
+    });
+    const list = Array.from(map.entries())
+      .map(([name, category]) => ({ name, category }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (list.length === 0) {
+      return [
+        { name: "To Do", category: "new" },
+        { name: "In Progress", category: "indeterminate" },
+        { name: "Done", category: "done" },
+      ];
+    }
+    return list;
+  }, [boardStatusesData?.items, filtersData?.statuses, projectIssues]);
 
   const statusOptions = useMemo(
     () => {
+      if (allProjectStatuses.length > 0) return allProjectStatuses.map((s) => s.name);
       if (filtersData?.statuses && filtersData.statuses.length > 0) return filtersData.statuses;
       return Array.from(new Set(projectIssues.map((issue) => issue.status).filter(Boolean))).sort();
     },
-    [filtersData?.statuses, projectIssues]
+    [allProjectStatuses, filtersData?.statuses, projectIssues]
   );
 
   // Guarantee placeholder for any initial keys if not already present in the loaded issues list
@@ -502,6 +606,17 @@ export function BulkClient() {
         return taskFilters.priorities.includes(issue.priority);
       })
       .filter((issue) => {
+        if (!taskFilters.epics || taskFilters.epics.length === 0) return true;
+        const issueEpic = (issue.epic ?? "").toLowerCase();
+        const hasNone = taskFilters.epics.some(
+          (e) => e.toLowerCase() === "none" || e.toLowerCase() === "unassigned"
+        );
+        if (!issue.epic) return hasNone;
+        return taskFilters.epics.some(
+          (e) => e.toLowerCase() !== "none" && e.toLowerCase() !== "unassigned" && e.toLowerCase() === issueEpic
+        );
+      })
+      .filter((issue) => {
         if (isAllAssignees) return true;
         const hasUnassigned = assigneeList.some(
           (a) => a.toLowerCase() === "unassigned" || a.toLowerCase() === "none"
@@ -528,8 +643,19 @@ export function BulkClient() {
       list = list.filter((issue) => selected.has(issue.jiraKey));
     }
 
-    // Prioritize tasks being standardized (from initialKeys) to the top in their specified order
-    if (initialKeyIndexMap.size > 0) {
+    // Apply sorting
+    if (sortOption === "name-asc") {
+      list = [...list].sort((a, b) => (a.summary || "").localeCompare(b.summary || ""));
+    } else if (sortOption === "name-desc") {
+      list = [...list].sort((a, b) => (b.summary || "").localeCompare(a.summary || ""));
+    } else if (sortOption === "created-desc") {
+      list = [...list].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    } else if (sortOption === "created-asc") {
+      list = [...list].sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+    } else if (sortOption === "updated-desc") {
+      list = [...list].sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+    } else if (initialKeyIndexMap.size > 0) {
+      // Prioritize tasks being standardized (from initialKeys) to the top in their specified order
       list = [...list].sort((a, b) => {
         const aIndex = initialKeyIndexMap.get(a.jiraKey);
         const bIndex = initialKeyIndexMap.get(b.jiraKey);
@@ -549,6 +675,7 @@ export function BulkClient() {
     taskFilters,
     session?.user?.jiraUsername,
     filterOnlySelected,
+    sortOption,
     selected,
     initialKeyIndexMap,
   ]);
@@ -580,6 +707,14 @@ export function BulkClient() {
 
   function buildAction(): BulkAction | null {
     if (!filterProject) return null;
+
+    if (operationKind === "transition") {
+      if (!targetStatus.trim()) return null;
+      return {
+        kind: "transition",
+        value: targetStatus.trim(),
+      };
+    }
 
     if (operationKind === "log-work") {
       if (!worklogDuration.trim() || !isWorklogDurationValid) return null;
@@ -636,6 +771,14 @@ export function BulkClient() {
         value.fixVersions = [];
       } else {
         value.fixVersions = fixVersions;
+      }
+    }
+    if (enabledFields.has("epic")) {
+      if (clearEpic) {
+        value.epic = null;
+      } else {
+        if (!epic.trim()) return null;
+        value.epic = epic.trim().toUpperCase();
       }
     }
 
@@ -699,6 +842,7 @@ export function BulkClient() {
                   statuses: taskFilters.statuses.length > 0 ? taskFilters.statuses : undefined,
                   labels: taskFilters.labels.length > 0 ? taskFilters.labels : undefined,
                   priorities: taskFilters.priorities.length > 0 ? taskFilters.priorities : undefined,
+                  epics: taskFilters.epics && taskFilters.epics.length > 0 ? taskFilters.epics : undefined,
                 },
               },
               action,
@@ -778,10 +922,13 @@ export function BulkClient() {
 
   const visiblePreviewItems = preview?.items.filter((item) => previewBucket(item) === previewView) ?? [];
   const isLogWorkOp = buildAction()?.kind === "log-work" || preview?.type === "log-work";
+  const isTransitionOp = buildAction()?.kind === "transition" || preview?.type === "transition";
   const confirmLabel = preview
     ? isLogWorkOp
       ? `Ghi worklog ${preview.actionable} task`
-      : `Cập nhật ${preview.actionable} task`
+      : isTransitionOp
+        ? `Chuyển trạng thái ${preview.actionable} task sang "${targetStatus || (preview.items[0]?.after?.status as string) || ""}"`
+        : `Cập nhật ${preview.actionable} task`
     : "Xác nhận thay đổi";
 
   const activeFilterCount = countActiveIssueFilters(taskFilters, DEFAULT_BULK_FILTERS);
@@ -833,7 +980,17 @@ export function BulkClient() {
       <ol aria-label="Tiến trình thao tác hàng loạt" className="grid grid-cols-3 overflow-hidden rounded-lg border bg-card">
         {[
           { number: 1, label: "Chọn dự án & task", active: true, done: Boolean(filterProject) && effectiveCount > 0 },
-          { number: 2, label: "Chọn trường cần sửa", active: Boolean(filterProject) && effectiveCount > 0, done: Boolean(buildAction()) },
+          {
+            number: 2,
+            label:
+              operationKind === "transition"
+                ? "Chọn trạng thái đích"
+                : operationKind === "log-work"
+                  ? "Thiết lập Worklog"
+                  : "Chọn trường cần sửa",
+            active: Boolean(filterProject) && effectiveCount > 0,
+            done: Boolean(buildAction()),
+          },
           { number: 3, label: "Xem trước & Chạy", active: Boolean(preview), done: false },
         ].map((step) => (
           <li
@@ -967,6 +1124,7 @@ export function BulkClient() {
                   options={{
                     assignees: availableAssignees,
                     statuses: statusOptions,
+                    epics: epicOptions,
                     labels: labelOptions,
                     priorities: priorityOptions,
                   }}
@@ -974,6 +1132,7 @@ export function BulkClient() {
                     search: true,
                     assignee: "multi",
                     status: "multi",
+                    epic: "multi",
                     label: "multi",
                     priority: "multi",
                     quickSwitch: false,
@@ -994,34 +1153,63 @@ export function BulkClient() {
                 </p>
               </div>
 
-              {selectionMode === "pick" && (
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 bg-muted/10">
-                  <div className="flex items-center gap-3">
-                    <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
-                      <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
-                      Chọn tất cả task đang hiển thị
-                    </label>
-                    {selected.size > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setFilterOnlySelected(!filterOnlySelected)}
-                        className={cn(
-                          "cursor-pointer inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition-colors border",
-                          filterOnlySelected
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-background text-muted-foreground hover:text-foreground border-border"
-                        )}
-                      >
-                        <Filter className="h-3 w-3" aria-hidden />
-                        {filterOnlySelected ? "Đang lọc: Chỉ hiện đã chọn" : "Chỉ hiện đã chọn"}
-                      </button>
-                    )}
-                  </div>
-                  <span className="text-xs text-muted-foreground font-medium">
-                    Đã chọn {selected.size} / {filteredIssues.length}
-                  </span>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 bg-muted/10">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  {selectionMode === "pick" && (
+                    <>
+                      <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                        <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
+                        Chọn tất cả
+                      </label>
+                      {selected.size > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setFilterOnlySelected(!filterOnlySelected)}
+                          className={cn(
+                            "cursor-pointer inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition-colors border",
+                            filterOnlySelected
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-background text-muted-foreground hover:text-foreground border-border"
+                          )}
+                        >
+                          <Filter className="h-3 w-3" aria-hidden />
+                          {filterOnlySelected ? "Đang lọc: Chỉ hiện đã chọn" : "Chỉ hiện đã chọn"}
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {selectionMode === "filter" && (
+                    <span className="text-xs text-muted-foreground font-medium">
+                      Danh sách task khớp bộ lọc
+                    </span>
+                  )}
                 </div>
-              )}
+
+                <div className="flex items-center gap-3 ml-auto">
+                  <div className="flex items-center gap-1.5">
+                    <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden />
+                    <span className="text-xs text-muted-foreground hidden sm:inline">Sắp xếp:</span>
+                    <Select value={sortOption} onValueChange={(v) => setSortOption(v as typeof sortOption)}>
+                      <SelectTrigger className="h-7 w-[165px] text-xs bg-background">
+                        <SelectValue placeholder="Thứ tự mặc định" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Thứ tự mặc định</SelectItem>
+                        <SelectItem value="name-asc">Tên task (A → Z)</SelectItem>
+                        <SelectItem value="name-desc">Tên task (Z → A)</SelectItem>
+                        <SelectItem value="created-desc">Ngày tạo (Mới nhất)</SelectItem>
+                        <SelectItem value="created-asc">Ngày tạo (Cũ nhất)</SelectItem>
+                        <SelectItem value="updated-desc">Cập nhật gần nhất</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {selectionMode === "pick" && (
+                    <span className="text-xs text-muted-foreground font-medium shrink-0">
+                      Đã chọn {selected.size} / {filteredIssues.length}
+                    </span>
+                  )}
+                </div>
+              </div>
 
               {/* Task table / list */}
               <div className="max-h-80 overflow-auto">
@@ -1084,6 +1272,27 @@ export function BulkClient() {
                         </Badge>
                       )}
                       <span className="min-w-0 flex-1 truncate">{i.summary}</span>
+                      {i.epic && (
+                        <span
+                          className="hidden sm:inline-flex shrink-0 items-center rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 font-mono text-[10px] font-medium text-primary"
+                          title={`Epic: ${i.epic}`}
+                        >
+                          {i.epic}
+                        </span>
+                      )}
+                      {i.createdAt && (
+                        <span
+                          className="hidden md:inline-flex shrink-0 items-center text-[11px] text-muted-foreground tabular-nums"
+                          title={`Ngày tạo: ${new Date(i.createdAt).toLocaleString("vi-VN")}`}
+                        >
+                          <Clock className="h-3 w-3 mr-1 opacity-60" aria-hidden />
+                          {new Date(i.createdAt).toLocaleDateString("vi-VN", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                          })}
+                        </span>
+                      )}
                       <span
                         className="hidden sm:inline-flex shrink-0 items-center rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground max-w-[130px] truncate"
                         title={i.assigneeJira ? `Người phụ trách: @${i.assigneeJira}` : "Chưa giao"}
@@ -1149,7 +1358,11 @@ export function BulkClient() {
           <CardTitle className="text-base flex items-center justify-between">
             <span className="flex items-center gap-2">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">2</span>
-              {operationKind === "log-work" ? "Thiết lập Ghi Worklog" : "Chọn các trường cần sửa"}
+              {operationKind === "log-work"
+                ? "Thiết lập Ghi Worklog"
+                : operationKind === "transition"
+                  ? "Chuyển trạng thái hàng loạt"
+                  : "Chọn các trường cần sửa"}
             </span>
             {filterProject && (
               <Badge variant="outline" className="font-normal text-xs">
@@ -1161,13 +1374,15 @@ export function BulkClient() {
             {filterProject
               ? operationKind === "log-work"
                 ? `Nhập thời lượng thực hiện để ghi nhận cộng dồn lên ${effectiveCount} task đã chọn.`
-                : `Bật một hoặc nhiều trường có sẵn của dự án ${filterProject}, nhập giá trị mới rồi xem trước trên ${effectiveCount} task đã chọn.`
+                : operationKind === "transition"
+                  ? `Chọn trạng thái đích để chuyển đổi đồng loạt cho ${effectiveCount} task đã chọn trong dự án ${filterProject}.`
+                  : `Bật một hoặc nhiều trường có sẵn của dự án ${filterProject}, nhập giá trị mới rồi xem trước trên ${effectiveCount} task đã chọn.`
               : "Vui lòng chọn dự án ở Bước 1 trước khi cấu hình thao tác."}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 px-4 pb-4 sm:px-5 sm:pb-5">
           {filterProject && (
-            <div className="flex items-center gap-2 border-b pb-3">
+            <div className="flex flex-wrap items-center gap-2 border-b pb-3">
               <span className="text-xs font-semibold text-muted-foreground mr-1">Chế độ:</span>
               <Button
                 type="button"
@@ -1177,9 +1392,23 @@ export function BulkClient() {
                   setOperationKind("update-fields");
                   resetPreview();
                 }}
-                className="text-xs h-7 cursor-pointer"
+                className="gap-1.5 text-xs h-7 cursor-pointer"
               >
+                <Edit3 className="h-3.5 w-3.5" />
                 Cập nhật trường
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={operationKind === "transition" ? "default" : "outline"}
+                onClick={() => {
+                  setOperationKind("transition");
+                  resetPreview();
+                }}
+                className="gap-1.5 text-xs h-7 cursor-pointer"
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5" />
+                Chuyển trạng thái
               </Button>
               <Button
                 type="button"
@@ -1288,6 +1517,84 @@ export function BulkClient() {
                 />
               </div>
             </div>
+          ) : operationKind === "transition" ? (
+            <div className="flex flex-col gap-4 rounded-lg border bg-card/60 p-4">
+              <div className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-xs text-foreground">
+                <div className="font-semibold text-sm mb-1 flex items-center gap-1.5">
+                  <ArrowRightLeft className="h-4 w-4 text-primary" />
+                  Chế độ chuyển trạng thái hàng loạt
+                </div>
+                <p className="text-muted-foreground">
+                  Chọn trạng thái bạn muốn chuyển đến cho {effectiveCount} task đã chọn trong dự án {filterProject}.
+                  Jira sẽ kiểm tra luồng workflow transition có hợp lệ với từng task hay không tại bước Xem trước.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2.5">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  Trạng thái đích <span className="text-destructive">*</span>
+                </label>
+
+                {allProjectStatuses.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {allProjectStatuses.map((st) => {
+                      const isSelected = targetStatus === st.name;
+                      const dot = statusDot(st.name, st.category);
+                      return (
+                        <button
+                          key={st.name}
+                          type="button"
+                          onClick={() => {
+                            setTargetStatus(st.name);
+                            resetPreview();
+                          }}
+                          className={cn(
+                            "cursor-pointer flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all shadow-2xs",
+                            isSelected
+                              ? "border-primary bg-primary/15 text-primary ring-2 ring-primary/30 font-semibold"
+                              : "border-border bg-background hover:bg-muted/60 text-foreground"
+                          )}
+                        >
+                          <span className={cn("h-2.5 w-2.5 rounded-full", dot)} aria-hidden />
+                          <span>{st.name}</span>
+                          {isSelected && <CheckCheck className="h-3.5 w-3.5 text-primary ml-1" aria-hidden />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="mt-2 max-w-sm">
+                  <Select
+                    value={targetStatus}
+                    onValueChange={(val) => {
+                      setTargetStatus(val);
+                      resetPreview();
+                    }}
+                  >
+                    <SelectTrigger className="h-9 bg-background text-sm">
+                      <SelectValue placeholder="— Hoặc chọn từ danh sách trạng thái —" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allProjectStatuses.map((st) => (
+                        <SelectItem key={st.name} value={st.name}>
+                          <span className="flex items-center gap-2">
+                            <span className={cn("h-2 w-2 rounded-full", statusDot(st.name, st.category))} />
+                            <span>{st.name}</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {!targetStatus && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+                    Vui lòng chọn một trạng thái đích để tiếp tục xem trước thay đổi.
+                  </p>
+                )}
+              </div>
+            </div>
           ) : fieldsLoading ? (
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {[0, 1, 2, 3, 4, 5, 6].map((idx) => (
@@ -1305,6 +1612,7 @@ export function BulkClient() {
                 { id: "estimate", label: "Original Estimate" },
                 { id: "dueDate", label: "Due date" },
                 { id: "fixVersions", label: "Fix Versions" },
+                { id: "epic", label: "Epic / Task cha" },
               ].map(({ id, label }) => {
                 const isAvailable = availableFieldMap.get(id)?.available ?? true;
                 const isEnabled = enabledFields.has(id);
@@ -1584,6 +1892,34 @@ export function BulkClient() {
                   )}
                 </div>
               )}
+
+              {enabledFields.has("epic") && (
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-foreground">Epic / Task cha</span>
+                    <span className="text-[10px] text-muted-foreground">Gợi ý từ dự án {filterProject}</span>
+                  </div>
+                  <EpicInput
+                    projectKey={filterProject}
+                    value={epic}
+                    onChange={(v) => {
+                      setEpic(v);
+                      resetPreview();
+                    }}
+                    disabled={clearEpic}
+                  />
+                  <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground hover:text-foreground">
+                    <Checkbox
+                      checked={clearEpic}
+                      onCheckedChange={(v) => {
+                        setClearEpic(v === true);
+                        resetPreview();
+                      }}
+                    />
+                    Gỡ Epic khỏi task (Unlink Epic)
+                  </label>
+                </div>
+              )}
             </div>
           )}
 
@@ -1654,6 +1990,25 @@ export function BulkClient() {
               </div>
             )}
 
+            {isTransitionOp && (
+              <div className="rounded-lg border border-primary/30 bg-primary/10 p-4 text-xs text-primary dark:text-primary">
+                <div className="font-semibold text-sm mb-1 flex items-center gap-1.5 text-foreground">
+                  <ArrowRightLeft className="h-4 w-4 text-primary" />
+                  Chuyển trạng thái hàng loạt
+                </div>
+                <div className="text-foreground">
+                  Dự kiến chuyển trạng thái sang{" "}
+                  <Badge variant="outline" className="font-semibold mx-1">
+                    {targetStatus || (preview.items[0]?.after?.status as string) || ""}
+                  </Badge>{" "}
+                  cho {preview.actionable} task.
+                </div>
+                <div className="mt-1 text-muted-foreground text-[11px]">
+                  * Hệ thống tự động kiểm tra luồng workflow trên Jira. Các task không có bước chuyển hợp lệ sẽ được xếp vào mục &quot;Bị chặn&quot; và bỏ qua an toàn.
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
               {([
                 ["changes", "Sẽ thay đổi", previewCounts.changes, CheckCircle2, "text-emerald-700 dark:text-emerald-400"],
@@ -1716,6 +2071,7 @@ export function BulkClient() {
                     </p>
                   ) : (
                     <div className="flex flex-col gap-1 border-t pt-2 mt-1">
+                      {fieldRow("Trạng thái", item.before, item.after, "status")}
                       {fieldRow("Người phụ trách", item.before, item.after, "assignee")}
                       {fieldRow("Độ ưu tiên", item.before, item.after, "priority")}
                       {fieldRow("Type", item.before, item.after, "issueType")}
@@ -1724,6 +2080,7 @@ export function BulkClient() {
                       {fieldRow("Due date", item.before, item.after, "dueDate")}
                       {fieldRow("Nhãn (Labels)", item.before, item.after, "labels")}
                       {fieldRow("Fix Versions", item.before, item.after, "fixVersions")}
+                      {fieldRow("Epic / Task cha", item.before, item.after, "epic")}
                       {Boolean(item.after.worklog) ? (
                         <div className="flex items-center justify-between text-xs py-0.5 border-t mt-0.5">
                           <span className="text-muted-foreground font-medium">Ghi Worklog:</span>

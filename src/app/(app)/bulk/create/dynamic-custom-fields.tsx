@@ -42,6 +42,23 @@ const STANDARD_FIELD_IDS = new Set([
   "status",
 ]);
 
+function getFieldDisplayValue(val: unknown): string {
+  if (val === undefined || val === null) return "";
+  if (typeof val === "string") return val;
+  if (typeof val === "number" || typeof val === "boolean") return String(val);
+  if (Array.isArray(val)) {
+    if (val.length === 0) return "";
+    return getFieldDisplayValue(val[0]);
+  }
+  if (typeof val === "object") {
+    const obj = val as Record<string, unknown>;
+    if (obj.id !== undefined && obj.id !== null) return String(obj.id);
+    if (obj.name !== undefined && obj.name !== null) return String(obj.name);
+    if (obj.value !== undefined && obj.value !== null) return String(obj.value);
+  }
+  return "";
+}
+
 export function DynamicCustomFields({
   metadata,
   issueTypeId,
@@ -112,7 +129,7 @@ export function DynamicCustomFields({
 
     // 1. Single selection from allowedValues
     if (field.allowedValues && field.allowedValues.length > 0) {
-      const stringVal = effectiveVal !== undefined && effectiveVal !== null ? String(effectiveVal) : "";
+      const stringVal = getFieldDisplayValue(effectiveVal);
       return (
         <div key={field.id} className="space-y-1">
           <div className="flex items-center justify-between">
@@ -146,7 +163,7 @@ export function DynamicCustomFields({
 
     // 2. Number input
     if (field.schemaType === "number") {
-      const numVal = effectiveVal !== undefined && effectiveVal !== null ? String(effectiveVal) : "";
+      const numVal = getFieldDisplayValue(effectiveVal);
       return (
         <div key={field.id} className="space-y-1">
           <div className="flex items-center justify-between">
@@ -175,7 +192,7 @@ export function DynamicCustomFields({
 
     // 3. Date input
     if (field.schemaType === "date") {
-      const dateVal = effectiveVal !== undefined && effectiveVal !== null ? String(effectiveVal) : "";
+      const dateVal = getFieldDisplayValue(effectiveVal);
       return (
         <div key={field.id} className="space-y-1">
           <div className="flex items-center justify-between">
@@ -199,7 +216,7 @@ export function DynamicCustomFields({
     }
 
     // 4. Default string / text input
-    const strVal = effectiveVal !== undefined && effectiveVal !== null ? String(effectiveVal) : "";
+    const strVal = getFieldDisplayValue(effectiveVal);
     return (
       <div key={field.id} className="space-y-1">
         <div className="flex items-center justify-between">

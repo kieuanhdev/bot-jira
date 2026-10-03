@@ -78,6 +78,7 @@ export function loadStoredFilters(
         statuses: Array.isArray(parsed.statuses) ? parsed.statuses : [],
         labels: Array.isArray(parsed.labels) ? parsed.labels : [],
         priorities: Array.isArray(parsed.priorities) ? parsed.priorities : [],
+        epics: Array.isArray(parsed.epics) ? parsed.epics : [],
         includeDone:
           typeof parsed.includeDone === "boolean"
             ? parsed.includeDone

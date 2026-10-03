@@ -9,7 +9,7 @@ import { jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 
 export type BulkFieldOption = {
-  id: "assignee" | "labels" | "priority" | "issueType" | "points" | "estimate" | "dueDate" | "fixVersions";
+  id: "assignee" | "labels" | "priority" | "issueType" | "points" | "estimate" | "dueDate" | "fixVersions" | "epic";
   jiraFieldId: string;
   name: string;
   available: boolean;
@@ -79,6 +79,7 @@ export async function GET(req: Request) {
     { id: "estimate", jiraFieldId: "timetracking", name: "Original Estimate", available: true },
     { id: "dueDate", jiraFieldId: "duedate", name: "Due date", available: true },
     { id: "fixVersions", jiraFieldId: "fixVersions", name: "Fix Versions", available: true },
+    { id: "epic", jiraFieldId: "epic", name: "Epic / Task cha", available: true },
   ];
 
   if (!sampleKey) {
@@ -107,6 +108,16 @@ export async function GET(req: Request) {
     }
 
     const m = editMeta.fields;
+    const epicEntry = Object.entries(m).find(([id, field]) => {
+      const lowerName = field.name?.trim().toLowerCase() ?? "";
+      return (
+        id === "parent" ||
+        lowerName === "epic link" ||
+        lowerName === "epic" ||
+        (field.schema as { custom?: string })?.custom === "com.pyxis.greenhopper.jira:gh-epic-link"
+      );
+    });
+
     const fields: BulkFieldOption[] = [
       { id: "assignee", jiraFieldId: "assignee", name: m.assignee?.name ?? "Người phụ trách", available: Boolean(m.assignee) },
       { id: "labels", jiraFieldId: "labels", name: m.labels?.name ?? "Nhãn", available: Boolean(m.labels) },
@@ -120,6 +131,12 @@ export async function GET(req: Request) {
       { id: "estimate", jiraFieldId: "timetracking", name: m.timetracking?.name ?? "Original Estimate", available: Boolean(m.timetracking) },
       { id: "dueDate", jiraFieldId: "duedate", name: m.duedate?.name ?? "Due date", available: Boolean(m.duedate) },
       { id: "fixVersions", jiraFieldId: "fixVersions", name: m.fixVersions?.name ?? "Fix Versions", available: Boolean(m.fixVersions) },
+      {
+        id: "epic",
+        jiraFieldId: epicEntry ? epicEntry[0] : "parent",
+        name: epicEntry ? epicEntry[1].name : "Epic / Task cha",
+        available: Boolean(epicEntry || m.parent),
+      },
     ];
 
     return NextResponse.json({

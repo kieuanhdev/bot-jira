@@ -25,6 +25,7 @@ import {
   validateAndNormalizeItem,
   validateBatchParentGraph,
   generateBulkCreateMarker,
+  normalizeJiraCustomFieldValue,
 } from "./create-validator";
 import { buildDependencyGraph } from "./dependency-graph";
 import {
@@ -125,6 +126,9 @@ export async function fetchBulkCreateMetadata(
         name: fDef.name,
         required: Boolean(fDef.required),
         schemaType: fDef.schema?.type,
+        schemaItems: fDef.schema?.items,
+        schemaCustom: fDef.schema?.custom,
+        schemaSystem: fDef.schema?.system,
         allowedValues: fDef.allowedValues?.map((v) => ({
           id: String(v.id),
           name: v.name,
@@ -666,6 +670,14 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
   const pointsFieldId = payload.pointsFieldId ?? env.jiraPointsFieldId ?? null;
   const epicLinkFieldId = payload.epicLinkFieldId ?? null;
 
+  // Prefetch metadata for worker normalization
+  let meta: BulkCreateProjectMetadata | null = null;
+  try {
+    meta = await fetchBulkCreateMetadata(jira, projectKey, auth);
+  } catch {
+    // Graceful fallback if metadata prefetch fails
+  }
+
   // Concurrency cap: default 2, max 4
   const envConcurrency = Number(process.env.BULK_CREATE_CONCURRENCY) || 2;
   const concurrency = Math.max(1, Math.min(4, envConcurrency));
@@ -704,7 +716,8 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
           auth,
           jira,
           pointsFieldId,
-          epicLinkFieldId
+          epicLinkFieldId,
+          meta
         );
         const itemLatency = Date.now() - itemStart;
         itemLatenciesMs.push(itemLatency);
@@ -811,7 +824,8 @@ async function processCreateItem(
   auth: JiraAuth,
   jira: ReturnType<typeof jiraWith>,
   pointsFieldId?: string | null,
-  epicLinkFieldId?: string | null
+  epicLinkFieldId?: string | null,
+  meta?: BulkCreateProjectMetadata | null
 ): Promise<boolean> {
   const current = await prisma.bulkCreateItem.findUnique({ where: { id: itemId } });
   if (!current || current.status === "succeeded") return true;
@@ -893,9 +907,25 @@ async function processCreateItem(
         extraFields[pointsFieldId] = reqData.points;
       }
       if (reqData.customFields) {
+        let effectiveMeta = meta;
+        if (!effectiveMeta) {
+          try {
+            effectiveMeta = await fetchBulkCreateMetadata(jira, projectKey, auth);
+          } catch {
+            // ignore
+          }
+        }
+        const issueTypeFields =
+          (reqData.issueTypeId && effectiveMeta?.fieldsByIssueType[reqData.issueTypeId]) ||
+          Object.values(effectiveMeta?.fieldsByIssueType ?? {}).flat();
+
         for (const [fieldId, val] of Object.entries(reqData.customFields)) {
-          if (val !== undefined && val !== null) {
-            extraFields[fieldId] = val;
+          if (val !== undefined && val !== null && val !== "") {
+            const fieldDef = issueTypeFields.find((f) => f.id === fieldId);
+            const normalized = normalizeJiraCustomFieldValue(fieldDef, val);
+            if (normalized !== undefined && normalized !== null && normalized !== "") {
+              extraFields[fieldId] = normalized;
+            }
           }
         }
       }

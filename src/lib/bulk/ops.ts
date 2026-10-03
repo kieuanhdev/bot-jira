@@ -39,6 +39,7 @@ export type BulkFieldValues = {
   estimate?: string;
   dueDate?: string | null;
   fixVersions?: string[];
+  epic?: string | null;
 };
 
 export type BulkAction =
@@ -51,6 +52,7 @@ export type BulkAction =
   | { kind: "log-work"; value: { timeSpent: string; started?: string; comment?: string } }
   | { kind: "set-due-date"; value: string | null }
   | { kind: "set-priority"; value: string }
+  | { kind: "set-epic"; value: string | null }
   | { kind: "transition"; value: string }
   | { kind: "add-fix-version"; value: string; dependencyScope?: DependencyScope }
   | { kind: "remove-fix-version"; value: string; dependencyScope?: DependencyScope; forceRemove?: boolean }
@@ -87,6 +89,7 @@ export type BulkSelector =
         statuses?: string[];
         labels?: string[];
         priorities?: string[];
+        epics?: string[];
       };
     };
 
@@ -106,7 +109,25 @@ type IssueRow = {
   timeSpentSeconds?: number | null;
   updatedAt: Date | null;
   lastSyncedAt: Date;
+  raw?: unknown;
 };
+
+export function extractEpicKey(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  if (r.parent && typeof r.parent === "object" && typeof (r.parent as { key?: unknown }).key === "string") {
+    return (r.parent as { key: string }).key;
+  }
+  if (r.epic && typeof r.epic === "object" && typeof (r.epic as { key?: unknown }).key === "string") {
+    return (r.epic as { key: string }).key;
+  }
+  for (const [key, val] of Object.entries(r)) {
+    if (key.startsWith("customfield_") && typeof val === "string" && /^[A-Z][A-Z0-9_]+-\d+$/i.test(val)) {
+      return val.toUpperCase();
+    }
+  }
+  return null;
+}
 
 type ActionParams = {
   fields?: BulkFieldValues;
@@ -121,6 +142,7 @@ type ActionParams = {
   fixVersion?: string;
   comment?: string;
   branches?: BranchParams;
+  epic?: string | null;
 };
 
 export function actionParams(action: BulkAction): ActionParams {
@@ -142,6 +164,8 @@ export function actionParams(action: BulkAction): ActionParams {
       return { dueDate: action.value };
     case "set-priority":
       return { priority: action.value };
+    case "set-epic":
+      return { epic: action.value };
     case "transition":
       return { status: action.value };
     case "add-fix-version":
@@ -173,6 +197,7 @@ const KNOWN_ACTION_KINDS = [
   "log-work",
   "set-due-date",
   "set-priority",
+  "set-epic",
   "transition",
   "add-fix-version",
   "remove-fix-version",
@@ -324,6 +349,13 @@ export function validateBulkRequest(body: unknown, resolvedKeys?: string[]): Val
             if (Array.isArray(v.fixVersions) && v.fixVersions.every((item) => isNonEmptyString(item))) fields.fixVersions = Array.from(new Set(v.fixVersions.map((item) => item.trim())));
             else errors.push("update-fields.value.fixVersions must be an array of strings");
           }
+          if ("epic" in v) {
+            if (v.epic === null || (isNonEmptyString(v.epic) && /^[A-Z][A-Z0-9_]+-\d+$/i.test(v.epic.trim()))) {
+              fields.epic = v.epic === null ? null : v.epic.trim().toUpperCase();
+            } else {
+              errors.push("update-fields.value.epic must be a valid Jira issue key or null");
+            }
+          }
           if (Object.keys(fields).length === 0) errors.push("update-fields.value must contain at least one field");
           action = { kind, value: fields };
           break;
@@ -415,6 +447,15 @@ export function validateBulkRequest(body: unknown, resolvedKeys?: string[]): Val
             else action = { kind, value: v } as BulkAction;
           } else {
             errors.push(`${kind}.value must be a non-empty string`);
+          }
+          break;
+        }
+        case "set-epic": {
+          const v = rawAction.value;
+          if (v === null || (isNonEmptyString(v) && /^[A-Z][A-Z0-9_]+-\d+$/i.test(v.trim()))) {
+            action = { kind, value: v === null ? null : v.trim().toUpperCase() };
+          } else {
+            errors.push("set-epic.value must be a valid Jira issue key or null");
           }
           break;
         }
@@ -511,6 +552,7 @@ export async function resolveFilterKeys(
     statuses?: string[];
     labels?: string[];
     priorities?: string[];
+    epics?: string[];
   },
   jiraUsername?: string | null,
   maxKeys: number = MAX_FILTER_KEYS
@@ -596,12 +638,27 @@ export async function resolveFilterKeys(
     }
   }
 
+  const hasEpicFilter = Boolean(filters.epics && filters.epics.length > 0);
+
   const rows = await prisma.issueCache.findMany({
     where,
-    select: { jiraKey: true },
+    select: { jiraKey: true, ...(hasEpicFilter ? { raw: true } : {}) },
     orderBy: { jiraKey: "asc" },
     take: maxKeys,
   });
+
+  if (hasEpicFilter && filters.epics) {
+    const epicTokens = filters.epics.map((e) => e.trim().toLowerCase());
+    const hasUnassigned = epicTokens.some((e) => e === "none" || e === "unassigned");
+    const namedEpics = epicTokens.filter((e) => e !== "none" && e !== "unassigned");
+
+    const matched = rows.filter((row) => {
+      const epic = extractEpicKey((row as { raw?: unknown }).raw);
+      if (!epic) return hasUnassigned;
+      return namedEpics.includes(epic.toLowerCase());
+    });
+    return matched.map((r) => r.jiraKey);
+  }
 
   return rows.map((r) => r.jiraKey);
 }
@@ -713,7 +770,8 @@ export function classifyAction(
         (fields.fixVersions === undefined || (
           fields.fixVersions.length === issue.fixVersionNames.length &&
           fields.fixVersions.slice().sort().join(",") === issue.fixVersionNames.slice().sort().join(",")
-        ));
+        )) &&
+        (fields.epic === undefined || fields.epic === extractEpicKey((issue as { raw?: unknown }).raw));
       return unchanged ? "no_change" : "will_change";
     }
     case "assign":
@@ -736,6 +794,10 @@ export function classifyAction(
     }
     case "set-priority":
       return p.priority === issue.priority ? "no_change" : "will_change";
+    case "set-epic": {
+      const currentEpic = extractEpicKey((issue as { raw?: unknown }).raw);
+      return currentEpic === (p.epic ?? null) ? "no_change" : "will_change";
+    }
     case "transition":
       if (ctx.transitionName == null) return "blocked";
       return p.status?.toLowerCase() === issue.status.toLowerCase() ? "no_change" : "will_change";
@@ -782,6 +844,7 @@ export function computePreview(
     worklogSeconds: issue.timeSpentSeconds,
     dueDate: issue.dueDate?.toISOString().slice(0, 10) ?? null,
     fixVersions: issue.fixVersionNames,
+    epic: extractEpicKey((issue as { raw?: unknown }).raw),
   };
   const after: Record<string, unknown> = { ...before };
   const warning = isStale(issue.lastSyncedAt, new Date()) ? "stale_data" : null;
@@ -799,6 +862,7 @@ export function computePreview(
       if (fields.estimate !== undefined) after.estimateSeconds = fields.estimate;
       if (fields.dueDate !== undefined) after.dueDate = fields.dueDate;
       if (fields.fixVersions !== undefined) after.fixVersions = fields.fixVersions;
+      if (fields.epic !== undefined) after.epic = fields.epic;
       break;
     }
     case "assign":
@@ -826,6 +890,9 @@ export function computePreview(
       break;
     case "set-priority":
       after.priority = p.priority;
+      break;
+    case "set-epic":
+      after.epic = p.epic ?? null;
       break;
     case "transition":
       after.status = p.status;
@@ -995,7 +1062,7 @@ export async function previewBulk(
       if (
         fieldAvailable !== false &&
         jira.getEditMeta &&
-        (value.issueType !== undefined || value.estimate !== undefined || value.dueDate !== undefined || value.fixVersions !== undefined)
+        (value.issueType !== undefined || value.estimate !== undefined || value.dueDate !== undefined || value.fixVersions !== undefined || value.epic !== undefined)
       ) {
         try {
           const meta = await jira.getEditMeta(key);
@@ -1029,10 +1096,51 @@ export async function previewBulk(
               }
             }
           }
+          if (value.epic !== undefined && value.epic !== null) {
+            const hasEpicField = Object.entries(meta.fields ?? {}).some(([id, f]) => {
+              const fieldWithSchema = f as { name?: string; schema?: { custom?: string } };
+              const lowerName = fieldWithSchema.name?.trim().toLowerCase() ?? "";
+              return (
+                id === "parent" ||
+                lowerName === "epic link" ||
+                lowerName === "epic" ||
+                fieldWithSchema.schema?.custom === "com.pyxis.greenhopper.jira:gh-epic-link"
+              );
+            });
+            if (!hasEpicField && !meta.fields?.parent) {
+              fieldAvailable = false;
+              fieldSkipReason = "field_unavailable";
+            }
+          }
         } catch {
           fieldAvailable = false;
           fieldWarning = "field_metadata_unavailable";
           fieldSkipReason = "field_unavailable";
+        }
+      }
+    }
+
+    if (action.kind === "set-epic" && action.value) {
+      if (jira.getEditMeta) {
+        try {
+          const meta = await jira.getEditMeta(key);
+          const hasEpicField = Object.entries(meta.fields ?? {}).some(([id, f]) => {
+            const fieldWithSchema = f as { name?: string; schema?: { custom?: string } };
+            const lowerName = fieldWithSchema.name?.trim().toLowerCase() ?? "";
+            return (
+              id === "parent" ||
+              lowerName === "epic link" ||
+              lowerName === "epic" ||
+              fieldWithSchema.schema?.custom === "com.pyxis.greenhopper.jira:gh-epic-link"
+            );
+          });
+          if (!hasEpicField && !meta.fields?.parent) {
+            fieldAvailable = false;
+            fieldSkipReason = "field_unavailable";
+          }
+        } catch {
+          fieldAvailable = false;
+          fieldWarning = "field_metadata_unavailable";
         }
       }
     }
@@ -1350,7 +1458,7 @@ async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
         const issue = await getIssue(jira, key);
         const patch: {
           assignee?: string | null; labels?: string[]; priority?: string; issueType?: string; points?: number | null;
-          fixVersions?: string[]; dueDate?: string | null; originalEstimate?: string;
+          fixVersions?: string[]; dueDate?: string | null; originalEstimate?: string; epic?: string | null;
         } = {};
         if (a.value.assignee !== undefined) patch.assignee = a.value.assignee;
         if (a.value.labels !== undefined) patch.labels = a.value.labels;
@@ -1359,6 +1467,7 @@ async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
         if (a.value.points !== undefined) patch.points = a.value.points;
         if (a.value.dueDate !== undefined) patch.dueDate = a.value.dueDate;
         if (a.value.estimate !== undefined) patch.originalEstimate = a.value.estimate;
+        if (a.value.epic !== undefined) patch.epic = a.value.epic;
         if (a.value.fixVersions !== undefined) {
           const projectKey = issue.fields.project?.key ?? key.split("-")[0] ?? "";
           if (a.value.fixVersions.length === 0) {
@@ -1370,6 +1479,10 @@ async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
           }
         }
         await jira.updateIssue(key, patch);
+        break;
+      }
+      case "set-epic": {
+        await jira.updateIssue(key, { epic: a.value });
         break;
       }
       case "assign": {

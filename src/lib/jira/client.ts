@@ -101,10 +101,63 @@ export class JiraRequestError extends Error {
   constructor(
     message: string,
     readonly status: number | null,
-    readonly retryable: boolean
+    readonly retryable: boolean,
+    readonly errorDetails?: string | null
   ) {
     super(message);
     this.name = "JiraRequestError";
+  }
+}
+
+/**
+ * Safely extracts error messages and field-specific errors from Jira REST JSON error responses.
+ * Rejects non-JSON (like HTML error pages), strips any HTML tags, and truncates to maxLength.
+ */
+export function extractJiraErrorDetail(rawBody?: string | null, maxLength = 300): string | null {
+  if (!rawBody || typeof rawBody !== "string") return null;
+  const trimmed = rawBody.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return null;
+
+  try {
+    const parsed = JSON.parse(trimmed) as {
+      errorMessages?: unknown;
+      errors?: unknown;
+      message?: unknown;
+    };
+    if (!parsed || typeof parsed !== "object") return null;
+
+    const parts: string[] = [];
+
+    if (parsed.errors && typeof parsed.errors === "object" && !Array.isArray(parsed.errors)) {
+      for (const [field, val] of Object.entries(parsed.errors)) {
+        if (typeof val === "string" && val.trim()) {
+          const cleanVal = val.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+          if (cleanVal) parts.push(`${field}: ${cleanVal}`);
+        }
+      }
+    }
+
+    if (Array.isArray(parsed.errorMessages)) {
+      for (const msg of parsed.errorMessages) {
+        if (typeof msg === "string" && msg.trim()) {
+          const cleanMsg = msg.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+          if (cleanMsg) parts.push(cleanMsg);
+        }
+      }
+    } else if (typeof parsed.message === "string" && parsed.message.trim()) {
+      const cleanMsg = parsed.message.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+      if (cleanMsg) parts.push(cleanMsg);
+    }
+
+    if (parts.length === 0) return null;
+
+    let combined = parts.join("; ");
+    if (combined.length > maxLength) {
+      combined = combined.slice(0, maxLength - 3) + "...";
+    }
+    return combined;
+  } catch {
+    return null;
   }
 }
 
@@ -284,12 +337,21 @@ async function requestOnce<T>(
       },
     });
     if (!res.ok) {
-      // Upstream response bodies can contain internal HTML, user content or
-      // diagnostics. Keep the error useful without reflecting that data.
+      let detail: string | null = null;
+      try {
+        const text = await res.text();
+        detail = extractJiraErrorDetail(text);
+      } catch {
+        // Upstream response bodies can contain internal HTML, user content or
+        // diagnostics. Keep the error useful without reflecting that data.
+      }
+      const baseMessage = `Jira ${init.method ?? "GET"} ${path.split("?")[0]} -> ${res.status}`;
+      const message = detail ? `${baseMessage}: ${detail}` : baseMessage;
       throw new JiraRequestError(
-        `Jira ${init.method ?? "GET"} ${path.split("?")[0]} -> ${res.status}`,
+        message,
         res.status,
-        res.status === 408 || res.status === 429 || res.status >= 500
+        res.status === 408 || res.status === 429 || res.status >= 500,
+        detail
       );
     }
     if (res.status === 204) return undefined as T;
@@ -472,6 +534,7 @@ export function jiraWith(auth?: JiraAuth) {
         fixVersions?: string[];
         dueDate?: string | null;
         originalEstimate?: string;
+        epic?: string | null;
       }
     ) => {
       const fields: Record<string, unknown> = {};
@@ -504,6 +567,40 @@ export function jiraWith(auth?: JiraAuth) {
       if (patch.dueDate !== undefined) fields.duedate = patch.dueDate;
       if (patch.originalEstimate !== undefined) {
         fields.timetracking = { originalEstimate: patch.originalEstimate };
+      }
+      if (patch.epic !== undefined) {
+        let epicFieldId: string | null = null;
+        let isParentField = false;
+        try {
+          const meta = await request<JiraEditMeta>(
+            `/rest/api/2/issue/${encodeURIComponent(key)}/editmeta`,
+            {},
+            auth
+          );
+          for (const [id, field] of Object.entries(meta.fields ?? {})) {
+            const lowerName = field.name?.trim().toLowerCase() ?? "";
+            if (
+              (field.schema as { custom?: string })?.custom === "com.pyxis.greenhopper.jira:gh-epic-link" ||
+              lowerName === "epic link" ||
+              lowerName === "epic"
+            ) {
+              epicFieldId = id;
+              break;
+            }
+            if (id === "parent" || field.schema?.system === "parent") {
+              epicFieldId = id;
+              isParentField = true;
+            }
+          }
+        } catch {
+          // ignore editmeta fetch error and fallback to parent
+        }
+
+        if (epicFieldId && !isParentField) {
+          fields[epicFieldId] = patch.epic;
+        } else {
+          fields.parent = patch.epic ? { key: patch.epic } : null;
+        }
       }
       if (Object.keys(fields).length === 0) return undefined as unknown as void;
       return request(`/rest/api/2/issue/${encodeURIComponent(key)}`, {

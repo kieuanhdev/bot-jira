@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   refreshJiraIssueCache: vi.fn(),
   notifyUser: vi.fn(),
   audit: vi.fn(),
+  getCreateMetadata: vi.fn(),
+  getMyPermissions: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -45,6 +47,8 @@ vi.mock("@/lib/jira/client", () => ({
   jiraWith: () => ({
     findIssueByBulkMarker: mocks.findIssueByBulkMarker,
     createIssue: mocks.createIssue,
+    getCreateMetadata: mocks.getCreateMetadata,
+    getMyPermissions: mocks.getMyPermissions,
   }),
   JiraRequestError: class extends Error {
     constructor(msg: string, public status = 400, public retryable = false) {
@@ -239,6 +243,122 @@ describe("executeBulkCreateOperation worker execution", () => {
         projectKey: "EPM",
         fields: expect.objectContaining({
           components: [{ id: "comp-1" }],
+        }),
+      })
+    );
+  });
+
+  it("normalizes raw string custom fields to Jira REST objects before POST Jira (e.g. MHRM operation retry)", async () => {
+    mocks.bulkOperationFindUnique.mockResolvedValue({
+      id: "op-mhrm",
+      requestedBy: "user-1",
+      state: "queued",
+      payload: { projectKey: "MHRM" },
+      total: 1,
+      createItems: [],
+    });
+    mocks.bulkOperationUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.userFindUnique.mockResolvedValue({ id: "user-1" });
+
+    // Mock Jira metadata returning schemas for versions, Approver, Assignee Tester
+    mocks.getCreateMetadata.mockResolvedValue({
+      projects: [
+        {
+          id: "20000",
+          key: "MHRM",
+          name: "MHRM Project",
+          issuetypes: [
+            {
+              id: "10001",
+              name: "Task",
+              subtask: false,
+              fields: {
+                versions: {
+                  name: "Affects Version/s",
+                  required: false,
+                  schema: { type: "array", items: "version", system: "versions" },
+                  allowedValues: [{ id: "11200", name: "1.0.0" }],
+                },
+                customfield_10300: {
+                  name: "Approver",
+                  required: false,
+                  schema: {
+                    type: "user",
+                    custom: "com.atlassian.jira.plugin.system.customfieldtypes:userpicker",
+                  },
+                },
+                customfield_10501: {
+                  name: "Assignee Tester",
+                  required: false,
+                  schema: {
+                    type: "user",
+                    custom: "com.atlassian.jira.plugin.system.customfieldtypes:userpicker",
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+    mocks.getMyPermissions.mockResolvedValue({
+      permissions: { CREATE_ISSUES: { havePermission: true } },
+    });
+
+    // Item in DB has raw strings (like operation cmus3kdfg003w1ppemodc6o1n)
+    mocks.bulkCreateItemFindMany
+      .mockResolvedValueOnce([
+        {
+          id: "item-mhrm-1",
+          rowIndex: 0,
+          clientRef: "row-1",
+          status: "pending",
+          requested: {
+            summary: "MHRM Task",
+            issueTypeId: "10001",
+            customFields: {
+              versions: "11200",
+              customfield_10300: "vunt",
+              customfield_10501: "hunglm",
+            },
+          },
+          attemptCount: 1,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    mocks.bulkCreateItemFindUnique.mockResolvedValue({
+      id: "item-mhrm-1",
+      status: "running",
+      clientRef: "row-1",
+      requested: {
+        summary: "MHRM Task",
+        issueTypeId: "10001",
+        customFields: {
+          versions: "11200",
+          customfield_10300: "vunt",
+          customfield_10501: "hunglm",
+        },
+      },
+      attemptCount: 1,
+    });
+    mocks.bulkCreateItemUpdateMany.mockResolvedValue({ count: 1 });
+
+    mocks.findIssueByBulkMarker.mockResolvedValue(null);
+    mocks.createIssue.mockResolvedValue({ id: "2001", key: "MHRM-50", self: "url" });
+    mocks.bulkCreateItemGroupBy.mockResolvedValue([
+      { status: "succeeded", _count: { _all: 1 } },
+    ]);
+
+    await executeBulkCreateOperation("op-mhrm");
+
+    expect(mocks.createIssue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectKey: "MHRM",
+        fields: expect.objectContaining({
+          versions: [{ id: "11200" }],
+          customfield_10300: { name: "vunt" },
+          customfield_10501: { name: "hunglm" },
         }),
       })
     );

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Search, X, ListTree, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { bulkKeys } from "@/lib/query-keys";
+import { cn } from "@/lib/utils";
 import type { BulkParentRef, BulkCreateRowInput } from "@/lib/bulk/create-types";
 
 interface ParentComboboxProps {
@@ -12,14 +13,15 @@ interface ParentComboboxProps {
   value: BulkParentRef | null | undefined;
   onChange: (parent: BulkParentRef | null) => void;
   /** All items in the batch for "in batch" parent options. */
-  batchItems: BulkCreateRowInput[];
+  batchItems?: BulkCreateRowInput[];
   /** The clientRef of the current row (to exclude self). */
-  currentClientRef: string;
+  currentClientRef?: string;
   /** Issue type IDs that are subtasks (to exclude from batch parent options). */
-  subtaskIssueTypeIds: Set<string>;
+  subtaskIssueTypeIds?: Set<string>;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  compact?: boolean;
 }
 
 type ParentSearchResult = {
@@ -33,12 +35,13 @@ export function ParentCombobox({
   projectKey,
   value,
   onChange,
-  batchItems,
-  currentClientRef,
-  subtaskIssueTypeIds,
+  batchItems = [],
+  currentClientRef = "",
+  subtaskIssueTypeIds = new Set(),
   placeholder = "Chọn parent...",
   disabled,
   className,
+  compact = false,
 }: ParentComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -137,7 +140,7 @@ export function ParentCombobox({
             setOpen(!open);
             setTimeout(() => inputRef.current?.focus(), 0);
           }}
-          className="h-8 w-full justify-between gap-1 text-xs cursor-pointer"
+          className={cn(compact ? "h-7" : "h-8", "w-full justify-between gap-1 text-xs cursor-pointer")}
         >
           <span className="truncate">{displayValue || <span className="text-muted-foreground">{placeholder}</span>}</span>
           {displayValue && (
@@ -152,7 +155,7 @@ export function ParentCombobox({
             variant="ghost"
             size="sm"
             onClick={clearParent}
-            className="h-8 w-7 p-0 cursor-pointer text-muted-foreground hover:text-destructive"
+            className={cn(compact ? "h-7 w-6" : "h-8 w-7", "p-0 cursor-pointer text-muted-foreground hover:text-destructive")}
             title="Xóa parent"
           >
             <X className="h-3.5 w-3.5" />

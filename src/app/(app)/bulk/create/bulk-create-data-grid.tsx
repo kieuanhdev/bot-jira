@@ -216,7 +216,13 @@ export function BulkCreateDataGrid({
   function handleBulkApply(indices: Set<number>, patch: Partial<BulkCreateRowInput>) {
     const next = [...items];
     for (const idx of indices) {
-      if (next[idx]) next[idx] = { ...next[idx], ...patch };
+      if (next[idx]) {
+        if (patch.parent) {
+          const isEpic = metadata.issueTypes.find((t) => t.id === next[idx].issueTypeId)?.name.toLowerCase() === "epic";
+          if (isEpic) continue;
+        }
+        next[idx] = { ...next[idx], ...patch };
+      }
     }
     onChange(next);
     onSelectedRowsChange(new Set());
@@ -286,6 +292,7 @@ export function BulkCreateDataGrid({
             metadata={metadata}
             projectKey={projectKey}
             selectedIndices={selectedRows}
+            batchItems={items}
             onApply={handleBulkApply}
             onDelete={handleBulkDelete}
             onClearOverrides={handleClearOverrides}

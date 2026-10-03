@@ -466,7 +466,7 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
                             <span className="text-red-700 dark:text-red-400">
                               {item.error || "Lỗi tạo task"}
                             </span>
-                            {item.retryable && isFinished && (
+                            {(item.retryable || isFailed) && isFinished && (
                               <div>
                                 <label className="inline-flex items-center gap-1.5 cursor-pointer text-[11px] text-muted-foreground hover:text-foreground">
                                   <input

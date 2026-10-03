@@ -36,6 +36,7 @@ export type IssueItem = {
   } | null;
   aiDecision: { decision: string; finalPoints: number | null; decidedAt: string } | null;
   delivery?: { branchCount: number; prOpen: boolean; prMerged: boolean } | null;
+  epic?: string | null;
 };
 
 export type IssuePendingResponse = {
@@ -86,6 +87,7 @@ export type BoardFilters = {
   label?: string | string[];
   priority?: string | string[];
   status?: string | string[];
+  epic?: string | string[];
   releaseLabel?: string;
   q?: string;
   includeDone?: boolean;

@@ -63,22 +63,19 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   if (op.type === "create-issues") {
     const whereClause: {
       operationId: string;
-      status: string;
+      status: { in: string[] };
       id?: { in: string[] };
-      retryable?: boolean;
     } = {
       operationId: id,
-      status: "failed",
+      status: { in: ["failed", "blocked_by_parent"] },
     };
     if (Array.isArray(rawBody.itemIds) && rawBody.itemIds.length > 0) {
       whereClause.id = { in: rawBody.itemIds };
-    } else {
-      whereClause.retryable = true;
     }
 
     const retried = await prisma.bulkCreateItem.updateMany({
       where: whereClause,
-      data: { status: "pending", error: null, retryable: true },
+      data: { status: "pending", error: null, retryable: true, errorCode: null },
     });
     retriedCount = retried.count;
   } else {

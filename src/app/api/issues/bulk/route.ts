@@ -128,6 +128,7 @@ export async function POST(req: Request) {
         statuses?: string[];
         labels?: string[];
         priorities?: string[];
+        epics?: string[];
       };
     };
     if (!s.project || typeof s.project !== "string" || !s.project.trim()) {

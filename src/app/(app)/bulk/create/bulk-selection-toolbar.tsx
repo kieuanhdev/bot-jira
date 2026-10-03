@@ -17,7 +17,8 @@ import {
 import { LabelCombobox } from "./label-combobox";
 import { AssigneeCombobox } from "./assignee-combobox";
 import { ComponentsCombobox } from "./components-combobox";
-import { X, User, Tag, Calendar, Trash2, Eraser, Layers } from "lucide-react";
+import { ParentCombobox } from "./parent-combobox";
+import { X, User, Tag, Calendar, Trash2, Eraser, Layers, FolderKanban } from "lucide-react";
 
 interface BulkSelectionToolbarProps {
   selectedCount: number;
@@ -29,6 +30,7 @@ interface BulkSelectionToolbarProps {
   onClearOverrides: (indices: Set<number>) => void;
   onClearSelection: () => void;
   selectedIndices: Set<number>;
+  batchItems?: BulkCreateRowInput[];
 }
 
 export function BulkSelectionToolbar({
@@ -41,8 +43,13 @@ export function BulkSelectionToolbar({
   onClearOverrides,
   onClearSelection,
   selectedIndices,
+  batchItems = [],
 }: BulkSelectionToolbarProps) {
   const [activeAction, setActiveAction] = useState<string | null>(null);
+
+  const subtaskIssueTypeIds = new Set(
+    metadata.issueTypes.filter((t) => t.subtask).map((t) => t.id)
+  );
 
   if (selectedCount === 0) return null;
 
@@ -117,6 +124,36 @@ export function BulkSelectionToolbar({
           )}
         </div>
       )}
+
+      {/* Epic / Parent */}
+      <div className="flex items-center gap-1">
+        <FolderKanban className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+        {activeAction === "parent" ? (
+          <div className="w-56">
+            <ParentCombobox
+              projectKey={projectKey}
+              value={null}
+              onChange={(parentRef) => {
+                applyField({ parent: parentRef });
+              }}
+              batchItems={batchItems}
+              subtaskIssueTypeIds={subtaskIssueTypeIds}
+              placeholder="Chọn Epic / Task cha..."
+              compact
+            />
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveAction("parent")}
+            className="h-7 text-xs cursor-pointer"
+          >
+            Gán Epic
+          </Button>
+        )}
+      </div>
 
       {/* Priority */}
       <div className="flex items-center gap-1">
