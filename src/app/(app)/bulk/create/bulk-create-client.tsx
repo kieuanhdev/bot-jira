@@ -44,6 +44,9 @@ import {
   Edit3,
   AlertTriangle,
   Maximize2,
+  Sparkles,
+  Layers,
+  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -275,139 +278,175 @@ export function BulkCreateClient() {
     setActiveOperationId(null);
   }
 
+  const stepsConfig = [
+    {
+      number: 1,
+      title: "Nhập dữ liệu & Mặc định",
+      desc: filledCount > 0 ? `${filledCount} task đã sẵn sàng` : "Nhập hoặc dán từ bảng tính",
+      active: step === "input",
+      done: step !== "input",
+      clickable: step === "preview",
+      onClick: () => {
+        if (step === "preview") setStep("input");
+      },
+    },
+    {
+      number: 2,
+      title: "Xem trước & Xác nhận",
+      desc: previewData ? `${previewData.actionable} task sẵn sàng tạo` : "Kiểm tra chuẩn hoá",
+      active: step === "preview",
+      done: step === "progress",
+      clickable: step === "input" && Boolean(previewData),
+      onClick: () => {
+        if (step === "input" && previewData) setStep("preview");
+      },
+    },
+    {
+      number: 3,
+      title: "Tiến độ & Kết quả",
+      desc: activeOperationId ? "Hàng đợi nền Jira" : "Tạo tự động trên Jira",
+      active: step === "progress",
+      done: false,
+      clickable: false,
+      onClick: undefined,
+    },
+  ];
+
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
-      {/* Top Navigation Switcher */}
-      <div className="flex border-b border-border">
-        <Link
-          href="/bulk"
-          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-        >
-          <Edit3 className="h-4 w-4" aria-hidden="true" />
-          Cập nhật task hàng loạt
-        </Link>
-        <Link
-          href="/bulk/create"
-          className="flex items-center gap-2 border-b-2 border-primary px-4 py-2.5 text-xs font-semibold text-primary cursor-pointer transition-colors"
-        >
-          <ListPlus className="h-4 w-4" aria-hidden="true" />
-          Tạo task mới hàng loạt
-        </Link>
-      </div>
+      {/* Top Segmented Navigation Switcher */}
+      <nav aria-label="Điều hướng tác vụ hàng loạt" className="flex items-center">
+        <div className="inline-flex items-center gap-1.5 p-1 rounded-xl bg-muted/60 border border-border/80 shadow-2xs">
+          <Link
+            href="/bulk"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-background/50 cursor-pointer transition-all duration-150"
+          >
+            <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Cập nhật task hàng loạt</span>
+          </Link>
+          <Link
+            href="/bulk/create"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-primary bg-background shadow-xs cursor-pointer transition-all duration-150 border border-border/50"
+          >
+            <ListPlus className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+            <span>Tạo task mới hàng loạt</span>
+            <span className="ml-0.5 text-[10px] px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-mono font-medium">
+              DC REST v2
+            </span>
+          </Link>
+        </div>
+      </nav>
 
-      {/* Header */}
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      {/* Header Hero */}
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-border/80 bg-card/60 p-4 sm:p-5 backdrop-blur-xs shadow-xs">
         <div>
           <div className="mb-1 flex items-center gap-2 text-primary">
-            <PlusCircle className="h-5 w-5" aria-hidden="true" />
-            <span className="text-xs font-semibold uppercase tracking-wider">Jira Data Center</span>
+            <PlusCircle className="h-4 w-4" aria-hidden="true" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider">Jira Data Center • Batch Operations</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
             Tạo task hàng loạt theo dự án
           </h1>
           <p className="mt-1 max-w-2xl text-xs text-muted-foreground leading-relaxed">
-            Chọn dự án, nhập danh sách công việc qua bảng hoặc copy-paste từ Excel/CSV, xem trước chuẩn hoá và tạo task an toàn trên nền background.
+            Soạn thảo danh sách công việc, copy-paste từ Excel/Google Sheets hoặc nhập file CSV. Hệ thống kiểm tra hợp lệ thời gian thực và tạo task an toàn qua hàng đợi background.
           </p>
         </div>
 
-        {projectKey && (
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="px-3 py-1 font-mono text-xs">
-              Dự án: {projectKey}
-            </Badge>
-            <Badge variant={filledCount > 0 ? "info" : "secondary"} className="px-3 py-1 text-xs">
-              {filledCount} task đã sẵn sàng
-            </Badge>
-            {step === "input" && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleToggleFullscreen}
-                className="h-8 gap-1.5 text-xs font-semibold cursor-pointer border-primary/40 text-primary hover:bg-primary/10 ml-1"
-              >
-                <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>Mở toàn màn hình</span>
-              </Button>
-            )}
+        {/* Project Selector & Actions in Header */}
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start sm:self-center">
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 shadow-2xs">
+            <FolderKanban className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
+            <span className="text-xs text-muted-foreground font-medium">Dự án:</span>
+            <div className="w-28 sm:w-32">
+              <Select value={projectKey} onValueChange={handleProjectSelect}>
+                <SelectTrigger className="h-7 border-0 p-0 text-xs font-bold text-foreground focus:ring-0 cursor-pointer shadow-none">
+                  <SelectValue placeholder="Chọn dự án" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableProjects.map((p) => (
+                    <SelectItem key={p} value={p} className="text-xs cursor-pointer font-medium">
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        )}
+
+          <Badge variant={filledCount > 0 ? "info" : "secondary"} className="h-8 px-2.5 text-xs font-medium">
+            {filledCount} task sẵn sàng
+          </Badge>
+
+          {step === "input" && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleToggleFullscreen}
+              className="h-8 gap-1.5 text-xs font-medium cursor-pointer border-border hover:bg-muted text-foreground"
+            >
+              <Maximize2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              <span>Toàn màn hình</span>
+            </Button>
+          )}
+        </div>
       </header>
 
-      {/* Progress Steps Header */}
+      {/* Interactive Progress Steps */}
       <ol
         aria-label="Tiến trình tạo task hàng loạt"
-        className="grid grid-cols-3 overflow-hidden rounded-lg border border-border bg-card shadow-xs"
+        className="grid grid-cols-1 sm:grid-cols-3 overflow-hidden rounded-xl border border-border/80 bg-card shadow-xs select-none divide-y sm:divide-y-0 sm:divide-x divide-border/60"
       >
-        {[
-          { number: 1, label: "Nhập dữ liệu & Mặc định", active: step === "input", done: step !== "input" },
-          { number: 2, label: "Xem trước & Xác nhận", active: step === "preview", done: step === "progress" },
-          { number: 3, label: "Tiến độ & Kết quả", active: step === "progress", done: false },
-        ].map((s) => (
-          <li
-            key={s.number}
-            className={cn(
-              "flex min-w-0 items-center gap-2 border-r border-border px-3 py-3 text-xs last:border-r-0 sm:px-4 sm:text-sm",
-              s.active && "bg-primary/5 text-foreground font-semibold",
-              !s.active && !s.done && "text-muted-foreground",
-              s.done && "text-muted-foreground"
-            )}
-          >
-            <span
-              className={cn(
-                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
-                s.done
-                  ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-                  : s.active
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-muted"
-              )}
-            >
-              {s.done ? <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" /> : s.number}
-            </span>
-            <span className="truncate">{s.label}</span>
-          </li>
-        ))}
+        {stepsConfig.map((s) => {
+          const Tag = s.clickable ? "button" : "div";
+          return (
+            <li key={s.number}>
+              <Tag
+                type={s.clickable ? "button" : undefined}
+                onClick={s.onClick}
+                disabled={!s.clickable}
+                className={cn(
+                  "w-full text-left flex items-center gap-3 px-4 py-3.5 transition-colors",
+                  s.active && "bg-primary/5 text-foreground font-medium",
+                  !s.active && !s.done && "text-muted-foreground",
+                  s.done && "text-foreground",
+                  s.clickable && "cursor-pointer hover:bg-muted/40"
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition-transform duration-150",
+                    s.done
+                      ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                      : s.active
+                        ? "border-primary bg-primary text-primary-foreground shadow-xs scale-105"
+                        : "border-border bg-muted/60 text-muted-foreground"
+                  )}
+                >
+                  {s.done ? <CheckCheck className="h-4 w-4" aria-hidden="true" /> : s.number}
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-xs sm:text-sm font-semibold">{s.title}</span>
+                    {s.clickable && (
+                      <span className="text-[10px] text-primary underline">Quay lại</span>
+                    )}
+                  </div>
+                  <div className="truncate text-[11px] text-muted-foreground">{s.desc}</div>
+                </div>
+              </Tag>
+            </li>
+          );
+        })}
       </ol>
 
       {/* Step 1: Input & Defaults */}
       {step === "input" && (
-        <div className="space-y-6">
-          {/* Project Selector Card */}
-          <Card className="border-border/80 bg-card p-4 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
-                  <FolderKanban className="h-4 w-4" aria-hidden="true" />
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-foreground">Chọn dự án Jira</div>
-                  <div className="text-xs text-muted-foreground">
-                    Metadata trường và quyền tạo task sẽ được tải theo dự án đã chọn.
-                  </div>
-                </div>
-              </div>
-
-              <div className="w-full sm:w-64">
-                <Select value={projectKey} onValueChange={handleProjectSelect}>
-                  <SelectTrigger className="h-9 text-xs cursor-pointer">
-                    <SelectValue placeholder="Chọn một dự án..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableProjects.map((p) => (
-                      <SelectItem key={p} value={p} className="text-xs cursor-pointer">
-                        {p}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </Card>
-
+        <div className="space-y-4">
           {/* Empty State when no project is selected */}
           {!projectKey && (
-            <Card className="border-dashed border-border p-8 text-center">
+            <Card className="border-dashed border-border p-10 text-center">
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <FolderKanban className="h-6 w-6" aria-hidden="true" />
               </div>
@@ -415,7 +454,7 @@ export function BulkCreateClient() {
                 Chưa chọn dự án Jira
               </h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Vui lòng chọn một dự án ở trên để tải loại issue, phiên bản và nhập danh sách task.
+                Vui lòng chọn một dự án ở thanh tiêu đề trên để tải loại issue, phiên bản và nhập danh sách task.
               </p>
             </Card>
           )}
@@ -423,21 +462,21 @@ export function BulkCreateClient() {
           {/* Loading Metadata Skeleton */}
           {metadataLoading && (
             <div className="space-y-3">
-              <Skeleton className="h-24 w-full rounded-lg" />
-              <Skeleton className="h-64 w-full rounded-lg" />
+              <Skeleton className="h-10 w-full rounded-lg" />
+              <Skeleton className="h-80 w-full rounded-lg" />
             </div>
           )}
 
           {/* Error State */}
           {metadataError && !metadataLoading && (
-            <Card className="border-red-500/30 bg-red-500/5 p-6 text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 text-red-600 dark:text-red-400">
+            <Card className="border-destructive/30 bg-destructive/5 p-6 text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
                 <AlertCircle className="h-6 w-6" aria-hidden="true" />
               </div>
               <h3 className="text-base font-semibold text-foreground">
                 Không thể tải thông tin dự án {projectKey}
               </h3>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
                 {metadataError instanceof Error ? metadataError.message : "Đã xảy ra lỗi khi kết nối tới Jira. Vui lòng kiểm tra lại token cá nhân trong Cài đặt."}
               </p>
               <div className="mt-4 flex justify-center">
@@ -457,15 +496,15 @@ export function BulkCreateClient() {
 
           {/* Permission Error State */}
           {metadata && !metadata.canCreate && (
-            <Card className="border-red-500/30 bg-red-500/5 p-6 text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 text-red-600 dark:text-red-400">
+            <Card className="border-destructive/30 bg-destructive/5 p-6 text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
                 <AlertCircle className="h-6 w-6" aria-hidden="true" />
               </div>
               <h3 className="text-base font-semibold text-foreground">
                 Không thể tạo task trong dự án {projectKey}
               </h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {metadata.permissionReason || "Tài khoản của bạn không có quyền CREATE_ISSUES trên dự án này."}
+              <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
+                {metadata.permissionReason || "Tài khoản Jira của bạn không có quyền CREATE_ISSUES trên dự án này."}
               </p>
             </Card>
           )}
@@ -475,29 +514,35 @@ export function BulkCreateClient() {
             <div className="space-y-4">
               {/* Draft Restore Banner */}
               {draftAvailable && (
-                <div className="flex items-center justify-between rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3">
-                  <div className="flex items-center gap-2 text-xs">
-                    <AlertTriangle className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" aria-hidden="true" />
-                    <span className="text-blue-800 dark:text-blue-300">
-                      Có bản nháp chưa hoàn tất cho dự án {projectKey}. Bạn có muốn khôi phục?
-                    </span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 shadow-2xs animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2.5 text-xs">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15 text-primary shrink-0">
+                      <Sparkles className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-foreground">
+                        Tìm thấy bản nháp chưa hoàn tất cho dự án {projectKey}
+                      </div>
+                      <div className="text-muted-foreground text-[11px]">
+                        Bạn có muốn khôi phục lại danh sách task và cài đặt mặc định đã soạn thảo từ phiên trước?
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
                     <Button
                       type="button"
-                      variant="outline"
                       size="sm"
                       onClick={handleRestoreDraft}
-                      className="h-7 text-xs cursor-pointer"
+                      className="h-7.5 px-3 text-xs font-semibold cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs"
                     >
-                      Khôi phục
+                      Khôi phục bản nháp
                     </Button>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       onClick={handleDiscardDraft}
-                      className="h-7 text-xs cursor-pointer text-muted-foreground"
+                      className="h-7.5 px-2.5 text-xs cursor-pointer text-muted-foreground hover:text-destructive"
                     >
                       Bỏ qua
                     </Button>
@@ -531,8 +576,9 @@ export function BulkCreateClient() {
               />
 
               {previewMutation.isError && (
-                <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-400">
-                  Lỗi kiểm tra xem trước: {previewMutation.error.message}
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>Lỗi kiểm tra xem trước: {previewMutation.error.message}</span>
                 </div>
               )}
             </div>
@@ -576,12 +622,12 @@ export function BulkCreateClient() {
               Xác nhận thay đổi dự án Jira
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Bảng hiện tại đang có dữ liệu task hoặc cài đặt mặc định.
+              Bảng soạn thảo hiện tại đang có dữ liệu task hoặc cài đặt mặc định.
             </DialogDescription>
           </DialogHeader>
 
           <div className="rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground leading-relaxed">
-            Dự án sẽ chuyển sang <strong>{pendingProjectKey}</strong>. Các giá trị phụ thuộc vào dự án cũ (Loại task, Mức ưu tiên, Phiên bản) và các giá trị mặc định sẽ được đặt lại. Tiêu đề và mô tả công việc sẽ được giữ nguyên.
+            Dự án sẽ chuyển sang <strong>{pendingProjectKey}</strong>. Các giá trị phụ thuộc vào dự án cũ (Loại task, Mức ưu tiên, Phiên bản) và các giá trị mặc định sẽ được đặt lại để tương thích. Tiêu đề và mô tả công việc sẽ được giữ nguyên an toàn.
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">

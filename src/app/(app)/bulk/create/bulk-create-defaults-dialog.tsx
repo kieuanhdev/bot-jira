@@ -226,10 +226,10 @@ export function BulkCreateDefaultsDialog({
               </div>
               <Textarea
                 placeholder="Mô tả mặc định hoặc template nội dung công việc..."
-                rows={4}
+                rows={6}
                 value={defaults.description ?? ""}
                 onChange={(e) => updateField("description", e.target.value || undefined)}
-                className="text-xs resize-y"
+                className="text-xs resize-y min-h-[140px]"
               />
             </div>
           </div>

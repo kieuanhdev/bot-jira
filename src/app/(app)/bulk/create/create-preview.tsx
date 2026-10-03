@@ -104,13 +104,69 @@ export function CreatePreview({
 
       {/* Slow operation latency alert banner */}
       {preview.metrics?.isSlow && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-800 dark:text-amber-300">
+        <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-800 dark:text-amber-300">
           <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
           <span>
             Thời gian tạo bản xem trước kéo dài ({preview.metrics.durationMs}ms). Hoạt động mạng hoặc batch lớn có thể làm chậm quá trình xử lý.
           </span>
         </div>
       )}
+
+      {/* Top Quick Action Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onBack}
+            disabled={isConfirming}
+            className="gap-1.5 cursor-pointer text-xs h-8"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            <span>Quay lại chỉnh sửa</span>
+          </Button>
+
+          {onFixRow && blockedItems.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onFixRow(blockedItems[0]!.rowIndex)}
+              disabled={isConfirming}
+              className="gap-1.5 cursor-pointer text-xs h-8 text-destructive border-destructive/30 hover:bg-destructive/10"
+            >
+              <Crosshair className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Sửa lỗi đầu tiên</span>
+            </Button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground hidden sm:inline">
+            Dự án: <strong className="text-foreground">{projectKey}</strong>
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setConfirmDialogOpen(true)}
+            disabled={preview.actionable === 0 || isConfirming}
+            className="gap-1.5 cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold h-8 shadow-xs"
+          >
+            {isConfirming ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                <span>Đang xử lý...</span>
+              </>
+            ) : (
+              <>
+                <span>Xác nhận tạo {preview.actionable} task</span>
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
 
       {/* Main Preview Table Card */}
       <Card className="border-border/80 bg-card shadow-sm">

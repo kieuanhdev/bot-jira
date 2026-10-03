@@ -27,6 +27,7 @@ import {
   Minimize2,
   LayoutGrid,
   Loader2,
+  FolderKanban,
 } from "lucide-react";
 import { BulkCreateColumnPicker } from "./bulk-create-column-picker";
 import { BulkCreateShortcutsDialog } from "./bulk-create-shortcuts-dialog";
@@ -97,13 +98,13 @@ export function BulkCreateCommandBar({
   ].filter(Boolean).length;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card/60 px-4 py-2 select-none text-xs">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card/75 px-3 sm:px-4 py-2 select-none text-xs backdrop-blur-xs">
       {/* Left controls: Project, Defaults, Import & Templates */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
         {/* Project Selector */}
-        <div className="w-36">
+        <div className="w-32 sm:w-36">
           <Select value={projectKey} onValueChange={onSelectProject}>
-            <SelectTrigger className="h-8 text-xs cursor-pointer font-medium">
+            <SelectTrigger className="h-8 text-xs cursor-pointer font-medium bg-background/80 hover:bg-background border-border/80">
               <SelectValue placeholder="Chọn dự án" />
             </SelectTrigger>
             <SelectContent>
@@ -122,14 +123,15 @@ export function BulkCreateCommandBar({
           variant="outline"
           size="sm"
           onClick={() => setDefaultsDialogOpen(true)}
-          className={`h-8 gap-1.5 text-xs cursor-pointer ${
+          className={`h-8 gap-1.5 text-xs cursor-pointer transition-colors ${
             activeDefaultsCount > 0
-              ? "border-primary/50 bg-primary/10 text-primary font-medium"
-              : "text-muted-foreground hover:text-foreground"
+              ? "border-primary/50 bg-primary/10 text-primary font-medium hover:bg-primary/15"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
           }`}
+          title="Thiết lập các trường mặc định được kế thừa tự động cho mọi dòng"
         >
           <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>Giá trị mặc định</span>
+          <span>Mặc định</span>
           {activeDefaultsCount > 0 && (
             <Badge variant="info" className="px-1.5 py-0 text-[10px] font-mono">
               {activeDefaultsCount}
@@ -137,7 +139,7 @@ export function BulkCreateCommandBar({
           )}
         </Button>
 
-        <div className="h-4 w-px bg-border hidden sm:block" aria-hidden="true" />
+        <div className="h-4 w-px bg-border/60 hidden sm:block" aria-hidden="true" />
 
         {/* Import CSV / Excel */}
         <Button
@@ -145,7 +147,8 @@ export function BulkCreateCommandBar({
           variant="outline"
           size="sm"
           onClick={onOpenImport}
-          className="h-8 gap-1.5 text-xs cursor-pointer text-muted-foreground hover:text-primary hover:border-primary/40"
+          className="h-8 gap-1.5 text-xs cursor-pointer text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-primary/5"
+          title="Nhập dữ liệu từ tệp CSV, TSV hoặc Excel (.xlsx)"
         >
           <Upload className="h-3.5 w-3.5" aria-hidden="true" />
           <span className="hidden sm:inline">Nhập CSV / Excel</span>
@@ -159,8 +162,8 @@ export function BulkCreateCommandBar({
           size="sm"
           onClick={onDownloadTemplate}
           disabled={isDownloadingTemplate}
-          title={`Tải mẫu file Excel cho dự án ${projectKey}`}
-          className="h-8 gap-1.5 text-xs cursor-pointer text-teal-700 dark:text-teal-400 hover:bg-teal-500/10"
+          title={`Tải mẫu file Excel có sẵn dropdown danh mục của dự án ${projectKey}`}
+          className="h-8 gap-1.5 text-xs cursor-pointer text-teal-700 dark:text-teal-400 hover:bg-teal-500/10 border-teal-500/20"
         >
           {isDownloadingTemplate ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
@@ -177,16 +180,17 @@ export function BulkCreateCommandBar({
           size="sm"
           onClick={onOpenTemplateDialog}
           disabled={totalRows >= MAX_BULK_CREATE_ITEMS}
-          className="h-8 gap-1.5 text-xs cursor-pointer text-muted-foreground hover:text-teal-600 dark:hover:text-teal-400"
+          className="h-8 gap-1.5 text-xs cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted"
+          title="Sao chép cấu trúc từ một task có sẵn trên Jira để làm mẫu"
         >
           <ClipboardCopy className="h-3.5 w-3.5" aria-hidden="true" />
-          <span className="hidden lg:inline">Lấy task Jira làm mẫu</span>
+          <span className="hidden lg:inline">Lấy mẫu Jira</span>
           <span className="lg:hidden">Mẫu Jira</span>
         </Button>
       </div>
 
       {/* Right controls: Columns, Density, Shortcuts, Add row, Fullscreen toggle */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
         {/* Column Picker */}
         <BulkCreateColumnPicker
           toggleableColumns={toggleableColumns}
@@ -201,7 +205,7 @@ export function BulkCreateCommandBar({
           variant="outline"
           size="sm"
           onClick={() => onDensityChange(density === "comfortable" ? "compact" : "comfortable")}
-          title={`Mật độ hiển thị: ${density === "comfortable" ? "Thoải mái (bấm để đổi sang Nhỏ gọn)" : "Nhỏ gọn (bấm để đổi sang Thoải mái)"}`}
+          title={`Mật độ bảng: ${density === "comfortable" ? "Thoải mái (bấm để chuyển sang Nhỏ gọn)" : "Nhỏ gọn (bấm để chuyển sang Thoải mái)"}`}
           className="h-8 gap-1 text-xs cursor-pointer text-muted-foreground hover:text-foreground"
         >
           <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
@@ -216,7 +220,7 @@ export function BulkCreateCommandBar({
           variant="ghost"
           size="sm"
           onClick={() => setShortcutsDialogOpen(true)}
-          title="Xem danh sách phím tắt"
+          title="Xem danh sách phím tắt hữu ích"
           className="h-8 px-2 text-xs cursor-pointer text-muted-foreground hover:text-foreground"
         >
           <Keyboard className="h-3.5 w-3.5" aria-hidden="true" />
@@ -230,14 +234,15 @@ export function BulkCreateCommandBar({
             variant="outline"
             size="sm"
             onClick={onToggleFullscreen}
-            className="h-8 gap-1.5 text-xs font-semibold cursor-pointer border-primary/40 text-primary hover:bg-primary/10"
+            className="h-8 gap-1.5 text-xs font-medium cursor-pointer border-border hover:bg-muted text-foreground"
+            title="Mở toàn màn hình để có không gian soạn thảo tối đa"
           >
-            <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Toàn màn hình</span>
+            <Maximize2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+            <span className="hidden sm:inline">Toàn màn hình</span>
           </Button>
         )}
 
-        <div className="h-4 w-px bg-border hidden sm:block" aria-hidden="true" />
+        <div className="h-4 w-px bg-border/60 hidden sm:block" aria-hidden="true" />
 
         {/* Add Row Button */}
         <Button
@@ -245,7 +250,8 @@ export function BulkCreateCommandBar({
           size="sm"
           onClick={onAddRow}
           disabled={totalRows >= MAX_BULK_CREATE_ITEMS}
-          className="h-8 gap-1.5 text-xs font-semibold cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90"
+          className="h-8 gap-1.5 text-xs font-semibold cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs"
+          title="Thêm một dòng trống mới (Ctrl+Enter)"
         >
           <Plus className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Thêm dòng</span>

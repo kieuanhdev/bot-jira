@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   type BulkCreateRowInput,
   type BulkCreateFieldDefaults,
@@ -27,7 +28,14 @@ import {
   RotateCcw,
   Sparkles,
   FileText,
+  Maximize2,
+  Minimize2,
+  Columns,
+  Square,
+  ListChecks,
+  Code,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ExpandedRowEditorProps {
   item: BulkCreateRowInput;
@@ -52,12 +60,42 @@ export function ExpandedRowEditor({
   onCollapse,
   onOpenFullSheet,
 }: ExpandedRowEditorProps) {
+  const [isLargeHeight, setIsLargeHeight] = useState(false);
+  const [isFullWidth, setIsFullWidth] = useState(false);
+
   const subtaskIssueTypeIds = new Set(
     metadata.issueTypes.filter((t) => t.subtask).map((t) => t.id)
   );
   const isSubtask = item.issueTypeId ? subtaskIssueTypeIds.has(item.issueTypeId) : false;
 
   const descLength = item.description?.length ?? 0;
+
+  function insertTemplate(templateText: string) {
+    const current = item.description || "";
+    const updated = current ? `${current}\n\n${templateText}` : templateText;
+    onChange({ description: updated });
+  }
+
+  function handleInsertAcTemplate() {
+    insertTemplate(
+`*Mục tiêu:* 
+
+*Tiêu chí nghiệm thu (Acceptance Criteria):*
+- [ ] 
+- [ ] 
+
+*Tài liệu tham khảo & Ghi chú:*
+`
+    );
+  }
+
+  function handleInsertCodeBlock() {
+    insertTemplate(
+`{code:typescript}
+// Mã nguồn hoặc log lỗi ở đây
+{code}`
+    );
+  }
 
   return (
     <div className="border-t border-border/80 bg-muted/15 p-4 rounded-b-lg shadow-inner">
@@ -100,51 +138,132 @@ export function ExpandedRowEditor({
           </div>
         </div>
 
-        {/* 2-Column Responsive Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          {/* Left Column: Description & Notes (7 cols) */}
-          <div className="lg:col-span-7 space-y-2">
-            <div className="flex items-center justify-between">
+        {/* Layout Grid: Supports Side-by-Side (8/4 cols) or Full-Width (12 cols) */}
+        <div className={cn("grid gap-5", isFullWidth ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-12")}>
+          {/* Description Section */}
+          <div className={cn("space-y-2", isFullWidth ? "col-span-1" : "lg:col-span-8")}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                <FileText className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                Mô tả chi tiết công việc (Description)
+                <FileText className="h-4 w-4 text-primary" aria-hidden="true" />
+                <span>Mô tả chi tiết công việc (Description)</span>
               </Label>
-              <span
-                className={`text-[10px] tabular-nums ${
-                  descLength > MAX_DESCRIPTION_LENGTH * 0.9
-                    ? "text-destructive font-medium"
-                    : "text-muted-foreground"
-                }`}
-              >
-                {descLength.toLocaleString()} / {MAX_DESCRIPTION_LENGTH.toLocaleString()}
-              </span>
+
+              {/* Description Toolbar: Templates, Size and Layout toggles */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleInsertAcTemplate}
+                  title="Chèn khung Tiêu chí nghiệm thu (Acceptance Criteria)"
+                  className="h-6 px-2 text-[11px] gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted"
+                >
+                  <ListChecks className="h-3 w-3 text-primary" aria-hidden="true" />
+                  <span>+ Mẫu AC</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleInsertCodeBlock}
+                  title="Chèn khối mã nguồn {code}"
+                  className="h-6 px-2 text-[11px] gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted"
+                >
+                  <Code className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+                  <span>+ Code</span>
+                </Button>
+
+                <div className="h-3.5 w-px bg-border/80 hidden sm:block" aria-hidden="true" />
+
+                {/* Toggle Height */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsLargeHeight(!isLargeHeight)}
+                  title={isLargeHeight ? "Thu nhỏ chiều cao (300px)" : "Mở rộng chiều cao (480px)"}
+                  className="h-6 px-2 text-[11px] gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted"
+                >
+                  {isLargeHeight ? (
+                    <>
+                      <Minimize2 className="h-3 w-3" aria-hidden="true" />
+                      <span>Thu cao</span>
+                    </>
+                  ) : (
+                    <>
+                      <Maximize2 className="h-3 w-3" aria-hidden="true" />
+                      <span>Kéo to</span>
+                    </>
+                  )}
+                </Button>
+
+                {/* Toggle Layout (Full Width vs 2 Columns) */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsFullWidth(!isFullWidth)}
+                  title={isFullWidth ? "Chuyển về chia 2 cột" : "Mở rộng mô tả toàn chiều rộng"}
+                  className="h-6 px-2 text-[11px] gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted"
+                >
+                  {isFullWidth ? (
+                    <>
+                      <Columns className="h-3 w-3" aria-hidden="true" />
+                      <span>2 Cột</span>
+                    </>
+                  ) : (
+                    <>
+                      <Square className="h-3 w-3" aria-hidden="true" />
+                      <span>Toàn rộng</span>
+                    </>
+                  )}
+                </Button>
+
+                <span
+                  className={cn(
+                    "text-[10px] tabular-nums ml-1",
+                    descLength > MAX_DESCRIPTION_LENGTH * 0.9
+                      ? "text-destructive font-medium"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {descLength.toLocaleString()} / {MAX_DESCRIPTION_LENGTH.toLocaleString()}
+                </span>
+              </div>
             </div>
 
+            {/* Generous Textarea with Smooth Resizing */}
             <Textarea
-              placeholder="Nhập mô tả chi tiết, tài liệu tham khảo, tiêu chí nghiệm thu (AC)..."
+              placeholder="Nhập mô tả chi tiết, tài liệu tham khảo, tiêu chí nghiệm thu (AC)... Hỗ trợ định dạng văn bản thuần, Markdown hoặc Jira markup."
               value={item.description ?? ""}
               onChange={(e) => onChange({ description: e.target.value || undefined })}
-              rows={6}
-              className="w-full resize-y text-xs min-h-[140px] leading-relaxed bg-background"
+              rows={isLargeHeight ? 18 : 11}
+              className={cn(
+                "w-full resize-y text-xs leading-relaxed bg-background transition-all duration-200 border-border/80 focus-visible:ring-1 focus-visible:ring-ring font-sans shadow-2xs",
+                isLargeHeight ? "min-h-[480px]" : "min-h-[280px]"
+              )}
             />
 
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1">
-              <span>Hỗ trợ văn bản thuần hoặc Markdown / Jira markup.</span>
+            <div className="flex flex-wrap items-center justify-between text-[11px] text-muted-foreground pt-1 gap-2">
+              <span className="flex items-center gap-1">
+                <span>Hỗ trợ Markdown và Jira markup (h1., *bold*, _italic_, - [ ], {"{code}"}). Kéo góc dưới ô để mở rộng tuỳ ý.</span>
+              </span>
               {item.description && defaults.description && (
                 <button
                   type="button"
                   onClick={() => onChange({ description: undefined })}
-                  className="text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                  className="text-primary hover:underline flex items-center gap-1 cursor-pointer font-medium"
                 >
-                  <RotateCcw className="h-2.5 w-2.5" />
+                  <RotateCcw className="h-3 w-3" />
                   Dùng lại mô tả mặc định
                 </button>
               )}
             </div>
           </div>
 
-          {/* Right Column: Key Attributes & Overrides (5 cols) */}
-          <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          {/* Key Attributes & Overrides Column */}
+          <div className={cn("grid gap-3 text-xs", isFullWidth ? "grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 pt-2 border-t border-border/60" : "lg:col-span-4 grid-cols-1 sm:grid-cols-2")}>
             {/* Issue Type */}
             <div className="space-y-1">
               <span className="text-[11px] font-medium text-foreground">
@@ -309,8 +428,8 @@ export function ExpandedRowEditor({
               </div>
             )}
 
-            {/* Labels (spans 2 cols) */}
-            <div className="space-y-1 sm:col-span-2">
+            {/* Labels */}
+            <div className={cn("space-y-1", isFullWidth ? "col-span-2 sm:col-span-4" : "sm:col-span-2")}>
               <span className="text-[11px] font-medium text-foreground">Nhãn (Labels)</span>
               <LabelCombobox
                 projectKey={projectKey}

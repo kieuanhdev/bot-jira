@@ -28,7 +28,9 @@ import {
   AlertCircle,
   AlertTriangle,
   RotateCcw,
+  Sparkles,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { AssigneeCombobox } from "./assignee-combobox";
 import { ParentCombobox } from "./parent-combobox";
 import { LabelCombobox } from "./label-combobox";
@@ -157,6 +159,20 @@ export function BulkCreateDataGrid({
     } else {
       onChange([...items, newRow]);
     }
+  }
+
+  function handleAddFiveRows() {
+    if (items.length >= MAX_BULK_CREATE_ITEMS) return;
+    const count = Math.min(5, MAX_BULK_CREATE_ITEMS - items.length);
+    const existingRefs = new Set(items.map((i) => i.clientRef).filter(Boolean));
+    const newRows: BulkCreateRowInput[] = [];
+    for (let k = 0; k < count; k++) {
+      const newRef = generateUniqueClientRef(existingRefs, "row");
+      existingRefs.add(newRef);
+      newRows.push({ clientRef: newRef, summary: "" });
+    }
+    const nonBlank = filterBlankPlaceholderItems(items);
+    onChange([...nonBlank, ...newRows]);
   }
 
   function handleDuplicateRow(idx: number) {
@@ -549,6 +565,11 @@ export function BulkCreateDataGrid({
               const hasErrors = (rowVal?.errors.length ?? 0) > 0;
               const isSelected = selectedRows.has(idx);
               const isExpanded = expandedRowIndex === idx;
+              const stickyCellBg = isSelected
+                ? "bg-primary/10 group-hover:bg-primary/15"
+                : hasErrors
+                  ? "bg-destructive/10 group-hover:bg-destructive/15"
+                  : "bg-card group-hover:bg-muted/40";
 
               return (
                 <tr
@@ -563,7 +584,7 @@ export function BulkCreateDataGrid({
                   }`}
                 >
                   {/* Sticky Checkbox */}
-                  <td className="sticky left-0 z-10 bg-background group-hover:bg-muted/30 px-2 py-2 text-center border-r border-border/40">
+                  <td className={cn("sticky left-0 z-10 px-2 py-2 text-center border-r border-border/40 transition-colors", stickyCellBg)}>
                     <Checkbox
                       checked={isSelected}
                       onCheckedChange={() => toggleRowSelection(idx)}
@@ -572,7 +593,7 @@ export function BulkCreateDataGrid({
                   </td>
 
                   {/* Sticky Index & Status */}
-                  <td className="sticky left-9 z-10 bg-background group-hover:bg-muted/30 px-2 py-2 text-center font-mono text-[11px] border-r border-border/40">
+                  <td className={cn("sticky left-9 z-10 px-2 py-2 text-center font-mono text-[11px] border-r border-border/40 transition-colors", stickyCellBg)}>
                     <div className="flex items-center justify-center gap-1">
                       {hasErrors ? (
                         <span title={rowVal?.errors[0].message}>
@@ -585,7 +606,7 @@ export function BulkCreateDataGrid({
                   </td>
 
                   {/* Sticky Summary Input */}
-                  <td className="sticky left-[76px] z-10 bg-background group-hover:bg-muted/30 px-3 py-2 border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)]">
+                  <td className={cn("sticky left-[76px] z-10 px-3 py-2 border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)] transition-colors", stickyCellBg)}>
                     <textarea
                       data-field="summary"
                       placeholder="Tiêu đề công việc..."
@@ -809,7 +830,7 @@ export function BulkCreateDataGrid({
                   )}
 
                   {/* Sticky Right Actions */}
-                  <td className="sticky right-0 z-10 bg-background group-hover:bg-muted/30 px-2 py-2 text-center border-l border-border shadow-[-2px_0_4px_-1px_rgba(0,0,0,0.06)]">
+                  <td className={cn("sticky right-0 z-10 px-2 py-2 text-center border-l border-border shadow-[-2px_0_4px_-1px_rgba(0,0,0,0.06)] transition-colors", stickyCellBg)}>
                     <div className="flex items-center justify-center gap-1">
                       {/* Toggle Expand Row Button */}
                       <Button
@@ -875,6 +896,33 @@ export function BulkCreateDataGrid({
             })}
           </tbody>
         </table>
+
+        {/* Quick Start Guide when table is pristine / empty */}
+        {items.length === 1 && !items[0].summary.trim() && (
+          <div className="m-4 rounded-xl border border-dashed border-border/80 bg-muted/15 p-6 text-center animate-in fade-in duration-200">
+            <div className="mx-auto mb-2.5 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Sparkles className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <h4 className="text-sm font-semibold text-foreground">
+              Bắt đầu soạn thảo danh sách task cho {projectKey}
+            </h4>
+            <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
+              Bạn có thể gõ trực tiếp vào ô Tiêu đề, chọn ô rồi dán nhiều dòng từ Excel/Google Sheets (<kbd className="rounded border border-border px-1 py-0.2 font-mono text-[10px] bg-muted/40">Ctrl+V</kbd>), hoặc thêm nhanh các dòng mẫu.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddFiveRows}
+                className="h-8 text-xs gap-1.5 cursor-pointer bg-card hover:bg-muted border-border font-medium"
+              >
+                <Plus className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                <span>Thêm nhanh 5 dòng trống</span>
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* If any row is expanded, render ExpandedRowEditor container */}
         {expandedRowIndex != null && items[expandedRowIndex] && (

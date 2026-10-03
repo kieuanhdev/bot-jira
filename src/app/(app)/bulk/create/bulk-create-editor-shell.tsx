@@ -332,7 +332,7 @@ export function BulkCreateEditorShell({
         onSelectedRowsChange={setSelectedRows}
       />
 
-      {/* Status Bar */}
+      {/* Status & Action Dock */}
       <BulkCreateStatusBar
         totalItems={items.length}
         filledItemsCount={filledCount}
@@ -340,6 +340,14 @@ export function BulkCreateEditorShell({
         totalWarnings={validationSummary.totalWarnings}
         selectedCount={selectedRows.size}
         onGoToNextError={handleGoToNextError}
+        onPreview={onPreview}
+        isPreviewPending={isPreviewPending}
+        isSavingDraft={isSavingDraft}
+        draftSavedTime={draftSavedTime}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={onToggleFullscreen}
+        onAddRow={handleAddRow}
+        canAddRow={items.length < MAX_BULK_CREATE_ITEMS}
       />
 
       {/* Dialogs */}
