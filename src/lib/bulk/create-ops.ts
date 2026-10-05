@@ -978,6 +978,15 @@ async function processCreateItem(
   }
 
   if (success && finalJiraKey) {
+    // Best-effort cleanup of technical idempotency marker from Jira issue labels
+    if (typeof jira.removeIssueLabel === "function") {
+      try {
+        await jira.removeIssueLabel(finalJiraKey, marker);
+      } catch {
+        // Ignore marker cleanup failure so item success is not compromised
+      }
+    }
+
     await prisma.bulkCreateItem.update({
       where: { id: itemId },
       data: {

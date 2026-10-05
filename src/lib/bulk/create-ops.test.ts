@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   userFindUnique: vi.fn(),
   findIssueByBulkMarker: vi.fn(),
   createIssue: vi.fn(),
+  removeIssueLabel: vi.fn(),
   refreshJiraIssueCache: vi.fn(),
   notifyUser: vi.fn(),
   audit: vi.fn(),
@@ -47,6 +48,7 @@ vi.mock("@/lib/jira/client", () => ({
   jiraWith: () => ({
     findIssueByBulkMarker: mocks.findIssueByBulkMarker,
     createIssue: mocks.createIssue,
+    removeIssueLabel: mocks.removeIssueLabel,
     getCreateMetadata: mocks.getCreateMetadata,
     getMyPermissions: mocks.getMyPermissions,
   }),
@@ -122,6 +124,7 @@ describe("executeBulkCreateOperation worker execution", () => {
 
     // Succeeded via reconciliation without calling createIssue!
     expect(mocks.createIssue).not.toHaveBeenCalled();
+    expect(mocks.removeIssueLabel).toHaveBeenCalledWith("EPM-42", "ttw-bulk-op-1-0");
     expect(mocks.bulkCreateItemUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "item-1" },
@@ -186,6 +189,7 @@ describe("executeBulkCreateOperation worker execution", () => {
     await executeBulkCreateOperation("op-2");
 
     expect(mocks.createIssue).toHaveBeenCalledTimes(1);
+    expect(mocks.removeIssueLabel).toHaveBeenCalledWith("EPM-100", "ttw-bulk-op-2-0");
     expect(mocks.bulkCreateItemUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "item-2" },

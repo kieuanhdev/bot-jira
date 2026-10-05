@@ -44,7 +44,7 @@ export async function GET(req: Request) {
     for (const issue of issues) {
       for (const label of issue.labels) {
         const normalized = label.trim();
-        if (!normalized) continue;
+        if (!normalized || normalized.startsWith("ttw-bulk-")) continue;
         if (query && !normalized.toLowerCase().includes(query)) continue;
         labelSet.set(normalized, (labelSet.get(normalized) ?? 0) + 1);
       }

@@ -97,4 +97,44 @@ describe("Jira dynamic issue fields", () => {
     });
     expect(String(fetchMock.mock.calls[2][0])).toContain("/worklog?adjustEstimate=leave");
   });
+
+  it("removes a label using Jira update operation with remove verb", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = jiraWith(auth);
+
+    await client.removeIssueLabel("EPM-4303", "ttw-bulk-dcw6g2h6-52");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/rest/api/2/issue/EPM-4303");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(String(init.body))).toEqual({
+      update: {
+        labels: [{ remove: "ttw-bulk-dcw6g2h6-52" }],
+      },
+    });
+  });
+
+  it("falls back to GET labels and PUT fields if update operation fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ errorMessages: ["Field labels cannot be updated using update operation"] }), { status: 400 }))
+      .mockResolvedValueOnce(json({ fields: { labels: ["flow-support", "ttw-bulk-dcw6g2h6-52"] } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = jiraWith(auth);
+
+    await client.removeIssueLabel("EPM-4303", "ttw-bulk-dcw6g2h6-52");
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const [putUrl, putInit] = fetchMock.mock.calls[2] as [string, RequestInit];
+    expect(putUrl).toContain("/rest/api/2/issue/EPM-4303");
+    expect(putInit.method).toBe("PUT");
+    expect(JSON.parse(String(putInit.body))).toEqual({
+      fields: {
+        labels: ["flow-support"],
+      },
+    });
+  });
 });

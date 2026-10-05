@@ -778,6 +778,52 @@ export function jiraWith(auth?: JiraAuth) {
       }
       return res.issues[0];
     },
+    removeIssueLabel: async (
+      key: string,
+      label: string
+    ): Promise<void> => {
+      // Jira REST API v2 supports removing a label via the update operation
+      try {
+        await request(
+          `/rest/api/2/issue/${encodeURIComponent(key)}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              update: {
+                labels: [{ remove: label }],
+              },
+            }),
+          },
+          auth
+        );
+      } catch {
+        // Fallback: If update syntax is rejected on specific Jira instances,
+        // fetch current labels and update fields.labels without the label.
+        try {
+          const issue = await request<{ fields?: { labels?: string[] } }>(
+            `/rest/api/2/issue/${encodeURIComponent(key)}?fields=labels`,
+            {},
+            auth
+          );
+          const currentLabels = issue?.fields?.labels ?? [];
+          if (currentLabels.includes(label)) {
+            const nextLabels = currentLabels.filter((l) => l !== label);
+            await request(
+              `/rest/api/2/issue/${encodeURIComponent(key)}`,
+              {
+                method: "PUT",
+                body: JSON.stringify({
+                  fields: { labels: nextLabels },
+                }),
+              },
+              auth
+            );
+          }
+        } catch {
+          // Best-effort cleanup, ignore failure so issue creation status is not broken
+        }
+      }
+    },
     getProjects: () => request<JiraProject[]>("/rest/api/2/project", {}, auth),
     getProject: (projectKey: string) =>
       request<JiraProject>(`/rest/api/2/project/${encodeURIComponent(projectKey)}`, {}, auth),
