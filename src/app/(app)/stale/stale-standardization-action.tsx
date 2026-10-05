@@ -60,6 +60,8 @@ export function BulkStandardizationAction({
     const allFirstProjectOnlyWorklog =
       sameProjectTasks.length > 0 &&
       sameProjectTasks.every((t) => t.missing.length === 1 && t.missing[0] === "WORKLOG");
+    const sameProjectKeys = new Set(sameProjectTasks.map((t) => t.jiraKey));
+    const initialBatchFields = buildMissingBulkFields(sameProjectKeys, allTasks);
 
     return (
       <Button
@@ -70,7 +72,7 @@ export function BulkStandardizationAction({
           href={
             allFirstProjectOnlyWorklog
               ? `/bulk?${pParam}keys=${sameProjectTasks.map((t) => t.jiraKey).join(",")}&action=log-work&returnTo=standardization`
-              : `/bulk?${pParam}keys=${sameProjectTasks.map((t) => t.jiraKey).join(",")}&fields=points,estimate,fixVersions,dueDate&returnTo=standardization`
+              : `/bulk?${pParam}keys=${sameProjectTasks.map((t) => t.jiraKey).join(",")}&fields=${initialBatchFields}&returnTo=standardization`
           }
         >
           {allFirstProjectOnlyWorklog ? (

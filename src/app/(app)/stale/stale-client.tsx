@@ -63,6 +63,7 @@ import {
   formatTimeSpent,
   formatDueDate,
   buildMissingBulkFields,
+  getEstimationMissingLabel,
 } from "./lib/stale-utils";
 import { SeverityBadge, TaskMeta, GreenCheck } from "./stale-task-meta";
 import { BulkStandardizationAction } from "./stale-standardization-action";
@@ -1011,7 +1012,9 @@ export function StaleClient() {
                                 className="text-[10px] flex items-center gap-1 font-normal"
                               >
                                 <X className="h-3 w-3" aria-hidden />
-                                Thiếu {REQUIREMENT_LABELS[req]}
+                                {req === "ESTIMATION"
+                                  ? getEstimationMissingLabel(task, allStdTasks)
+                                  : `Thiếu ${REQUIREMENT_LABELS[req]}`}
                               </Badge>
                             ))}
                           </div>
@@ -1173,7 +1176,8 @@ export function StaleClient() {
                                           variant="danger"
                                           className="text-[10px] w-full justify-start font-normal"
                                         >
-                                          <X className="h-3 w-3 mr-1 shrink-0" aria-hidden /> Thiếu Estimate
+                                          <X className="h-3 w-3 mr-1 shrink-0" aria-hidden />{" "}
+                                          {getEstimationMissingLabel(task, allStdTasks)}
                                         </Badge>
                                       ) : (
                                         <Badge
@@ -1181,7 +1185,11 @@ export function StaleClient() {
                                           className="text-[10px] w-full justify-start font-normal"
                                         >
                                           <Check className="h-3 w-3 mr-1 shrink-0" aria-hidden />
-                                          {task.points ? `${task.points}pt` : "Có Est"}
+                                          {task.points
+                                            ? `${task.points}pt`
+                                            : task.originalEstimateSeconds
+                                            ? "Có Est"
+                                            : "Đã có"}
                                         </Badge>
                                       )}
                                     </div>

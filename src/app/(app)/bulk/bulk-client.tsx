@@ -459,6 +459,35 @@ export function BulkClient() {
     return map;
   }, [projectFieldsData?.fields]);
 
+  // Automatically prune any fields that are not available for the active project
+  useEffect(() => {
+    if (!projectFieldsData?.fields) return;
+    const unavailableIds: Set<string> = new Set(
+      projectFieldsData.fields.filter((f) => !f.available).map((f) => String(f.id))
+    );
+    if (unavailableIds.size === 0) return;
+
+    setEnabledFields((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (unavailableIds.has(id)) {
+          changed = true;
+        } else {
+          next.add(id);
+        }
+      }
+      return changed ? next : prev;
+    });
+
+    if (unavailableIds.has("estimate")) {
+      setEstimate("");
+    }
+    if (unavailableIds.has("points")) {
+      setPoints("");
+    }
+  }, [projectFieldsData?.fields]);
+
   // Fetch Fix Versions for the selected project
   const selectedProjects = filterProject ? [filterProject] : [];
   const isFixVersionAction = enabledFields.has("fixVersions");
@@ -758,7 +787,7 @@ export function BulkClient() {
         value.points = Number(points);
       }
     }
-    if (enabledFields.has("estimate")) {
+    if (enabledFields.has("estimate") && availableFieldMap.get("estimate")?.available !== false) {
       if (!estimate.trim() || !isEstimateValid) return null;
       value.estimate = estimate.trim();
     }
@@ -786,6 +815,7 @@ export function BulkClient() {
   }
 
   function toggleField(field: string) {
+    if (availableFieldMap.get(field)?.available === false) return;
     setEnabledFields((previous) => {
       const next = new Set(previous);
       if (next.has(field)) next.delete(field);
@@ -1628,7 +1658,7 @@ export function BulkClient() {
                   >
                     <div className="flex items-center gap-2">
                       <Checkbox
-                        checked={isEnabled}
+                        checked={isEnabled && isAvailable}
                         disabled={!isAvailable}
                         onCheckedChange={() => isAvailable && toggleField(id)}
                       />
@@ -1791,7 +1821,7 @@ export function BulkClient() {
                 </div>
               )}
 
-              {enabledFields.has("estimate") && (
+              {enabledFields.has("estimate") && availableFieldMap.get("estimate")?.available !== false && (
                 <div className="flex flex-col gap-1.5">
                   <span className="text-xs font-semibold text-foreground">Original Estimate</span>
                   <Input

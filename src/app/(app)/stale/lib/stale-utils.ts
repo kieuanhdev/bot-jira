@@ -48,18 +48,59 @@ export function formatDueDate(value: string | null) {
   });
 }
 
+export function getEstimationMissingLabel(
+  task: StandardizationTask,
+  allTasks: StandardizationTask[]
+): string {
+  const projectTasks = allTasks.filter((t) => t.projectKey === task.projectKey);
+  const hasEst = projectTasks.some((t) => t.originalEstimateSeconds != null && t.originalEstimateSeconds > 0);
+  const hasPts = projectTasks.some((t) => t.points != null && t.points > 0);
+
+  if (hasPts && !hasEst) return "Thiếu Points";
+  if (hasEst && !hasPts) return "Thiếu Estimate";
+  return "Thiếu Points/Est";
+}
+
 export function buildMissingBulkFields(keys: Set<string>, tasks: StandardizationTask[]): string {
   const fields = new Set<string>();
-  for (const task of tasks) {
-    if (keys.has(task.jiraKey)) {
-      for (const req of task.missing) {
-        if (req === "WORKLOG") continue;
+  const selectedTasks = tasks.filter((t) => keys.has(t.jiraKey));
+  const relevantTasks = selectedTasks.length > 0 ? selectedTasks : tasks;
+
+  const relevantProjects = new Set(relevantTasks.map((t) => t.projectKey));
+  const projectTasks = tasks.filter((t) => relevantProjects.has(t.projectKey));
+
+  const hasEstimateUsage = projectTasks.some(
+    (t) => t.originalEstimateSeconds != null && t.originalEstimateSeconds > 0
+  );
+  const hasPointsUsage = projectTasks.some((t) => t.points != null && t.points > 0);
+
+  for (const task of relevantTasks) {
+    for (const req of task.missing) {
+      if (req === "WORKLOG") continue;
+      if (req === "ESTIMATION") {
+        if (hasEstimateUsage && !hasPointsUsage) {
+          fields.add("estimate");
+        } else if (hasPointsUsage && !hasEstimateUsage) {
+          fields.add("points");
+        } else {
+          fields.add("points");
+          if (hasEstimateUsage) {
+            fields.add("estimate");
+          }
+        }
+      } else {
         const bulkFields = REQUIREMENT_BULK_FIELDS[req] ?? [];
         for (const bf of bulkFields) fields.add(bf);
       }
     }
   }
-  return fields.size > 0
-    ? Array.from(fields).join(",")
-    : "points,estimate,fixVersions,dueDate";
+
+  if (fields.size > 0) {
+    return Array.from(fields).join(",");
+  }
+
+  if (hasEstimateUsage && !hasPointsUsage) {
+    return "estimate,fixVersions,dueDate";
+  }
+  return "points,fixVersions,dueDate";
 }
