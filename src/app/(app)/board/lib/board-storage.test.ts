@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BOARD_STORAGE_KEYS,
+  loadStoredColumnPreferences,
   loadStoredFilters,
   loadStoredProject,
   loadStoredSortMode,
   loadStoredViewMode,
+  saveStoredColumnPreferences,
   saveStoredFilters,
   saveStoredProject,
   saveStoredSortMode,
@@ -99,6 +101,19 @@ describe("board-storage unit tests", () => {
     it("handles invalid JSON without throwing", () => {
       store[`${BOARD_STORAGE_KEYS.FILTERS_PREFIX}CICM`] = "invalid-json";
       expect(loadStoredFilters("CICM")).toBeNull();
+    });
+  });
+
+  describe("column preference persistence", () => {
+    it("stores preferences per project and removes duplicates", () => {
+      saveStoredColumnPreferences(" cicm ", { hidden: ["review", "review"], collapsed: ["done"] });
+      expect(loadStoredColumnPreferences("CICM")).toEqual({ hidden: ["review"], collapsed: ["done"] });
+      expect(loadStoredColumnPreferences("OTHER")).toEqual({ hidden: [], collapsed: [] });
+    });
+
+    it("handles malformed preferences", () => {
+      store[BOARD_STORAGE_KEYS.COLUMN_PREFS_PREFIX + "CICM"] = "invalid-json";
+      expect(loadStoredColumnPreferences("CICM")).toEqual({ hidden: [], collapsed: [] });
     });
   });
 

@@ -8,9 +8,12 @@ import type { SortMode, ViewMode } from "./board-types";
 export const BOARD_STORAGE_KEYS = {
   PROJECT: "jira_board_selected_project",
   FILTERS_PREFIX: "jira_board_filters_",
+  COLUMN_PREFS_PREFIX: "jira_board_column_prefs_",
   SORT_MODE: "jira_board_sort_mode",
   VIEW_MODE: "jira_board_view_mode",
 } as const;
+
+export type BoardColumnPreferences = { hidden: string[]; collapsed: string[] };
 
 function getStorage(): Storage | null {
   try {
@@ -106,6 +109,39 @@ export function saveStoredFilters(projectKey: string, filters: IssueFilters): vo
     storage.setItem(
       `${BOARD_STORAGE_KEYS.FILTERS_PREFIX}${cleanKey}`,
       JSON.stringify(toSave)
+    );
+  } catch {
+    // Ignore storage quota or security errors
+  }
+}
+
+function uniqueStrings(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((item): item is string => typeof item === "string" && item.length > 0))];
+}
+
+export function loadStoredColumnPreferences(projectKey: string): BoardColumnPreferences {
+  const storage = getStorage();
+  if (!storage || !projectKey) return { hidden: [], collapsed: [] };
+  try {
+    const cleanKey = projectKey.trim().toUpperCase();
+    const raw = storage.getItem(BOARD_STORAGE_KEYS.COLUMN_PREFS_PREFIX + cleanKey);
+    if (!raw) return { hidden: [], collapsed: [] };
+    const parsed = JSON.parse(raw) as Partial<BoardColumnPreferences> | null;
+    return { hidden: uniqueStrings(parsed?.hidden), collapsed: uniqueStrings(parsed?.collapsed) };
+  } catch {
+    return { hidden: [], collapsed: [] };
+  }
+}
+
+export function saveStoredColumnPreferences(projectKey: string, preferences: BoardColumnPreferences): void {
+  const storage = getStorage();
+  if (!storage || !projectKey) return;
+  try {
+    const cleanKey = projectKey.trim().toUpperCase();
+    storage.setItem(
+      BOARD_STORAGE_KEYS.COLUMN_PREFS_PREFIX + cleanKey,
+      JSON.stringify({ hidden: uniqueStrings(preferences.hidden), collapsed: uniqueStrings(preferences.collapsed) } satisfies BoardColumnPreferences)
     );
   } catch {
     // Ignore storage quota or security errors

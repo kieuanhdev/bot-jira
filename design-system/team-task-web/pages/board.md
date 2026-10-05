@@ -19,7 +19,7 @@
 
 ### Responsive / Adaptive Layout (no horizontal scroll)
 
-The board never requires horizontal scrolling. It adapts to viewport width:
+The board avoids page-level horizontal scrolling and adapts to viewport width. When many workflow columns remain visible, scrolling is contained inside the board:
 
 | Width | Kanban layout |
 |-------|---------------|
@@ -28,8 +28,11 @@ The board never requires horizontal scrolling. It adapts to viewport width:
 | narrow (<768px) | Kanban disabled → forces **List view**; the Board toggle is disabled |
 
 - Many workflow states (e.g. MR has 10) are handled by fluid columns
-  (`flex-1 basis-64 min-w-0`) + the medium merge + horizontal scroll as a last
+  (`flex-1 basis-72 min-w-64`) + the medium merge + horizontal scroll as a last
   resort; List view is the clean fallback for narrow screens.
+- Users can hide/show individual columns and collapse columns from a central
+  **Columns** menu. Preferences are stored per project in local storage, with a
+  one-action reset. At least one column always remains visible.
 - The user's explicit Board/List choice is honored on wide + medium screens; on
   narrow screens List is forced automatically.
 - Columns come from `/api/board/statuses` (real project workflow states). Fallback

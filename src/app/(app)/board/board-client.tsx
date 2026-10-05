@@ -32,10 +32,12 @@ import {
 } from "@/lib/issues/issue-filters";
 import { IssueFilterBar } from "@/components/issues/issue-filter-bar";
 import {
+  loadStoredColumnPreferences,
   loadStoredFilters,
   loadStoredProject,
   loadStoredSortMode,
   loadStoredViewMode,
+  saveStoredColumnPreferences,
   saveStoredFilters,
   saveStoredProject,
   saveStoredSortMode,
@@ -54,6 +56,15 @@ import {
 import { timeAgo } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { type BoardWidth } from "@/lib/status-groups";
 import {
@@ -70,6 +81,12 @@ import {
   RefreshCw,
   ChevronsUpDown,
   Plus,
+  RotateCcw,
+  SlidersHorizontal,
+  Eye,
+  EyeOff,
+  Minimize2,
+  Maximize2,
 } from "lucide-react";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { SearchField } from "@/components/shared/search-field";
@@ -377,7 +394,11 @@ export function BoardClient() {
     saveStoredViewMode(view);
   }, [view]);
 
-  const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set());
+  const [columnPrefs, setColumnPrefs] = useState<{
+    projectKey: string;
+    hidden: Set<string>;
+    collapsed: Set<string>;
+  }>({ projectKey: "", hidden: new Set(), collapsed: new Set() });
   const [quickPanel, setQuickPanel] = useState<IssueItem | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const cardRefs = useRef<Map<string, HTMLElement | null>>(new Map());
@@ -408,6 +429,24 @@ export function BoardClient() {
   }, []);
 
   const effectiveView: ViewMode = width === "narrow" ? "list" : view;
+
+  const activeColumnPrefs = useMemo(() => {
+    if (columnPrefs.projectKey === selectedProject) return columnPrefs;
+    const stored = loadStoredColumnPreferences(selectedProject);
+    return {
+      projectKey: selectedProject,
+      hidden: new Set(stored.hidden),
+      collapsed: new Set(stored.collapsed),
+    };
+  }, [columnPrefs, selectedProject]);
+
+  const hiddenCols = activeColumnPrefs.hidden;
+  const collapsedCols = activeColumnPrefs.collapsed;
+
+  function persistColumnPrefs(hidden: Set<string>, collapsed: Set<string>) {
+    setColumnPrefs({ projectKey: selectedProject, hidden, collapsed });
+    saveStoredColumnPreferences(selectedProject, { hidden: [...hidden], collapsed: [...collapsed] });
+  }
 
   const activeAssignees = effectiveAssignees(filters.assigneeScope);
   const isAssigneeAll = activeAssignees === "ALL";
@@ -795,7 +834,12 @@ export function BoardClient() {
 
   const activeProject = projectList.find((p) => p.key === selectedProject) ?? null;
 
-  const columnKeys = useMemo(() => columns.map((c) => c.key), [columns]);
+  const visibleColumns = useMemo(() => {
+    const visible = columns.filter((column) => !hiddenCols.has(column.key));
+    return visible.length > 0 ? visible : columns;
+  }, [columns, hiddenCols]);
+
+  const columnKeys = useMemo(() => visibleColumns.map((c) => c.key), [visibleColumns]);
 
   const transitionCache = useRef(new Map<string, Transition[]>());
   const transitionRequests = useRef(new Map<string, Promise<Transition[]>>());
@@ -1126,7 +1170,7 @@ export function BoardClient() {
 
   const boardColumnsRender = useMemo(() => {
     const seen = new Map<string, number>();
-    return columns.map((c, i) => {
+    return visibleColumns.map((c, i) => {
       const idxInCat = seen.get(c.category) ?? 0;
       seen.set(c.category, idxInCat + 1);
       const all = sortedByColumn.get(c.key) ?? [];
@@ -1142,7 +1186,7 @@ export function BoardClient() {
         isBacklog: c.isBacklog,
         emptyMessage,
         colIndex: i,
-        columnCount: columns.length,
+        columnCount: visibleColumns.length,
         dotColor: statusDot(c.category, idxInCat),
         items: all.slice(0, count),
         total: all.length,
@@ -1150,7 +1194,7 @@ export function BoardClient() {
         collapsed: collapsedCols.has(c.key),
       };
     });
-  }, [columns, sortedByColumn, colVisible, collapsedCols, activeFilterCount]);
+  }, [visibleColumns, sortedByColumn, colVisible, collapsedCols, activeFilterCount]);
 
   function growColumn(colId: string) {
     setColVisibleState((prev) => {
@@ -1161,10 +1205,74 @@ export function BoardClient() {
   }
 
   function toggleCollapse(colId: string) {
-    setCollapsedCols((prev) => {
+    const next = new Set(collapsedCols);
+    if (next.has(colId)) next.delete(colId);
+    else next.add(colId);
+    persistColumnPrefs(new Set(hiddenCols), next);
+  }
+
+  function hideColumn(colId: string) {
+    if (visibleColumns.length <= 1) return;
+    const next = new Set(hiddenCols);
+    next.add(colId);
+    persistColumnPrefs(next, new Set(collapsedCols));
+  }
+
+  function showColumn(colId: string) {
+    const next = new Set(hiddenCols);
+    next.delete(colId);
+    persistColumnPrefs(next, new Set(collapsedCols));
+  }
+
+  function showAllColumns() {
+    persistColumnPrefs(new Set(), new Set(collapsedCols));
+  }
+
+  function toggleColumnVisibility(colId: string) {
+    const next = new Set(hiddenCols);
+    if (next.has(colId)) next.delete(colId);
+    else {
+      if (visibleColumns.length <= 1) return;
+      next.add(colId);
+    }
+    persistColumnPrefs(next, new Set(collapsedCols));
+  }
+
+  function hideEmptyColumns() {
+    const next = new Set(hiddenCols);
+    for (const column of columns) {
+      if ((byColumn.get(column.key)?.length ?? 0) === 0) {
+        next.add(column.key);
+      }
+    }
+    if (next.size >= columns.length) {
+      next.delete(columns[0].key);
+    }
+    persistColumnPrefs(next, new Set(collapsedCols));
+  }
+
+  function collapseEmptyColumns() {
+    const next = new Set(collapsedCols);
+    for (const column of visibleColumns) {
+      if ((byColumn.get(column.key)?.length ?? 0) === 0) next.add(column.key);
+    }
+    persistColumnPrefs(new Set(hiddenCols), next);
+  }
+
+  function expandAllCollapsedColumns() {
+    persistColumnPrefs(new Set(hiddenCols), new Set());
+  }
+
+  function resetColumnPreferences() {
+    persistColumnPrefs(new Set(), new Set());
+  }
+
+  const [hiddenTableCols, setHiddenTableCols] = useState<Set<string>>(new Set());
+  function toggleTableColumn(colKey: string) {
+    setHiddenTableCols((prev) => {
       const next = new Set(prev);
-      if (next.has(colId)) next.delete(colId);
-      else next.add(colId);
+      if (next.has(colKey)) next.delete(colKey);
+      else next.add(colKey);
       return next;
     });
   }
@@ -1457,6 +1565,217 @@ export function BoardClient() {
             aria-label="Chế độ hiển thị"
           />
 
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "h-8 cursor-pointer gap-1.5 font-medium transition-colors",
+                  effectiveView === "board" && hiddenCols.size > 0
+                    ? "border-amber-500/50 bg-amber-500/10 text-amber-900 hover:bg-amber-500/15 dark:text-amber-200"
+                    : effectiveView === "list" && hiddenTableCols.size > 0
+                    ? "border-amber-500/50 bg-amber-500/10 text-amber-900 hover:bg-amber-500/15 dark:text-amber-200"
+                    : ""
+                )}
+                aria-label="Tùy chỉnh ẩn/hiện cột"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
+                <span>Tùy chỉnh cột</span>
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 py-0.2 text-[10px] tabular-nums font-semibold",
+                    effectiveView === "board" && hiddenCols.size > 0
+                      ? "bg-amber-500/25 text-amber-950 dark:text-amber-100"
+                      : effectiveView === "list" && hiddenTableCols.size > 0
+                      ? "bg-amber-500/25 text-amber-950 dark:text-amber-100"
+                      : "bg-muted text-muted-foreground"
+                  )}
+                >
+                  {effectiveView === "board"
+                    ? hiddenCols.size > 0
+                      ? `Ẩn ${hiddenCols.size}`
+                      : `${visibleColumns.length}/${columns.length}`
+                    : hiddenTableCols.size > 0
+                    ? `Ẩn ${hiddenTableCols.size}`
+                    : "Đầy đủ"}
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 p-0 shadow-lg">
+              {effectiveView === "board" ? (
+                <>
+                  <div className="border-b border-border/50 px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <DropdownMenuLabel className="p-0 text-sm font-semibold">Tùy chỉnh hiển thị cột</DropdownMenuLabel>
+                      <span className="text-[11px] font-medium text-muted-foreground">
+                        Hiện {visibleColumns.length}/{columns.length} cột
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                      Bật/tắt cột để tùy biến bảng. Lưu riêng cho dự án {selectedProject}.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-1 border-b border-border/40 bg-muted/30 p-1.5 text-xs">
+                    <button
+                      onClick={showAllColumns}
+                      disabled={hiddenCols.size === 0}
+                      className="flex-1 cursor-pointer rounded px-2 py-1 text-center font-medium text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                    >
+                      Hiện tất cả ({columns.length})
+                    </button>
+                    <span className="text-border">|</span>
+                    <button
+                      onClick={hideEmptyColumns}
+                      className="flex-1 cursor-pointer rounded px-2 py-1 text-center font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      Ẩn cột trống
+                    </button>
+                  </div>
+
+                  <div className="max-h-72 overflow-y-auto p-1.5 [scrollbar-width:thin]">
+                    {columns.map((column) => {
+                      const visible = !hiddenCols.has(column.key);
+                      const isOnlyVisible = visible && visibleColumns.length === 1;
+                      const count = byColumn.get(column.key)?.length ?? 0;
+                      return (
+                        <div
+                          key={column.key}
+                          onClick={() => {
+                            if (!isOnlyVisible) toggleColumnVisibility(column.key);
+                          }}
+                          className={cn(
+                            "flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs transition-colors cursor-pointer select-none",
+                            visible ? "hover:bg-accent/80" : "opacity-60 hover:bg-muted/60 hover:opacity-100",
+                            isOnlyVisible && "cursor-not-allowed"
+                          )}
+                          title={
+                            isOnlyVisible
+                              ? "Cần giữ ít nhất 1 cột hiển thị"
+                              : visible
+                              ? `Bấm để ẩn cột ${column.label}`
+                              : `Bấm để hiện cột ${column.label}`
+                          }
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <Checkbox
+                              checked={visible}
+                              disabled={isOnlyVisible}
+                              className="h-3.5 w-3.5 pointer-events-none"
+                            />
+                            <span className={cn("h-2 w-2 shrink-0 rounded-full", statusDot(column.category, 0))} />
+                            <span
+                              className={cn(
+                                "truncate font-medium",
+                                !visible && "line-through text-muted-foreground"
+                              )}
+                            >
+                              {column.label}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground font-medium">
+                              {count}
+                            </span>
+                            {visible ? (
+                              <Eye className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                            ) : (
+                              <EyeOff className="h-3.5 w-3.5 text-rose-500" aria-hidden />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <DropdownMenuSeparator className="my-0" />
+                  <div className="p-1 text-xs">
+                    <DropdownMenuItem
+                      onSelect={collapseEmptyColumns}
+                      className="cursor-pointer gap-2 py-1.5 text-xs"
+                    >
+                      <Minimize2 className="h-3.5 w-3.5" aria-hidden />
+                      <span>Thu gọn các cột trống (thanh đứng)</span>
+                    </DropdownMenuItem>
+                    {collapsedCols.size > 0 && (
+                      <DropdownMenuItem
+                        onSelect={expandAllCollapsedColumns}
+                        className="cursor-pointer gap-2 py-1.5 text-xs"
+                      >
+                        <Maximize2 className="h-3.5 w-3.5" aria-hidden />
+                        <span>Mở rộng tất cả cột đang thu gọn</span>
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem
+                      onSelect={resetColumnPreferences}
+                      disabled={hiddenCols.size === 0 && collapsedCols.size === 0}
+                      className="cursor-pointer gap-2 py-1.5 text-xs text-muted-foreground focus:text-foreground"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                      <span>Khôi phục thiết lập mặc định</span>
+                    </DropdownMenuItem>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="border-b border-border/50 px-3 py-2">
+                    <DropdownMenuLabel className="p-0 text-sm font-semibold">Cột trong danh sách</DropdownMenuLabel>
+                    <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                      Chọn các trường thông tin bạn muốn hiển thị trên bảng danh sách.
+                    </p>
+                  </div>
+                  <div className="p-1.5">
+                    {[
+                      { key: "status", label: "Trạng thái (Status)" },
+                      { key: "assignee", label: "Người xử lý (Assignee)" },
+                      { key: "priority", label: "Mức ưu tiên (Priority)" },
+                      { key: "updated", label: "Thời gian cập nhật (Updated)" },
+                    ].map((col) => {
+                      const visible = !hiddenTableCols.has(col.key);
+                      return (
+                        <div
+                          key={col.key}
+                          onClick={() => toggleTableColumn(col.key)}
+                          className={cn(
+                            "flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs transition-colors cursor-pointer select-none",
+                            visible ? "hover:bg-accent/80" : "opacity-60 hover:bg-muted/60 hover:opacity-100"
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Checkbox checked={visible} className="h-3.5 w-3.5 pointer-events-none" />
+                            <span className={cn("font-medium", !visible && "line-through text-muted-foreground")}>
+                              {col.label}
+                            </span>
+                          </div>
+                          {visible ? (
+                            <Eye className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                          ) : (
+                            <EyeOff className="h-3.5 w-3.5 text-rose-500" aria-hidden />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {hiddenTableCols.size > 0 && (
+                    <>
+                      <DropdownMenuSeparator className="my-0" />
+                      <div className="p-1 text-xs">
+                        <DropdownMenuItem
+                          onSelect={() => setHiddenTableCols(new Set())}
+                          className="cursor-pointer gap-2 py-1.5 text-xs text-muted-foreground focus:text-foreground"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                          <span>Hiện tất cả các cột</span>
+                        </DropdownMenuItem>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
             <SelectTrigger className="h-8 w-auto gap-1.5 text-sm" title="Sắp xếp thẻ trong từng cột">
               <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
@@ -1520,6 +1839,33 @@ export function BoardClient() {
         </div>
       )}
 
+      {effectiveView === "board" && hiddenCols.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-900 dark:text-amber-200">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <EyeOff className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+            <span className="font-semibold">Đang ẩn {hiddenCols.size} cột:</span>
+            {columns
+              .filter((c) => hiddenCols.has(c.key))
+              .map((c) => (
+                <button
+                  key={c.key}
+                  onClick={() => showColumn(c.key)}
+                  title={`Bấm để hiện lại cột ${c.label}`}
+                  className="inline-flex cursor-pointer items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-[11px] font-medium text-foreground transition-colors hover:bg-amber-500/30"
+                >
+                  <span>+ {c.label}</span>
+                </button>
+              ))}
+          </div>
+          <button
+            onClick={showAllColumns}
+            className="cursor-pointer shrink-0 font-medium underline underline-offset-2 hover:text-foreground"
+          >
+            Hiện lại tất cả
+          </button>
+        </div>
+      )}
+
       {isLoading || isLoadingStatuses ? (
         <BoardSkeleton columnCount={columns.length || 5} />
       ) : issues.length === 0 ? (
@@ -1567,9 +1913,11 @@ export function BoardClient() {
                 optimistic={optimistic}
                 wipOver={col.wipOver}
                 collapsed={col.collapsed}
+                canHide={visibleColumns.length > 1}
                 total={col.total}
                 onGrow={growColumn}
                 onToggleCollapse={toggleCollapse}
+                onHideColumn={hideColumn}
                 onOpen={(issue) => setQuickPanel(issue)}
                 onQuickAction={handleQuickAction}
                 assignees={assignees}
@@ -1591,10 +1939,10 @@ export function BoardClient() {
               <tr>
                 <th className="px-3 py-2 font-medium">Key</th>
                 <th className="px-3 py-2 font-medium">Summary</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium">Assignee</th>
-                <th className="px-3 py-2 font-medium">Priority</th>
-                <th className="px-3 py-2 font-medium">Updated</th>
+                {!hiddenTableCols.has("status") && <th className="px-3 py-2 font-medium">Status</th>}
+                {!hiddenTableCols.has("assignee") && <th className="px-3 py-2 font-medium">Assignee</th>}
+                {!hiddenTableCols.has("priority") && <th className="px-3 py-2 font-medium">Priority</th>}
+                {!hiddenTableCols.has("updated") && <th className="px-3 py-2 font-medium">Updated</th>}
               </tr>
             </thead>
             <tbody>
@@ -1606,10 +1954,18 @@ export function BoardClient() {
                 >
                   <td className="px-3 py-2 font-mono text-xs text-primary">{issue.jiraKey}</td>
                   <td className="max-w-xs truncate px-3 py-2 font-medium">{issue.summary}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{issue.status}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{issue.assigneeJira ?? "—"}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{issue.priority ?? "—"}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{timeAgo(issue.updatedAt)}</td>
+                  {!hiddenTableCols.has("status") && (
+                    <td className="px-3 py-2 text-muted-foreground">{issue.status}</td>
+                  )}
+                  {!hiddenTableCols.has("assignee") && (
+                    <td className="px-3 py-2 text-muted-foreground">{issue.assigneeJira ?? "—"}</td>
+                  )}
+                  {!hiddenTableCols.has("priority") && (
+                    <td className="px-3 py-2 text-muted-foreground">{issue.priority ?? "—"}</td>
+                  )}
+                  {!hiddenTableCols.has("updated") && (
+                    <td className="px-3 py-2 text-muted-foreground">{timeAgo(issue.updatedAt)}</td>
+                  )}
                 </tr>
               ))}
             </tbody>

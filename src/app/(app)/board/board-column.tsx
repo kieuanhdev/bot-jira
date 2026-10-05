@@ -4,7 +4,13 @@ import { useEffect } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, EyeOff, Maximize2, Minimize2, MoreHorizontal } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { IssueItem } from "@/hooks/use-issues";
 import type { QuickAction } from "./lib/board-types";
@@ -31,8 +37,10 @@ export function BoardColumn({
   optimistic,
   wipOver,
   collapsed,
+  canHide,
   onGrow,
   onToggleCollapse,
+  onHideColumn,
   onOpen,
   onQuickAction,
   assignees,
@@ -58,8 +66,10 @@ export function BoardColumn({
   optimistic: Map<string, string>;
   wipOver: boolean;
   collapsed: boolean;
+  canHide?: boolean;
   onGrow: (id: string) => void;
   onToggleCollapse: (id: string) => void;
+  onHideColumn?: (id: string) => void;
   onOpen: (issue: IssueItem) => void;
   onQuickAction: (key: string, action: QuickAction) => void;
   assignees: string[];
@@ -78,12 +88,12 @@ export function BoardColumn({
 
   if (collapsed) {
     return (
-      <div className="flex w-9 shrink-0 flex-col items-center gap-2 py-1">
+      <div className="flex w-9 shrink-0 flex-col items-center gap-1.5 py-1">
         <button
           onClick={() => onToggleCollapse(id)}
-          title={`Mở cột ${label}`}
-          aria-label={`Mở cột ${label}`}
-          className="flex flex-col items-center gap-1.5 rounded-lg border border-border/60 bg-muted/25 px-1 py-2 transition-colors hover:border-primary/40 hover:bg-primary/5"
+          title={`Mở rộng cột ${label}`}
+          aria-label={`Mở rộng cột ${label}`}
+          className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-border/60 bg-muted/25 px-1 py-2 transition-colors hover:border-primary/40 hover:bg-primary/5"
         >
           <span className={cn("h-2.5 w-2.5 rounded-full", dotColor)} />
           <span className="text-[10px] font-semibold tabular-nums text-muted-foreground">{total}</span>
@@ -93,16 +103,29 @@ export function BoardColumn({
           >
             {label}
           </span>
+          <Maximize2 className="mt-1 h-3 w-3 text-muted-foreground" aria-hidden />
         </button>
+        {canHide && onHideColumn && (
+          <button
+            onClick={() => onHideColumn(id)}
+            title={`Ẩn hoàn toàn cột ${label}`}
+            aria-label={`Ẩn hoàn toàn cột ${label}`}
+            className="cursor-pointer rounded p-1 text-muted-foreground/60 transition-colors hover:bg-rose-500/10 hover:text-rose-500"
+          >
+            <EyeOff className="h-3 w-3" aria-hidden />
+          </button>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="flex min-w-0 flex-1 basis-72 flex-col">
-      <div className="mb-2 flex items-center gap-2 px-0.5">
+    <div className="flex min-w-64 flex-1 basis-72 flex-col">
+      <div className="mb-2 flex items-center gap-1.5 px-0.5">
         <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dotColor)} />
-        <span className={cn("min-w-0 truncate text-[13px] font-semibold tracking-tight", text)}>{label}</span>
+        <span className={cn("min-w-0 truncate text-[13px] font-semibold tracking-tight", text)} title={label}>
+          {label}
+        </span>
         {wipOver && (
           <span
             className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400"
@@ -120,11 +143,43 @@ export function BoardColumn({
             {total}
           </span>
         )}
+
+        {/* Dropdown Menu actions for Column: Ẩn cột, Thu gọn cột */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              title={`Tùy chọn cột ${label}`}
+              aria-label={`Tùy chọn cột ${label}`}
+              className="shrink-0 cursor-pointer rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" aria-hidden />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            {canHide && onHideColumn && (
+              <DropdownMenuItem
+                onClick={() => onHideColumn(id)}
+                className="cursor-pointer gap-2 text-xs text-rose-600 focus:text-rose-600 dark:text-rose-400"
+              >
+                <EyeOff className="h-3.5 w-3.5" aria-hidden />
+                <span>Ẩn cột này</span>
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem
+              onClick={() => onToggleCollapse(id)}
+              className="cursor-pointer gap-2 text-xs"
+            >
+              <Minimize2 className="h-3.5 w-3.5" aria-hidden />
+              <span>Thu gọn cột</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <button
           onClick={() => onToggleCollapse(id)}
           title={`Thu gọn cột ${label}`}
           aria-label={`Thu gọn cột ${label}`}
-          className="shrink-0 rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+          className="shrink-0 cursor-pointer rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
         >
           <ChevronRight className="h-3.5 w-3.5" aria-hidden />
         </button>
@@ -188,7 +243,7 @@ export function BoardColumn({
               {hasMore && (
                 <button
                   onClick={() => onGrow(id)}
-                  className="rounded-lg border border-dashed border-border/70 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                  className="cursor-pointer rounded-lg border border-dashed border-border/70 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
                 >
                   Xem thêm {total - items.length}
                 </button>
@@ -206,7 +261,7 @@ export function BoardSkeleton({ columnCount }: { columnCount: number }) {
   return (
     <div className="flex flex-1 gap-3 overflow-hidden">
       {Array.from({ length: count }, (_, g) => (
-        <div key={g} className="flex min-w-0 flex-1 basis-64 flex-col gap-2">
+        <div key={g} className="flex min-w-64 flex-1 basis-64 flex-col gap-2">
           <div className="flex items-center justify-between px-1">
             <Skeleton className="h-4 w-20" />
             <Skeleton className="h-4 w-6" />
