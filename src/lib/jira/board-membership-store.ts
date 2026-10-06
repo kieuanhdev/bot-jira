@@ -119,7 +119,6 @@ export async function getMembershipReadModel(
   const now = Date.now();
   const hasGeneration = Boolean(snapshot.generation && snapshot.generation.length > 0);
   const expiresAtMs = snapshot.expiresAt?.getTime() ?? 0;
-  const staleUntilMs = snapshot.staleUntil?.getTime() ?? 0;
 
   // Case 1: Snapshot has never completed a generation
   if (!hasGeneration || !snapshot.fetchedAt) {
@@ -143,7 +142,6 @@ export async function getMembershipReadModel(
 
   // Case 2: We have a previously completed generation. Determine freshness and status.
   const isFresh = now < expiresAtMs && snapshot.state === "ready";
-  const isStaleWindow = now < staleUntilMs || snapshot.state === "ready" || snapshot.state === "refreshing";
 
   // Fetch entries for active generation
   const entries = await prisma.jiraBoardMembershipEntry.findMany({

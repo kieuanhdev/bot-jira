@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useState, useMemo } from "react";
-import { Filter, Check, ChevronDown, X, Search } from "lucide-react";
+import { ChevronDown, X, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { SearchField } from "@/components/shared/search-field";

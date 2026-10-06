@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GET, POST } from "./route";
 
-const { prismaMock, sessionMock, canMock, userJiraAuthMock, jiraWithMock, createVersionMock, getVersionsMock, getMyPermissionsMock } = vi.hoisted(() => {
+const { prismaMock, sessionMock, canMock, userJiraAuthMock, jiraWithMock, createVersionMock, getMyPermissionsMock } = vi.hoisted(() => {
   const sessionMock = vi.fn();
   const canMock = vi.fn();
   const userJiraAuthMock = vi.fn();

@@ -44,7 +44,7 @@ vi.mock("@/lib/queue/boss", () => ({
   enqueueBoardMembershipRefresh: mocks.enqueueBoardMembershipRefresh,
 }));
 
-import { PUT, GET } from "./route";
+import { PUT } from "./route";
 import { JiraRequestError } from "@/lib/jira/client";
 
 describe("/api/me/board-preferences", () => {

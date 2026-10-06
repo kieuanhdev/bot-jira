@@ -24,8 +24,6 @@ import {
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/shared/page-header";
-import { FilterBar } from "@/components/shared/filter-bar";
-import { SearchField } from "@/components/shared/search-field";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { FeedbackBanner } from "@/components/shared/feedback-banner";
@@ -33,7 +31,6 @@ import {
   type IssueFilters,
   DEFAULT_BULK_FILTERS,
   effectiveAssignees,
-  countActiveIssueFilters,
 } from "@/lib/issues/issue-filters";
 import { IssueFilterBar } from "@/components/issues/issue-filter-bar";
 import {
@@ -273,7 +270,7 @@ export function BulkClient() {
       available.find((k) => projectKeys.includes(k)) ??
       projectKeys[0] ??
       "";
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     if (pick) {
       setFilterProject(pick);
       setExtraIssues([]);
@@ -961,11 +958,6 @@ export function BulkClient() {
         : `Cập nhật ${preview.actionable} task`
     : "Xác nhận thay đổi";
 
-  const activeFilterCount = countActiveIssueFilters(taskFilters, DEFAULT_BULK_FILTERS);
-
-  function resetTaskFilters() {
-    setTaskFilters(DEFAULT_BULK_FILTERS);
-  }
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">

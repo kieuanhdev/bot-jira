@@ -26,8 +26,6 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
-  AlertTriangle,
-  RotateCcw,
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -38,13 +36,12 @@ import { ComponentsCombobox } from "./components-combobox";
 import { ExpandedRowEditor } from "./expanded-row-editor";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { BulkSelectionToolbar } from "./bulk-selection-toolbar";
-import { type ColumnDefinition, type ColumnId, ALL_COLUMNS } from "./lib/column-definitions";
+import { type ColumnId, ALL_COLUMNS } from "./lib/column-definitions";
 import { type GridDensity } from "./lib/editor-preferences";
 import { parsePastedSpreadsheet } from "./lib/paste-matrix";
 import { validateAllRows, type RowValidationResult } from "./lib/client-validation";
 import {
   generateUniqueClientRef,
-  ensureUniqueClientRefs,
   filterBlankPlaceholderItems,
 } from "@/lib/bulk/client-ref";
 

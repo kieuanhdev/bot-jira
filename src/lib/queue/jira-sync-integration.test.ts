@@ -14,8 +14,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   claimJiraSyncLease,
-  renewJiraSyncLease,
-  releaseJiraSyncLease,
   computeLeaseTtlSeconds,
   SyncAlreadyRunningError,
   SyncLeaseLostError,
@@ -23,8 +21,6 @@ import {
 import { syncProject } from "./workers/poll-jira";
 import {
   upsertJiraIssue,
-  upsertJiraCommentsWithNew,
-  isPrismaUniqueConstraintError,
 } from "@/lib/issues/cache";
 import { prisma } from "@/lib/prisma";
 import { jira } from "@/lib/jira/client";

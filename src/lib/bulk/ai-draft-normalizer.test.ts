@@ -6,7 +6,6 @@ import {
 } from "./ai-draft-normalizer";
 import {
   getDefaultWorkCriteriaPolicy,
-  type JiraWorkCriteriaPolicy,
 } from "./work-criteria-policy";
 import type { BulkCreateProjectMetadata } from "./create-types";
 

@@ -5,7 +5,7 @@ import {
   extractJiraKeys,
   isSystemOrReleaseBranch,
 } from "@/lib/bitbucket/branch-linker";
-import { guard, hasBitbucketConfig } from "../guard";
+import { guard } from "../guard";
 import type { WorkerLog } from "../guard";
 
 export async function runCheckBranches(): Promise<WorkerLog> {

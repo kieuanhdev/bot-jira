@@ -7,9 +7,7 @@ import {
   ArrowRight,
   Loader2,
   Check,
-  AlertCircle,
   FolderKanban,
-  Sparkles,
 } from "lucide-react";
 
 interface BulkCreateEditorTopbarProps {

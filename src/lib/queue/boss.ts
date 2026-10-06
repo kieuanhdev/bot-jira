@@ -266,6 +266,7 @@ export async function enqueueNotificationDelivery(startAfter?: Date): Promise<st
 /** Enqueue background refresh of board membership snapshot. Disabled in single project board mode. */
 export async function enqueueBoardMembershipRefresh(_data: RefreshBoardMembershipJobData): Promise<string | null> {
   // Producer-off: single project board mode does not use membership jobs
+  void _data;
   return null;
 }
 

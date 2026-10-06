@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { can } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
 import { jiraWith, canCreateProjectVersion, JiraRequestError } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
-import { syncReleasesFromJira } from "@/lib/releases/sync";
 import {
   evaluateTaskReadiness,
   evaluateReleaseReadiness,
@@ -61,7 +59,7 @@ export async function GET(req: Request) {
   const readinessFilter = url.searchParams.get("readiness")?.trim();
   const includeArchived = url.searchParams.get("includeArchived") === "true";
 
-  let releases = await prisma.release.findMany({
+  const releases = await prisma.release.findMany({
     where: projectKey && projectKey !== "all" ? { projectKey } : undefined,
     orderBy: { createdAt: "desc" },
     select: RELEASE_SELECT,

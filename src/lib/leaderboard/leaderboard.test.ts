@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getTier, getNextTier, LEADERBOARD_TIERS, computePeriodBounds } from "./types";
+import { getTier, getNextTier, computePeriodBounds } from "./types";
 
 describe("Leaderboard Tier System", () => {
   it("resolves correct tier based on story points", () => {

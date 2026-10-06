@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_BOARD_FILTERS,
-  DEFAULT_BULK_FILTERS,
   countActiveIssueFilters,
   effectiveAssignees,
   normalizeAssigneeScope,
   normalizeAssigneeToken,
-  normalizeIssueFilters,
   parseIssueFilters,
   serializeIssueFilters,
   type AssigneeScope,

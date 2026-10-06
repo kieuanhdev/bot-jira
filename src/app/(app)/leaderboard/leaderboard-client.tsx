@@ -26,7 +26,6 @@ import {
   Trophy,
   Crown,
   Medal,
-  Award,
   Sparkles,
   Zap,
   TrendingUp,
@@ -40,7 +39,6 @@ import {
   Inbox,
   Flame,
   Shield,
-  BookOpen,
 } from "lucide-react";
 import {
   type LeaderboardResponse,
@@ -1022,7 +1020,7 @@ export function LeaderboardClient() {
                           </span>
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-1 italic leading-relaxed">
-                          "{tier.realmDesc}"
+                          &ldquo;{tier.realmDesc}&rdquo;
                         </p>
                       </div>
 

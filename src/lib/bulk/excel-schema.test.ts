@@ -3,7 +3,6 @@ import {
   normalizeExcelHeader,
   extractIdFromDropdownValue,
   getActiveColumnsForProject,
-  EXCEL_SCHEMA_VERSION,
 } from "./excel-schema";
 import { type BulkCreateProjectMetadata } from "./create-types";
 

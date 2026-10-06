@@ -24,10 +24,8 @@ import {
   RotateCcw,
   Keyboard,
   Maximize2,
-  Minimize2,
   LayoutGrid,
   Loader2,
-  FolderKanban,
 } from "lucide-react";
 import { BulkCreateColumnPicker } from "./bulk-create-column-picker";
 import { BulkCreateShortcutsDialog } from "./bulk-create-shortcuts-dialog";

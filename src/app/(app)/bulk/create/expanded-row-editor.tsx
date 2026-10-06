@@ -28,7 +28,6 @@ import {
   ChevronUp,
   ExternalLink,
   RotateCcw,
-  Sparkles,
   FileText,
   Maximize2,
   Minimize2,

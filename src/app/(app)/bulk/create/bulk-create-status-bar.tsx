@@ -13,7 +13,6 @@ import {
   Plus,
   Maximize2,
   Minimize2,
-  Keyboard,
   Info,
 } from "lucide-react";
 import { MAX_BULK_CREATE_ITEMS } from "@/lib/bulk/create-types";

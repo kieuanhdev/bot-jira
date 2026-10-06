@@ -39,14 +39,11 @@ import {
   RotateCcw,
   FolderKanban,
   AlertCircle,
-  ArrowRight,
   ListPlus,
   Edit3,
   AlertTriangle,
   Maximize2,
   Sparkles,
-  Layers,
-  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

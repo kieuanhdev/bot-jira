@@ -58,7 +58,6 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -88,8 +87,6 @@ import {
   Minimize2,
   Maximize2,
 } from "lucide-react";
-import { FilterBar } from "@/components/shared/filter-bar";
-import { SearchField } from "@/components/shared/search-field";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { EmptyState } from "@/components/shared/empty-state";
 import { BoardSummaryCards } from "./board-summary-cards";
@@ -407,9 +404,6 @@ export function BoardClient() {
     effectivePreferred.length > 0 && Boolean(selectedProject);
 
   const activeFilterCount = countActiveIssueFilters(filters, DEFAULT_BOARD_FILTERS);
-  function resetFilters() {
-    setFilters(DEFAULT_BOARD_FILTERS);
-  }
 
   const [colVisibleState, setColVisibleState] = useState<{ sig: string; counts: Record<string, number> }>({
     sig: "",

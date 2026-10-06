@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Sliders, ChevronDown, ChevronRight, Info } from "lucide-react";
+import { Sliders, ChevronDown, ChevronRight } from "lucide-react";
 import type { BulkCreateProjectMetadata, BulkCreateFieldDefaults } from "@/lib/bulk/create-types";
 
 interface DynamicCustomFieldsProps {

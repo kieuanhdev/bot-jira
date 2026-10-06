@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { validateBulkRequest, previewBulk, extractEpicKey, computePreview, resolveFilterKeys } from "./ops";
+import { validateBulkRequest, previewBulk, extractEpicKey, resolveFilterKeys } from "./ops";
 import { prisma } from "@/lib/prisma";
 import * as depModule from "@/lib/issues/dependencies";
 

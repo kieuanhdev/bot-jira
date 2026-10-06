@@ -4,7 +4,6 @@ import {
   checkDescriptionTemplate,
   calculateRuleQualityScore,
   DEFAULT_POINT_SCALE,
-  DEFAULT_CYCLE_TIME_UPPER_DAYS,
   DEFAULT_TECH_DEBT_LABEL,
 } from "./work-criteria-policy";
 

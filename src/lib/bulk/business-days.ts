@@ -96,7 +96,7 @@ export function isBusinessDay(date: Date | string, calendar?: ProjectCalendar): 
  * Finds the nearest next business day. If date is already a business day, returns it.
  */
 export function ensureBusinessDay(date: Date | string, calendar?: ProjectCalendar): Date {
-  let curr = typeof date === "string" ? parseIsoDate(date) : new Date(date.getTime());
+  const curr = typeof date === "string" ? parseIsoDate(date) : new Date(date.getTime());
   while (!isBusinessDay(curr, calendar)) {
     curr.setUTCDate(curr.getUTCDate() + 1);
   }
@@ -141,7 +141,7 @@ export function addBusinessDays(
     targetDays = Math.round(businessDays);
   }
 
-  let curr = ensureBusinessDay(startDateStr, calendar);
+  const curr = ensureBusinessDay(startDateStr, calendar);
 
   // targetDays = 1 means task finishes on the initial business day itself.
   // targetDays = 2 means task takes 2 business days (initial day + 1 more business day).

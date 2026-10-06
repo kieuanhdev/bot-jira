@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { bulkKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
-import { Search, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 type ParentSearchResult = {
   key: string;

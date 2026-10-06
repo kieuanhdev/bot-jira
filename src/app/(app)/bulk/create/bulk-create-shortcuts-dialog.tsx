@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Keyboard, CornerDownLeft, Copy, Plus, Table, Expand, X } from "lucide-react";
+import { Keyboard, Copy, Plus, Table, Expand, X } from "lucide-react";
 
 interface BulkCreateShortcutsDialogProps {
   open: boolean;

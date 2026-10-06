@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   extractRepoSlugFromUrl,
   parsePrId,
-  fetchJiraDevStatusDetail,
   syncJiraDevStatusForIssue,
 } from "./dev-status";
 import { prisma } from "@/lib/prisma";

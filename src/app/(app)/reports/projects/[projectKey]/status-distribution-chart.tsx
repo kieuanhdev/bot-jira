@@ -16,7 +16,6 @@ import {
   Table as TableIcon,
   Workflow,
   RotateCcw,
-  Check,
   Calendar,
 } from "lucide-react";
 import {
@@ -100,11 +99,9 @@ export function StatusDistributionChart({
 
   // User display preferences
   const [preferences, setPreferences] = useState<ChartPreferences>(DEFAULT_PREFERENCES);
-  const [isClientLoaded, setIsClientLoaded] = useState(false);
 
   // Load preferences from localStorage on client mount
   useEffect(() => {
-    setIsClientLoaded(true);
     try {
       const stored = localStorage.getItem(STORAGE_PREFS_KEY);
       if (stored) {
