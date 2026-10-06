@@ -5,6 +5,7 @@ import { jiraWith, JiraRequestError } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 import { validateBoardForProject } from "@/lib/jira/board-membership";
 import type { UserBoardPreferenceResponse } from "@/lib/jira/types";
+import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -52,10 +53,7 @@ export async function PUT(req: Request) {
 
   const auth = userJiraAuth(user);
   if (!auth) {
-    return NextResponse.json(
-      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-      { status: 428 }
-    );
+    return jiraCredentialsRequired();
   }
 
   let body: unknown;

@@ -5,6 +5,7 @@ import { jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 import { getIssueView } from "@/lib/issues/live";
 import { refreshJiraIssueCache } from "@/lib/issues/cache";
+import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ key: string }> }) {
   const session = await getSession();
@@ -17,10 +18,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ key: string }>
   });
   const auth = userJiraAuth(user);
   if (!auth) {
-    return NextResponse.json(
-      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-      { status: 428 }
-    );
+    return jiraCredentialsRequired();
   }
   const view = await getIssueView(key, auth);
   if (!view) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -55,10 +53,7 @@ export async function PATCH(
   });
   const auth = userJiraAuth(user);
   if (!auth) {
-    return NextResponse.json(
-      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-      { status: 428 }
-    );
+    return jiraCredentialsRequired();
   }
   const client = jiraWith(auth);
 

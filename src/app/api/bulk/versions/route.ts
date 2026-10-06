@@ -7,6 +7,7 @@ import {
 } from "@/lib/jira/project-catalog";
 import { jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
+import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 export type BulkVersionOption = {
   name: string;
@@ -47,10 +48,7 @@ export async function GET(req: Request) {
 
   const auth = userJiraAuth(user);
   if (!auth) {
-    return NextResponse.json(
-      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-      { status: 428 }
-    );
+    return jiraCredentialsRequired();
   }
 
   const client = jiraWith(auth);

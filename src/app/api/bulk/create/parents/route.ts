@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { userJiraAuth } from "@/lib/user-creds";
 import { jiraWith, JiraRequestError } from "@/lib/jira/client";
 import { recordSearchMetrics } from "@/lib/bulk/create-metrics";
+import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 const PARENT_SEARCH_CACHE_TTL_MS = 30_000;
 const parentSearchCache = new Map<
@@ -34,10 +35,7 @@ export async function GET(req: Request) {
 
   const auth = userJiraAuth(user);
   if (!auth || !auth.token) {
-    return NextResponse.json(
-      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-      { status: 428 }
-    );
+    return jiraCredentialsRequired();
   }
 
   const cacheKey = `${auth.token.slice(0, 8)}:${project}:${query.toLowerCase()}:${limit}`;

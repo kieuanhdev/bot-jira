@@ -7,6 +7,7 @@ import { notifyAll } from "@/lib/notify";
 import { jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 import { getReleaseReadiness } from "@/lib/releases/release-readiness";
+import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 /**
  * Actually release a Jira Fix Version based on Jira Done and Git merge.
@@ -59,10 +60,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   });
   const auth = userJiraAuth(user);
   if (!auth) {
-    return NextResponse.json(
-      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-      { status: 428 }
-    );
+    return jiraCredentialsRequired();
   }
 
   const client = jiraWith(auth);

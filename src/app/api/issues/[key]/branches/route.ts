@@ -6,6 +6,7 @@ import { getSystemJiraAuth, jiraWith } from "@/lib/jira/client";
 import { syncJiraDevStatusForIssue } from "@/lib/jira/dev-status";
 import { createBranchForIssue, type BranchParams } from "@/lib/bulk/ops";
 import { env } from "@/lib/env";
+import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 /**
  * Branches linked to this issue via confirmed `BranchInfo.jiraKey`,
@@ -98,10 +99,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ key: string }>
 
   const auth = userJiraAuth(user);
   if (!auth) {
-    return NextResponse.json(
-      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-      { status: 428 }
-    );
+    return jiraCredentialsRequired();
   }
 
   const bbCreds = userBitbucketCreds(user);

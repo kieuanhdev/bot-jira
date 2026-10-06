@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { userJiraAuth } from "@/lib/user-creds";
 import { enqueueBoardMembershipRefresh } from "@/lib/queue/boss";
+import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -26,10 +27,7 @@ export async function POST(req: Request) {
 
   const auth = userJiraAuth(user);
   if (!auth) {
-    return NextResponse.json(
-      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-      { status: 428 }
-    );
+    return jiraCredentialsRequired();
   }
 
   let body: unknown;

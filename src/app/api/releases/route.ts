@@ -11,6 +11,7 @@ import {
 } from "@/lib/releases/release-readiness";
 import { computeReleaseSummary } from "@/lib/releases/release-summary";
 import { env } from "@/lib/env";
+import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 const RELEASE_SELECT = {
   id: true,
@@ -293,10 +294,7 @@ export async function POST(req: Request) {
     });
     const auth = userJiraAuth(user);
     if (!auth) {
-      return NextResponse.json(
-        { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-        { status: 428 }
-      );
+      return jiraCredentialsRequired();
     }
     const client = jiraWith(auth);
 

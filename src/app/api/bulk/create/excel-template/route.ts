@@ -5,6 +5,7 @@ import { userJiraAuth } from "@/lib/user-creds";
 import { jiraWith, JiraRequestError } from "@/lib/jira/client";
 import { fetchBulkCreateMetadata } from "@/lib/bulk/create-ops";
 import { generateBulkCreateExcelTemplate } from "@/lib/bulk/excel-template";
+import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -31,13 +32,7 @@ export async function GET(req: Request) {
 
   const auth = userJiraAuth(user);
   if (!auth || !auth.token) {
-    return NextResponse.json(
-      {
-        error: "Bạn cần cấu hình token Jira cá nhân trong Settings.",
-        code: "jira_credentials_required",
-      },
-      { status: 428 }
-    );
+    return jiraCredentialsRequired();
   }
 
   const jira = jiraWith(auth);

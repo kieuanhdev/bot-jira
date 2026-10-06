@@ -5,6 +5,7 @@ import { jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 import { notifyWatchersOfComment } from "@/lib/issues/notify-watchers";
 import { upsertJiraComments } from "@/lib/issues/cache";
+import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 export async function POST(
   req: Request,
@@ -26,10 +27,7 @@ export async function POST(
   });
   const auth = userJiraAuth(user);
   if (!auth) {
-    return NextResponse.json(
-      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-      { status: 428 }
-    );
+    return jiraCredentialsRequired();
   }
   const client = jiraWith(auth);
 

@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import { enqueueBulkOperation } from "@/lib/queue/boss";
 import { probeJiraAuth } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
+import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 /**
  * BC-SMART-108 — Retry an entire branch rooted at a failed item.
@@ -36,10 +37,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   });
   const jiraAuth = userJiraAuth(user);
   if (!jiraAuth) {
-    return NextResponse.json(
-      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-      { status: 428 }
-    );
+    return jiraCredentialsRequired();
   }
   if (!(await probeJiraAuth(jiraAuth))) {
     return NextResponse.json(

@@ -11,6 +11,7 @@ import {
 } from "@/lib/bulk/ops";
 import { enqueueBulkOperation } from "@/lib/queue/boss";
 import { probeJiraAuth } from "@/lib/jira/client";
+import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 /**
  * M4-02 — Preview + confirm a bulk operation.
@@ -61,10 +62,7 @@ export async function POST(req: Request) {
     });
     const jiraAuth = userJiraAuth(user);
     if (!jiraAuth) {
-      return NextResponse.json(
-        { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-        { status: 428 }
-      );
+      return jiraCredentialsRequired();
     }
     // Fail fast if the actor's Jira credential expired before the worker runs.
     if (!(await probeJiraAuth(jiraAuth))) {
@@ -107,10 +105,7 @@ export async function POST(req: Request) {
   });
   const auth = userJiraAuth(user);
   if (!auth) {
-    return NextResponse.json(
-      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-      { status: 428 }
-    );
+    return jiraCredentialsRequired();
   }
   const jiraUsername = userJiraUsername(user);
 

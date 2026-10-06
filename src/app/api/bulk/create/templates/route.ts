@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { userJiraAuth } from "@/lib/user-creds";
 import { jiraWith, JiraRequestError, jiraIssueFields } from "@/lib/jira/client";
+import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 /**
  * BC-SMART-303 — Read a Jira issue or search issues to use as Bulk Create templates.
@@ -159,10 +160,7 @@ export async function GET(req: Request) {
 
   const auth = userJiraAuth(user);
   if (!auth || !auth.token) {
-    return NextResponse.json(
-      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-      { status: 428 }
-    );
+    return jiraCredentialsRequired();
   }
 
   const jira = jiraWith(auth);

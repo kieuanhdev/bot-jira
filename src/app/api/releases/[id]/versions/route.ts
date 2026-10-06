@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import { jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 import type { JiraVersion } from "@/lib/jira/types";
+import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 /**
  * List the Jira Fix Versions for the release's project so the UI can show
@@ -54,10 +55,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     auth = await getSystemJiraAuth();
   }
   if (!auth) {
-    return NextResponse.json(
-      { error: "Bạn cần cấu hình token Jira cá nhân trong Settings.", code: "jira_credentials_required" },
-      { status: 428 }
-    );
+    return jiraCredentialsRequired();
   }
   const client = jiraWith(auth);
 
