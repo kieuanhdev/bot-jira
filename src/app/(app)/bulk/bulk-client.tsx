@@ -7,14 +7,10 @@ import { useSession } from "next-auth/react";
 import { api } from "@/lib/api-client";
 import { useIssues, fetchIssuesPage, type IssueItem } from "@/hooks/use-issues";
 import { issuesKeys, boardKeys, bulkKeys, meKeys, staleKeys } from "@/lib/query-keys";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/shared/page-header";
-import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { type IssueFilters, DEFAULT_BULK_FILTERS } from "@/lib/issues/issue-filters";
-import { Loader2, Eye, ListChecks } from "lucide-react";
+import { ListChecks } from "lucide-react";
 import { parseJiraDuration } from "@/lib/worklogs/schema";
 import {
   type BulkAction,
@@ -26,25 +22,12 @@ import {
 } from "./lib/bulk-types";
 import { previewBucket } from "./lib/bulk-utils";
 import { BulkConfirmDialog } from "./bulk-confirm-dialog";
-import {
-  BulkConfigureEmptyState,
-  BulkFieldInputs,
-  BulkFieldPicker,
-  BulkOperationModeSwitch,
-  BulkTransitionForm,
-  BulkWorklogForm,
-} from "./bulk-configure-step";
 import { BulkHistoryCard } from "./bulk-history-card";
 import { BulkProgressSteps, BulkTopNav, StandardizationBanner } from "./bulk-header-parts";
 import { BulkPreviewCard } from "./bulk-preview-step";
-import {
-  BulkNoProjectState,
-  BulkProjectSelector,
-  BulkTaskFilters,
-  BulkTaskList,
-  BulkTaskListFooter,
-  BulkTaskListToolbar,
-} from "./bulk-select-step";
+import { BulkSelectCard } from "./bulk-select-card";
+import { BulkConfigureCard } from "./bulk-configure-card";
+import { useBulkFieldState } from "./lib/use-bulk-field-state";
 import {
   buildBulkAction,
   buildPreviewRequestBody,
@@ -190,13 +173,12 @@ export function BulkClient() {
     const preferred = prefs?.projects ?? [];
     const available = prefs?.available ?? [];
     const projectKeys = projectOptions.map((p) => p.key);
-    // Pick the first preferred project that actually exists in the project list
     const pick =
       preferred.find((k) => projectKeys.includes(k)) ??
       available.find((k) => projectKeys.includes(k)) ??
       projectKeys[0] ??
       "";
-     
+
     if (pick) {
       setFilterProject(pick);
       setExtraIssues([]);
@@ -257,22 +239,8 @@ export function BulkClient() {
     }
   }
 
-  // Field values
-  const [assignee, setAssignee] = useState("");
-  const [clearAssignee, setClearAssignee] = useState(false);
-  const [label, setLabel] = useState("");
-  const [clearLabels, setClearLabels] = useState(false);
-  const [priority, setPriority] = useState("");
-  const [issueType, setIssueType] = useState("");
-  const [points, setPoints] = useState("");
-  const [clearPoints, setClearPoints] = useState(false);
-  const [estimate, setEstimate] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [clearDueDate, setClearDueDate] = useState(false);
-  const [fixVersions, setFixVersions] = useState<string[]>([]);
-  const [clearFixVersions, setClearFixVersions] = useState(false);
-  const [epic, setEpic] = useState("");
-  const [clearEpic, setClearEpic] = useState(false);
+  // Form field state
+  const fieldState = useBulkFieldState();
 
   // Sorting option for tasks
   const [sortOption, setSortOption] = useState<
@@ -372,10 +340,10 @@ export function BulkClient() {
         });
 
         if (unavailableIds.has("estimate")) {
-          setEstimate("");
+          fieldState.setters.setEstimate("");
         }
         if (unavailableIds.has("points")) {
-          setPoints("");
+          fieldState.setters.setPoints("");
         }
       }
     }
@@ -400,6 +368,11 @@ export function BulkClient() {
 
   const [filterOnlySelected, setFilterOnlySelected] = useState(false);
 
+  function resetPreview() {
+    setPreview(null);
+    setPreviewBasis(null);
+  }
+
   // Reset when changing project
   function handleProjectChange(newProject: string) {
     setFilterProject(newProject);
@@ -411,21 +384,7 @@ export function BulkClient() {
     setTargetStatus("");
     resetPreview();
     setEnabledFields(new Set());
-    setAssignee("");
-    setClearAssignee(false);
-    setLabel("");
-    setClearLabels(false);
-    setPriority("");
-    setIssueType("");
-    setPoints("");
-    setClearPoints(false);
-    setEstimate("");
-    setDueDate("");
-    setClearDueDate(false);
-    setFixVersions([]);
-    setClearFixVersions(false);
-    setEpic("");
-    setClearEpic(false);
+    fieldState.resetFields();
   }
 
   // Fetch workflow statuses for the selected project
@@ -480,7 +439,6 @@ export function BulkClient() {
   );
 
   const allSelected = filteredIssues.length > 0 && filteredIssues.every((i) => selected.has(i.jiraKey));
-
   const effectiveCount = selectionMode === "filter" ? filteredIssues.length : selected.size;
 
   function toggle(key: string) {
@@ -501,7 +459,7 @@ export function BulkClient() {
     });
   }
 
-  const isEstimateValid = isValidEstimate(estimate);
+  const isEstimateValid = isValidEstimate(fieldState.values.estimate);
   const isWorklogDurationValid = Boolean(worklogDuration.trim() && parseJiraDuration(worklogDuration.trim()));
 
   const buildAction = useCallback(
@@ -515,50 +473,36 @@ export function BulkClient() {
         worklogStarted,
         worklogComment,
         enabledFields,
-        clearAssignee,
-        assignee,
-        clearLabels,
-        label,
-        priority,
-        issueType,
-        clearPoints,
-        points,
+        clearAssignee: fieldState.values.clearAssignee,
+        assignee: fieldState.values.assignee,
+        clearLabels: fieldState.values.clearLabels,
+        label: fieldState.values.label,
+        priority: fieldState.values.priority,
+        issueType: fieldState.values.issueType,
+        clearPoints: fieldState.values.clearPoints,
+        points: fieldState.values.points,
         availableFieldMap,
-        estimate,
+        estimate: fieldState.values.estimate,
         isEstimateValid,
-        clearDueDate,
-        dueDate,
-        clearFixVersions,
-        fixVersions,
-        clearEpic,
-        epic,
+        clearDueDate: fieldState.values.clearDueDate,
+        dueDate: fieldState.values.dueDate,
+        clearFixVersions: fieldState.values.clearFixVersions,
+        fixVersions: fieldState.values.fixVersions,
+        clearEpic: fieldState.values.clearEpic,
+        epic: fieldState.values.epic,
       }),
     [
-    filterProject,
-    operationKind,
-    targetStatus,
-    worklogDuration,
-    isWorklogDurationValid,
-    worklogStarted,
-    worklogComment,
-    enabledFields,
-    clearAssignee,
-    assignee,
-    clearLabels,
-    label,
-    priority,
-    issueType,
-    clearPoints,
-    points,
-    availableFieldMap,
-    estimate,
-    isEstimateValid,
-    clearDueDate,
-    dueDate,
-    clearFixVersions,
-    fixVersions,
-    clearEpic,
-    epic,
+      filterProject,
+      operationKind,
+      targetStatus,
+      worklogDuration,
+      isWorklogDurationValid,
+      worklogStarted,
+      worklogComment,
+      enabledFields,
+      fieldState.values,
+      availableFieldMap,
+      isEstimateValid,
     ]
   );
 
@@ -571,11 +515,6 @@ export function BulkClient() {
       return next;
     });
     resetPreview();
-  }
-
-  function resetPreview() {
-    setPreview(null);
-    setPreviewBasis(null);
   }
 
   function handleOperationKindChange(kind: OperationKind) {
@@ -671,12 +610,10 @@ export function BulkClient() {
   }
 
   const previewCounts = countPreviewBuckets(preview);
-
   const visiblePreviewItems = preview?.items.filter((item) => previewBucket(item) === previewView) ?? [];
   const isLogWorkOp = buildAction()?.kind === "log-work" || preview?.type === "log-work";
   const isTransitionOp = buildAction()?.kind === "transition" || preview?.type === "transition";
   const confirmLabel = getConfirmLabel({ preview, isLogWorkOp, isTransitionOp, targetStatus });
-
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
@@ -717,221 +654,76 @@ export function BulkClient() {
       )}
 
       {/* Step 1 — Project Scope & Task Selection */}
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b p-4 sm:p-5">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">1</span>
-            Chọn phạm vi dự án & danh sách task
-          </CardTitle>
-          <CardDescription>
-            Bắt buộc chọn một dự án trước. Thao tác hàng loạt chỉ thực hiện trên các task thuộc cùng một dự án.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          {/* Project selector banner */}
-          <BulkProjectSelector
-            filterProject={filterProject}
-            projectOptions={projectOptions}
-            issueCount={projectIssues.length}
-            onProjectChange={handleProjectChange}
-          />
-
-          {!filterProject ? (
-            <BulkNoProjectState />
-          ) : (
-            <>
-              {/* Task filters */}
-              <BulkTaskFilters
-                filterProject={filterProject}
-                selectionMode={selectionMode}
-                taskFilters={taskFilters}
-                availableAssignees={availableAssignees}
-                statusOptions={statusOptions}
-                epicOptions={epicOptions}
-                labelOptions={labelOptions}
-                priorityOptions={priorityOptions}
-                myName={session?.user?.jiraUsername}
-                filteredCount={filteredIssues.length}
-                onSelectionModeChange={setSelectionMode}
-                onTaskFiltersChange={setTaskFilters}
-              />
-
-              <BulkTaskListToolbar
-                selectionMode={selectionMode}
-                allSelected={allSelected}
-                selectedCount={selected.size}
-                filteredCount={filteredIssues.length}
-                filterOnlySelected={filterOnlySelected}
-                sortOption={sortOption}
-                onToggleAll={toggleAll}
-                onFilterOnlySelectedChange={setFilterOnlySelected}
-                onSortOptionChange={setSortOption}
-              />
-
-              {/* Task table / list */}
-              <BulkTaskList
-                isIssuesLoading={isIssuesLoading}
-                filteredIssues={filteredIssues}
-                selectionMode={selectionMode}
-                selected={selected}
-                initialKeysSet={initialKeysSet}
-                jiraBaseUrl={jiraBaseUrl}
-                onToggle={toggle}
-              />
-              <BulkTaskListFooter
-                filterProject={filterProject}
-                filteredCount={filteredIssues.length}
-                loadedCount={issues.length}
-                totalServerIssues={totalServerIssues}
-                isLoadingMore={isLoadingMore}
-                effectiveCount={effectiveCount}
-                onLoadMore={handleLoadMore}
-              />
-            </>
-          )}
-        </CardContent>
-      </Card>
+      <BulkSelectCard
+        filterProject={filterProject}
+        projectOptions={projectOptions}
+        projectIssuesCount={projectIssues.length}
+        onProjectChange={handleProjectChange}
+        selectionMode={selectionMode}
+        taskFilters={taskFilters}
+        availableAssignees={availableAssignees}
+        statusOptions={statusOptions}
+        epicOptions={epicOptions}
+        labelOptions={labelOptions}
+        priorityOptions={priorityOptions}
+        myName={session?.user?.jiraUsername}
+        filteredIssues={filteredIssues}
+        onSelectionModeChange={setSelectionMode}
+        onTaskFiltersChange={setTaskFilters}
+        allSelected={allSelected}
+        selected={selected}
+        filterOnlySelected={filterOnlySelected}
+        sortOption={sortOption}
+        onToggleAll={toggleAll}
+        onFilterOnlySelectedChange={setFilterOnlySelected}
+        onSortOptionChange={setSortOption}
+        isIssuesLoading={isIssuesLoading}
+        initialKeysSet={initialKeysSet}
+        jiraBaseUrl={jiraBaseUrl}
+        onToggle={toggle}
+        loadedCount={issues.length}
+        totalServerIssues={totalServerIssues}
+        isLoadingMore={isLoadingMore}
+        effectiveCount={effectiveCount}
+        onLoadMore={handleLoadMore}
+      />
 
       {/* Step 2 — Field selection & input */}
-      <Card>
-        <CardHeader className="p-4 sm:p-5">
-          <CardTitle className="text-base flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">2</span>
-              {operationKind === "log-work"
-                ? "Thiết lập Ghi Worklog"
-                : operationKind === "transition"
-                  ? "Chuyển trạng thái hàng loạt"
-                  : "Chọn các trường cần sửa"}
-            </span>
-            {filterProject && (
-              <Badge variant="outline" className="font-normal text-xs">
-                Dự án: <span className="font-semibold ml-1">{filterProject}</span>
-              </Badge>
-            )}
-          </CardTitle>
-          <CardDescription>
-            {filterProject
-              ? operationKind === "log-work"
-                ? `Nhập thời lượng thực hiện để ghi nhận cộng dồn lên ${effectiveCount} task đã chọn.`
-                : operationKind === "transition"
-                  ? `Chọn trạng thái đích để chuyển đổi đồng loạt cho ${effectiveCount} task đã chọn trong dự án ${filterProject}.`
-                  : `Bật một hoặc nhiều trường có sẵn của dự án ${filterProject}, nhập giá trị mới rồi xem trước trên ${effectiveCount} task đã chọn.`
-              : "Vui lòng chọn dự án ở Bước 1 trước khi cấu hình thao tác."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4 px-4 pb-4 sm:px-5 sm:pb-5">
-          {filterProject && (
-            <BulkOperationModeSwitch operationKind={operationKind} onChange={handleOperationKindChange} />
-          )}
-
-          {!filterProject ? (
-            <BulkConfigureEmptyState />
-          ) : operationKind === "log-work" ? (
-            <BulkWorklogForm
-              effectiveCount={effectiveCount}
-              worklogDuration={worklogDuration}
-              setWorklogDuration={setWorklogDuration}
-              isWorklogDurationValid={isWorklogDurationValid}
-              worklogStarted={worklogStarted}
-              setWorklogStarted={setWorklogStarted}
-              worklogComment={worklogComment}
-              setWorklogComment={setWorklogComment}
-              resetPreview={resetPreview}
-            />
-          ) : operationKind === "transition" ? (
-            <BulkTransitionForm
-              effectiveCount={effectiveCount}
-              filterProject={filterProject}
-              allProjectStatuses={allProjectStatuses}
-              targetStatus={targetStatus}
-              setTargetStatus={setTargetStatus}
-              resetPreview={resetPreview}
-            />
-          ) : fieldsLoading ? (
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {[0, 1, 2, 3, 4, 5, 6].map((idx) => (
-                <Skeleton key={idx} className="h-11 w-full rounded-lg" />
-              ))}
-            </div>
-          ) : (
-            <BulkFieldPicker
-              availableFieldMap={availableFieldMap}
-              enabledFields={enabledFields}
-              onToggleField={toggleField}
-            />
-          )}
-
-          {filterProject && enabledFields.size > 0 && (
-            <BulkFieldInputs
-              filterProject={filterProject}
-              enabledFields={enabledFields}
-              values={{
-                assignee,
-                clearAssignee,
-                label,
-                clearLabels,
-                priority,
-                issueType,
-                points,
-                clearPoints,
-                estimate,
-                dueDate,
-                clearDueDate,
-                fixVersions,
-                clearFixVersions,
-                epic,
-                clearEpic,
-              }}
-              setters={{
-                setAssignee,
-                setClearAssignee,
-                setLabel,
-                setClearLabels,
-                setPriority,
-                setIssueType,
-                setPoints,
-                setClearPoints,
-                setEstimate,
-                setDueDate,
-                setClearDueDate,
-                setFixVersions,
-                setClearFixVersions,
-                setEpic,
-                setClearEpic,
-              }}
-              resetPreview={resetPreview}
-              availableAssignees={availableAssignees}
-              labelOptions={labelOptions}
-              priorityOptions={priorityOptions}
-              versionOptions={versionOptions}
-              versionsLoading={versionsLoading}
-              availableFieldMap={availableFieldMap}
-              isEstimateValid={isEstimateValid}
-            />
-          )}
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center pt-2">
-            <Button
-              onClick={doPreview}
-              disabled={
-                previewing ||
-                (selectionMode === "pick" && selected.size === 0) ||
-                !filterProject ||
-                !buildAction()
-              }
-            >
-              {previewing ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-              {selectionMode === "filter"
-                ? "Xem trước thay đổi bộ lọc"
-                : `Xem trước ${selected.size > 0 ? `${selected.size} ` : ""}thay đổi`}
-            </Button>
-            {previewError && (
-              <FeedbackBanner tone="destructive">{previewError}</FeedbackBanner>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <BulkConfigureCard
+        filterProject={filterProject}
+        operationKind={operationKind}
+        effectiveCount={effectiveCount}
+        onOperationKindChange={handleOperationKindChange}
+        worklogDuration={worklogDuration}
+        setWorklogDuration={setWorklogDuration}
+        isWorklogDurationValid={isWorklogDurationValid}
+        worklogStarted={worklogStarted}
+        setWorklogStarted={setWorklogStarted}
+        worklogComment={worklogComment}
+        setWorklogComment={setWorklogComment}
+        allProjectStatuses={allProjectStatuses}
+        targetStatus={targetStatus}
+        setTargetStatus={setTargetStatus}
+        fieldsLoading={fieldsLoading}
+        availableFieldMap={availableFieldMap}
+        enabledFields={enabledFields}
+        onToggleField={toggleField}
+        values={fieldState.values}
+        setters={fieldState.setters}
+        availableAssignees={availableAssignees}
+        labelOptions={labelOptions}
+        priorityOptions={priorityOptions}
+        versionOptions={versionOptions}
+        versionsLoading={versionsLoading}
+        isEstimateValid={isEstimateValid}
+        resetPreview={resetPreview}
+        onPreview={doPreview}
+        previewing={previewing}
+        selectionMode={selectionMode}
+        selectedCount={selected.size}
+        isActionReady={Boolean(buildAction())}
+        previewError={previewError}
+      />
 
       {/* Step 3 — Preview + Confirm */}
       {preview && (
