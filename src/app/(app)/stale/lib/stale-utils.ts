@@ -1,5 +1,18 @@
-import { REQUIREMENT_BULK_FIELDS } from "@/lib/issues/standardization";
-import type { Task, SortMode, FocusMode, StandardizationTask } from "./stale-types";
+import { REQUIREMENT_BULK_FIELDS, type RequirementCode } from "@/lib/issues/standardization";
+import { ALL, type Task, type SortMode, type FocusMode, type StandardizationTask } from "./stale-types";
+
+export type StdMissingFilter = "ALL" | RequirementCode;
+export type StdStaleFilter = "ALL" | "stale" | "healthy";
+export type StdSortMode = "missing-desc" | "stateAge-desc" | "updated-desc" | "key-asc";
+
+export interface StdFilters {
+  missing: StdMissingFilter;
+  project: string;
+  status: string;
+  stale: StdStaleFilter;
+  search: string;
+  sort: StdSortMode;
+}
 
 export function priorityScore(task: Task) {
   const severity = task.severity === "high" ? 3 : task.severity === "warning" ? 2 : 1;
@@ -103,4 +116,53 @@ export function buildMissingBulkFields(keys: Set<string>, tasks: Standardization
     return "estimate,fixVersions,dueDate";
   }
   return "points,fixVersions,dueDate";
+}
+
+/** Tasks matching the focus lens and the free-text query (case-insensitive, vi locale). */
+export function filterFocusedTasks(tasks: Task[], focus: FocusMode, query: string) {
+  const normalizedQuery = query.trim().toLocaleLowerCase("vi");
+  return tasks.filter(
+    (task) =>
+      matchesFocus(task, focus) &&
+      (!normalizedQuery ||
+        [task.jiraKey, task.summary, task.status, task.assigneeJira ?? "", task.staleReasonLabel, task.projectKey].some(
+          (value) => value.toLocaleLowerCase("vi").includes(normalizedQuery)
+        ))
+  );
+}
+
+export function computeFocusCounts(tasks: Task[] | undefined) {
+  return {
+    high: tasks?.filter((task) => matchesFocus(task, "high")).length ?? 0,
+    blocked: tasks?.filter((task) => matchesFocus(task, "blocked")).length ?? 0,
+    overdue: tasks?.filter((task) => matchesFocus(task, "overdue")).length ?? 0,
+    unassigned: tasks?.filter((task) => matchesFocus(task, "unassigned")).length ?? 0,
+  };
+}
+
+/** Standardization queue: apply filters, then sort. */
+export function filterStdTasks(tasks: StandardizationTask[], filters: StdFilters) {
+  const q = filters.search.trim().toLowerCase();
+  return tasks
+    .filter((t) => {
+      if (filters.missing !== "ALL" && !t.missing.includes(filters.missing)) return false;
+      if (filters.project !== ALL && t.projectKey !== filters.project) return false;
+      if (filters.status !== ALL && t.status !== filters.status) return false;
+      if (filters.stale === "stale" && !t.isStale) return false;
+      if (filters.stale === "healthy" && t.isStale) return false;
+      if (q && ![t.jiraKey, t.summary, t.status, t.projectKey].some((s) => s.toLowerCase().includes(q))) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (filters.sort === "missing-desc") {
+        if (b.missing.length !== a.missing.length) return b.missing.length - a.missing.length;
+        if (b.stateAgeDays !== a.stateAgeDays) return b.stateAgeDays - a.stateAgeDays;
+        return a.jiraKey.localeCompare(b.jiraKey);
+      }
+      if (filters.sort === "stateAge-desc") return b.stateAgeDays - a.stateAgeDays;
+      if (filters.sort === "updated-desc") {
+        return new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime();
+      }
+      return a.jiraKey.localeCompare(b.jiraKey);
+    });
 }
