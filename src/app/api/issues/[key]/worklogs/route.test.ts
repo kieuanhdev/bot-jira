@@ -38,7 +38,7 @@ vi.mock("@/lib/audit", () => ({
   audit: mocks.audit,
 }));
 vi.mock("@/lib/user-creds", () => ({
-  userJiraAuth: vi.fn((user: any) =>
+  userJiraAuth: vi.fn((user: { jiraTokenEnc?: string | null } | null | undefined) =>
     user?.jiraTokenEnc ? { user: "alice", token: "tok", authMode: "Bearer" } : null
   ),
 }));
@@ -48,7 +48,7 @@ import { JiraRequestError } from "@/lib/jira/client";
 
 describe("POST /api/issues/[key]/worklogs", () => {
   const params = Promise.resolve({ key: "EPM-123" });
-  const validBody = {
+  const validBody: import("@/lib/worklogs/schema").CreateWorklogInput = {
     timeSpent: "2h 30m",
     startedAt: new Date(Date.now() - 3600000).toISOString(),
     comment: "Fixed issue with standardization",
@@ -127,7 +127,7 @@ describe("POST /api/issues/[key]/worklogs", () => {
 
   it("returns 200 duplicate replay when same idempotency key and payload already succeeded", async () => {
     const { computeWorklogRequestHash } = await import("@/lib/worklogs/schema");
-    const hash = computeWorklogRequestHash(validBody as any);
+    const hash = computeWorklogRequestHash(validBody);
     mocks.worklogIdempotencyFindUnique.mockResolvedValue({
       key: validBody.idempotencyKey,
       requestHash: hash,

@@ -99,7 +99,7 @@ describe("Dynamic Project Cross-Feature Integration (DYN not in env)", () => {
     const res = await getProjects();
     expect(res.status).toBe(200);
     const json = await res.json();
-    const dyn = json.items.find((p: any) => p.key === "DYN");
+    const dyn = json.items.find((p: { key: string }) => p.key === "DYN");
     expect(dyn).toBeDefined();
     expect(dyn.key).toBe("DYN");
   });

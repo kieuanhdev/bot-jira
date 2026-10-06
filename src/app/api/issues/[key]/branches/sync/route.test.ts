@@ -13,7 +13,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 vi.mock("@/lib/user-creds", () => ({
-  userJiraAuth: vi.fn((user: any) =>
+  userJiraAuth: vi.fn((user: { jiraTokenEnc?: string | null } | null | undefined) =>
     user?.jiraTokenEnc ? { user: "alice", token: "tok", authMode: "Bearer" } : null
   ),
 }));

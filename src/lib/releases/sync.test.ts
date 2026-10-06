@@ -70,8 +70,8 @@ describe("syncReleasesFromJira", () => {
       getVersions: mocks.getVersions,
     });
     mocks.findFirstRelease.mockResolvedValue(null);
-    mocks.createRelease.mockImplementation(async ({ data }: any) => ({ id: `rel-${data.version}`, ...data }));
-    mocks.updateRelease.mockImplementation(async ({ data }: any) => ({ id: "rel-upd", ...data }));
+    mocks.createRelease.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: `rel-${data.version}`, ...data }));
+    mocks.updateRelease.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: "rel-upd", ...data }));
     mocks.findManyIssues.mockResolvedValue([]);
     mocks.upsertCursor.mockResolvedValue({});
   });

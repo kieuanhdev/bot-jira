@@ -18,10 +18,10 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 vi.mock("@/lib/user-creds", () => ({
-  userJiraAuth: vi.fn((user: any) =>
+  userJiraAuth: vi.fn((user: { jiraTokenEnc?: string | null } | null | undefined) =>
     user?.jiraTokenEnc ? { user: "alice", token: "tok", authMode: "Bearer" } : null
   ),
-  userBitbucketCreds: vi.fn((user: any) =>
+  userBitbucketCreds: vi.fn((user: { bitbucketTokenEnc?: string | null } | null | undefined) =>
     user?.bitbucketTokenEnc ? { user: "alice_bb", token: "bb_tok" } : null
   ),
 }));

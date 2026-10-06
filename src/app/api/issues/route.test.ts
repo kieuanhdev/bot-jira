@@ -26,7 +26,7 @@ vi.mock("@/lib/user-creds", async (importOriginal) => {
   const mod = await importOriginal<typeof import("@/lib/user-creds")>();
   return {
     ...mod,
-    userJiraUsername: (user: any) => user?.jiraUsername ?? "current_user",
+    userJiraUsername: (user: { jiraUsername?: string | null } | null | undefined) => user?.jiraUsername ?? "current_user",
   };
 });
 vi.mock("@/lib/env", () => ({

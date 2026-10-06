@@ -103,24 +103,24 @@ describe("Worklog Schema & Utilities", () => {
     it("rejects missing or invalid duration", () => {
       const res1 = validateCreateWorklogInput({ ...validPayload, timeSpent: "" });
       expect(res1.success).toBe(false);
-      expect((res1 as any).code).toBe("INVALID_DURATION");
+      if (!res1.success) expect(res1.code).toBe("INVALID_DURATION");
 
       const res2 = validateCreateWorklogInput({ ...validPayload, timeSpent: "invalid" });
       expect(res2.success).toBe(false);
-      expect((res2 as any).code).toBe("INVALID_DURATION");
+      if (!res2.success) expect(res2.code).toBe("INVALID_DURATION");
     });
 
     it("rejects invalid startedAt", () => {
       const res = validateCreateWorklogInput({ ...validPayload, startedAt: "not-a-date" });
       expect(res.success).toBe(false);
-      expect((res as any).code).toBe("INVALID_STARTED_AT");
+      if (!res.success) expect(res.code).toBe("INVALID_STARTED_AT");
     });
 
     it("rejects startedAt more than 5 minutes in the future", () => {
       const tenMinutesInFuture = new Date(Date.now() + 10 * 60 * 1000).toISOString();
       const res = validateCreateWorklogInput({ ...validPayload, startedAt: tenMinutesInFuture });
       expect(res.success).toBe(false);
-      expect((res as any).code).toBe("FUTURE_STARTED_AT");
+      if (!res.success) expect(res.code).toBe("FUTURE_STARTED_AT");
     });
 
     it("allows startedAt within 5 minutes in the future (clock drift tolerance)", () => {
@@ -133,19 +133,19 @@ describe("Worklog Schema & Utilities", () => {
       const longComment = "a".repeat(4001);
       const res = validateCreateWorklogInput({ ...validPayload, comment: longComment });
       expect(res.success).toBe(false);
-      expect((res as any).code).toBe("COMMENT_TOO_LONG");
+      if (!res.success) expect(res.code).toBe("COMMENT_TOO_LONG");
     });
 
     it("rejects adjustEstimate other than 'leave' in MVP", () => {
       const res = validateCreateWorklogInput({ ...validPayload, adjustEstimate: "auto" });
       expect(res.success).toBe(false);
-      expect((res as any).code).toBe("INVALID_ADJUST_ESTIMATE");
+      if (!res.success) expect(res.code).toBe("INVALID_ADJUST_ESTIMATE");
     });
 
     it("rejects missing idempotencyKey", () => {
       const res = validateCreateWorklogInput({ ...validPayload, idempotencyKey: "" });
       expect(res.success).toBe(false);
-      expect((res as any).code).toBe("INVALID_IDEMPOTENCY_KEY");
+      if (!res.success) expect(res.code).toBe("INVALID_IDEMPOTENCY_KEY");
     });
   });
 

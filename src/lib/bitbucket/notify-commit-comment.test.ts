@@ -78,7 +78,7 @@ describe("notifyCommitComment", () => {
       userRow("user-anhnk", "anhnk_mb", "anhnk@intern.vn"),
     ]);
 
-    vi.mocked(notifyUser).mockResolvedValue({ id: "notif-c1" } as any);
+    vi.mocked(notifyUser).mockResolvedValue({ id: "notif-c1" } as unknown as Awaited<ReturnType<typeof notifyUser>>);
 
     const result = await notifyCommitComment({
       repo: "SMA/sds_feedback",
