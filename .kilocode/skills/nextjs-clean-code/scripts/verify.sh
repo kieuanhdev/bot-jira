@@ -28,8 +28,8 @@ has_script() { node -e "process.exit(require('./package.json').scripts?.['$1']?0
 count() { # đếm dòng lỗi/cảnh báo trong log
   case "$1" in
     tsc)    c=$(grep -cE "error TS[0-9]+" "$LOGDIR/tsc.log" 2>/dev/null); echo "${c:-0}" ;;
-    eslint) grep -oE "[0-9]+ errors?" "$LOGDIR/eslint.log" 2>/dev/null | tail -1 | grep -oE "[0-9]+" || echo 0 ;;
-    eslintw) grep -oE "[0-9]+ warnings?" "$LOGDIR/eslint.log" 2>/dev/null | tail -1 | grep -oE "[0-9]+" || echo 0 ;;
+    eslint) grep -E "problems \([0-9]+ error" "$LOGDIR/eslint.log" 2>/dev/null | grep -oE "[0-9]+ error" | grep -oE "[0-9]+" || echo 0 ;;
+    eslintw) grep -E "problems \([0-9]+ error" "$LOGDIR/eslint.log" 2>/dev/null | grep -oE "[0-9]+ warning" | grep -oE "[0-9]+" || echo 0 ;;
     vitest) grep -E "^[[:space:]]*Tests[[:space:]]" "$LOGDIR/vitest.log" 2>/dev/null | grep -oE "[0-9]+ failed" | grep -oE "[0-9]+" || echo 0 ;;
   esac
 }

@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    ".kilo/**",
+    ".kilocode/**",
+    ".cleanup/**",
   ]),
   // Import boundary: shared/ must not import from route/domain/hook layers.
   {
