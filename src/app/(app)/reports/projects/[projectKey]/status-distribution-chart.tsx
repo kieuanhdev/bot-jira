@@ -100,6 +100,7 @@ export function StatusDistributionChart({
   }
 
   // User display preferences
+  // Read from localStorage on first render; the chart only mounts after the report query resolves on the client.
   const [preferences, setPreferences] = useState<ChartPreferences>(() => {
     if (typeof window === "undefined") return DEFAULT_PREFERENCES;
     try {

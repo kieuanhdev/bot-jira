@@ -86,32 +86,32 @@ export function TasksTab({
   });
   const jiraBaseUrl = meStatus?.jiraBaseUrl;
 
-  const [prevFilters, setPrevFilters] = useState({
-    statusGroup: initialStatusGroup,
-    activity: initialActivity,
-    assignee: initialAssignee,
-  });
-
-  if (
-    initialStatusGroup !== prevFilters.statusGroup ||
-    initialActivity !== prevFilters.activity ||
-    initialAssignee !== prevFilters.assignee
-  ) {
-    setPrevFilters({
-      statusGroup: initialStatusGroup,
-      activity: initialActivity,
-      assignee: initialAssignee,
-    });
+  // Each prop syncs its own filter and resets paging, independently of the others.
+  const [prevStatusGroup, setPrevStatusGroup] = useState(initialStatusGroup);
+  if (initialStatusGroup !== prevStatusGroup) {
+    setPrevStatusGroup(initialStatusGroup);
     if (initialStatusGroup !== undefined) {
       setStatusGroup(initialStatusGroup || "all");
+      setOffset(0);
     }
+  }
+
+  const [prevActivity, setPrevActivity] = useState(initialActivity);
+  if (initialActivity !== prevActivity) {
+    setPrevActivity(initialActivity);
     if (initialActivity !== undefined) {
       setActivity(initialActivity || "all");
+      setOffset(0);
     }
+  }
+
+  const [prevAssignee, setPrevAssignee] = useState(initialAssignee);
+  if (initialAssignee !== prevAssignee) {
+    setPrevAssignee(initialAssignee);
     if (initialAssignee !== undefined) {
       setAssignee(initialAssignee || "all");
+      setOffset(0);
     }
-    setOffset(0);
   }
 
   // Notify parent of filter changes for URL sync

@@ -74,6 +74,7 @@ export function BulkCreateEditorShell({
   focusField,
   onClearFocusRow,
 }: BulkCreateEditorShellProps) {
+  // Preferences are read from localStorage on first render; the shell is only mounted client-side after metadata loads.
   const [density, setDensityState] = useState<GridDensity>(() => getStoredDensity());
   const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => {
     if (!projectKey) return [];

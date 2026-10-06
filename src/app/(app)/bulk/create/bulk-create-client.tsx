@@ -66,6 +66,7 @@ export function BulkCreateClient() {
   const [focusRow, setFocusRow] = useState<number | null>(null);
   const [focusField, setFocusField] = useState<string | null>(null);
   const [draftAvailable, setDraftAvailable] = useState(false);
+  // Read from localStorage on first render; safe because the editor only renders after client-side metadata loads (no SSR/hydration).
   const [isEditorFullscreen, setIsEditorFullscreen] = useState(() => getStoredEditorMode() === "fullscreen");
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [draftSavedTime, setDraftSavedTime] = useState<number | null>(null);
