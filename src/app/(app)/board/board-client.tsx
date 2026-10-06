@@ -3,18 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  closestCorners,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragOverEvent,
-  type CollisionDetection,
-} from "@dnd-kit/core";
-import { api, ApiError } from "@/lib/api-client";
+import { api } from "@/lib/api-client";
 import {
   useIssues,
   fetchIssuesPage,
@@ -41,40 +30,29 @@ import {
   saveStoredSortMode,
   saveStoredViewMode,
 } from "./lib/board-storage";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { transitionTarget } from "@/lib/jira/board-transitions";
-import { Search, LayoutGrid, List, ChevronsUpDown } from "lucide-react";
-import { SegmentedControl } from "@/components/shared/segmented-control";
+import { Search } from "lucide-react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { BoardSummaryCards } from "./board-summary-cards";
-import { CardContent } from "./board-card";
-import { BoardColumn, BoardSkeleton } from "./board-column";
+import { BoardSkeleton } from "./board-column";
 import { QuickPanel } from "./board-quick-panel";
 import {
   type Project,
   type SortMode,
-  type QuickAction,
   type ViewMode,
 } from "./lib/board-types";
 import { sortIssues, columnKeyForIssue } from "./lib/board-utils";
 import { BoardProjectSummaryLine, HiddenColumnsBanner, StaleSyncBanner } from "./board-banners";
-import { BoardColumnsMenu } from "./board-columns-menu";
 import { BoardNoProjectsState } from "./board-empty-projects";
 import { BoardListView } from "./board-list-view";
-import { BoardProjectTabs } from "./board-project-tabs";
-import { BoardSyncButton } from "./board-sync-button";
+import { BoardHeader } from "./board-header";
+import { BoardKanbanView } from "./board-kanban-view";
+import { useBoardKeyboardNav } from "./lib/board-keyboard-nav";
+import { useBoardActions } from "./lib/board-actions-hook";
+import { useBoardDnD } from "./lib/board-dnd-hook";
 import {
   COL_BATCH,
-  allowedColumnKeys,
   buildColumns,
   buildColumnViews,
-  findTransition,
   indexColumnsByStatus,
   indexColumnsByStatusId,
   summarizeBoard,
@@ -83,7 +61,6 @@ import {
 import {
   useBoardWidth,
   useColumnPreferences,
-  useDragAutoScroll,
   useJiraSync,
   useTransitionCache,
 } from "./lib/board-hooks";
@@ -92,10 +69,6 @@ export function BoardClient() {
   const qc = useQueryClient();
   const router = useRouter();
   const boardScrollRef = useRef<HTMLDivElement | null>(null);
-  const [transitionBusy, setTransitionBusy] = useState(false);
-  const [activeDrag, setActiveDrag] = useState<IssueItem | null>(null);
-  const activeDragKeyRef = useRef<string | null>(null);
-  const [dragOverCol, setDragOverCol] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -103,12 +76,6 @@ export function BoardClient() {
     const t = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(t);
   }, [toast]);
-
-  useDragAutoScroll(boardScrollRef, activeDrag, dragOverCol);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
-  );
 
   const { data: projects } = useQuery({
     queryKey: boardKeys.projects,
@@ -380,9 +347,7 @@ export function BoardClient() {
   });
 
   const width = useBoardWidth();
-
   const effectiveView: ViewMode = width === "narrow" ? "list" : view;
-
 
   const activeAssignees = effectiveAssignees(filters.assigneeScope);
   const isAssigneeAll = activeAssignees === "ALL";
@@ -505,7 +470,6 @@ export function BoardClient() {
   }
 
   const columnKeyByStatusId = useMemo(() => indexColumnsByStatusId(columns), [columns]);
-
   const columnKeyByStatus = useMemo(() => indexColumnsByStatus(columns), [columns]);
 
   function findColumnForIssue(issue: IssueItem): string {
@@ -565,206 +529,32 @@ export function BoardClient() {
   const columnKeys = useMemo(() => visibleColumns.map((c) => c.key), [visibleColumns]);
 
   const { transitionCache, fetchTransitions, invalidateTransitionCache } = useTransitionCache(issues);
-  const [allowedCols, setAllowedCols] = useState<Set<string> | null>(null);
 
-  async function doTransition(key: string, transitionId: string, revertTo: string | null = null) {
-    try {
-      await api(`/api/issues/${key}/transition`, {
-        method: "POST",
-        body: { transitionId },
-      });
-    } catch (e) {
-      const status = (e as ApiError)?.status ?? null;
-      setOptimisticStatus(key, revertTo);
-      if (status === 403 || status === 401) {
-        setToast(`${key}: You don't have permission to make this transition.`);
-        return;
-      }
-      if (status === 409) {
-        setToast(`${key}: This transition isn't available from the current state. Move it via Jira.`);
-        return;
-      }
-      setToast(`${key}: Couldn't update Jira. The card has been reverted. Try again, or make the change in Jira.`);
-      return;
-    }
-    invalidateTransitionCache(key);
-    setOptimisticStatus(key, null);
-    await qc.invalidateQueries({ queryKey: issuesKeys.all });
-  }
+  const { transitionBusy, handleTransition, handleQuickAction } = useBoardActions({
+    issues,
+    columns,
+    columnKeys,
+    statusCategoryMap,
+    jiraBaseUrl,
+    fetchTransitions,
+    invalidateTransitionCache,
+    setOptimisticStatus,
+    setToast,
+    router,
+    qc,
+    findColumnForIssue,
+  });
 
-  async function handleTransition(key: string, target: string) {
-    setTransitionBusy(true);
-    setToast(null);
-    try {
-      let targetKey: string;
-      if (target === "__prev__" || target === "__next__") {
-        const issue = issues.find((i) => i.jiraKey === key);
-        if (!issue) return;
-        const currentCol = findColumnForIssue(issue);
-        const idx = columnKeys.indexOf(currentCol);
-        const nextIdx = target === "__next__" ? idx + 1 : idx - 1;
-        if (nextIdx < 0 || nextIdx >= columnKeys.length) return;
-        targetKey = columnKeys[nextIdx];
-      } else {
-        targetKey = target;
-      }
-      const targetCol = columns.find((c) => c.key === targetKey);
-      const targetLabel = targetCol?.label ?? targetKey;
-
-      const issue = issues.find((i) => i.jiraKey === key);
-      const fromStatus = issue?.status ?? "";
-
-      if (issue && findColumnForIssue(issue) === targetKey) {
-        setTransitionBusy(false);
-        return;
-      }
-
-      const all = await fetchTransitions(key);
-      const found = findTransition(columns, statusCategoryMap, all, targetLabel, targetKey);
-
-      if (!found) {
-        setToast(
-          `${key}: "${issue?.status || "current"}" cannot move to ${targetLabel}. The workflow doesn't allow this transition.`
-        );
-        return;
-      }
-
-      const targetStatusName = transitionTarget(found);
-      setOptimisticStatus(key, targetStatusName);
-      await doTransition(key, found.id, fromStatus);
-    } catch (e) {
-      setOptimisticStatus(key, null);
-      setToast(`${key}: ${(e as Error).message.slice(0, 120)}`);
-    } finally {
-      setTransitionBusy(false);
-    }
-  }
-
-  async function handleQuickAction(key: string, action: QuickAction) {
-    try {
-      switch (action.kind) {
-        case "openJira": {
-          const base = jiraBaseUrl.replace(/\/$/, "");
-          if (base) window.open(`${base}/browse/${key}`, "_blank", "noopener");
-          else setToast("Jira base URL isn't configured.");
-          return;
-        }
-        case "copyKey": {
-          try {
-            await navigator.clipboard.writeText(key);
-            setToast(`Copied ${key}`);
-          } catch {
-            setToast("Couldn't copy to clipboard.");
-          }
-          return;
-        }
-        case "openFull": {
-          router.push(`/issue/${key}`);
-          return;
-        }
-        case "assignee": {
-          await api(`/api/issues/${key}`, {
-            method: "PATCH",
-            body: { assignee: action.value },
-          });
-          await qc.invalidateQueries({ queryKey: issuesKeys.all });
-          setToast(action.value ? `${key} → ${action.value}` : `${key} unassigned`);
-          return;
-        }
-        case "priority": {
-          await api(`/api/issues/${key}`, {
-            method: "PATCH",
-            body: { priority: action.value },
-          });
-          await qc.invalidateQueries({ queryKey: issuesKeys.all });
-          setToast(`${key} priority → ${action.value}`);
-          return;
-        }
-        case "done": {
-          const issue = issues.find((i) => i.jiraKey === key);
-          const fromStatus = issue?.status ?? null;
-          const all = await fetchTransitions(key);
-          const doneCol = columns.find((c) => c.category === "done");
-          const target = doneCol?.label ?? "Done";
-          const found =
-            all.find((tr) => {
-              const t = transitionTarget(tr);
-              const cat = statusCategoryMap[t] ?? statusCategoryMap[t.toLowerCase()];
-              return cat === "done";
-            }) ?? null;
-          if (!found) {
-            setToast(`${key}: No "done" transition is available from the current state.`);
-            return;
-          }
-          setOptimisticStatus(key, target);
-          await doTransition(key, found.id, fromStatus);
-          return;
-        }
-      }
-    } catch (e) {
-      const err = e as ApiError;
-      const msg = err.status ? `update failed (HTTP ${err.status})` : err.message;
-      setToast(`${key}: ${msg.slice(0, 100)}`);
-    }
-  }
-
-  function onDragEnd(event: DragEndEvent) {
-    activeDragKeyRef.current = null;
-    setAllowedCols(null);
-    setActiveDrag(null);
-    const { active, over } = event;
-    if (!over) return;
-    const key = String(active.id);
-    const targetColumn = String(over.id);
-    const source = issues.find((i) => i.jiraKey === key);
-    if (!source) return;
-    const currentCol = findColumnForIssue(source);
-    if (currentCol === targetColumn) return;
-    handleTransition(key, targetColumn);
-  }
-
-  function collisionDetection(args: Parameters<CollisionDetection>[0]): ReturnType<CollisionDetection> {
-    const ranked = closestCorners(args);
-    const activeKey = String(args.active.id).replace(/^card:/, "");
-    const source = issues.find((i) => i.jiraKey === activeKey);
-    if (!source) return [];
-    const currentCol = findColumnForIssue(source);
-    const all = transitionCache.current.get(activeKey) ?? [];
-    const allowed = allowedColumnKeys(columns, statusCategoryMap, currentCol, all);
-    const first = ranked.find((r) => allowed.has(String(r.id)));
-    return first ? [first] : [];
-  }
-
-  function onDragOver(event: DragOverEvent) {
-    const activeId = String(event.active.id);
-    const activeKey = activeId.replace(/^card:/, "");
-    const source = issues.find((i) => i.jiraKey === activeKey);
-    if (!source) {
-      setAllowedCols(null);
-      return;
-    }
-    const all = transitionCache.current.get(activeKey) ?? [];
-    const currentCol = findColumnForIssue(source);
-    setAllowedCols(allowedColumnKeys(columns, statusCategoryMap, currentCol, all));
-  }
-
-  function onDragStart(key: string) {
-    const issue = issues.find((item) => item.jiraKey === key) ?? null;
-    activeDragKeyRef.current = issue?.jiraKey ?? null;
-    setActiveDrag(issue);
-    setAllowedCols(null);
-    if (!issue) return;
-
-    void fetchTransitions(issue.jiraKey)
-      .then((all) => {
-        if (activeDragKeyRef.current !== issue.jiraKey) return;
-        const currentCol = findColumnForIssue(issue);
-        setAllowedCols(allowedColumnKeys(columns, statusCategoryMap, currentCol, all));
-      })
-      .catch(() => {
-        // `handleTransition` reports the actionable error if the user drops.
-      });
-  }
+  const dnd = useBoardDnD({
+    boardScrollRef,
+    issues,
+    columns,
+    statusCategoryMap,
+    transitionCache,
+    fetchTransitions,
+    findColumnForIssue,
+    onTransition: handleTransition,
+  });
 
   const colResetSig = useMemo(
     () => `${selectedProject}|${sortMode}|${filterSig}|${issues.length}`,
@@ -806,52 +596,15 @@ export function BoardClient() {
     [boardColumnsRender]
   );
 
-  useEffect(() => {
-    if (effectiveView !== "board" || focusOrder.length === 0) return;
-    function onKey(e: KeyboardEvent) {
-      const target = e.target as HTMLElement | null;
-      const typing =
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable);
-      if (typing) return;
-      const keys = ["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"];
-      if (!keys.includes(e.key) && e.key !== "Enter" && e.key !== "Home" && e.key !== "End") return;
-
-      const idx = focusKey ? focusOrder.indexOf(focusKey) : -1;
-      let next = idx;
-      if (e.key === "Enter") {
-        if (idx === -1) return;
-        const issue = issues.find((i) => i.jiraKey === focusOrder[idx]);
-        if (issue) {
-          e.preventDefault();
-          setQuickPanel(issue);
-        }
-        return;
-      }
-      e.preventDefault();
-      if (idx === -1) {
-        next = e.key === "ArrowLeft" || e.key === "ArrowUp" ? focusOrder.length - 1 : 0;
-      } else {
-        next =
-          e.key === "ArrowRight" || e.key === "ArrowDown"
-            ? Math.min(focusOrder.length - 1, idx + 1)
-            : Math.max(0, idx - 1);
-        if (e.key === "Home") next = 0;
-        if (e.key === "End") next = focusOrder.length - 1;
-      }
-      const key = focusOrder[next];
-      setFocusKey(key);
-      const node = cardRefs.current.get(key);
-      if (node) {
-        node.focus({ preventScroll: true });
-        node.scrollIntoView({ block: "nearest", inline: "nearest" });
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [effectiveView, focusOrder, focusKey, issues]);
+  useBoardKeyboardNav({
+    effectiveView,
+    focusOrder,
+    issues,
+    cardRefs,
+    focusKey,
+    setFocusKey,
+    onOpenQuickPanel: (issue) => setQuickPanel(issue),
+  });
 
   if (effectivePreferred.length === 0) {
     return (
@@ -880,81 +633,50 @@ export function BoardClient() {
           {toast}
         </div>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <BoardProjectTabs
-            projectList={projectList}
-            selectedProject={selectedProject}
-            showPicker={showPicker}
-            preferredCount={effectivePreferred.length}
-            availableKeys={availableKeys}
-            pickerSet={pickerSet}
-            countMap={countMap}
-            boardNewKey={boardNewKey}
-            boardValidating={boardValidating}
-            boardValidateError={boardValidateError}
-            onSelectProject={handleSelectProject}
-            onOpenPicker={openPicker}
-            onClosePicker={closePicker}
-            onTogglePicker={togglePicker}
-            onSelectAllKeys={() => setPickerSelection(availableKeys)}
-            onCommit={commitPicker}
-            onKeyChange={handleBoardNewKeyChange}
-            onAddProject={handleAddProjectToBoard}
-          />
 
-        </div>
-
-        <div className="flex items-center gap-2">
-          <BoardSyncButton
-            boardSync={boardSync}
-            selectedProject={selectedProject}
-            isCurrentProjectSyncing={isCurrentProjectSyncing}
-            isFetching={isFetching}
-            onSync={syncJira}
-          />
-          <SegmentedControl<ViewMode>
-            items={[
-              { value: "board", label: "Bảng", icon: LayoutGrid, disabled: width === "narrow" },
-              { value: "list", label: "Danh sách", icon: List },
-            ]}
-            value={effectiveView}
-            onChange={setView}
-            aria-label="Chế độ hiển thị"
-          />
-
-          <BoardColumnsMenu
-            effectiveView={effectiveView}
-            columns={columns}
-            visibleColumns={visibleColumns}
-            byColumn={byColumn}
-            hiddenCols={hiddenCols}
-            collapsedCols={collapsedCols}
-            hiddenTableCols={hiddenTableCols}
-            selectedProject={selectedProject}
-            onShowAll={showAllColumns}
-            onHideEmpty={hideEmptyColumns}
-            onToggleColumn={toggleColumnVisibility}
-            onCollapseEmpty={collapseEmptyColumns}
-            onExpandAll={expandAllCollapsedColumns}
-            onResetColumns={resetColumnPreferences}
-            onToggleTableColumn={toggleTableColumn}
-            onResetTableColumns={() => setHiddenTableCols(new Set())}
-          />
-
-          <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
-            <SelectTrigger className="h-8 w-auto gap-1.5 text-sm" title="Sắp xếp thẻ trong từng cột">
-              <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="priority">Độ ưu tiên</SelectItem>
-              <SelectItem value="updated">Mới cập nhật</SelectItem>
-              <SelectItem value="age">Cũ nhất trước</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <BoardHeader
+        projectList={projectList}
+        selectedProject={selectedProject}
+        showPicker={showPicker}
+        preferredCount={effectivePreferred.length}
+        availableKeys={availableKeys}
+        pickerSet={pickerSet}
+        countMap={countMap}
+        boardNewKey={boardNewKey}
+        boardValidating={boardValidating}
+        boardValidateError={boardValidateError}
+        onSelectProject={handleSelectProject}
+        onOpenPicker={openPicker}
+        onClosePicker={closePicker}
+        onTogglePicker={togglePicker}
+        onSelectAllKeys={() => setPickerSelection(availableKeys)}
+        onCommit={commitPicker}
+        onKeyChange={handleBoardNewKeyChange}
+        onAddProject={handleAddProjectToBoard}
+        boardSync={boardSync}
+        isCurrentProjectSyncing={isCurrentProjectSyncing}
+        isFetching={isFetching}
+        onSync={syncJira}
+        effectiveView={effectiveView}
+        onViewChange={setView}
+        width={width}
+        columns={columns}
+        visibleColumns={visibleColumns}
+        byColumn={byColumn}
+        hiddenCols={hiddenCols}
+        collapsedCols={collapsedCols}
+        hiddenTableCols={hiddenTableCols}
+        onShowAllColumns={showAllColumns}
+        onHideEmptyColumns={hideEmptyColumns}
+        onToggleColumnVisibility={toggleColumnVisibility}
+        onCollapseEmptyColumns={collapseEmptyColumns}
+        onExpandAllCollapsedColumns={expandAllCollapsedColumns}
+        onResetColumnPreferences={resetColumnPreferences}
+        onToggleTableColumn={toggleTableColumn}
+        onResetTableColumns={() => setHiddenTableCols(new Set())}
+        sortMode={sortMode}
+        onSortModeChange={setSortMode}
+      />
 
       {issueData?.sync.stale && <StaleSyncBanner lastSuccessAt={issueData.sync.lastSuccessAt} />}
 
@@ -1008,62 +730,32 @@ export function BoardClient() {
           className="flex-1"
         />
       ) : effectiveView === "board" ? (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={collisionDetection}
-          onDragStart={(e) => onDragStart(String(e.active.id))}
-          onDragOver={onDragOver}
-          onDragEnd={onDragEnd}
-          onDragCancel={() => {
-            activeDragKeyRef.current = null;
-            setAllowedCols(null);
-            setActiveDrag(null);
-          }}
-        >
-          <div
-            ref={boardScrollRef}
-            className="flex flex-1 gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]"
-          >
-            {boardColumnsRender.map((col) => (
-              <BoardColumn
-                key={col.id}
-                id={col.id}
-                label={col.label}
-                category={col.category}
-                isDone={col.isDone}
-                isBacklog={col.isBacklog}
-                emptyMessage={col.emptyMessage}
-                items={col.items}
-                colIndex={col.colIndex}
-                columnCount={col.columnCount}
-                onTransition={handleTransition}
-                busy={transitionBusy}
-                dndDisabled={dndDisabled}
-                onOverChange={setDragOverCol}
-                dotColor={col.dotColor}
-                dragBlocked={allowedCols != null && !allowedCols.has(col.id)}
-                optimistic={optimistic}
-                wipOver={col.wipOver}
-                collapsed={col.collapsed}
-                canHide={visibleColumns.length > 1}
-                total={col.total}
-                onGrow={growColumn}
-                onToggleCollapse={toggleCollapse}
-                onHideColumn={hideColumn}
-                onOpen={(issue) => setQuickPanel(issue)}
-                onQuickAction={handleQuickAction}
-                assignees={assignees}
-                registerRef={(key, el) => cardRefs.current.set(key, el)}
-                focusKey={focusKey}
-              />
-            ))}
-          </div>
-          <DragOverlay>
-            {activeDrag ? (
-              <CardContent issue={activeDrag} done={false} dragging />
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+        <BoardKanbanView
+          boardScrollRef={boardScrollRef}
+          sensors={dnd.sensors}
+          collisionDetection={dnd.collisionDetection}
+          onDragStart={dnd.onDragStart}
+          onDragOver={dnd.onDragOver}
+          onDragEnd={dnd.onDragEnd}
+          onDragCancel={dnd.onDragCancel}
+          activeDrag={dnd.activeDrag}
+          boardColumnsRender={boardColumnsRender}
+          transitionBusy={transitionBusy}
+          dndDisabled={dndDisabled}
+          setDragOverCol={dnd.setDragOverCol}
+          allowedCols={dnd.allowedCols}
+          optimistic={optimistic}
+          visibleColumnsLength={visibleColumns.length}
+          growColumn={growColumn}
+          toggleCollapse={toggleCollapse}
+          hideColumn={hideColumn}
+          onOpen={(issue) => setQuickPanel(issue)}
+          onQuickAction={handleQuickAction}
+          onTransition={handleTransition}
+          assignees={assignees}
+          registerRef={(key, el) => cardRefs.current.set(key, el)}
+          focusKey={focusKey}
+        />
       ) : (
         <BoardListView
           issues={issues}
