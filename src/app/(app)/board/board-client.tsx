@@ -21,7 +21,7 @@ import {
   type IssueItem,
   type IssueSuccessResponse,
 } from "@/hooks/use-issues";
-import { issuesKeys, boardKeys, meKeys, freshnessKeys } from "@/lib/query-keys";
+import { issuesKeys, boardKeys, meKeys } from "@/lib/query-keys";
 import {
   type IssueFilters,
   DEFAULT_BOARD_FILTERS,
@@ -32,20 +32,15 @@ import {
 } from "@/lib/issues/issue-filters";
 import { IssueFilterBar } from "@/components/issues/issue-filter-bar";
 import {
-  loadStoredColumnPreferences,
   loadStoredFilters,
   loadStoredProject,
   loadStoredSortMode,
   loadStoredViewMode,
-  saveStoredColumnPreferences,
   saveStoredFilters,
   saveStoredProject,
   saveStoredSortMode,
   saveStoredViewMode,
 } from "./lib/board-storage";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -53,40 +48,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { timeAgo } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
-import { type BoardWidth } from "@/lib/status-groups";
-import {
-  canTransitionToStatus,
-  findTransitionToStatus,
-  transitionTarget,
-} from "@/lib/jira/board-transitions";
-import {
-  Search,
-  ListFilter,
-  LayoutGrid,
-  List,
-  AlertTriangle,
-  RefreshCw,
-  ChevronsUpDown,
-  Plus,
-  RotateCcw,
-  SlidersHorizontal,
-  Eye,
-  EyeOff,
-  Minimize2,
-  Maximize2,
-} from "lucide-react";
+import { transitionTarget } from "@/lib/jira/board-transitions";
+import { Search, LayoutGrid, List, ChevronsUpDown } from "lucide-react";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { EmptyState } from "@/components/shared/empty-state";
 import { BoardSummaryCards } from "./board-summary-cards";
@@ -98,10 +61,32 @@ import {
   type SortMode,
   type QuickAction,
   type ViewMode,
-  type Transition,
-  type BoardSyncState,
 } from "./lib/board-types";
-import { daysSince, sortIssues, columnKeyForIssue, statusDot } from "./lib/board-utils";
+import { sortIssues, columnKeyForIssue } from "./lib/board-utils";
+import { BoardProjectSummaryLine, HiddenColumnsBanner, StaleSyncBanner } from "./board-banners";
+import { BoardColumnsMenu } from "./board-columns-menu";
+import { BoardNoProjectsState } from "./board-empty-projects";
+import { BoardListView } from "./board-list-view";
+import { BoardProjectTabs } from "./board-project-tabs";
+import { BoardSyncButton } from "./board-sync-button";
+import {
+  COL_BATCH,
+  allowedColumnKeys,
+  buildColumns,
+  buildColumnViews,
+  findTransition,
+  indexColumnsByStatus,
+  indexColumnsByStatusId,
+  summarizeBoard,
+  type BoardStatusesResponse,
+} from "./lib/board-columns";
+import {
+  useBoardWidth,
+  useColumnPreferences,
+  useDragAutoScroll,
+  useJiraSync,
+  useTransitionCache,
+} from "./lib/board-hooks";
 
 export function BoardClient() {
   const qc = useQueryClient();
@@ -119,23 +104,7 @@ export function BoardClient() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  // While a card is dragged over a column, auto-scroll the board horizontally
-  // so off-screen columns can be reached and dropped on.
-  useEffect(() => {
-    if (!activeDrag || !dragOverCol) return;
-    let raf = 0;
-    const tick = () => {
-      const el = boardScrollRef.current;
-      if (el) {
-        const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
-        if (el.scrollLeft <= 1) el.scrollLeft += 16;
-        else if (atEnd) el.scrollLeft -= 16;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [activeDrag, dragOverCol]);
+  useDragAutoScroll(boardScrollRef, activeDrag, dragOverCol);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -295,6 +264,11 @@ export function BoardClient() {
     }
   }
 
+  function handleBoardNewKeyChange(value: string) {
+    setBoardNewKey(value.toUpperCase());
+    setBoardValidateError(null);
+  }
+
   const [view, setView] = useState<ViewMode>(() => {
     return loadStoredViewMode() ?? "board";
   });
@@ -391,11 +365,6 @@ export function BoardClient() {
     saveStoredViewMode(view);
   }, [view]);
 
-  const [columnPrefs, setColumnPrefs] = useState<{
-    projectKey: string;
-    hidden: Set<string>;
-    collapsed: Set<string>;
-  }>({ projectKey: "", hidden: new Set(), collapsed: new Set() });
   const [quickPanel, setQuickPanel] = useState<IssueItem | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const cardRefs = useRef<Map<string, HTMLElement | null>>(new Map());
@@ -409,38 +378,11 @@ export function BoardClient() {
     sig: "",
     counts: {},
   });
-  const COL_BATCH = 40;
 
-  const [width, setWidth] = useState<BoardWidth>("wide");
-  useEffect(() => {
-    function measure() {
-      const w = window.innerWidth;
-      setWidth(w >= 1280 ? "wide" : w >= 768 ? "medium" : "narrow");
-    }
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, []);
+  const width = useBoardWidth();
 
   const effectiveView: ViewMode = width === "narrow" ? "list" : view;
 
-  const activeColumnPrefs = useMemo(() => {
-    if (columnPrefs.projectKey === selectedProject) return columnPrefs;
-    const stored = loadStoredColumnPreferences(selectedProject);
-    return {
-      projectKey: selectedProject,
-      hidden: new Set(stored.hidden),
-      collapsed: new Set(stored.collapsed),
-    };
-  }, [columnPrefs, selectedProject]);
-
-  const hiddenCols = activeColumnPrefs.hidden;
-  const collapsedCols = activeColumnPrefs.collapsed;
-
-  function persistColumnPrefs(hidden: Set<string>, collapsed: Set<string>) {
-    setColumnPrefs({ projectKey: selectedProject, hidden, collapsed });
-    saveStoredColumnPreferences(selectedProject, { hidden: [...hidden], collapsed: [...collapsed] });
-  }
 
   const activeAssignees = effectiveAssignees(filters.assigneeScope);
   const isAssigneeAll = activeAssignees === "ALL";
@@ -501,125 +443,7 @@ export function BoardClient() {
     [issueData, extraIssues]
   );
 
-  const [boardSync, setBoardSync] = useState<{
-    projectKey: string;
-    state: BoardSyncState;
-    acceptedAt?: string;
-    pollStartMs?: number;
-  }>({
-    projectKey: "",
-    state: "idle",
-  });
-
-  const isCurrentProjectSyncing =
-    boardSync.projectKey === selectedProject &&
-    (boardSync.state === "enqueueing" ||
-      boardSync.state === "queued" ||
-      boardSync.state === "running");
-
-  // Status polling effect when a sync is active
-  useEffect(() => {
-    if (boardSync.state !== "queued" && boardSync.state !== "running") return;
-    const { projectKey, acceptedAt, pollStartMs = Date.now() } = boardSync;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let cancelled = false;
-
-    async function checkStatus() {
-      const elapsed = Date.now() - pollStartMs;
-      if (elapsed > 60_000) {
-        if (!cancelled) {
-          setToast("Chưa nhận được trạng thái đồng bộ. Hãy kiểm tra worker hoặc thử lại.");
-          setBoardSync({ projectKey: "", state: "idle" });
-        }
-        return;
-      }
-
-      try {
-        const queryParams = new URLSearchParams({ projectKey });
-        if (acceptedAt) queryParams.set("since", acceptedAt);
-        const res = await api<{
-          projectKey: string;
-          state: "queued" | "running" | "succeeded" | "failed" | "unknown";
-          lastError: string | null;
-        }>(`/api/sync/jira/status?${queryParams.toString()}`);
-
-        if (cancelled) return;
-
-        if (res.state === "succeeded") {
-          void qc.invalidateQueries({ queryKey: issuesKeys.all });
-          void qc.invalidateQueries({ queryKey: boardKeys.projects });
-          void qc.invalidateQueries({ queryKey: freshnessKeys.all });
-          setToast(`Đã đồng bộ ${projectKey}.`);
-          setBoardSync({ projectKey, state: "succeeded" });
-          setTimeout(() => {
-            if (!cancelled) setBoardSync({ projectKey: "", state: "idle" });
-          }, 2000);
-          return;
-        }
-
-        if (res.state === "failed") {
-          const shortErr = res.lastError ? res.lastError.slice(0, 100) : "Lỗi đồng bộ";
-          setToast(`Không thể đồng bộ ${projectKey}: ${shortErr}`);
-          setBoardSync({ projectKey, state: "failed" });
-          setTimeout(() => {
-            if (!cancelled) setBoardSync({ projectKey: "", state: "idle" });
-          }, 3500);
-          return;
-        }
-
-        if (res.state === "running" && boardSync.state !== "running") {
-          setBoardSync((prev) => (prev.projectKey === projectKey ? { ...prev, state: "running" } : prev));
-        }
-
-        const nextDelay = elapsed < 15_000 ? 1000 : 2500;
-        timer = setTimeout(checkStatus, nextDelay);
-      } catch {
-        if (!cancelled) {
-          timer = setTimeout(checkStatus, 2500);
-        }
-      }
-    }
-
-    timer = setTimeout(checkStatus, 800);
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [boardSync, qc]);
-
-  async function syncJira() {
-    if (!selectedProject || isCurrentProjectSyncing) return;
-    const targetProject = selectedProject;
-    setBoardSync({ projectKey: targetProject, state: "enqueueing" });
-    setToast(`Đang gửi yêu cầu đồng bộ ${targetProject}…`);
-
-    try {
-      const res = await api<{
-        state: "queued" | "already_running";
-        acceptedAt: string;
-      }>("/api/sync/jira", {
-        method: "POST",
-        body: { projectKey: targetProject },
-      });
-
-      if (res.state === "already_running") {
-        setToast(`${targetProject} đang được đồng bộ. Dữ liệu sẽ tự cập nhật khi hoàn tất.`);
-      } else {
-        setToast(`${targetProject} đang chờ đồng bộ.`);
-      }
-
-      setBoardSync({
-        projectKey: targetProject,
-        state: "queued",
-        acceptedAt: res.acceptedAt || new Date().toISOString(),
-        pollStartMs: Date.now(),
-      });
-    } catch (error) {
-      setToast(`Không thể đồng bộ ${targetProject}: ${(error as Error).message.slice(0, 100)}`);
-      setBoardSync({ projectKey: "", state: "idle" });
-    }
-  }
+  const { boardSync, isCurrentProjectSyncing, syncJira } = useJiraSync(selectedProject, setToast);
 
   const { data: optData } = useQuery({
     queryKey: issuesKeys.filters(selectedProject),
@@ -655,25 +479,7 @@ export function BoardClient() {
     queryKey: boardKeys.statuses(selectedProject),
     enabled: boardQueriesEnabled,
     queryFn: () =>
-      api<{
-        projectKey?: string;
-        source?: string;
-        columns?: Array<{
-          id: string;
-          name: string;
-          statusIds: string[];
-          statuses: Array<{ id: string; name: string }>;
-          category?: string;
-          isBacklog: boolean;
-          isDone: boolean;
-        }>;
-        backlogColumnId?: string | null;
-        backlogStatusIds?: string[];
-        items?: { name: string; category: string }[];
-        statusCategoryMap: Record<string, string>;
-      }>(
-        `/api/board/statuses?project=${selectedProject}`
-      ),
+      api<BoardStatusesResponse>(`/api/board/statuses?project=${selectedProject}`),
     staleTime: 5 * 60_000,
     retry: 1,
   });
@@ -682,72 +488,10 @@ export function BoardClient() {
     [statusesData?.statusCategoryMap]
   );
 
-  type Column = {
-    key: string;
-    label: string;
-    category: string;
-    isDone: boolean;
-    isBacklog: boolean;
-    statusIds: string[];
-    statuses: Array<{ id: string; name: string }>;
-  };
-
-  const columns = useMemo<Column[]>(() => {
-    const cols: Column[] = [];
-    const seenColKeys = new Set<string>();
-    const seenStatusNames = new Set<string>();
-
-    if (statusesData?.columns && statusesData.columns.length > 0) {
-      for (const c of statusesData.columns) {
-        cols.push({
-          key: c.id,
-          label: c.name,
-          category: c.isDone ? "done" : (statusCategoryMap[c.name] ?? "new"),
-          isDone: c.isDone,
-          isBacklog: c.isBacklog,
-          statusIds: c.statusIds ?? [],
-          statuses: c.statuses ?? [],
-        });
-        seenColKeys.add(c.id);
-        seenStatusNames.add(c.name.toLowerCase());
-        for (const s of c.statuses ?? []) {
-          seenStatusNames.add(s.name.toLowerCase());
-        }
-      }
-    }
-
-    // Dynamic runtime column creation: if an issue has a status not present in workflow columns,
-    // add a runtime column so it never gets lost or placed in the wrong column
-    for (const issue of issues) {
-      const sId = (issue.statusId || "").trim();
-      const sName = (issue.status || "").trim();
-      const key = sId ? `status:${sId}` : `status:${sName}`;
-      if (!seenColKeys.has(key) && !seenStatusNames.has(sName.toLowerCase())) {
-        seenColKeys.add(key);
-        seenStatusNames.add(sName.toLowerCase());
-        const cat = issue.statusCategory || statusCategoryMap[sName] || "new";
-        cols.push({
-          key,
-          label: sName || (sId ? `Status ${sId}` : "Khác"),
-          category: cat,
-          isDone: cat === "done",
-          isBacklog: false,
-          statusIds: sId ? [sId] : [],
-          statuses: sId ? [{ id: sId, name: sName }] : [],
-        });
-      }
-    }
-
-    if (cols.length === 0) {
-      return [
-        { key: "status:todo", label: "To Do", category: "new", isDone: false, isBacklog: false, statusIds: [], statuses: [] },
-        { key: "status:inprogress", label: "In Progress", category: "indeterminate", isDone: false, isBacklog: false, statusIds: [], statuses: [] },
-        { key: "status:done", label: "Done", category: "done", isDone: true, isBacklog: false, statusIds: [], statuses: [] },
-      ];
-    }
-
-    return cols;
-  }, [statusesData, statusCategoryMap, issues]);
+  const columns = useMemo(
+    () => buildColumns(statusesData, statusCategoryMap, issues),
+    [statusesData, statusCategoryMap, issues]
+  );
 
   const [optimistic, setOptimistic] = useState<Map<string, string>>(new Map());
 
@@ -760,26 +504,9 @@ export function BoardClient() {
     });
   }
 
-  const columnKeyByStatusId = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const c of columns) {
-      for (const sId of c.statusIds) {
-        m.set(sId, c.key);
-      }
-    }
-    return m;
-  }, [columns]);
+  const columnKeyByStatusId = useMemo(() => indexColumnsByStatusId(columns), [columns]);
 
-  const columnKeyByStatus = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const c of columns) {
-      m.set(c.label, c.key);
-      for (const s of c.statuses) {
-        m.set(s.name, c.key);
-      }
-    }
-    return m;
-  }, [columns]);
+  const columnKeyByStatus = useMemo(() => indexColumnsByStatus(columns), [columns]);
 
   function findColumnForIssue(issue: IssueItem): string {
     const effective = optimistic.has(issue.jiraKey)
@@ -813,125 +540,32 @@ export function BoardClient() {
     return m;
   }, [byColumn, sortMode]);
 
-  const summary = useMemo(() => {
-    let inProgress = 0;
-    let done = 0;
-    let stale = 0;
-    for (const c of columns) {
-      const items = byColumn.get(c.key) ?? [];
-      if (c.category === "indeterminate") inProgress += items.length;
-      if (c.category === "done") done += items.length;
-      if (c.category !== "done") stale += items.filter((i) => daysSince(i.updatedAt) >= 7).length;
-    }
-    return { inProgress, stale, done, open: issues.length - done };
-  }, [columns, byColumn, issues]);
+  const summary = useMemo(
+    () => summarizeBoard(columns, byColumn, issues),
+    [columns, byColumn, issues]
+  );
 
   const activeProject = projectList.find((p) => p.key === selectedProject) ?? null;
 
-  const visibleColumns = useMemo(() => {
-    const visible = columns.filter((column) => !hiddenCols.has(column.key));
-    return visible.length > 0 ? visible : columns;
-  }, [columns, hiddenCols]);
+  const {
+    hiddenCols,
+    collapsedCols,
+    visibleColumns,
+    toggleCollapse,
+    hideColumn,
+    showColumn,
+    showAllColumns,
+    toggleColumnVisibility,
+    hideEmptyColumns,
+    collapseEmptyColumns,
+    expandAllCollapsedColumns,
+    resetColumnPreferences,
+  } = useColumnPreferences(selectedProject, columns, byColumn);
 
   const columnKeys = useMemo(() => visibleColumns.map((c) => c.key), [visibleColumns]);
 
-  const transitionCache = useRef(new Map<string, Transition[]>());
-  const transitionRequests = useRef(new Map<string, Promise<Transition[]>>());
+  const { transitionCache, fetchTransitions, invalidateTransitionCache } = useTransitionCache(issues);
   const [allowedCols, setAllowedCols] = useState<Set<string> | null>(null);
-
-  function toName(tr: Transition): string {
-    return transitionTarget(tr);
-  }
-
-  const fetchTransitions = useCallback(async (key: string) => {
-    if (transitionCache.current.has(key)) {
-      return transitionCache.current.get(key)!;
-    }
-    if (transitionRequests.current.has(key)) {
-      return transitionRequests.current.get(key)!;
-    }
-    const request = api<{ transitions: Transition[] }>(`/api/issues/${key}/transitions`)
-      .then((result) => {
-        transitionCache.current.set(key, result.transitions);
-        return result.transitions;
-      })
-      .finally(() => transitionRequests.current.delete(key));
-    transitionRequests.current.set(key, request);
-    return request;
-  }, []);
-
-  function invalidateTransitionCache(key: string) {
-    transitionCache.current.delete(key);
-    transitionRequests.current.delete(key);
-  }
-
-  const transitionKeys = useMemo(() => issues.map((i) => i.jiraKey).join("|"), [issues]);
-  useEffect(() => {
-    const keys = transitionKeys ? transitionKeys.split("|") : [];
-    let cancelled = false;
-    void (async () => {
-      for (const key of keys) {
-        if (cancelled) return;
-        if (transitionCache.current.has(key)) continue;
-        try {
-          await fetchTransitions(key);
-        } catch {
-          // Leave it uncached; drag-start and transition execution retry it.
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [transitionKeys, fetchTransitions]);
-
-  function canDropTo(
-    all: Transition[],
-    targetLabel: string,
-    targetCat: string | undefined,
-    targetKey: string
-  ): boolean {
-    if (canTransitionToStatus(all, targetLabel)) {
-      return true;
-    }
-    const targetCol = columns.find((c) => c.key === targetKey);
-    if (targetCol && targetCol.statuses.length > 0) {
-      for (const st of targetCol.statuses) {
-        if (canTransitionToStatus(all, st.name)) return true;
-      }
-    }
-    if (targetCat && targetKey !== targetLabel) {
-      return all.some((tr) => {
-        const t = toName(tr);
-        return (statusCategoryMap[t] ?? statusCategoryMap[t.toLowerCase()]) === targetCat;
-      });
-    }
-    return false;
-  }
-
-  function findTransition(all: Transition[], targetLabel: string, targetKey?: string): Transition | null {
-    const exact = findTransitionToStatus(all, targetLabel);
-    if (exact) return exact;
-    if (targetKey) {
-      const targetCol = columns.find((c) => c.key === targetKey);
-      if (targetCol && targetCol.statuses.length > 0) {
-        for (const st of targetCol.statuses) {
-          const match = findTransitionToStatus(all, st.name);
-          if (match) return match;
-        }
-      }
-    }
-    const targetCat = columns.find((c) => c.key === (targetKey ?? targetLabel))?.category;
-    if (targetCat) {
-      const byCat = all.find((tr) => {
-        const target = toName(tr);
-        const cat = statusCategoryMap[target] ?? statusCategoryMap[target.toLowerCase()];
-        return cat === targetCat;
-      });
-      if (byCat) return byCat;
-    }
-    return null;
-  }
 
   async function doTransition(key: string, transitionId: string, revertTo: string | null = null) {
     try {
@@ -986,7 +620,7 @@ export function BoardClient() {
       }
 
       const all = await fetchTransitions(key);
-      const found = findTransition(all, targetLabel, targetKey);
+      const found = findTransition(columns, statusCategoryMap, all, targetLabel, targetKey);
 
       if (!found) {
         setToast(
@@ -1054,7 +688,7 @@ export function BoardClient() {
           const target = doneCol?.label ?? "Done";
           const found =
             all.find((tr) => {
-              const t = toName(tr);
+              const t = transitionTarget(tr);
               const cat = statusCategoryMap[t] ?? statusCategoryMap[t.toLowerCase()];
               return cat === "done";
             }) ?? null;
@@ -1096,11 +730,7 @@ export function BoardClient() {
     if (!source) return [];
     const currentCol = findColumnForIssue(source);
     const all = transitionCache.current.get(activeKey) ?? [];
-    const allowed = new Set(
-      columns
-        .filter((c) => c.key === currentCol || canDropTo(all, c.label, c.category, c.key))
-        .map((c) => c.key)
-    );
+    const allowed = allowedColumnKeys(columns, statusCategoryMap, currentCol, all);
     const first = ranked.find((r) => allowed.has(String(r.id)));
     return first ? [first] : [];
   }
@@ -1115,13 +745,7 @@ export function BoardClient() {
     }
     const all = transitionCache.current.get(activeKey) ?? [];
     const currentCol = findColumnForIssue(source);
-    setAllowedCols(
-      new Set(
-        columns
-          .filter((c) => c.key === currentCol || canDropTo(all, c.label, c.category, c.key))
-          .map((c) => c.key)
-      )
-    );
+    setAllowedCols(allowedColumnKeys(columns, statusCategoryMap, currentCol, all));
   }
 
   function onDragStart(key: string) {
@@ -1135,16 +759,7 @@ export function BoardClient() {
       .then((all) => {
         if (activeDragKeyRef.current !== issue.jiraKey) return;
         const currentCol = findColumnForIssue(issue);
-        setAllowedCols(
-          new Set(
-            columns
-              .filter((column) =>
-                column.key === currentCol ||
-                canDropTo(all, column.label, column.category, column.key)
-              )
-              .map((column) => column.key)
-          )
-        );
+        setAllowedCols(allowedColumnKeys(columns, statusCategoryMap, currentCol, all));
       })
       .catch(() => {
         // `handleTransition` reports the actionable error if the user drops.
@@ -1160,35 +775,10 @@ export function BoardClient() {
     [colVisibleState, colResetSig]
   );
 
-  const WIP_LIMIT = 8;
-
-  const boardColumnsRender = useMemo(() => {
-    const seen = new Map<string, number>();
-    return visibleColumns.map((c, i) => {
-      const idxInCat = seen.get(c.category) ?? 0;
-      seen.set(c.category, idxInCat + 1);
-      const all = sortedByColumn.get(c.key) ?? [];
-      const count = colVisible[c.key] ?? COL_BATCH;
-      const emptyMessage = c.isBacklog
-        ? (activeFilterCount > 0 ? "Không có task Backlog khớp bộ lọc" : "Không có task Backlog")
-        : undefined;
-      return {
-        id: c.key,
-        label: c.label,
-        category: c.category,
-        isDone: c.isDone,
-        isBacklog: c.isBacklog,
-        emptyMessage,
-        colIndex: i,
-        columnCount: visibleColumns.length,
-        dotColor: statusDot(c.category, idxInCat),
-        items: all.slice(0, count),
-        total: all.length,
-        wipOver: c.category === "indeterminate" && all.length > WIP_LIMIT,
-        collapsed: collapsedCols.has(c.key),
-      };
-    });
-  }, [visibleColumns, sortedByColumn, colVisible, collapsedCols, activeFilterCount]);
+  const boardColumnsRender = useMemo(
+    () => buildColumnViews(visibleColumns, sortedByColumn, colVisible, collapsedCols, activeFilterCount),
+    [visibleColumns, sortedByColumn, colVisible, collapsedCols, activeFilterCount]
+  );
 
   function growColumn(colId: string) {
     setColVisibleState((prev) => {
@@ -1196,69 +786,6 @@ export function BoardClient() {
       counts[colId] = (counts[colId] ?? COL_BATCH) + COL_BATCH;
       return { sig: colResetSig, counts };
     });
-  }
-
-  function toggleCollapse(colId: string) {
-    const next = new Set(collapsedCols);
-    if (next.has(colId)) next.delete(colId);
-    else next.add(colId);
-    persistColumnPrefs(new Set(hiddenCols), next);
-  }
-
-  function hideColumn(colId: string) {
-    if (visibleColumns.length <= 1) return;
-    const next = new Set(hiddenCols);
-    next.add(colId);
-    persistColumnPrefs(next, new Set(collapsedCols));
-  }
-
-  function showColumn(colId: string) {
-    const next = new Set(hiddenCols);
-    next.delete(colId);
-    persistColumnPrefs(next, new Set(collapsedCols));
-  }
-
-  function showAllColumns() {
-    persistColumnPrefs(new Set(), new Set(collapsedCols));
-  }
-
-  function toggleColumnVisibility(colId: string) {
-    const next = new Set(hiddenCols);
-    if (next.has(colId)) next.delete(colId);
-    else {
-      if (visibleColumns.length <= 1) return;
-      next.add(colId);
-    }
-    persistColumnPrefs(next, new Set(collapsedCols));
-  }
-
-  function hideEmptyColumns() {
-    const next = new Set(hiddenCols);
-    for (const column of columns) {
-      if ((byColumn.get(column.key)?.length ?? 0) === 0) {
-        next.add(column.key);
-      }
-    }
-    if (next.size >= columns.length) {
-      next.delete(columns[0].key);
-    }
-    persistColumnPrefs(next, new Set(collapsedCols));
-  }
-
-  function collapseEmptyColumns() {
-    const next = new Set(collapsedCols);
-    for (const column of visibleColumns) {
-      if ((byColumn.get(column.key)?.length ?? 0) === 0) next.add(column.key);
-    }
-    persistColumnPrefs(new Set(hiddenCols), next);
-  }
-
-  function expandAllCollapsedColumns() {
-    persistColumnPrefs(new Set(hiddenCols), new Set());
-  }
-
-  function resetColumnPreferences() {
-    persistColumnPrefs(new Set(), new Set());
   }
 
   const [hiddenTableCols, setHiddenTableCols] = useState<Set<string>>(new Set());
@@ -1328,69 +855,17 @@ export function BoardClient() {
 
   if (effectivePreferred.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <ListFilter className="h-6 w-6 text-muted-foreground" />
-        </div>
-        <p className="text-sm font-medium">Chưa chọn dự án nào</p>
-        <p className="max-w-xs text-xs text-muted-foreground">
-          Chọn các dự án Jira muốn hiển thị trên bảng, hoặc nhập mã dự án bên dưới để bắt đầu.
-        </p>
-
-        <div className="mt-2 flex w-full max-w-xs flex-col gap-2 rounded-lg border border-border bg-card p-3 shadow-xs">
-          <Label className="text-left text-xs font-semibold text-foreground">
-            Nhập mã dự án Jira muốn có
-          </Label>
-          <div className="flex gap-2">
-            <Input
-              value={boardNewKey}
-              onChange={(e) => {
-                setBoardNewKey(e.target.value.toUpperCase());
-                setBoardValidateError(null);
-              }}
-              placeholder="VD: ABC, MOBILE..."
-              className="h-8 font-mono text-xs uppercase"
-              disabled={boardValidating}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void handleAddProjectToBoard();
-                }
-              }}
-            />
-            <Button
-              size="sm"
-              disabled={boardValidating || !boardNewKey.trim()}
-              onClick={() => void handleAddProjectToBoard()}
-              className="h-8 shrink-0 cursor-pointer text-xs gap-1.5"
-            >
-              {boardValidating ? (
-                <RefreshCw className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
-              ) : (
-                <Plus className="h-3.5 w-3.5" />
-              )}
-              Kiểm tra & Thêm
-            </Button>
-          </div>
-          {boardValidateError && (
-            <p className="text-left text-xs font-medium text-destructive">{boardValidateError}</p>
-          )}
-        </div>
-
-        {availableKeys.length > 0 && (
-          <Button variant="outline" size="sm" onClick={() => setShowPicker(true)} className="cursor-pointer gap-1.5">
-            <ListFilter className="h-4 w-4" /> Chọn từ danh sách có sẵn
-          </Button>
-        )}
-      </div>
+      <BoardNoProjectsState
+        boardNewKey={boardNewKey}
+        boardValidating={boardValidating}
+        boardValidateError={boardValidateError}
+        hasAvailableKeys={availableKeys.length > 0}
+        onKeyChange={handleBoardNewKeyChange}
+        onAddProject={handleAddProjectToBoard}
+        onPickFromList={() => setShowPicker(true)}
+      />
     );
   }
-
-  const tabCls = (active: boolean) =>
-    "flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
-    (active
-      ? "bg-primary text-primary-foreground"
-      : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground");
 
   const dndDisabled = effectiveView === "list" || transitionBusy;
 
@@ -1407,148 +882,37 @@ export function BoardClient() {
       )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          {projectList.map((p) => (
-            <button
-              key={p.key}
-              onClick={() => {
-                handleSelectProject(p.key);
-              }}
-              className={tabCls(selectedProject === p.key)}
-            >
-              {p.key}
-              <span
-                className={
-                  "rounded-full px-1.5 text-xs " +
-                  (selectedProject === p.key ? "bg-primary-foreground/20" : "bg-background/60")
-                }
-              >
-                {p.openCount}
-              </span>
-            </button>
-          ))}
-
-          <div className="relative">
-            <button
-              onClick={() => (showPicker ? closePicker() : openPicker())}
-              className={
-                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
-                (effectivePreferred.length > 0
-                  ? "border border-primary/40 bg-primary/10 text-primary"
-                  : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground")
-              }
-            >
-              <ListFilter className="h-4 w-4" />
-              {effectivePreferred.length > 0 ? `${effectivePreferred.length} đã chọn` : "Chọn dự án"}
-            </button>
-            {showPicker && (
-              <Card className="absolute left-0 top-full z-20 mt-1 w-72 p-3 shadow-lg">
-                <p className="mb-2 text-xs font-semibold text-muted-foreground">
-                  Hiển thị dự án trên bảng
-                </p>
-                <div className="flex max-h-56 flex-col gap-1 overflow-auto">
-                  {availableKeys.map((key) => (
-                    <label
-                      key={key}
-                      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
-                    >
-                      <Checkbox checked={pickerSet.has(key)} onCheckedChange={() => togglePicker(key)} />
-                      <span className="flex-1 font-medium">{key}</span>
-                      <span className="text-xs text-muted-foreground">{countMap.get(key) ?? 0}</span>
-                    </label>
-                  ))}
-                </div>
-
-                <div className="mt-2.5 border-t border-border pt-2.5">
-                  <p className="mb-1 text-[11px] font-semibold text-muted-foreground">
-                    Nhập dự án muốn có
-                  </p>
-                  <div className="flex gap-1.5">
-                    <Input
-                      value={boardNewKey}
-                      onChange={(e) => {
-                        setBoardNewKey(e.target.value.toUpperCase());
-                        setBoardValidateError(null);
-                      }}
-                      placeholder="Mã dự án (VD: ABC)"
-                      className="h-8 font-mono text-xs uppercase"
-                      disabled={boardValidating}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void handleAddProjectToBoard();
-                        }
-                      }}
-                    />
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={boardValidating || !boardNewKey.trim()}
-                      onClick={() => void handleAddProjectToBoard()}
-                      className="h-8 shrink-0 cursor-pointer px-2.5 text-xs gap-1"
-                    >
-                      {boardValidating ? (
-                        <RefreshCw className="h-3 w-3 animate-spin motion-reduce:animate-none" />
-                      ) : (
-                        <Plus className="h-3 w-3" />
-                      )}
-                      Thêm
-                    </Button>
-                  </div>
-                  {boardValidateError && (
-                    <p className="mt-1 text-[11px] font-medium text-destructive">{boardValidateError}</p>
-                  )}
-                </div>
-
-                <div className="mt-2.5 flex items-center justify-between border-t border-border pt-2">
-                  <button
-                    onClick={() => setPickerSelection(availableKeys)}
-                    className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                  >
-                    Chọn tất cả
-                  </button>
-                  <Button size="sm" variant="ghost" onClick={commitPicker}>
-                    Xong
-                  </Button>
-                </div>
-              </Card>
-            )}
-          </div>
+          <BoardProjectTabs
+            projectList={projectList}
+            selectedProject={selectedProject}
+            showPicker={showPicker}
+            preferredCount={effectivePreferred.length}
+            availableKeys={availableKeys}
+            pickerSet={pickerSet}
+            countMap={countMap}
+            boardNewKey={boardNewKey}
+            boardValidating={boardValidating}
+            boardValidateError={boardValidateError}
+            onSelectProject={handleSelectProject}
+            onOpenPicker={openPicker}
+            onClosePicker={closePicker}
+            onTogglePicker={togglePicker}
+            onSelectAllKeys={() => setPickerSelection(availableKeys)}
+            onCommit={commitPicker}
+            onKeyChange={handleBoardNewKeyChange}
+            onAddProject={handleAddProjectToBoard}
+          />
 
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={syncJira}
-            disabled={isCurrentProjectSyncing}
-            className="gap-1.5 cursor-pointer"
-            title={
-              isCurrentProjectSyncing
-                ? boardSync.state === "enqueueing"
-                  ? `Đang gửi yêu cầu đồng bộ ${selectedProject}…`
-                  : boardSync.state === "running"
-                  ? `Đang đồng bộ Jira cho ${selectedProject}…`
-                  : `${selectedProject} đang chờ đồng bộ.`
-                : `Đồng bộ Jira cho ${selectedProject}`
-            }
-          >
-            <RefreshCw
-              className={cn(
-                "h-4 w-4",
-                (isCurrentProjectSyncing || isFetching) && "animate-spin motion-reduce:animate-none"
-              )}
-            />
-            {boardSync.projectKey === selectedProject && boardSync.state === "enqueueing"
-              ? "Đang gửi…"
-              : boardSync.projectKey === selectedProject && boardSync.state === "queued"
-              ? "Đang chờ…"
-              : boardSync.projectKey === selectedProject && boardSync.state === "running"
-              ? "Đang đồng bộ…"
-              : boardSync.projectKey === selectedProject && boardSync.state === "succeeded"
-              ? "Đã đồng bộ"
-              : "Đồng bộ Jira"}
-          </Button>
+          <BoardSyncButton
+            boardSync={boardSync}
+            selectedProject={selectedProject}
+            isCurrentProjectSyncing={isCurrentProjectSyncing}
+            isFetching={isFetching}
+            onSync={syncJira}
+          />
           <SegmentedControl<ViewMode>
             items={[
               { value: "board", label: "Bảng", icon: LayoutGrid, disabled: width === "narrow" },
@@ -1559,216 +923,24 @@ export function BoardClient() {
             aria-label="Chế độ hiển thị"
           />
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "h-8 cursor-pointer gap-1.5 font-medium transition-colors",
-                  effectiveView === "board" && hiddenCols.size > 0
-                    ? "border-amber-500/50 bg-amber-500/10 text-amber-900 hover:bg-amber-500/15 dark:text-amber-200"
-                    : effectiveView === "list" && hiddenTableCols.size > 0
-                    ? "border-amber-500/50 bg-amber-500/10 text-amber-900 hover:bg-amber-500/15 dark:text-amber-200"
-                    : ""
-                )}
-                aria-label="Tùy chỉnh ẩn/hiện cột"
-              >
-                <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
-                <span>Tùy chỉnh cột</span>
-                <span
-                  className={cn(
-                    "rounded-full px-1.5 py-0.2 text-[10px] tabular-nums font-semibold",
-                    effectiveView === "board" && hiddenCols.size > 0
-                      ? "bg-amber-500/25 text-amber-950 dark:text-amber-100"
-                      : effectiveView === "list" && hiddenTableCols.size > 0
-                      ? "bg-amber-500/25 text-amber-950 dark:text-amber-100"
-                      : "bg-muted text-muted-foreground"
-                  )}
-                >
-                  {effectiveView === "board"
-                    ? hiddenCols.size > 0
-                      ? `Ẩn ${hiddenCols.size}`
-                      : `${visibleColumns.length}/${columns.length}`
-                    : hiddenTableCols.size > 0
-                    ? `Ẩn ${hiddenTableCols.size}`
-                    : "Đầy đủ"}
-                </span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 p-0 shadow-lg">
-              {effectiveView === "board" ? (
-                <>
-                  <div className="border-b border-border/50 px-3 py-2">
-                    <div className="flex items-center justify-between">
-                      <DropdownMenuLabel className="p-0 text-sm font-semibold">Tùy chỉnh hiển thị cột</DropdownMenuLabel>
-                      <span className="text-[11px] font-medium text-muted-foreground">
-                        Hiện {visibleColumns.length}/{columns.length} cột
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-                      Bật/tắt cột để tùy biến bảng. Lưu riêng cho dự án {selectedProject}.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-1 border-b border-border/40 bg-muted/30 p-1.5 text-xs">
-                    <button
-                      onClick={showAllColumns}
-                      disabled={hiddenCols.size === 0}
-                      className="flex-1 cursor-pointer rounded px-2 py-1 text-center font-medium text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-                    >
-                      Hiện tất cả ({columns.length})
-                    </button>
-                    <span className="text-border">|</span>
-                    <button
-                      onClick={hideEmptyColumns}
-                      className="flex-1 cursor-pointer rounded px-2 py-1 text-center font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-                    >
-                      Ẩn cột trống
-                    </button>
-                  </div>
-
-                  <div className="max-h-72 overflow-y-auto p-1.5 [scrollbar-width:thin]">
-                    {columns.map((column) => {
-                      const visible = !hiddenCols.has(column.key);
-                      const isOnlyVisible = visible && visibleColumns.length === 1;
-                      const count = byColumn.get(column.key)?.length ?? 0;
-                      return (
-                        <div
-                          key={column.key}
-                          onClick={() => {
-                            if (!isOnlyVisible) toggleColumnVisibility(column.key);
-                          }}
-                          className={cn(
-                            "flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs transition-colors cursor-pointer select-none",
-                            visible ? "hover:bg-accent/80" : "opacity-60 hover:bg-muted/60 hover:opacity-100",
-                            isOnlyVisible && "cursor-not-allowed"
-                          )}
-                          title={
-                            isOnlyVisible
-                              ? "Cần giữ ít nhất 1 cột hiển thị"
-                              : visible
-                              ? `Bấm để ẩn cột ${column.label}`
-                              : `Bấm để hiện cột ${column.label}`
-                          }
-                        >
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <Checkbox
-                              checked={visible}
-                              disabled={isOnlyVisible}
-                              className="h-3.5 w-3.5 pointer-events-none"
-                            />
-                            <span className={cn("h-2 w-2 shrink-0 rounded-full", statusDot(column.category, 0))} />
-                            <span
-                              className={cn(
-                                "truncate font-medium",
-                                !visible && "line-through text-muted-foreground"
-                              )}
-                            >
-                              {column.label}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground font-medium">
-                              {count}
-                            </span>
-                            {visible ? (
-                              <Eye className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                            ) : (
-                              <EyeOff className="h-3.5 w-3.5 text-rose-500" aria-hidden />
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <DropdownMenuSeparator className="my-0" />
-                  <div className="p-1 text-xs">
-                    <DropdownMenuItem
-                      onSelect={collapseEmptyColumns}
-                      className="cursor-pointer gap-2 py-1.5 text-xs"
-                    >
-                      <Minimize2 className="h-3.5 w-3.5" aria-hidden />
-                      <span>Thu gọn các cột trống (thanh đứng)</span>
-                    </DropdownMenuItem>
-                    {collapsedCols.size > 0 && (
-                      <DropdownMenuItem
-                        onSelect={expandAllCollapsedColumns}
-                        className="cursor-pointer gap-2 py-1.5 text-xs"
-                      >
-                        <Maximize2 className="h-3.5 w-3.5" aria-hidden />
-                        <span>Mở rộng tất cả cột đang thu gọn</span>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem
-                      onSelect={resetColumnPreferences}
-                      disabled={hiddenCols.size === 0 && collapsedCols.size === 0}
-                      className="cursor-pointer gap-2 py-1.5 text-xs text-muted-foreground focus:text-foreground"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-                      <span>Khôi phục thiết lập mặc định</span>
-                    </DropdownMenuItem>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="border-b border-border/50 px-3 py-2">
-                    <DropdownMenuLabel className="p-0 text-sm font-semibold">Cột trong danh sách</DropdownMenuLabel>
-                    <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-                      Chọn các trường thông tin bạn muốn hiển thị trên bảng danh sách.
-                    </p>
-                  </div>
-                  <div className="p-1.5">
-                    {[
-                      { key: "status", label: "Trạng thái (Status)" },
-                      { key: "assignee", label: "Người xử lý (Assignee)" },
-                      { key: "priority", label: "Mức ưu tiên (Priority)" },
-                      { key: "updated", label: "Thời gian cập nhật (Updated)" },
-                    ].map((col) => {
-                      const visible = !hiddenTableCols.has(col.key);
-                      return (
-                        <div
-                          key={col.key}
-                          onClick={() => toggleTableColumn(col.key)}
-                          className={cn(
-                            "flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs transition-colors cursor-pointer select-none",
-                            visible ? "hover:bg-accent/80" : "opacity-60 hover:bg-muted/60 hover:opacity-100"
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Checkbox checked={visible} className="h-3.5 w-3.5 pointer-events-none" />
-                            <span className={cn("font-medium", !visible && "line-through text-muted-foreground")}>
-                              {col.label}
-                            </span>
-                          </div>
-                          {visible ? (
-                            <Eye className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                          ) : (
-                            <EyeOff className="h-3.5 w-3.5 text-rose-500" aria-hidden />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {hiddenTableCols.size > 0 && (
-                    <>
-                      <DropdownMenuSeparator className="my-0" />
-                      <div className="p-1 text-xs">
-                        <DropdownMenuItem
-                          onSelect={() => setHiddenTableCols(new Set())}
-                          className="cursor-pointer gap-2 py-1.5 text-xs text-muted-foreground focus:text-foreground"
-                        >
-                          <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-                          <span>Hiện tất cả các cột</span>
-                        </DropdownMenuItem>
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <BoardColumnsMenu
+            effectiveView={effectiveView}
+            columns={columns}
+            visibleColumns={visibleColumns}
+            byColumn={byColumn}
+            hiddenCols={hiddenCols}
+            collapsedCols={collapsedCols}
+            hiddenTableCols={hiddenTableCols}
+            selectedProject={selectedProject}
+            onShowAll={showAllColumns}
+            onHideEmpty={hideEmptyColumns}
+            onToggleColumn={toggleColumnVisibility}
+            onCollapseEmpty={collapseEmptyColumns}
+            onExpandAll={expandAllCollapsedColumns}
+            onResetColumns={resetColumnPreferences}
+            onToggleTableColumn={toggleTableColumn}
+            onResetTableColumns={() => setHiddenTableCols(new Set())}
+          />
 
           <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
             <SelectTrigger className="h-8 w-auto gap-1.5 text-sm" title="Sắp xếp thẻ trong từng cột">
@@ -1784,19 +956,7 @@ export function BoardClient() {
         </div>
       </div>
 
-      {issueData?.sync.stale && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-300/50 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          <div>
-            <p className="font-medium">Dữ liệu Jira chưa được đồng bộ mới</p>
-            <p className="text-xs opacity-90">
-              Đồng bộ thành công lần cuối: {issueData.sync.lastSuccessAt ? timeAgo(issueData.sync.lastSuccessAt) : "chưa từng"}.
-              Hãy xếp hàng đồng bộ hoặc kiểm tra worker trước khi ra quyết định phát hành.
-            </p>
-          </div>
-        </div>
-      )}
-
+      {issueData?.sync.stale && <StaleSyncBanner lastSuccessAt={issueData.sync.lastSuccessAt} />}
 
       <IssueFilterBar
         value={filters}
@@ -1822,42 +982,20 @@ export function BoardClient() {
       <BoardSummaryCards summary={summary} loading={isLoading} />
 
       {activeProject && (
-        <div className="text-sm text-muted-foreground">
-          Dự án <span className="font-semibold text-foreground">{activeProject.key}</span>
-          {" "}· {issues.length} task
-          {issueData?.sync.lastSuccessAt ? (
-            <>
-              {" "}· Đồng bộ <span className="font-medium text-foreground">{timeAgo(issueData.sync.lastSuccessAt)}</span>
-            </>
-          ) : null}
-        </div>
+        <BoardProjectSummaryLine
+          projectKey={activeProject.key}
+          issueCount={issues.length}
+          lastSuccessAt={issueData?.sync.lastSuccessAt}
+        />
       )}
 
       {effectiveView === "board" && hiddenCols.size > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-900 dark:text-amber-200">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <EyeOff className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-            <span className="font-semibold">Đang ẩn {hiddenCols.size} cột:</span>
-            {columns
-              .filter((c) => hiddenCols.has(c.key))
-              .map((c) => (
-                <button
-                  key={c.key}
-                  onClick={() => showColumn(c.key)}
-                  title={`Bấm để hiện lại cột ${c.label}`}
-                  className="inline-flex cursor-pointer items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-[11px] font-medium text-foreground transition-colors hover:bg-amber-500/30"
-                >
-                  <span>+ {c.label}</span>
-                </button>
-              ))}
-          </div>
-          <button
-            onClick={showAllColumns}
-            className="cursor-pointer shrink-0 font-medium underline underline-offset-2 hover:text-foreground"
-          >
-            Hiện lại tất cả
-          </button>
-        </div>
+        <HiddenColumnsBanner
+          columns={columns}
+          hiddenCols={hiddenCols}
+          onShowColumn={showColumn}
+          onShowAll={showAllColumns}
+        />
       )}
 
       {isLoading || isLoadingStatuses ? (
@@ -1927,51 +1065,14 @@ export function BoardClient() {
           </DragOverlay>
         </DndContext>
       ) : (
-        <div className="flex-1 overflow-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-muted/50 text-left text-xs text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 font-medium">Key</th>
-                <th className="px-3 py-2 font-medium">Summary</th>
-                {!hiddenTableCols.has("status") && <th className="px-3 py-2 font-medium">Status</th>}
-                {!hiddenTableCols.has("assignee") && <th className="px-3 py-2 font-medium">Assignee</th>}
-                {!hiddenTableCols.has("priority") && <th className="px-3 py-2 font-medium">Priority</th>}
-                {!hiddenTableCols.has("updated") && <th className="px-3 py-2 font-medium">Updated</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {issues.map((issue) => (
-                <tr
-                  key={issue.jiraKey}
-                  className="cursor-pointer border-t transition-colors hover:bg-muted/30"
-                  onClick={() => setQuickPanel(issue)}
-                >
-                  <td className="px-3 py-2 font-mono text-xs text-primary">{issue.jiraKey}</td>
-                  <td className="max-w-xs truncate px-3 py-2 font-medium">{issue.summary}</td>
-                  {!hiddenTableCols.has("status") && (
-                    <td className="px-3 py-2 text-muted-foreground">{issue.status}</td>
-                  )}
-                  {!hiddenTableCols.has("assignee") && (
-                    <td className="px-3 py-2 text-muted-foreground">{issue.assigneeJira ?? "—"}</td>
-                  )}
-                  {!hiddenTableCols.has("priority") && (
-                    <td className="px-3 py-2 text-muted-foreground">{issue.priority ?? "—"}</td>
-                  )}
-                  {!hiddenTableCols.has("updated") && (
-                    <td className="px-3 py-2 text-muted-foreground">{timeAgo(issue.updatedAt)}</td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {hasMore && (
-            <div className="border-t p-3 text-center">
-              <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
-                {loadingMore ? "Đang tải…" : "Xem thêm"}
-              </Button>
-            </div>
-          )}
-        </div>
+        <BoardListView
+          issues={issues}
+          hiddenTableCols={hiddenTableCols}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          onOpen={setQuickPanel}
+          onLoadMore={loadMore}
+        />
       )}
 
       {quickPanel && (
