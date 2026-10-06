@@ -1,7 +1,7 @@
 # Trạng thái triển khai — REMAINING_IMPLEMENTATION_PLAN
 
 > Cập nhật: 2026-10-03
-> Đối chiếu với `docs/REMAINING_IMPLEMENTATION_PLAN.md` và `docs/PROJECT_REPORTING_DASHBOARD_PLAN.md`.
+> Đối chiếu với `docs/archive/REMAINING_IMPLEMENTATION_PLAN.md` và `docs/archive/PROJECT_REPORTING_DASHBOARD_PLAN.md`.
 > Nguyên tắc: đánh dấu **DONE** chỉ khi code đã có. Đánh dấu **CONFIG** khi code
 > đã sẵn nhưng cần cấu hình/dữ liệu thật để chạy end-to-end. Đánh dấu **TODO**
 > khi còn thiếu code.
@@ -14,8 +14,8 @@
 | Pha 2 — Integration (INT-01/02/03/04) | DONE (code) + CONFIG (runtime) | Chờ token/dữ liệu thật |
 | Pha 3 — Release (REL-01/02/03/04/05) | DONE (01–04) + TODO (05) | REL-05 chưa làm (cần PO xác nhận) |
 | Pha 4 — AI/Audit/OBS/QA/OPS | DONE code, AI-01 + E2E còn pilot | Chờ dữ liệu pilot |
-| Bulk Create Smart V2 | DONE | Components, Epic Link, Cascade Subtask, Custom Fields UI, CSV Export (`docs/BULK_CREATE_LOGIC_IMPROVEMENT.md`) |
-| Báo cáo tiến độ dự án (Reporting Dashboard) | DONE | Portfolio, Project detail, KPIs, Recharts (Status/Workload/Bottleneck), Risk task drill-down, CSV export, Snapshot model & Cron (`docs/PROJECT_REPORTING_DASHBOARD_PLAN.md`) |
+| Bulk Create Smart V2 | DONE | Components, Epic Link, Cascade Subtask, Custom Fields UI, CSV Export (`docs/archive/BULK_CREATE_LOGIC_IMPROVEMENT.md`) |
+| Báo cáo tiến độ dự án (Reporting Dashboard) | DONE | Portfolio, Project detail, KPIs, Recharts (Status/Workload/Bottleneck), Risk task drill-down, CSV export, Snapshot model & Cron (`docs/archive/PROJECT_REPORTING_DASHBOARD_PLAN.md`) |
 
 Quality gate hiện tại: **1,029 unit & contract tests pass (135 test files), typecheck pass (0 error), lint sạch, production build pass.**
 
@@ -175,7 +175,7 @@ Quality gate hiện tại: **1,029 unit & contract tests pass (135 test files), 
 
 ### Báo cáo tiến độ theo dự án (Project Reporting Dashboard)
 
-Đối chiếu với `docs/PROJECT_REPORTING_DASHBOARD_PLAN.md`. Đã hoàn thành các pha MVP (P0–P3) và nền tảng Snapshot lịch sử (P4: RPT-401, RPT-402, RPT-403).
+Đối chiếu với `docs/archive/PROJECT_REPORTING_DASHBOARD_PLAN.md`. Đã hoàn thành các pha MVP (P0–P3) và nền tảng Snapshot lịch sử (P4: RPT-401, RPT-402, RPT-403).
 
 #### 1. Quyền hạn & Navigation (RPT-103, RPT-201) → DONE
 - `src/lib/permissions.ts`: Bổ sung 3 permissions chuẩn: `report.view`, `report.export`, `report.configure`. Có unit test suite 11 cases (`src/lib/permissions.test.ts`).

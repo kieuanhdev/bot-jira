@@ -356,7 +356,7 @@ deployment platform's secret store and must not be committed.
 ## 11. Current state versus target state
 
 This decision record describes the accepted target. M0–M8 are implemented
-(2026-09-22). Remaining gaps are tracked in `docs/IMPLEMENTATION_PLAN.md`:
+(2026-09-22). Remaining gaps are tracked in `docs/archive/IMPLEMENTATION_PLAN.md`:
 
 | Area | Current implementation | Accepted target | Work item |
 |---|---|---|---|
