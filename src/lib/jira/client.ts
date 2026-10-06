@@ -602,7 +602,7 @@ export function jiraWith(auth?: JiraAuth) {
           fields.parent = patch.epic ? { key: patch.epic } : null;
         }
       }
-      if (Object.keys(fields).length === 0) return undefined as unknown as void;
+      if (Object.keys(fields).length === 0) return;
       return request(`/rest/api/2/issue/${encodeURIComponent(key)}`, {
         method: "PUT",
         body: JSON.stringify({ fields }),

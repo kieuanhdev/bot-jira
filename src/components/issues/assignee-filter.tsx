@@ -210,6 +210,8 @@ export function AssigneeFilter({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
+            // aria-controls is injected by Radix DropdownMenuTrigger while the menu is open.
+            // eslint-disable-next-line jsx-a11y/role-has-required-aria-props
             role="combobox"
             aria-expanded={open}
             aria-haspopup="menu"

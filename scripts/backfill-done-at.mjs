@@ -1,4 +1,4 @@
-import { createHash, createDecipheriv } from "crypto";
+import { createDecipheriv } from "crypto";
 import pg from "pg";
 
 const { Client } = pg;

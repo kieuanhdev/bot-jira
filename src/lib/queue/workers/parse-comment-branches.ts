@@ -17,7 +17,7 @@ export async function runParseCommentBranches(): Promise<WorkerLog> {
     const stats = await parseCommentsForBranches();
     return {
       ok: true,
-      stats: { scanned: stats.scanned, parsed: stats.parsed, upserted: stats.upserted } as unknown as Record<string, number>,
+      stats: { scanned: stats.scanned, parsed: stats.parsed, upserted: stats.upserted },
     };
   } catch (e) {
     return { ok: false, errors: [(e as Error).message.slice(0, 500)] };

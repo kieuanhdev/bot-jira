@@ -81,5 +81,5 @@ export async function runAiScore(): Promise<WorkerLog> {
       }
     }
   }
-  return { ok: true, stats: { scored, candidates: candidates.length } as unknown as Record<string, number>, errors };
+  return { ok: true, stats: { scored, candidates: candidates.length }, errors };
 }

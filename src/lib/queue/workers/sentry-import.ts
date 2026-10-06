@@ -228,7 +228,7 @@ export async function runSentryImport(): Promise<WorkerLog> {
 
   return {
     ok: true,
-    stats: { imported, recovered, failed } as unknown as Record<string, number>,
+    stats: { imported, recovered, failed },
     errors,
   };
 }

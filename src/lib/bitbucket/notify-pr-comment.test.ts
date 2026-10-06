@@ -158,12 +158,12 @@ describe("notifyPrComment", () => {
     it("notifies assignee and watcher of the Jira task linked to the PR branch", async () => {
       // Mock finding branch info
       vi.mocked(prisma.branchInfo.findMany).mockResolvedValueOnce([
-        { jiraKey: "EPM-500", branch: "feature/EPM-500-checkout" } as unknown as import("@prisma/client").BranchInfo,
+        { jiraKey: "EPM-500", branch: "feature/EPM-500-checkout" } as import("@prisma/client").BranchInfo,
       ]);
 
       // Mock finding issues
       vi.mocked(prisma.issueCache.findMany).mockResolvedValueOnce([
-        { jiraKey: "EPM-500", assigneeJira: "anhnk_mb" } as unknown as import("@prisma/client").IssueCache,
+        { jiraKey: "EPM-500", assigneeJira: "anhnk_mb" } as import("@prisma/client").IssueCache,
       ]);
 
       // Mock finding users for assignee
@@ -173,7 +173,7 @@ describe("notifyPrComment", () => {
 
       // Mock finding watchers
       vi.mocked(prisma.watch.findMany).mockResolvedValueOnce([
-        { userId: "user-watcher" } as unknown as import("@prisma/client").Watch,
+        { userId: "user-watcher" } as import("@prisma/client").Watch,
       ]);
 
       // Mock user verification query for filtering comment author

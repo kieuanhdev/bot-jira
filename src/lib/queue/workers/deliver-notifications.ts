@@ -167,7 +167,7 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
 
   return {
     ok: true,
-    stats: { sent, failed, skipped, due: due.length } as unknown as Record<string, number>,
+    stats: { sent, failed, skipped, due: due.length },
     errors,
   };
 }

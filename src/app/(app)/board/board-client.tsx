@@ -1069,7 +1069,7 @@ export function BoardClient() {
       }
     } catch (e) {
       const err = e as ApiError;
-      const msg = err.status ? `update failed (HTTP ${err.status})` : (err as unknown as Error).message;
+      const msg = err.status ? `update failed (HTTP ${err.status})` : err.message;
       setToast(`${key}: ${msg.slice(0, 100)}`);
     }
   }

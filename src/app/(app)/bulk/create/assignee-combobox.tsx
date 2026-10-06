@@ -158,6 +158,8 @@ export function AssigneeCombobox({
                   onMouseEnter={() => setHighlighted(idx)}
                 >
                   {user.avatar ? (
+                    // Jira avatars are arbitrary remote URLs; next/image would need remotePatterns config.
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={user.avatar} alt="" className="h-5 w-5 rounded-full" />
                   ) : (
                     <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-medium">

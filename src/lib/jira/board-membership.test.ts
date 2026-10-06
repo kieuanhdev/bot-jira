@@ -6,6 +6,9 @@ import {
 } from "./board-membership";
 import { JiraRequestError, type JiraClient } from "./client";
 
+// Tests only stub the client methods under test; widen the stub to JiraClient in one place.
+const asJiraClient = (stub: object) => stub as JiraClient;
+
 describe("board-membership", () => {
   beforeEach(() => {
     clearBoardMembershipCache();
@@ -139,7 +142,7 @@ describe("board-membership", () => {
         }),
       };
 
-      const membership = await getBoardMembership(mockClient as unknown as JiraClient, 101, "user1");
+      const membership = await getBoardMembership(asJiraClient(mockClient), 101, "user1");
       expect(membership.boardId).toBe(101);
       expect(membership.boardKeys).toEqual(["EPM-1", "EPM-2", "EPM-3"]);
       expect(membership.backlogKeys).toEqual(["EPM-4", "EPM-2"]);
@@ -160,7 +163,7 @@ describe("board-membership", () => {
         getBoardBacklog: vi.fn().mockRejectedValue(new JiraRequestError("Backlog not supported", 400, false)),
       };
 
-      const membership = await getBoardMembership(mockClient as unknown as JiraClient, 202, "user1");
+      const membership = await getBoardMembership(asJiraClient(mockClient), 202, "user1");
       expect(membership.boardKeys).toEqual(["KAN-1"]);
       expect(membership.backlogKeys).toEqual([]);
       expect(membership.allKeys).toEqual(["KAN-1"]);
@@ -184,8 +187,8 @@ describe("board-membership", () => {
       const mockClient = { getBoardIssues, getBoardBacklog };
 
       const [res1, res2] = await Promise.all([
-        getBoardMembership(mockClient as unknown as JiraClient, 303, "user1"),
-        getBoardMembership(mockClient as unknown as JiraClient, 303, "user1"),
+        getBoardMembership(asJiraClient(mockClient), 303, "user1"),
+        getBoardMembership(asJiraClient(mockClient), 303, "user1"),
       ]);
 
       expect(res1.allKeys).toEqual(["EPM-10"]);
@@ -193,7 +196,7 @@ describe("board-membership", () => {
       expect(getBoardIssues).toHaveBeenCalledTimes(1);
 
       // Third call should hit cache directly
-      const res3 = await getBoardMembership(mockClient as unknown as JiraClient, 303, "user1");
+      const res3 = await getBoardMembership(asJiraClient(mockClient), 303, "user1");
       expect(res3.allKeys).toEqual(["EPM-10"]);
       expect(getBoardIssues).toHaveBeenCalledTimes(1);
     });
@@ -214,14 +217,14 @@ describe("board-membership", () => {
       };
 
       // First call succeeds and caches
-      const first = await getBoardMembership(mockClient as unknown as JiraClient, 404, "userA");
+      const first = await getBoardMembership(asJiraClient(mockClient), 404, "userA");
       expect(first.allKeys).toEqual(["SEC-1"]);
 
       // Invalidate cache TTL to simulate expiry within stale window
       clearBoardMembershipCache();
 
       // Second call fails with 403: must throw, never serve stale cache
-      await expect(getBoardMembership(mockClient as unknown as JiraClient, 404, "userA")).rejects.toThrowError(
+      await expect(getBoardMembership(asJiraClient(mockClient), 404, "userA")).rejects.toThrowError(
         /Forbidden/
       );
     });

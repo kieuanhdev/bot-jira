@@ -231,7 +231,7 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
       recoveryCoalesced: recovery.coalesced,
       recoveryFailed: recovery.failed,
       ...(recovery.errors.length > 0 ? { recoveryErrors: recovery.errors } : {}),
-    } as unknown as Record<string, unknown>,
+    },
     ...(recovery.errors.length > 0 ? { errors: recovery.errors } : {}),
   };
 }

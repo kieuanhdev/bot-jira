@@ -188,5 +188,5 @@ export async function runCheckBranches(): Promise<WorkerLog> {
     },
   });
 
-  return { ok: errors.length === 0, stats: { checked, deleted, skippedUnauthorized } as unknown as Record<string, number>, errors: errors.length > 0 ? errors : undefined };
+  return { ok: errors.length === 0, stats: { checked, deleted, skippedUnauthorized }, errors: errors.length > 0 ? errors : undefined };
 }

@@ -441,7 +441,7 @@ export async function registerJobs(): Promise<PgBoss> {
   await boss.work("capture-project-report-snapshots", async () =>
     recordRun("capture-project-report-snapshots", async () => {
       const stats = await captureProjectReportSnapshots();
-      return { ok: true, stats: stats as unknown as Record<string, unknown> };
+      return { ok: true, stats: { ...stats } };
     })
   );
   // M5 — webhook processing: one-off jobs enqueued by the webhook endpoints.
