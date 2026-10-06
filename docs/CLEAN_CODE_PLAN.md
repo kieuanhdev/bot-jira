@@ -1,69 +1,164 @@
-# Kế hoạch clean code toàn dự án
+# Clean code toàn dự án — kế hoạch & tiến độ
 
-> Ngày lập: 2026-10-06 · Branch gốc: `main` · Trạng thái: **chờ duyệt, chưa sửa code**
+> Cập nhật: 2026-10-06 · Branch: `chore/clean-code-20261006` (từ `main`) · **Chưa merge, chưa push**
 > Mục tiêu: repo sạch hơn, type chặt hơn, file nhỏ hơn — **hành vi không đổi**.
 > Đây là refactor, không phải rewrite, không nâng dependency, không thêm feature.
 
-## 1. Hiện trạng (đo ngày 2026-10-06)
+## 0. Tóm tắt trạng thái
 
-| Hạng mục | Kết quả |
-|---|---|
-| Quy mô | 562 file trong `src/`, 95 API route, 39 file trong `docs/` (~23.5k dòng) |
-| `tsc --noEmit` | 34 lỗi. **Toàn bộ do môi trường**: `recharts` và `exceljs` có trong `package.json` nhưng chưa cài trong `node_modules`; 2 lỗi do cache `.next/` trỏ tới `api/inbox/command/route` không còn tồn tại |
-| Vitest | 13 fail / 1089 pass (8 file fail) |
-| ESLint | 86 lỗi, 60 cảnh báo |
-| `any` | 155 chỗ (`: any` / `as any`) |
-| `as unknown as` | 42 chỗ |
-| `eslint-disable` | 11 chỗ |
-| `@ts-ignore` / `console.log` | 0 / 0 (đã dọn ở đợt 2026-09-24) |
-
-### 1.1 Test đang fail (13)
-
-| File | Số test | Nghi vấn ban đầu |
+| Batch | Nội dung | Trạng thái |
 |---|---|---|
-| `bulk/create/excel-import/route.test.ts`, `excel-template/route.test.ts`, `lib/bulk/excel-parser.test.ts`, `excel-template.test.ts` | 4 file | Thiếu `exceljs` → sẽ hết sau `npm install` |
-| `lib/jira/board-membership-store.test.ts` | 7 | Chưa rõ: mock Prisma cũ hay code đổi? |
-| `lib/queue/workers/refresh-board-membership.test.ts` | 3 | Như trên |
-| `api/reports/projects/[projectKey]/sub-routes.test.ts` | 2 | `completedTasks` assertion sai → có thể bug thật |
-| `lib/stale/business-days.test.ts` | 1 | Case "same business day", nghi phụ thuộc ngày/giờ chạy |
+| 0 | Dọn nền (`npm install`, prisma generate, baseline) | ✅ Xong |
+| 1 | Phân loại test fail | ✅ Xong |
+| 2 | Lint cơ học | ✅ Xong |
+| 3 | Siết type | 🟡 Xong phần code; **test còn `any`** bị tắt rule ở mức file |
+| 4 | React hooks / React Compiler | ✅ Xong |
+| 5 | Gom trùng lặp & dependency | 🟡 Xong phần route + dependency; **còn clone ở `lib/`** (cố ý bỏ qua) |
+| 6 | Tách file lớn | 🟡 **4/13 file lớn đã tách**; còn 8 file + vài file cha vẫn > 800 dòng |
+| 7 | Dọn repo (`docs/`, `public/`, `.kilocode/`, scripts) | ⬜ **Chưa làm** |
+| — | Kiểm tra tay trên trình duyệt | ⬜ **Chưa làm bất kỳ mục nào** |
 
-### 1.2 Phân bố lỗi ESLint
+## 1. Số liệu trước → sau
 
-| Rule | Mức | Số lượng |
+| Hạng mục | Trước (2026-10-06, `main`) | Sau (branch hiện tại) |
 |---|---|---|
-| `@typescript-eslint/no-explicit-any` | error | 60 |
-| `@typescript-eslint/no-unused-vars` | warn | 54 |
-| `react-hooks/set-state-in-effect` | error | 16 |
-| `react-hooks/preserve-manual-memoization` | error | 5 |
-| `prefer-const` | error | 3 |
-| `react/no-unescaped-entities` | error | 2 |
-| `jsx-a11y/role-has-required-aria-props` | warn | 2 |
-| `react-hooks/exhaustive-deps` | warn | 2 |
-| `@next/next/no-img-element` | warn | 1 |
+| `tsc --noEmit` | 34 lỗi (toàn bộ do môi trường: thiếu `recharts`/`exceljs`, cache `.next/`) | **0** |
+| ESLint | 86 lỗi, 60 cảnh báo | **0 lỗi, 0 cảnh báo** (xem lưu ý `any` bên dưới) |
+| Vitest | 13 fail / 1089 pass (145 file) | **1176 pass / 0 fail (149 file)**, +57 test mới |
+| `next build` | pass | pass |
+| Lỗi lint `no-explicit-any` | 60 (code + test) | **0** |
+| `any` thực tế trong code (không tính test) | — | 0 (5 kết quả grep chỉ là comment) |
+| `any` thực tế trong test | — | ~99, **được giữ bằng `eslint-disable` đầu file ở 7 file test** |
+| `as unknown as` | 42 (tạm lên 54 giữa chừng) | **35** |
+| `eslint-disable` | 11 | 12 (5 ở code có ghi lý do, 7 là file-level ở test) |
+| Dependency | — | gỡ `zustand`, `@dnd-kit/sortable`, `@types/bcryptjs` |
+| jscpd (min 10 dòng) | 74 clone / 1,9% | 68 clone / 1,66% (đo sau Batch 5) |
+| Diff so với `main` | — | 143 file, +9069 / −7807 (gồm file mới do tách) |
 
-### 1.3 File quá lớn (> 900 dòng)
+Kích thước file đã tách:
 
-| File | Dòng |
-|---|---|
-| `src/app/(app)/bulk/bulk-client.tsx` | 2254 |
-| `src/app/(app)/board/board-client.tsx` | 1993 |
-| `src/lib/bulk/ops.ts` | 1933 |
-| `src/app/(app)/stale/stale-client.tsx` | 1836 |
-| `src/app/(app)/issue/[key]/issue-detail-client.tsx` | 1427 |
-| `src/app/(app)/reports/projects/[projectKey]/status-distribution-chart.tsx` | 1324 |
-| `src/lib/jira/client.ts` | 1193 |
-| `src/lib/bulk/create-ops.ts` | 1111 |
-| `src/app/(app)/board/board-quick-panel.tsx` | 1055 |
-| `src/app/(app)/leaderboard/leaderboard-client.tsx` | 1045 |
-| `src/app/(app)/bulk/create/bulk-create-data-grid.tsx` | 997 |
-| `src/app/(app)/bulk/create/csv-import-dialog.tsx` | 960 |
-| `src/app/(app)/bulk/create/create-task-grid.tsx` | 954 |
+| File | Trước | Sau | File mới sinh ra |
+|---|---|---|---|
+| `reports/projects/[projectKey]/status-distribution-chart.tsx` | 1322 | **274** | 8 file trong `status-chart/` |
+| `stale/stale-client.tsx` | 1836 | **469** | 9 component + hàm thuần trong `lib/stale-utils.ts` |
+| `board/board-client.tsx` | 1987 | **1088** | 6 component, `lib/board-columns.ts`, `lib/board-hooks.ts` |
+| `bulk/bulk-client.tsx` | 2277 | **985** | 7 file step + `lib/bulk-logic.ts` |
 
-### 1.4 Đợt dọn trước (2026-09-24)
+## 2. Đã làm — chi tiết theo batch
 
-Đã làm: xóa `console.log` debug, 3 file chết, 12 `any`, gom 50 `queryKey` vào `src/lib/query-keys.ts`. Đã bỏ qua có chủ đích: xóa "unused export" vì đó là public API của module. **Không làm lại các việc này.** Từ đó repo thêm ~400 file nên lỗi mới tích lại ở `reports/`, `bulk/`, `board-membership`.
+### Batch 0 — Dọn nền
+- Tạo branch, `npm install` (khôi phục `recharts`, `exceljs` có trong `package.json` nhưng thiếu trong `node_modules`), xóa `.next/`, `prisma generate`.
+- Kết quả: `tsc` 34 → 0 lỗi; 4 file test Excel hết fail.
+- Commit: `ee2a002` (thêm tài liệu kế hoạch), `4542a89` (baseline; `eslint.config.mjs` bỏ qua `.kilo/`, `.kilocode/`, `.cleanup/`; sửa cách đếm trong `verify.sh`).
 
-## 2. Bất biến — KHÔNG được thay đổi
+### Batch 1 — Phân loại test fail (13 test)
+| Nhóm | Nguyên nhân | Cách xử lý | Commit |
+|---|---|---|---|
+| `excel-*` (4 file) | thiếu `exceljs` | hết sau Batch 0 | — |
+| `business-days.test` (1) | test phụ thuộc múi giờ máy (`UTC+7` làm `17:00Z` sang ngày sau) | dùng giờ local trong test | `ad0c4f0` |
+| `sub-routes.test` (2) | test hard-code ngày 2026-10-02 nhưng `period=this_week` tính theo ngày chạy | cố định `Date` bằng fake timers | `ad0c4f0` |
+| `board-membership-store.test` (7), `refresh-board-membership.test` (3) | là **test tích hợp ghi vào DB thật** trong `.env`, DB không dùng được | viết lại thành unit test với Prisma giả trong bộ nhớ | `c369acc` |
+
+⚠️ Hệ quả của dòng cuối: hai file test này **không còn kiểm tra transaction/generation thật**. Xem mục 4.
+
+### Batch 2 — Lint cơ học
+- Xóa import/biến thừa (54), `prefer-const` (3), `no-unescaped-entities` (2). Commit `6eea03a`.
+
+### Batch 3 — Siết type
+- Thay `any` bằng type thật ở code (`process-webhook.ts`, `board-membership-store.ts`, `use-issues.ts`, `components/ui/chart.tsx`, …): `6b2c5a2`. Ở test: `96a0bfa`.
+- `as unknown as`: bỏ các cast thừa ở 6 worker (`ai-score`, `sentry-import`, `deliver-notifications`, `check-branches`, `parse-comment-branches`, `health-alert`), `boss.ts` (`{ ...stats }`), `board-client.tsx`, `jira/client.ts`, và gom 11 cast trong test. 54 → 35. Commit `2e52091`.
+- 3 cảnh báo cuối → 0 (`createHash` thừa; hai `eslint-disable` có lý do cho `<img>` avatar Jira và ARIA combobox do Radix tự thêm `aria-controls`). Commit `2e52091`.
+
+### Batch 4 — React hooks & React Compiler
+- 16 `set-state-in-effect` + 5 `preserve-manual-memoization` → 0, bằng "đồng bộ state trong render" (`if (x !== prevX) { setPrevX(x); … }`) và khởi tạo lazy từ `localStorage`. Commit `7c668f6`.
+- Sửa sau review (`7bd69fe`):
+  - `tasks-tab.tsx`: khôi phục đồng bộ **từng filter độc lập** (bản đầu ghi đè cả ba khi một prop đổi).
+  - Ghi chú trong 3 file đọc `localStorage` ở lần render đầu: an toàn vì chỉ render sau khi `useQuery` có dữ liệu ở client (repo không dùng `HydrationBoundary`/`initialData`).
+- Đã xác nhận **không** có hydration mismatch thật; nếu sau này thêm SSR prefetch thì phải xem lại 3 chỗ đó.
+- Xóa 5 file chết (`create-task-grid`, `create-defaults-form`, `jira-option-select`, `workload-chart`, `assignee-multi-select`, ~1885 dòng; 0 tham chiếu). Commit `96e1f20`.
+
+### Batch 5 — Gom trùng lặp & dependency
+- `src/lib/reports/route-guard.ts` → `guardProjectReport(params, { permission?, forbiddenMessage? })` dùng cho 6 route `reports/projects/[projectKey]/*`; giữ nguyên thứ tự kiểm tra và JSON/status; có test (6). Commit `061e6fa`.
+- `src/lib/jira/credentials-required.ts` → `jiraCredentialsRequired()` thay response 428 giống hệt ở **26 chỗ / 24 route**. Route `projects`, `projects/validate`, `releases/sync` có payload khác nên **giữ nguyên**. Commit `c344979`.
+- Gỡ dependency chết: `zustand`, `@dnd-kit/sortable`, `@types/bcryptjs` (đã grep 0 tham chiếu; `tsc`/test/build pass). Commit `4e87ffc`.
+
+### Batch 6 — Tách file lớn (4/13)
+Nguyên tắc đã áp dụng: **state và handler giữ ở component cha**; chỉ tách (1) hàm thuần có test, (2) hook tự chứa gọi cùng thứ tự, (3) JSX chuyển nguyên văn thành component ở module scope (không tạo component trong component, không thêm wrapper).
+
+| File | Cách tách | Test thêm | Commit |
+|---|---|---|---|
+| `status-distribution-chart.tsx` | `status-chart/{model.ts, use-status-chart-preferences.ts, controls, header-panels, donut/pipeline/table-view, empty-state}` | `model.test.ts` (8) | `bacb160` |
+| `stale-client.tsx` | `stale-{view-switcher, scope-filter, std-overview, std-filters, std-task-list, focus-sections, task-list-card, insight-cards, empty-state}.tsx`; `filterFocusedTasks/computeFocusCounts/filterStdTasks` vào `lib/stale-utils.ts` | +7 trong `stale-utils.test.ts` | `ee8232d` |
+| `board-client.tsx` | `lib/board-columns.ts` (xây cột, transition, thống kê; biểu thức "cột được phép thả" lặp 3 lần → `allowedColumnKeys`), `lib/board-hooks.ts` (`useBoardWidth`, `useDragAutoScroll`, `useJiraSync`, `useTransitionCache`, `useColumnPreferences`), 6 component | `board-columns.test.ts` (12) | `243ce01` |
+| `bulk-client.tsx` | `lib/bulk-logic.ts` (tùy chọn lọc, lọc/sắp xếp, task giữ chỗ, dựng action, body preview, đếm bucket, nhãn xác nhận), `bulk-{header-parts, select-step, configure-step, preview-step, history-card, confirm-dialog, preview-field-row}.tsx` | `bulk-logic.test.ts` (24) | `657714b` |
+
+#### Cách kiểm chứng "không đổi UI" (quan trọng)
+Dự án chưa có E2E. Mỗi file được kiểm bằng **so sánh HTML**: render bản cũ (lấy từ git) và bản mới bằng `renderToStaticMarkup` với cùng dữ liệu giả (react-query được seed sẵn, mock `next/navigation`/`next-auth`), ép các state khởi tạo khác nhau (chế độ, preview, giá trị trường…). Kết quả: giống hệt ở 12 (chart) + 5 (stale) + 9 (board) + 24 (bulk) kịch bản. Đã thử cố ý đổi một class để chắc harness bắt được.
+
+Giới hạn của cách này (**cần kiểm tay**): không chạy effect, click, kéo-thả, mutation, gọi mạng, URL sync.
+Harness hiện **chưa nằm trong repo** (để ở thư mục tạm của phiên làm việc); nếu muốn dùng tiếp thì cần quyết định lưu ở đâu (mục 6).
+
+## 3. Chưa làm
+
+### 3.1 Batch 6 — các file lớn còn lại
+
+| File | Dòng | Gợi ý tách (chưa thực hiện) | Rủi ro |
+|---|---|---|---|
+| `lib/bulk/ops.ts` | 1933 | Tách theo thao tác (preview, execute, retry…); giữ file gốc làm entry re-export; **trước tiên grep `vi.mock`/`vi.spyOn` trên module này** | Cao: ghi Jira/DB, dùng chung worker và app |
+| `issue/[key]/issue-detail-client.tsx` | 1428 | Hàm thuần cho validate worklog; component cho header, quick-action bar, panel nhánh, panel AI, bình luận, dialog Log Work; state giữ ở cha. Có thể dùng lại harness SSR (seed 5 query, mock các hook `use-issue-detail`) | Trung bình |
+| `lib/jira/client.ts` | 1193 | Chỉ tách nếu `jiraWith` là closure trả một object literal trên một `request` dùng chung và type `JiraClient` giữ nguyên; nếu không sạch thì **bỏ qua và ghi lý do** | Cao |
+| `lib/bulk/create-ops.ts` | 1111 | Như `ops.ts`; chỉ tách khi có test bao phủ | Cao |
+| `board/board-quick-panel.tsx` | 1055 | Chưa khảo sát chi tiết | Trung bình |
+| `leaderboard/leaderboard-client.tsx` | 1043 | Chưa khảo sát chi tiết | Trung bình |
+| `bulk/create/bulk-create-data-grid.tsx` | 1005 | **Giữ nguyên** thuộc tính `data-row-index`, `data-field` và `ref` mà cha dùng để `querySelector`/focus | Trung bình–cao |
+| `bulk/create/csv-import-dialog.tsx` | 960 | Tách parser/mapping thành hàm thuần có test, dialog chỉ còn trình bày | Trung bình |
+
+Các file cha vẫn còn lớn sau khi tách (chấp nhận được vì phần còn lại là state/handler cohesive, nhưng có thể tách tiếp):
+- `board-client.tsx` 1088: còn bộ lọc + URL sync, project picker, kéo-thả (`useBoardFilters`, `useBoardDnd` là hướng có thể làm; các effect đan xen nên cần cẩn thận).
+- `bulk-client.tsx` 985; `bulk-configure-step.tsx` 689.
+
+Ngoài kế hoạch gốc (> 600 dòng, tùy chọn): `lib/bulk/create-validator.ts` 815, `settings/notification-preferences.tsx` 757, `bulk/create/bulk-create-client.tsx` 682, `jira-template-dialog.tsx` 678, `lib/jira/board-config.ts` 624.
+
+**Tiêu chí xong của Batch 6** (chưa đạt): không file nào > ~800 dòng trừ khi ghi lý do.
+
+### 3.2 Batch 7 — Dọn repo (chưa động vào)
+- [ ] `docs/` (40 file): archive các file `*_PLAN.md` / `*_PROGRESS.md` đã thực hiện xong vào `docs/archive/` bằng `git mv`; giữ `architecture.md`, `RUNBOOK.md`, `release-policy.md`, `BACKUP_RESTORE.md`, `PR_CHECKLIST.md`, `notification-realtime.md`, `IMPLEMENTATION_STATUS.md`; sửa link trỏ tới.
+- [ ] `public/`: `file.svg`, `globe.svg`, `next.svg`, `vercel.svg`, `window.svg` — grep tham chiếu rồi xóa nếu không dùng.
+- [ ] `.kilocode/` (177 file được commit) và `.kilo/` (7,3 GB, không commit): giữ, ignore hay chuyển ra ngoài repo.
+- [ ] Rà `package.json` scripts, `scripts/` (backfill/cleanup dùng một lần), `README.md`.
+
+### 3.3 Batch 3 — phần còn dở
+- [ ] 7 file test có `/* eslint-disable @typescript-eslint/no-explicit-any */` đầu file (~99 chỗ `any`): `jira-sync-integration.test`, `jira-sync-race.test`, `jira-sync-lease-renewal.test`, `workers/poll-jira.test`, `workers/poll-pr-comments.test`, `cache-transaction.test`, `cache-error-propagation.test`. Rule lint đang "xanh" nhờ suppress, **không phải nhờ đã có type**.
+- [ ] `as unknown as` còn 35, trong đó **hợp lệ giữ lại**: singleton `globalThis` (`prisma.ts`, `boss.ts`, `realtime.ts`, `webhooks/_shared.ts`), ép `Buffer` cho exceljs/`Response`, `pushSubscription` kiểu JSON, `rawJob` của pg-boss; còn lại chủ yếu ở test mock.
+- [ ] 12 `eslint-disable`: chỉ 5 cái ở code đã có lý do; chưa rà `use-web-push.ts:61`, `board-column.tsx:86`, `board-client.tsx:534`.
+
+### 3.4 Batch 5 — phần còn dở (cố ý bỏ qua vì chạm code dùng chung worker/app)
+Clone còn lại ở `lib/`: `issues/cache.ts`, `bitbucket/link-service.ts`, `jira/board-config.ts`, `notify-commit-comment` ↔ `notify-pr-comment`, `reports/member-query` ↔ `project-query`, `ai/ollama` ↔ `ai/openai`, `queue/workers/check-branches.ts`, `process-webhook.ts`. Cũng còn phần mở đầu lặp ở nhóm `bulk/create/*` (session → tham số `project` → 428), mỗi route chỉ ~3 dòng thật sự trùng nên chưa gom.
+- [ ] 43 "unused export" và 107 "unused exported type" do knip báo: **giữ** vì là API công khai của module (quyết định từ đợt dọn 2026-09-24).
+
+### 3.5 Kiểm tra tay trên trình duyệt (chưa mục nào được làm)
+Mỗi commit tách file có ghi đường dẫn click trong message. Tổng hợp:
+- [ ] **Reports → dự án → Overview**: đổi Task/SP/giờ, Tròn/Luồng/Bảng, hover/click trạng thái để lọc, bật/tắt tùy chọn, reload để xem preference còn lưu; tab Tasks: đổi từng filter và kiểm tra phân trang.
+- [ ] **/stale**: chuyển "Việc của tôi"/"Toàn dự án", các tab, bộ lọc phạm vi, thẻ ưu tiên, bộ lọc + chọn nhiều + bulk action ở danh sách chuẩn hóa, "Xem thêm".
+- [ ] **/board**: đổi dự án, picker + thêm dự án, nút đồng bộ, **kéo thả thẻ** (cột được phép/bị chặn), menu cột (ẩn/thu gọn/khôi phục, chế độ danh sách), bộ lọc, "Xem thêm" ở chế độ danh sách, phím mũi tên + Enter, quick panel.
+- [ ] **/bulk**: chọn dự án, lọc + chọn tất cả, từng chế độ (cập nhật trường / chuyển trạng thái / log work), bật nhiều trường và nhập giá trị, **Xem trước → các tab → Chạy**, hủy xem trước, thử lại ở lịch sử, `/bulk?keys=…&returnTo=standardization`.
+- [ ] **/bulk/create**: mở với `editor-mode=fullscreen` đã lưu và xem console có cảnh báo hydration không.
+- [ ] Light/dark mode, màn hình hẹp.
+
+## 4. Phát hiện nhưng chưa sửa (chạm hành vi hoặc bất biến — cần bạn quyết)
+
+| # | Vấn đề | Vị trí | Ghi chú |
+|---|---|---|---|
+| 1 | **Bug thật, hẹp**: refresh nền (SWR) lưu `Promise<void>` vào `Map<string, Promise<T>>` bằng cast; request đến sau `staleUntil` khi refresh còn chạy sẽ nhận `undefined` như dữ liệu | `lib/jira/board-membership.ts:276`, `lib/jira/board-options.ts:69` | Sửa: cho refresh nền trả dữ liệu mới, hoặc không đưa vào Map đó |
+| 2 | `null as unknown as object` để xóa cột JSON `pushSubscription`; Prisma thường yêu cầu `Prisma.DbNull` | `lib/queue/workers/deliver-notifications.ts:131` | Cần thử trên DB thật trước khi đổi |
+| 3 | Hai file test membership giờ dùng Prisma giả → mất kiểm tra transaction/generation thật | `board-membership-store.test.ts`, `refresh-board-membership.test.ts` | Cân nhắc giữ thêm bản integration chạy riêng (cần DB test) |
+| 4 | `bulk-client`: effect cũ ép project về URL mỗi lần đổi project và khôi phục danh sách chọn (khiến không đổi được project khi vào bằng `?keys=`). Bản mới chỉ đồng bộ khi `initialKeys` đổi | `bulk/bulk-client.tsx` | Đã chủ ý giữ hành vi mới; cần kiểm tay |
+| 5 | `components/ui/chart.tsx`: `item.value !== undefined` → `!= null` (trước đây `null` làm crash `.toLocaleString()`) | `components/ui/chart.tsx` | Sửa lỗi nhỏ nhưng là đổi hành vi |
+| 6 | knip báo `dotenv`, `postcss` chưa khai báo trong `package.json` (đang chạy nhờ phụ thuộc gián tiếp); `tailwindcss` bị báo thừa là **false positive** (dùng qua plugin PostCSS) | `package.json` | Thêm dependency là ngoài phạm vi dọn dẹp; **đừng xóa `tailwindcss`** |
+| 7 | `eslint.config.mjs` bị sửa để bỏ qua `.kilo/`, `.kilocode/`, `.cleanup/` | `4542a89` | Là thay đổi cấu hình, xem lại có muốn giữ không |
+| 8 | Handler preview/confirm/retry của Bulk, kéo-thả của Board, đồng bộ Jira/URL **không** được harness HTML bao phủ | — | Chỉ có kiểm tra tay (mục 3.5) và review diff từng dòng |
+
+## 5. Bất biến — KHÔNG được thay đổi (giữ nguyên cho phần còn lại)
 
 - **UI**: markup, `className`, text hiển thị, thứ tự render, a11y attribute. Tách component phải cho DOM y hệt.
 - **Business logic**: điều kiện, công thức, thứ tự side-effect, giá trị mặc định.
@@ -73,123 +168,35 @@
 - **Auth** (`authOptions`, session/JWT shape), **web push** (VAPID, payload).
 - **Dependencies và config**: không thêm/nâng/hạ package; không đổi `next.config.ts`, `tsconfig.json`, tên env var.
 - **Public export** của module dùng chung giữa worker và app.
-- Phát hiện bug thật hoặc lỗ hổng bảo mật → ghi vào báo cáo cuối, **không tự sửa**.
+- Phát hiện bug thật hoặc lỗ hổng → ghi vào mục 4, **không tự sửa**.
 
-## 3. Quy trình mỗi batch
+## 6. Quy trình & lưu ý cho phần còn lại
 
-1. Đọc lại code liên quan (không sửa theo trí nhớ).
-2. Sửa tối thiểu, tối đa ~10 file hoặc ~300 dòng diff. Lớn hơn thì tách commit.
-3. Verify: `npm run typecheck && npm run lint && npm test`; cứ 3 batch (và trước khi kết thúc) chạy thêm `npm run build`.
-4. Pass → commit `refactor(cleanup): <mô tả ngắn>`. Fail → sửa tối đa 2 lần, vẫn fail thì `git reset --hard HEAD`, ghi "SKIPPED + lý do" vào log, sang batch kế.
-5. Không để số lỗi tsc/eslint/test fail **cao hơn baseline** ở bất kỳ commit nào.
-6. Không merge, không push, không mở PR nếu chưa được yêu cầu.
+1. Đọc lại code liên quan trước khi sửa (không sửa theo trí nhớ). Mỗi batch nhỏ, mỗi file lớn một commit riêng.
+2. Verify mỗi commit: `npm run typecheck && npm run lint && npm test`; trước khi kết thúc thêm `npm run build`.
+3. Khi tách file lớn:
+   - Component mới phải ở **module scope** (component định nghĩa trong component sẽ remount mỗi lần render → mất focus/state).
+   - **Không** chuyển `useState` vào component con render có điều kiện (dialog, tab, `{open && …}`) vì state sẽ reset khi unmount; chỉ chuyển vào hook gọi từ cùng component.
+   - Giữ các khối "đồng bộ state trong render" của Batch 4 cùng chỗ với state mà chúng set.
+   - Giữ `ref` và thuộc tính DOM mà component cha truy vấn (`data-row-index`, `data-field`…).
+   - Với file `lib/*` dùng chung worker/app: giữ file gốc làm điểm re-export, không đổi đường dẫn import ở cùng commit, kiểm tra mock `vi.mock("@/lib/...")`/`vi.spyOn` trước.
+   - Cẩn thận khi sinh code bằng script: `return` xuống dòng trước biểu thức bị ASI hiểu thành `return;` và `tsc` **không báo** (đã gặp một lần ở `buildPreviewRequestBody`, được test bắt).
+4. Hàm thuần tách ra phải có test; hàm chạm Jira/DB chỉ tách khi đã có test bao phủ.
+5. Không merge, không push, không mở PR nếu chưa được yêu cầu.
 
-Công cụ có sẵn: `.kilocode/skills/nextjs-clean-code/scripts/{scan,verify}.sh`; log tiến độ ghi vào `.cleanup/LOG.md` (đã nằm trong `.git/info/exclude`).
-
-## 4. Các batch
-
-### Batch 0 — Dọn nền (rủi ro: thấp)
-
-**Mục tiêu:** có baseline đáng tin cậy.
-
-- [ ] `git status` sạch; tạo branch `chore/clean-code-20261006`.
-- [ ] `npm install` (chỉ chạm `node_modules`, kiểm tra `git diff package.json package-lock.json` không đổi).
-- [ ] Xóa `.next/` rồi `npx prisma generate`.
-- [ ] `verify.sh --baseline` → ghi `.cleanup/baseline.txt`.
-
-**Tiêu chí xong:** `tsc` = 0 lỗi; số test fail còn lại là các test thật ở mục 1.1 (kỳ vọng ≤ 9).
-
-### Batch 1 — Phân loại test fail (rủi ro: thấp–trung)
-
-**Mục tiêu:** biết test fail do test cũ hay do bug thật.
-
-- [ ] `board-membership-store.test.ts` (7), `refresh-board-membership.test.ts` (3): so mock với `board-membership-store.ts` và schema hiện tại.
-- [ ] `sub-routes.test.ts` (2): kiểm tra `completedTasks` ở `/members`, `/tasks`.
-- [ ] `business-days.test.ts` (1): kiểm tra phụ thuộc thời gian/timezone, cố định bằng fake timers nếu đúng.
-- [ ] Phân loại từng test: **(a)** test lỗi thời → cập nhật test; **(b)** code lỗi → ghi báo cáo, hỏi bạn trước khi sửa.
-
-**Tiêu chí xong:** mọi test fail đều có kết luận (a) hoặc (b); nhóm (a) về xanh.
-
-### Batch 2 — Lint cơ học (rủi ro: thấp)
-
-- [ ] `eslint --fix` cho phần tự sửa được (3 lỗi + 1 cảnh báo).
-- [ ] Xóa 54 import/biến thừa (`no-unused-vars`); không xóa tham số bắt buộc theo chữ ký hàm, đổi tên `_x` nếu cần.
-- [ ] Sửa `prefer-const` (3), `no-unescaped-entities` (2).
-- [ ] Xem 2 `role-has-required-aria-props`, 1 `no-img-element` — chỉ sửa nếu không đổi DOM/hành vi.
-
-**Tiêu chí xong:** `no-unused-vars` = 0, `prefer-const` = 0, `no-unescaped-entities` = 0.
-
-### Batch 3 — Siết type (rủi ro: thấp–trung)
-
-- [ ] Thay 60 lỗi `no-explicit-any` bằng type thật hoặc `unknown` + narrowing. Chia commit theo thư mục: test (`worklogs`, `releases`, `queue/workers`), `process-webhook.ts`, recharts tooltip (`reports/`), còn lại.
-- [ ] Giảm `as unknown as` ở code không phải test. Giữ lại các singleton `globalThis` (`prisma.ts`, `boss.ts`, `webhooks/_shared.ts`) và ép kiểu pg-boss stats.
-- [ ] Rà 11 `eslint-disable`: bỏ cái không còn cần, thêm lý do ngắn cho cái giữ.
-
-**Tiêu chí xong:** `no-explicit-any` = 0; `as unknown as` (non-test) giảm ≥ 50%.
-
-### Batch 4 — React hooks & React Compiler (rủi ro: trung)
-
-Dự án bật `babel-plugin-react-compiler`, nên 21 lỗi này có thể làm compiler bỏ qua tối ưu component.
-
-- [ ] 16 chỗ `set-state-in-effect`: derive state trực tiếp trong render, hoặc `useMemo`, hoặc key-reset; chỉ giữ effect khi thật sự đồng bộ với hệ ngoài.
-- [ ] 5 chỗ `preserve-manual-memoization`: sửa dependency của `useMemo`/`useCallback` cho khớp.
-- [ ] Mỗi component sửa xong phải kiểm tra tay trên trình duyệt (xem mục 6).
-
-**Tiêu chí xong:** 2 rule trên = 0, không đổi hành vi quan sát được.
-
-### Batch 5 — Gom trùng lặp & dependency (rủi ro: trung)
-
-- [ ] Chạy `scan.sh` (knip + jscpd), lọc false positive theo danh sách trong `SKILL.md` (file convention App Router, export đặc biệt, `public/sw.js`, worker entry, script).
-- [ ] Route handler: gom phần mở đầu lặp (auth, parse/validate, bắt lỗi) vào helper chung, **giữ nguyên status code và JSON shape**. Làm theo cụm route (`bulk`, `reports`, `board`, `release`…), mỗi cụm một commit.
-- [ ] Gom helper trùng ở `lib/jira`, `lib/bulk`.
-- [ ] Dependency: chỉ **xóa** package đã xác minh không dùng (`grep` trong `src/ scripts/ prisma/ public/ *.config.*`).
-
-**Tiêu chí xong:** jscpd giảm so với báo cáo ban đầu; không còn dependency chết.
-
-### Batch 6 — Tách file lớn (rủi ro: trung–cao, làm cuối)
-
-Quy tắc chung: tách theo trách nhiệm (hook dữ liệu, util thuần, sub-component trình bày); DOM giữ y hệt; mỗi file lớn là một hoặc nhiều commit riêng. Hàm thuần được tách ra thì bổ sung test nhỏ.
-
-Thứ tự (từ ít rủi ro đến nhiều):
-
-1. [ ] `status-distribution-chart.tsx` (1324) — chart, tách theo từng loại biểu đồ
-2. [ ] `stale-client.tsx` (1836)
-3. [ ] `leaderboard-client.tsx` (1045)
-4. [ ] `board-client.tsx` (1993) + `board-quick-panel.tsx` (1055)
-5. [ ] `issue-detail-client.tsx` (1427)
-6. [ ] `bulk-client.tsx` (2254) và nhóm `bulk/create/*` (grid, csv-import, template dialog)
-7. [ ] `lib/bulk/ops.ts` (1933), `create-ops.ts` (1111) — logic ghi Jira/DB, **chỉ tách khi có test bao phủ**
-8. [ ] `lib/jira/client.ts` (1193) — tách theo domain (issue, board, project, auth); giữ nguyên export từ file gốc để import cũ không vỡ
-
-**Tiêu chí xong:** không file nào > ~800 dòng (trừ file đã ghi lý do), UI đúng như trước theo checklist mục 6.
-
-### Batch 7 — Dọn repo (rủi ro: thấp, cần bạn quyết định)
-
-- [ ] `docs/`: giữ `architecture.md`, `RUNBOOK.md`, `release-policy.md`, `BACKUP_RESTORE.md`, `PR_CHECKLIST.md`, `notification-realtime.md`, `IMPLEMENTATION_STATUS.md`. Chuyển các file `*_PLAN.md` / `*_PROGRESS.md` đã thực hiện xong vào `docs/archive/` (dùng `git mv` để giữ lịch sử). Cập nhật link nếu có file khác trỏ tới.
-- [ ] `public/`: xóa `file.svg`, `globe.svg`, `next.svg`, `vercel.svg`, `window.svg` nếu `grep` không còn tham chiếu.
-- [ ] `.kilocode/` (177 file được commit) và `.kilo/` (7.3 GB, không commit): quyết định giữ, ignore hay chuyển ra ngoài repo.
-- [ ] Rà `package.json` scripts, `scripts/` (backfill/cleanup một lần) và `README.md` cho khớp thực tế.
-
-## 5. Quyết định cần bạn xác nhận
+## 7. Quyết định cần bạn xác nhận
 
 | # | Câu hỏi | Đề xuất |
 |---|---|---|
-| 1 | Làm đến hết Batch 6, hay dừng sau Batch 5 rồi đánh giá? | Dừng sau Batch 5, đánh giá, rồi mới vào Batch 6 |
-| 2 | `docs/*_PLAN.md` đã xong: archive hay giữ? | Archive |
-| 3 | `.kilocode/` và `.kilo/`: xử lý thế nào? | Ignore, không commit |
-| 4 | Test nhóm (b) ở Batch 1 (bug thật): sửa ngay hay chỉ báo cáo? | Chỉ báo cáo, bạn quyết |
+| 1 | Harness so sánh HTML cũ/mới hiện nằm ngoài repo. Lưu vào repo (ví dụ `scripts/cleanup-equiv/`, không chạy trong `npm test`) để dùng cho các file còn lại? | Có, nhưng tách riêng khỏi `npm test` |
+| 2 | Tiếp tục Batch 6 cho `issue-detail-client`, `board-quick-panel`, `leaderboard-client`, `bulk-create-data-grid`, `csv-import-dialog` (UI, có thể kiểm bằng harness) trước, còn `ops.ts`/`create-ops.ts`/`jira/client.ts` (ghi Jira/DB) để sau hoặc bỏ? | Làm nhóm UI trước |
+| 3 | Gỡ `eslint-disable` đầu file ở 7 file test bằng cách gõ type thật, hay chấp nhận cho test? | Gõ type dần, ưu tiên khi chạm vào file đó |
+| 4 | Sửa bug #1 và kiểm tra #2 (mục 4)? | Sửa #1 kèm test; #2 chỉ khi có DB để thử |
+| 5 | `docs/*_PLAN.md` đã xong: archive hay giữ? `.kilocode/`, `.kilo/`: ignore hay giữ? | Archive; ignore, không commit |
+| 6 | Hướng xử lý test membership (mục 4 #3)? | Giữ bản mock; thêm bản integration chạy riêng khi có DB test |
 
-## 6. Kiểm thử thủ công cho UI (Batch 4 & 6)
-
-Dự án chưa có test E2E, nên sau mỗi lần sửa component lớn cần chạy `npm run dev` (cổng 3100) và kiểm tra:
-
-- [ ] Board: kéo thả thẻ, quick panel, bộ lọc, ẩn/hiện cột, trạng thái loading/empty
-- [ ] Bulk edit và Bulk create: nhập CSV/Excel, chỉnh trong grid, tạo thử
-- [ ] Stale, Leaderboard, Issue detail, Reports (các tab và biểu đồ)
-- [ ] Light và dark mode, màn hình hẹp
-
-## 7. Báo cáo kết thúc (`.cleanup/REPORT.md`)
+## 8. Báo cáo kết thúc (`.cleanup/REPORT.md`) — khi hoàn tất
 
 - Số batch hoàn thành / bỏ qua (kèm lý do).
 - Bảng trước → sau: lỗi tsc, lỗi/cảnh báo eslint, `any`, `as unknown as`, test pass/fail, số dòng (`git diff --stat main...HEAD`), kích thước file lớn nhất.
-- Danh sách **phát hiện nhưng chưa sửa** vì chạm bất biến (bug tiềm ẩn, bảo mật, N+1…) để bạn quyết.
+- Danh sách phát hiện chưa sửa (mục 4) để bạn quyết.
