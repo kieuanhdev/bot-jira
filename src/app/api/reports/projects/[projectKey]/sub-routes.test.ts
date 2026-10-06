@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GET as getTasks } from "./tasks/route";
 import { GET as getMembers } from "./members/route";
 import { GET as getHistory } from "./history/route";
@@ -44,8 +44,14 @@ vi.mock("@/lib/jira/project-catalog", () => ({
 }));
 
 describe("Reporting sub-routes (tasks, members, history)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-02T12:00:00Z"));
     mocks.session.mockResolvedValue({
       user: { id: "u-1", role: "member", displayName: "Tester" },
     });
