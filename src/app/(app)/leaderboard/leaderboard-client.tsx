@@ -675,7 +675,7 @@ export function LeaderboardClient() {
 
             {/* Sort Dropdown */}
             <div className="w-48">
-              <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
+              <Select value={sortBy} onValueChange={(val: "completed" | "total" | "tasks") => setSortBy(val)}>
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder="Sắp xếp theo" />
                 </SelectTrigger>

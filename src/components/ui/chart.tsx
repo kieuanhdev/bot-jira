@@ -86,6 +86,18 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
 
 export const ChartTooltip = RechartsPrimitive.Tooltip;
 
+type ChartPayloadItem = {
+  dataKey?: string | number;
+  name?: string | number;
+  value?: number | string | null;
+  color?: string;
+  payload?: {
+    fill?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
 export function ChartTooltipContent({
   active,
   payload,
@@ -102,15 +114,21 @@ export function ChartTooltipContent({
   labelKey,
 }: {
   active?: boolean;
-  payload?: any[];
+  payload?: ChartPayloadItem[];
   className?: string;
   indicator?: "dot" | "line" | "dashed";
   hideLabel?: boolean;
   hideIndicator?: boolean;
   label?: string;
-  labelFormatter?: (label: any, payload: any[]) => React.ReactNode;
+  labelFormatter?: (label: unknown, payload: ChartPayloadItem[]) => React.ReactNode;
   labelClassName?: string;
-  formatter?: (value: any, name: any, item: any, index: number, payload: any) => React.ReactNode;
+  formatter?: (
+    value: unknown,
+    name: unknown,
+    item: ChartPayloadItem,
+    index: number,
+    payload: unknown
+  ) => React.ReactNode;
   color?: string;
   nameKey?: string;
   labelKey?: string;
@@ -171,7 +189,7 @@ export function ChartTooltipContent({
         {payload.map((item, index) => {
           const key = `${nameKey || item.name || item.dataKey || "value"}`;
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
-          const indicatorColor = color || item.payload.fill || item.color;
+          const indicatorColor = color || item.payload?.fill || item.color;
 
           return (
             <div
@@ -221,7 +239,7 @@ export function ChartTooltipContent({
                         {itemConfig?.label || item.name}
                       </span>
                     </div>
-                    {item.value !== undefined && (
+                    {item.value != null && (
                       <span className="font-mono font-medium tabular-nums text-foreground">
                         {item.value.toLocaleString()}
                       </span>
@@ -248,7 +266,7 @@ export function ChartLegendContent({
 }: {
   className?: string;
   hideIcon?: boolean;
-  payload?: any[];
+  payload?: ChartPayloadItem[];
   verticalAlign?: "top" | "bottom";
   nameKey?: string;
 }) {
@@ -272,7 +290,7 @@ export function ChartLegendContent({
 
         return (
           <div
-            key={item.value}
+            key={String(item.value ?? item.dataKey ?? "")}
             className={cn(
               "flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground"
             )}
@@ -304,26 +322,27 @@ function getPayloadConfigFromPayload(
     return undefined;
   }
 
+  const payloadRecord = payload as Record<string, unknown>;
   const payloadPayload =
-    "payload" in payload &&
-    typeof payload.payload === "object" &&
-    payload.payload !== null
-      ? payload.payload
+    "payload" in payloadRecord &&
+    typeof payloadRecord.payload === "object" &&
+    payloadRecord.payload !== null
+      ? (payloadRecord.payload as Record<string, unknown>)
       : undefined;
 
   let configLabelKey: string = key;
 
   if (
-    key in payload &&
-    typeof (payload as any)[key] === "string"
+    key in payloadRecord &&
+    typeof payloadRecord[key] === "string"
   ) {
-    configLabelKey = (payload as any)[key] as string;
+    configLabelKey = payloadRecord[key] as string;
   } else if (
     payloadPayload &&
     key in payloadPayload &&
-    typeof (payloadPayload as any)[key] === "string"
+    typeof payloadPayload[key] === "string"
   ) {
-    configLabelKey = (payloadPayload as any)[key] as string;
+    configLabelKey = payloadPayload[key] as string;
   }
 
   return configLabelKey in config

@@ -102,7 +102,7 @@ export async function getMembershipReadModel(
   prisma.jiraBoardMembershipSnapshot
     .update({
       where: { id: snapshot.id },
-      data: { lastRequestedAt: new Date() } as any,
+      data: { lastRequestedAt: new Date() },
     })
     .catch(() => {});
 
@@ -191,7 +191,7 @@ export async function getMembershipReadModel(
     backlogCount: snapshot.backlogCount,
     fetchedAt: snapshot.fetchedAt,
     stale: !isFresh,
-    truncated: (snapshot as any).truncated ?? false,
+    truncated: snapshot.truncated ?? false,
     errorCode: snapshot.lastErrorCode,
   };
 }
@@ -266,16 +266,15 @@ export async function getMembershipRefreshStatus(
     statusState = "failed";
   }
 
-  const snapAny = snapshot as any;
   return {
     state: statusState,
-    lastStartedAt: snapAny.lastStartedAt ?? null,
-    lastSuccessAt: snapAny.lastSuccessAt ?? snapshot.fetchedAt,
-    lastRequestedAt: snapAny.lastRequestedAt ?? null,
+    lastStartedAt: snapshot.lastStartedAt ?? null,
+    lastSuccessAt: snapshot.lastSuccessAt ?? snapshot.fetchedAt,
+    lastRequestedAt: snapshot.lastRequestedAt ?? null,
     lastErrorCode: snapshot.lastErrorCode,
     itemCount: snapshot.itemCount,
-    lastJobId: snapAny.lastJobId ?? null,
-    refreshReason: snapAny.refreshReason ?? null,
+    lastJobId: snapshot.lastJobId ?? null,
+    refreshReason: snapshot.refreshReason ?? null,
     stale: !isFresh,
   };
 }
@@ -336,7 +335,7 @@ export async function saveBoardMembershipSnapshot(input: SaveMembershipInput): P
       generation: newGeneration,
       state: "refreshing",
       truncated: Boolean(truncated),
-    } as any,
+    },
     update: {
       // Keep active generation while writing new generation entries
     },
@@ -374,7 +373,7 @@ export async function saveBoardMembershipSnapshot(input: SaveMembershipInput): P
       lastSuccessAt: new Date(now),
       lastErrorCode: null,
       lastErrorAt: null,
-    } as any,
+    },
   });
 
   // 4. Delete old generations in the background / cleanup
@@ -436,13 +435,13 @@ export async function markMembershipRefreshing(
       lastStartedAt: now,
       lastJobId: options?.jobId ?? null,
       refreshReason: options?.reason ?? null,
-    } as any,
+    },
     update: {
       state: "refreshing",
       lastStartedAt: now,
       ...(options?.jobId ? { lastJobId: options.jobId } : {}),
       ...(options?.reason ? { refreshReason: options.reason } : {}),
-    } as any,
+    },
   });
 }
 

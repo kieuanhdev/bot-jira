@@ -71,11 +71,9 @@ export type IssueResponse = IssueSuccessResponse;
 export type IssueQueryResult = IssueSuccessResponse | IssuePendingResponse;
 
 export function isMembershipPending(data: unknown): data is IssuePendingResponse {
-  return (
-    typeof data === "object" &&
-    data !== null &&
-    ((data as any).code === "membership_pending" || (data as any).code === "membership_preparing")
-  );
+  if (typeof data !== "object" || data === null) return false;
+  const code = (data as { code?: unknown }).code;
+  return code === "membership_pending" || code === "membership_preparing";
 }
 
 export type BoardFilters = {

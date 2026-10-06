@@ -95,7 +95,7 @@ export async function getBoardOptions(
     }
 
     // Step 1: Check user preference in DB
-    const pref = await (prisma as any).userBoardPreference?.findUnique({
+    const pref = await prisma.userBoardPreference.findUnique({
       where: {
         userId_projectKey: {
           userId,
@@ -114,7 +114,7 @@ export async function getBoardOptions(
         selectionSource = "user_preference";
       } else {
         // Preference is stale or board removed, clean it up
-        await (prisma as any).userBoardPreference?.deleteMany({
+        await prisma.userBoardPreference.deleteMany({
           where: {
             userId,
             projectKey: cleanKey,

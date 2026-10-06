@@ -23,6 +23,7 @@ function bbExternalId(json: unknown): string {
       pullRequest?: { id?: number; state?: string };
       comment?: { id?: number };
       branches?: Array<{ name?: string }>;
+      commit?: { id?: string } | string;
     };
     repository?: { slug?: string; project?: { key?: string } };
     pullRequest?: {
@@ -31,6 +32,7 @@ function bbExternalId(json: unknown): string {
       toRef?: { repository?: { slug?: string; project?: { key?: string } } };
     };
     comment?: { id?: number };
+    commit?: { id?: string } | string;
   };
   const repoObj =
     j.data?.repository ??
@@ -42,7 +44,7 @@ function bbExternalId(json: unknown): string {
   const pr = j.pullRequest ?? j.data?.pullRequest;
   const comment = j.comment ?? j.data?.comment;
   const branch = j.data?.branches?.[0]?.name;
-  const rawCommit = (j as any).commit ?? (j as any).data?.commit;
+  const rawCommit = j.commit ?? j.data?.commit;
   const commitId = typeof rawCommit === "string" ? rawCommit : rawCommit?.id;
 
   let subject = "event";

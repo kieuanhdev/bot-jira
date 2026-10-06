@@ -217,7 +217,7 @@ export async function GET(req: Request) {
       lastErrorCode = stats.errorCode;
     }
     if (stats?.state && typeof stats.state === "string") {
-      syncState = stats.state as any;
+      syncState = stats.state as typeof syncState;
     } else if (cursor.lastSuccessAt) {
       syncState = releases.length === 0 ? "empty" : "synced";
     } else if (cursor.lastError) {

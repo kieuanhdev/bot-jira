@@ -259,7 +259,9 @@ async function handleBitbucket(json: unknown): Promise<Record<string, unknown>> 
     return { skipped: true, reason: "incomplete comment payload" };
   }
 
-  const rawCommit = (j as any).commit ?? (j as any).data?.commit;
+  const rawPayload = j as Record<string, unknown>;
+  const rawData = rawPayload.data as Record<string, unknown> | undefined;
+  const rawCommit = (rawPayload.commit ?? rawData?.commit) as { id?: string } | string | undefined;
   const commitId = typeof rawCommit === "string" ? rawCommit : rawCommit?.id;
 
   // Handle Commit comment events (e.g. repo:comment:added)
@@ -269,6 +271,7 @@ async function handleBitbucket(json: unknown): Promise<Record<string, unknown>> 
   ) {
     if (comment?.id && comment.text && commitId) {
       const { notifyCommitComment } = await import("@/lib/bitbucket/notify-commit-comment");
+      const commentWithAnchor = comment as { anchor?: { path?: string; line?: number } };
       const res = await notifyCommitComment({
         repo,
         commit: { id: commitId },
@@ -276,7 +279,7 @@ async function handleBitbucket(json: unknown): Promise<Record<string, unknown>> 
           id: comment.id,
           text: comment.text,
           author: comment.author as BbUser,
-          anchor: (comment as any).anchor,
+          anchor: commentWithAnchor.anchor,
         },
       });
 
