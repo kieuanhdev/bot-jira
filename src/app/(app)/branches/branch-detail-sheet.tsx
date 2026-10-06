@@ -237,7 +237,7 @@ export function BranchDetailSheet({
                     <Badge variant="warning">Gợi ý</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Suy luận từ {branch.linkSource === "pr_title" ? "tiêu đề Pull Request" : "tên nhánh"}.
+                    Suy luận từ {branch.linkSource === "pr_title" ? "tiêu đề Pull Request" : branch.linkSource === "commit_message" ? "nội dung commit" : "tên nhánh"}.
                   </p>
                   <Button
                     size="sm"

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getErrorMessage } from "@/lib/api-client";
 import { useBranchLink } from "@/hooks/use-branches";
 import {
@@ -242,6 +242,26 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
     const fresh = await api<{ issue: IssueDetail }>(`/api/issues/${issue.jiraKey}`);
     setIssue(fresh.issue);
   }
+
+  const syncDevStatusMutation = useMutation({
+    mutationFn: () =>
+      api<{ ok: boolean; count: number }>(`/api/issues/${issue.jiraKey}/branches/sync`, {
+        method: "POST",
+      }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: branchesForKeys.forIssue(issue.jiraKey) });
+      setMsg({
+        tone: "success",
+        text: `Đã đồng bộ thành công ${data.count ?? 0} nhánh từ Jira Dev-Status`,
+      });
+    },
+    onError: (err) => {
+      setMsg({
+        tone: "destructive",
+        text: getErrorMessage(err, "Không thể đồng bộ từ Jira Dev-Status"),
+      });
+    },
+  });
 
   function handleConfirmBranch(branchId: string) {
     branchLink.mutate(
@@ -1082,11 +1102,24 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
               <CardTitle className="flex items-center gap-2">
                 <GitBranch className="h-4 w-4" /> Các nhánh liên quan
               </CardTitle>
-              <Button asChild variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-foreground">
-                <Link href={`/branches?q=${encodeURIComponent(issue.jiraKey)}`}>
-                  Xem trong không gian làm việc Nhánh →
-                </Link>
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1.5"
+                  onClick={() => syncDevStatusMutation.mutate()}
+                  disabled={syncDevStatusMutation.isPending}
+                  title="Đồng bộ các nhánh và Pull Request trực tiếp từ Jira Development Panel"
+                >
+                  <RefreshCw className={cn("h-3 w-3", syncDevStatusMutation.isPending && "animate-spin")} />
+                  {syncDevStatusMutation.isPending ? "Đang đồng bộ..." : "Đồng bộ Jira"}
+                </Button>
+                <Button asChild variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-foreground">
+                  <Link href={`/branches?q=${encodeURIComponent(issue.jiraKey)}`}>
+                    Xem trong mục Nhánh →
+                  </Link>
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               {branches?.items?.length ? (
@@ -1186,8 +1219,18 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
                   </div>
                   <p className="text-sm font-medium text-foreground">Chưa có nhánh nào được liên kết</p>
                   <p className="max-w-sm text-xs text-muted-foreground">
-                    Các nhánh Bitbucket chứa mã issue này sẽ tự động được liên kết vào lần đồng bộ tiếp theo.
+                    Các nhánh Bitbucket chứa mã issue này sẽ tự động được liên kết, hoặc bạn có thể đồng bộ ngay từ Jira.
                   </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 text-xs gap-1.5"
+                    onClick={() => syncDevStatusMutation.mutate()}
+                    disabled={syncDevStatusMutation.isPending}
+                  >
+                    <RefreshCw className={cn("h-3 w-3", syncDevStatusMutation.isPending && "animate-spin")} />
+                    {syncDevStatusMutation.isPending ? "Đang đồng bộ..." : "Đồng bộ từ Jira ngay"}
+                  </Button>
                 </div>
               )}
 

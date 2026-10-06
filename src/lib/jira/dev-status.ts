@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { getSystemJiraAuth, jiraWith, type JiraAuth, JiraRequestError } from "./client";
+import { bitbucket } from "@/lib/bitbucket/client";
+import { isSystemOrReleaseBranch } from "@/lib/bitbucket/branch-linker";
 
 export type JiraDevStatusPullRequest = {
   id: string; // e.g. "#727"
@@ -20,9 +22,25 @@ export type JiraDevStatusBranch = {
   repository?: { name?: string; url?: string };
 };
 
+export type JiraDevStatusRepositoryCommit = {
+  id?: string;
+  displayId?: string;
+  message?: string;
+  url?: string;
+  authorTimestamp?: string;
+  merge?: boolean;
+};
+
+export type JiraDevStatusRepository = {
+  name: string;
+  url?: string;
+  commits?: JiraDevStatusRepositoryCommit[];
+};
+
 export type JiraDevStatusDetailResult = {
   branches: JiraDevStatusBranch[];
   pullRequests: JiraDevStatusPullRequest[];
+  repositories?: JiraDevStatusRepository[];
 };
 
 /**
@@ -99,18 +117,22 @@ export async function fetchJiraDevStatusDetail(
     }
   };
 
-  // Fetch pull requests and branches in parallel for stash (Bitbucket Server)
-  const [prData, branchData] = await Promise.all([
+  // Fetch pull requests, branches, and repositories in parallel for stash (Bitbucket Server)
+  const [prData, branchData, repoData] = await Promise.all([
     fetchWithTimeout(
       `/rest/dev-status/1.0/issue/detail?issueId=${encodeURIComponent(issueId)}&applicationType=stash&dataType=pullrequest`
     ),
     fetchWithTimeout(
       `/rest/dev-status/1.0/issue/detail?issueId=${encodeURIComponent(issueId)}&applicationType=stash&dataType=branch`
     ),
+    fetchWithTimeout(
+      `/rest/dev-status/1.0/issue/detail?issueId=${encodeURIComponent(issueId)}&applicationType=stash&dataType=repository`
+    ),
   ]);
 
   const pullRequests: JiraDevStatusPullRequest[] = [];
   const branches: JiraDevStatusBranch[] = [];
+  const repositories: JiraDevStatusRepository[] = [];
 
   if (prData && Array.isArray(prData.detail)) {
     for (const group of prData.detail) {
@@ -142,7 +164,15 @@ export async function fetchJiraDevStatusDetail(
     }
   }
 
-  return { branches, pullRequests };
+  if (repoData && Array.isArray(repoData.detail)) {
+    for (const group of repoData.detail) {
+      if (Array.isArray(group.repositories)) {
+        repositories.push(...group.repositories);
+      }
+    }
+  }
+
+  return { branches, pullRequests, repositories };
 }
 
 export type SyncedBranchResult = {
@@ -184,6 +214,24 @@ export async function syncJiraDevStatusForIssue(
       return { ok: false, syncedBranches: [], error: `Không tìm thấy ID của task ${jiraKey}` };
     }
 
+    // Ensure issue exists in IssueCache so foreign key is satisfied
+    await prisma.issueCache.upsert({
+      where: { jiraKey },
+      create: {
+        jiraKey,
+        projectKey: jiraKey.split("-")[0] || "",
+        summary: jiraKey,
+        status: "Unknown",
+        statusCategory: "unknown",
+        priority: "Medium",
+        type: "Task",
+        fixVersionIds: [],
+        fixVersionNames: [],
+        labels: [],
+      },
+      update: {},
+    });
+
     const devStatus = await fetchJiraDevStatusDetail(issueId, effectiveAuth);
     const syncedBranches: SyncedBranchResult[] = [];
     const now = new Date();
@@ -198,6 +246,15 @@ export async function syncJiraDevStatusForIssue(
         // Fallback: derive project from issue key + repo name
         const proj = jiraKey.split("-")[0];
         repo = pr.repository?.name ? `${proj}/${pr.repository.name}` : `${proj}/unknown`;
+      }
+
+      // Respect manual unlink / rejection decisions (BR-003, BR-202)
+      const existing = await prisma.branchInfo.findUnique({
+        where: { repo_branch: { repo, branch: branchName } },
+        select: { linkState: true, jiraKey: true },
+      });
+      if (existing?.linkState === "manual_unlinked" || existing?.linkState === "rejected") {
+        continue;
       }
 
       const prId = parsePrId(pr.id);
@@ -258,13 +315,22 @@ export async function syncJiraDevStatusForIssue(
       const branchName = b.name;
       if (!branchName) continue;
 
-      // If already processed via PR, skip
-      if (syncedBranches.some((s) => s.branch === branchName)) continue;
-
       let repo = extractRepoSlugFromUrl(b.url) || extractRepoSlugFromUrl(b.repository?.url);
       if (!repo) {
         const proj = jiraKey.split("-")[0];
         repo = b.repository?.name ? `${proj}/${b.repository.name}` : `${proj}/unknown`;
+      }
+
+      // If already processed via PR for this exact repo, skip
+      if (syncedBranches.some((s) => s.repo === repo && s.branch === branchName)) continue;
+
+      // Respect manual decisions
+      const existing = await prisma.branchInfo.findUnique({
+        where: { repo_branch: { repo, branch: branchName } },
+        select: { linkState: true, jiraKey: true },
+      });
+      if (existing?.linkState === "manual_unlinked" || existing?.linkState === "rejected") {
+        continue;
       }
 
       await prisma.branchInfo.upsert({
@@ -293,6 +359,79 @@ export async function syncJiraDevStatusForIssue(
         branch: branchName,
         merged: false,
       });
+    }
+
+    // 3. Process repositories with commits if any
+    if (devStatus.repositories && devStatus.repositories.length > 0) {
+      for (const r of devStatus.repositories) {
+        let repo = extractRepoSlugFromUrl(r.url);
+        if (!repo) {
+          const proj = jiraKey.split("-")[0];
+          repo = r.name ? `${proj}/${r.name}` : `${proj}/unknown`;
+        }
+
+        if (Array.isArray(r.commits)) {
+          for (const c of r.commits) {
+            const candidateBranches: string[] = [];
+
+            // A. Check if commit message specifies a branch (e.g. Merge branch '...')
+            const mergeMatch = c.message?.match(/Merge branch '([^']+)'/i);
+            if (mergeMatch && mergeMatch[1] && !isSystemOrReleaseBranch(mergeMatch[1])) {
+              candidateBranches.push(mergeMatch[1]);
+            }
+
+            // B. Query Bitbucket to find branches containing this commit SHA
+            if (c.id && repo && !repo.endsWith("/unknown")) {
+              try {
+                const commitBranches = await bitbucket.getCommitBranches(repo, c.id);
+                for (const b of commitBranches) {
+                  if (!isSystemOrReleaseBranch(b) && !candidateBranches.includes(b)) {
+                    candidateBranches.push(b);
+                  }
+                }
+              } catch {
+                // Ignore Bitbucket query failure for this commit
+              }
+            }
+
+            for (const candidateBranch of candidateBranches) {
+              if (!syncedBranches.some((s) => s.repo === repo && s.branch === candidateBranch)) {
+                const existing = await prisma.branchInfo.findUnique({
+                  where: { repo_branch: { repo, branch: candidateBranch } },
+                  select: { linkState: true },
+                });
+                if (existing?.linkState !== "manual_unlinked" && existing?.linkState !== "rejected") {
+                  await prisma.branchInfo.upsert({
+                    where: { repo_branch: { repo, branch: candidateBranch } },
+                    update: {
+                      jiraKey,
+                      linkSource: "commit_message",
+                      linkConfidence: 90,
+                      linkState: "confirmed",
+                      deletedAt: null,
+                      checkedAt: now,
+                    },
+                    create: {
+                      repo,
+                      branch: candidateBranch,
+                      jiraKey,
+                      linkSource: "commit_message",
+                      linkConfidence: 90,
+                      linkState: "confirmed",
+                      checkedAt: now,
+                    },
+                  });
+                  syncedBranches.push({
+                    repo,
+                    branch: candidateBranch,
+                    merged: false,
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
     }
 
     return { ok: true, syncedBranches };

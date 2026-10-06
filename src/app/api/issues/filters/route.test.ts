@@ -51,6 +51,7 @@ describe("GET /api/issues/filters", () => {
       statuses: ["Done", "In Progress"],
       labels: ["api", "backend"],
       priorities: ["High", "Medium"],
+      epics: [],
     });
   });
 

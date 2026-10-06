@@ -9,9 +9,19 @@ import { prisma } from "@/lib/prisma";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    branchInfo: {
-      upsert: vi.fn(),
+    issueCache: {
+      upsert: vi.fn().mockResolvedValue({}),
     },
+    branchInfo: {
+      upsert: vi.fn().mockResolvedValue({}),
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+  },
+}));
+
+vi.mock("@/lib/bitbucket/client", () => ({
+  bitbucket: {
+    getCommitBranches: vi.fn().mockResolvedValue(["feature/custom-login-branch"]),
   },
 }));
 
@@ -129,6 +139,62 @@ describe("syncJiraDevStatusForIssue", () => {
           linkSource: "jira_dev_status",
           linkState: "confirmed",
           merged: true,
+        }),
+      })
+    );
+  });
+
+  it("links branches discovered from commits via Bitbucket", async () => {
+    const mockDetail = {
+      errors: [],
+      detail: [
+        {
+          branches: [],
+          pullRequests: [],
+          repositories: [
+            {
+              name: "mobile-cic-2021",
+              url: "https://git-sds.softdreams.vn:7990/projects/CICB/repos/mobile-cic-2021/browse",
+              commits: [
+                {
+                  id: "commit123456",
+                  message: "[CICM-712] Fix login button layout",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockDetail),
+    });
+
+    const result = await syncJiraDevStatusForIssue("CICM-712");
+
+    expect(result.ok).toBe(true);
+    expect(result.syncedBranches).toContainEqual(
+      expect.objectContaining({
+        repo: "CICB/mobile-cic-2021",
+        branch: "feature/custom-login-branch",
+        merged: false,
+      })
+    );
+
+    expect(prisma.branchInfo.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          repo_branch: {
+            repo: "CICB/mobile-cic-2021",
+            branch: "feature/custom-login-branch",
+          },
+        },
+        create: expect.objectContaining({
+          jiraKey: "CICM-712",
+          linkSource: "commit_message",
+          linkState: "confirmed",
         }),
       })
     );

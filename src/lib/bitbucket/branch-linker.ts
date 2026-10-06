@@ -61,11 +61,43 @@ export function extractJiraKeys(text: string | null | undefined): string[] {
   return Array.from(matches);
 }
 
+export const SYSTEM_BASE_BRANCHES = new Set([
+  "main",
+  "master",
+  "develop",
+  "development",
+  "dev",
+  "staging",
+  "stage",
+  "prod",
+  "production",
+  "test",
+  "qa",
+  "uat",
+]);
+
+export function isSystemOrReleaseBranch(branchName?: string | null): boolean {
+  if (!branchName) return true;
+  const lower = branchName.toLowerCase().trim();
+  if (SYSTEM_BASE_BRANCHES.has(lower)) return true;
+  if (/^(release|hotfix|support)[\/-]/i.test(lower)) return true;
+  return false;
+}
+
 export type BranchLinkState = "confirmed" | "suggested" | "rejected" | "manual_unlinked" | "unlinked";
 
 export type LinkResolutionResult = {
   jiraKey: string | null;
-  linkSource: "manual" | "explicit" | "branch_name" | "pr_title" | "jira_label" | "comment" | null;
+  linkSource:
+    | "manual"
+    | "explicit"
+    | "branch_name"
+    | "pr_title"
+    | "commit_message"
+    | "jira_dev_status"
+    | "jira_label"
+    | "comment"
+    | null;
   linkConfidence: number | null;
   linkState: BranchLinkState;
   suggestedJiraKey: string | null;
@@ -75,6 +107,7 @@ export type LinkResolutionResult = {
 export type ResolveBranchLinkInput = {
   branch: string;
   prTitle?: string | null;
+  commitMessages?: string[] | null;
   existingJiraKey?: string | null;
   existingLinkSource?: string | null;
   existingLinkState?: BranchLinkState | string | null;
@@ -87,11 +120,12 @@ export type ResolveBranchLinkInput = {
  * 2. manual / explicit: always preserved as confirmed (confidence 100).
  * 3. branch_name: exact key -> auto-linked and confirmed by default (confidence 95).
  * 4. pr_title: exact key -> auto-linked and confirmed by default (confidence 85).
- * 5. ambiguous candidate keys -> suggested (confidence 0).
- * 6. no candidates -> unlinked.
+ * 5. commit_message: exact key in commit message -> auto-linked and confirmed (confidence 85).
+ * 6. ambiguous candidate keys -> suggested (confidence 0).
+ * 7. no candidates -> unlinked.
  */
 export function resolveBranchLink(input: ResolveBranchLinkInput): LinkResolutionResult {
-  const { branch, prTitle, existingJiraKey, existingLinkSource, existingLinkState, validJiraKeys } = input;
+  const { branch, prTitle, commitMessages, existingJiraKey, existingLinkSource, existingLinkState, validJiraKeys } = input;
 
   // 1. If user previously manually unlinked or rejected this branch, do not auto-link again
   if (existingLinkState === "manual_unlinked") {
@@ -207,7 +241,57 @@ export function resolveBranchLink(input: ResolveBranchLinkInput): LinkResolution
     }
   }
 
-  // 5. No candidate found
+  // 5. Candidate from commit messages (fallback when branch name and PR title have no key)
+  if (!isSystemOrReleaseBranch(branch) && commitMessages && commitMessages.length > 0) {
+    const commitCandidates: string[] = [];
+    for (const msg of commitMessages) {
+      if (msg) {
+        for (const k of extractJiraKeys(msg)) {
+          if (!commitCandidates.includes(k)) {
+            commitCandidates.push(k);
+          }
+        }
+      }
+    }
+
+    if (commitCandidates.length > 0) {
+      const validCommitCandidates = validJiraKeys
+        ? commitCandidates.filter((k) => validJiraKeys.has(k))
+        : commitCandidates;
+
+      if (validCommitCandidates.length === 1) {
+        return {
+          jiraKey: validCommitCandidates[0],
+          linkSource: "commit_message",
+          linkConfidence: 85,
+          linkState: "confirmed",
+          suggestedJiraKey: null,
+          reason: `Auto-linked from commit message containing "${validCommitCandidates[0]}"`,
+        };
+      } else if (commitCandidates.length === 1) {
+        return {
+          jiraKey: commitCandidates[0],
+          linkSource: "commit_message",
+          linkConfidence: 80,
+          linkState: "confirmed",
+          suggestedJiraKey: null,
+          reason: `Auto-linked from commit message containing "${commitCandidates[0]}"`,
+        };
+      } else {
+        const picked = validCommitCandidates[0] ?? commitCandidates[0];
+        return {
+          jiraKey: picked,
+          linkSource: "commit_message",
+          linkConfidence: 75,
+          linkState: "confirmed",
+          suggestedJiraKey: null,
+          reason: `Selected from multiple keys in commit messages: ${commitCandidates.join(", ")}`,
+        };
+      }
+    }
+  }
+
+  // 6. No candidate found
   return {
     jiraKey: null,
     linkSource: null,

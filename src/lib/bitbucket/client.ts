@@ -100,32 +100,42 @@ export type BbCreds = { user: string; token: string };
 const MERGED_STATES = new Set(["MERGED"]);
 
 export async function getSystemBitbucketCreds(): Promise<BbCreds | null> {
+  const all = await getAllBitbucketCreds();
+  return all[0] ?? null;
+}
+
+export async function getAllBitbucketCreds(): Promise<BbCreds[]> {
+  const list: BbCreds[] = [];
   if (env.bitbucketToken && env.bitbucketUser) {
-    return {
+    list.push({
       user: env.bitbucketUser,
       token: env.bitbucketToken,
-    };
+    });
   }
   try {
     const { prisma } = await import("@/lib/prisma");
     const { safeDecrypt } = await import("@/lib/crypto");
-    const user = await prisma.user.findFirst({
+    const users = await prisma.user.findMany({
       where: { bitbucketTokenEnc: { not: null } },
       orderBy: [{ role: "asc" }, { updatedAt: "desc" }],
       select: { bitbucketUserEnc: true, bitbucketTokenEnc: true },
     });
-    if (user?.bitbucketTokenEnc) {
-      const token = safeDecrypt(user.bitbucketTokenEnc);
-      const username = safeDecrypt(user.bitbucketUserEnc);
-      if (token && username) {
-        return { user: username, token };
+    for (const user of users) {
+      if (user.bitbucketTokenEnc) {
+        const token = safeDecrypt(user.bitbucketTokenEnc);
+        const username = safeDecrypt(user.bitbucketUserEnc);
+        if (token && username && !list.some((c) => c.user === username)) {
+          list.push({ user: username, token });
+        }
       }
     }
   } catch {
     // DB not available
   }
-  return null;
+  return list;
 }
+
+const repoCredCache = new Map<string, BbCreds>();
 
 async function request<T>(
   repo: string,
@@ -134,37 +144,69 @@ async function request<T>(
   creds?: BbCreds
 ): Promise<T> {
   const base = env.bitbucketBaseUrl.replace(/\/$/, "");
-  let user = creds?.user;
-  let token = creds?.token;
-  if (!token) {
-    const sys = await getSystemBitbucketCreds();
-    if (sys) {
-      user = sys.user;
-      token = sys.token;
+
+  let candidateCreds: BbCreds[] = [];
+  if (creds) {
+    candidateCreds = [creds];
+  } else {
+    const cached = repoCredCache.get(repo);
+    const all = await getAllBitbucketCreds();
+    if (cached) {
+      candidateCreds = [cached, ...all.filter((c) => c.user !== cached.user)];
+    } else {
+      candidateCreds = all;
     }
   }
-  if (!token || !user) {
+
+  if (candidateCreds.length === 0) {
     throw new Error("Chưa cấu hình tài khoản Bitbucket trong hệ thống hoặc thiết lập người dùng");
   }
-  const basic = Buffer.from(`${user}:${token}`).toString("base64");
-  const url = `${base}/rest/api/1.0/projects/${encodeURIComponent(
-    repo.split("/")[0] ?? repo
-  )}/repos/${encodeURIComponent(repo.split("/")[1] ?? repo)}/${path}`;
-  const res = await fetch(url, {
-    method: init.method ?? "GET",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Basic ${basic}`,
-    },
-    ...(init.body !== undefined ? { body: init.body } : {}),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Bitbucket ${path} -> ${res.status}: ${text.slice(0, 300)}`);
+
+  let lastError: Error | null = null;
+  for (let i = 0; i < candidateCreds.length; i++) {
+    const currentCred = candidateCreds[i];
+    const basic = Buffer.from(`${currentCred.user}:${currentCred.token}`).toString("base64");
+    const url = `${base}/rest/api/1.0/projects/${encodeURIComponent(
+      repo.split("/")[0] ?? repo
+    )}/repos/${encodeURIComponent(repo.split("/")[1] ?? repo)}/${path}`;
+
+    try {
+      const res = await fetch(url, {
+        method: init.method ?? "GET",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Basic ${basic}`,
+        },
+        ...(init.body !== undefined ? { body: init.body } : {}),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        const err = new Error(`Bitbucket ${path} -> ${res.status}: ${text.slice(0, 300)}`);
+        if (isBitbucketPermissionError(err) && i < candidateCreds.length - 1) {
+          lastError = err;
+          continue;
+        }
+        throw err;
+      }
+
+      if (!creds) {
+        repoCredCache.set(repo, currentCred);
+      }
+
+      if (res.status === 204) return undefined as T;
+      return (await res.json()) as T;
+    } catch (e) {
+      if (isBitbucketPermissionError(e) && i < candidateCreds.length - 1) {
+        lastError = e as Error;
+        continue;
+      }
+      throw e;
+    }
   }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+
+  throw lastError ?? new Error("Chưa cấu hình tài khoản Bitbucket có quyền truy cập repo này");
 }
 
 /** Check if an error from Bitbucket indicates unauthorized / forbidden access. */
@@ -303,6 +345,52 @@ export const bitbucket = {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes("404")) return null;
       throw e;
+    }
+  },
+
+  /**
+   * Fetch recent commits on a specific branch or commit reference.
+   */
+  async listCommits(
+    repo: string,
+    branchOrRef: string,
+    limit = 10,
+    creds?: BbCreds
+  ): Promise<BbCommit[]> {
+    try {
+      const res = await request<Paged<BbCommit>>(
+        repo,
+        `commits?until=${encodeURIComponent(branchOrRef)}&limit=${limit}`,
+        {},
+        creds
+      );
+      return res?.values ?? [];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Find branches containing a specific commit SHA in Bitbucket Server.
+   * Endpoint: /rest/api/1.0/projects/{projectKey}/repos/{repositorySlug}/commits/{commitId}/branches
+   */
+  async getCommitBranches(
+    repo: string,
+    commitId: string,
+    creds?: BbCreds
+  ): Promise<string[]> {
+    try {
+      const res = await request<Paged<{ id?: string; displayId?: string }>>(
+        repo,
+        `commits/${encodeURIComponent(commitId)}/branches`,
+        {},
+        creds
+      );
+      return (res?.values ?? [])
+        .map((b) => b.displayId || b.id?.replace(/^refs\/heads\//, "") || "")
+        .filter(Boolean);
+    } catch {
+      return [];
     }
   },
 

@@ -124,6 +124,41 @@ describe("resolveBranchLink", () => {
     expect(res.reason).toContain("Multiple candidate keys");
   });
 
+  it("resolves Jira key from commit messages when branch and PR have no key", () => {
+    const res = resolveBranchLink({
+      branch: "fix-broken-auth-flow",
+      prTitle: "fix login",
+      commitMessages: [
+        "minor refactor",
+        "[EPM-1] Fix login redirect and session timeout",
+      ],
+      validJiraKeys: cache,
+    });
+    expect(res.jiraKey).toBe("EPM-1");
+    expect(res.linkSource).toBe("commit_message");
+    expect(res.linkConfidence).toBe(85);
+    expect(res.linkState).toBe("confirmed");
+    expect(res.reason).toContain("Auto-linked from commit message");
+  });
+
+  it("never auto-links system or release branches from commit messages", () => {
+    const res = resolveBranchLink({
+      branch: "develop",
+      commitMessages: ["[EPM-1] Some commit merged into develop"],
+      validJiraKeys: cache,
+    });
+    expect(res.jiraKey).toBeNull();
+    expect(res.linkState).toBe("unlinked");
+
+    const res2 = resolveBranchLink({
+      branch: "release/v2.1",
+      commitMessages: ["[EPM-1] Some commit merged into release"],
+      validJiraKeys: cache,
+    });
+    expect(res2.jiraKey).toBeNull();
+    expect(res2.linkState).toBe("unlinked");
+  });
+
   it("returns null when no candidates are found", () => {
     const res = resolveBranchLink({
       branch: "bugfix/sanitize-input",

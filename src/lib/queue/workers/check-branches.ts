@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { bitbucket, isBitbucketPermissionError } from "@/lib/bitbucket/client";
-import { resolveBranchLink } from "@/lib/bitbucket/branch-linker";
+import {
+  resolveBranchLink,
+  extractJiraKeys,
+  isSystemOrReleaseBranch,
+} from "@/lib/bitbucket/branch-linker";
 import { guard, hasBitbucketConfig } from "../guard";
 import type { WorkerLog } from "../guard";
 
@@ -31,9 +35,30 @@ export async function runCheckBranches(): Promise<WorkerLog> {
           select: { jiraKey: true, linkSource: true, linkState: true },
         });
 
+        let commitMessages: string[] | undefined = undefined;
+        const branchKeys = extractJiraKeys(s.branch.name);
+        const prKeys = s.prTitle ? extractJiraKeys(s.prTitle) : [];
+        if (
+          branchKeys.length === 0 &&
+          prKeys.length === 0 &&
+          !isSystemOrReleaseBranch(s.branch.name) &&
+          s.branch.latestCommit &&
+          (!existing?.jiraKey || existing.linkSource === "commit_message")
+        ) {
+          try {
+            const commit = await bitbucket.getCommit(repo, s.branch.latestCommit);
+            if (commit?.message) {
+              commitMessages = [commit.message];
+            }
+          } catch {
+            // ignore commit fetch error
+          }
+        }
+
         const linkRes = resolveBranchLink({
           branch: s.branch.name,
           prTitle: s.prTitle,
+          commitMessages,
           existingJiraKey: existing?.jiraKey,
           existingLinkSource: existing?.linkSource,
           existingLinkState: existing?.linkState,

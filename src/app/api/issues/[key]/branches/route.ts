@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { userJiraAuth, userBitbucketCreds } from "@/lib/user-creds";
-import { jiraWith } from "@/lib/jira/client";
+import { getSystemJiraAuth, jiraWith } from "@/lib/jira/client";
+import { syncJiraDevStatusForIssue } from "@/lib/jira/dev-status";
 import { createBranchForIssue, type BranchParams } from "@/lib/bulk/ops";
 import { env } from "@/lib/env";
 
@@ -10,7 +11,7 @@ import { env } from "@/lib/env";
  * Branches linked to this issue via confirmed `BranchInfo.jiraKey`,
  * plus pending suggestions for this issue.
  */
-export async function GET(_req: Request, ctx: { params: Promise<{ key: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ key: string }> }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { key } = await ctx.params;
@@ -21,8 +22,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ key: string }>
   });
   if (!issue) return NextResponse.json({ error: "not found" }, { status: 404 });
 
+  const url = new URL(req.url);
+  const forceSync = url.searchParams.get("sync") === "true";
+
   // Confirmed links from database relation
-  const rows = await prisma.branchInfo.findMany({
+  let rows = await prisma.branchInfo.findMany({
     where: {
       deletedAt: null,
       jiraKey: key,
@@ -30,6 +34,33 @@ export async function GET(_req: Request, ctx: { params: Promise<{ key: string }>
     },
     orderBy: { checkedAt: "desc" },
   });
+
+  // If sync requested or no branches cached yet, sync from Jira Dev Status
+  if (forceSync || rows.length === 0) {
+    const user = session?.user?.id
+      ? await prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: {
+            jiraUserEnc: true,
+            jiraTokenEnc: true,
+            jiraAuth: true,
+            jiraUsername: true,
+          },
+        })
+      : null;
+    const auth = userJiraAuth(user) || (await getSystemJiraAuth());
+    if (auth) {
+      await syncJiraDevStatusForIssue(key, auth).catch(() => null);
+      rows = await prisma.branchInfo.findMany({
+        where: {
+          deletedAt: null,
+          jiraKey: key,
+          linkState: { notIn: ["rejected", "manual_unlinked"] },
+        },
+        orderBy: { checkedAt: "desc" },
+      });
+    }
+  }
 
   // Query suggested branches (found candidate key in PR title, comment or unconfirmed)
   const suggestedRows = await prisma.branchInfo.findMany({
