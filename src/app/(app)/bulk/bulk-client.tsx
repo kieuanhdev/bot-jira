@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -259,8 +259,7 @@ export function BulkClient() {
   });
 
   // Auto-select the first preferred project (or the first available project)
-  useEffect(() => {
-    if (filterProject) return; // already selected by user
+  if (!filterProject && (prefs || projectOptions.length > 0)) {
     const preferred = prefs?.projects ?? [];
     const available = prefs?.available ?? [];
     const projectKeys = projectOptions.map((p) => p.key);
@@ -275,7 +274,7 @@ export function BulkClient() {
       setFilterProject(pick);
       setExtraIssues([]);
     }
-  }, [prefs, projectOptions, filterProject]);
+  }
 
   // Selection mode and task filters
   const [selectionMode, setSelectionMode] = useState<"pick" | "filter">("pick");
@@ -289,18 +288,18 @@ export function BulkClient() {
   const availableAssignees = useMemo(() => {
     if (filtersData?.assignees && filtersData.assignees.length > 0) return filtersData.assignees;
     return Array.from(new Set(projectIssues.map((issue) => issue.assigneeJira).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b));
-  }, [filtersData?.assignees, projectIssues]);
+  }, [filtersData, projectIssues]);
 
   const labelOptions = useMemo(() => {
     if (filtersData?.labels && filtersData.labels.length > 0) return filtersData.labels;
     return Array.from(new Set(projectIssues.flatMap((issue) => issue.labels))).sort((a, b) => a.localeCompare(b));
-  }, [filtersData?.labels, projectIssues]);
+  }, [filtersData, projectIssues]);
 
   const priorityOptions = useMemo(() => {
     if (filtersData?.priorities && filtersData.priorities.length > 0) return filtersData.priorities;
     const values = Array.from(new Set(projectIssues.map((issue) => issue.priority).filter(Boolean)));
     return (values.length > 0 ? values : ["Low", "Medium", "High", "Highest", "Blocker"]).sort((a, b) => a.localeCompare(b));
-  }, [filtersData?.priorities, projectIssues]);
+  }, [filtersData, projectIssues]);
 
   const epicOptions = useMemo(() => {
     const set = new Set<string>();
@@ -340,13 +339,13 @@ export function BulkClient() {
     }
 
     return options;
-  }, [filtersData?.epics, projectIssues, session?.user?.jiraUsername]);
+  }, [filtersData, projectIssues, session?.user?.jiraUsername]);
 
   // Selected task keys
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initialKeys));
-
-  // Sync selected and project when keys change in URL (e.g. navigating from standardization)
-  useEffect(() => {
+  const [prevInitialKeys, setPrevInitialKeys] = useState(initialKeys);
+  if (initialKeys !== prevInitialKeys) {
+    setPrevInitialKeys(initialKeys);
     if (initialKeys.length > 0) {
       setSelected(new Set(initialKeys));
       const proj = searchParams?.get("project")?.trim().toUpperCase() || initialKeys[0]?.split("-")[0];
@@ -355,15 +354,17 @@ export function BulkClient() {
         setExtraIssues([]);
       }
     }
-  }, [initialKeys, searchParams, filterProject]);
+  }
 
   // Enabled fields toggle
   const [enabledFields, setEnabledFields] = useState<Set<string>>(() => new Set(initialFields));
-  useEffect(() => {
+  const [prevInitialFields, setPrevInitialFields] = useState(initialFields);
+  if (initialFields !== prevInitialFields) {
+    setPrevInitialFields(initialFields);
     if (initialFields.length > 0) {
       setEnabledFields(new Set(initialFields));
     }
-  }, [initialFields]);
+  }
 
   // Field values
   const [assignee, setAssignee] = useState("");
@@ -388,18 +389,19 @@ export function BulkClient() {
   >("default");
 
   // Operation Kind: "update-fields" | "transition" | "log-work"
+  const actionParam = searchParams?.get("action");
   const [operationKind, setOperationKind] = useState<"update-fields" | "transition" | "log-work">(() => {
-    const act = searchParams?.get("action");
-    if (act === "log-work") return "log-work";
-    if (act === "transition") return "transition";
+    if (actionParam === "log-work") return "log-work";
+    if (actionParam === "transition") return "transition";
     return "update-fields";
   });
-  useEffect(() => {
-    const act = searchParams?.get("action");
-    if (act === "log-work") setOperationKind("log-work");
-    else if (act === "transition") setOperationKind("transition");
-    else if (act) setOperationKind("update-fields");
-  }, [searchParams]);
+  const [prevActionParam, setPrevActionParam] = useState(actionParam);
+  if (actionParam !== prevActionParam) {
+    setPrevActionParam(actionParam);
+    if (actionParam === "log-work") setOperationKind("log-work");
+    else if (actionParam === "transition") setOperationKind("transition");
+    else if (actionParam) setOperationKind("update-fields");
+  }
 
   // Target status for transition mode
   const [targetStatus, setTargetStatus] = useState("");
@@ -457,33 +459,36 @@ export function BulkClient() {
   }, [projectFieldsData?.fields]);
 
   // Automatically prune any fields that are not available for the active project
-  useEffect(() => {
-    if (!projectFieldsData?.fields) return;
-    const unavailableIds: Set<string> = new Set(
-      projectFieldsData.fields.filter((f) => !f.available).map((f) => String(f.id))
-    );
-    if (unavailableIds.size === 0) return;
+  const [prevProjectFields, setPrevProjectFields] = useState(projectFieldsData?.fields);
+  if (projectFieldsData?.fields !== prevProjectFields) {
+    setPrevProjectFields(projectFieldsData?.fields);
+    if (projectFieldsData?.fields) {
+      const unavailableIds: Set<string> = new Set(
+        projectFieldsData.fields.filter((f) => !f.available).map((f) => String(f.id))
+      );
+      if (unavailableIds.size > 0) {
+        setEnabledFields((prev) => {
+          let changed = false;
+          const next = new Set<string>();
+          for (const id of prev) {
+            if (unavailableIds.has(id)) {
+              changed = true;
+            } else {
+              next.add(id);
+            }
+          }
+          return changed ? next : prev;
+        });
 
-    setEnabledFields((prev) => {
-      let changed = false;
-      const next = new Set<string>();
-      for (const id of prev) {
-        if (unavailableIds.has(id)) {
-          changed = true;
-        } else {
-          next.add(id);
+        if (unavailableIds.has("estimate")) {
+          setEstimate("");
+        }
+        if (unavailableIds.has("points")) {
+          setPoints("");
         }
       }
-      return changed ? next : prev;
-    });
-
-    if (unavailableIds.has("estimate")) {
-      setEstimate("");
     }
-    if (unavailableIds.has("points")) {
-      setPoints("");
-    }
-  }, [projectFieldsData?.fields]);
+  }
 
   // Fetch Fix Versions for the selected project
   const selectedProjects = filterProject ? [filterProject] : [];
@@ -569,7 +574,7 @@ export function BulkClient() {
       ];
     }
     return list;
-  }, [boardStatusesData?.items, filtersData?.statuses, projectIssues]);
+  }, [boardStatusesData?.items, filtersData, projectIssues]);
 
   const statusOptions = useMemo(
     () => {
@@ -577,7 +582,7 @@ export function BulkClient() {
       if (filtersData?.statuses && filtersData.statuses.length > 0) return filtersData.statuses;
       return Array.from(new Set(projectIssues.map((issue) => issue.status).filter(Boolean))).sort();
     },
-    [allProjectStatuses, filtersData?.statuses, projectIssues]
+    [allProjectStatuses, filtersData, projectIssues]
   );
 
   // Guarantee placeholder for any initial keys if not already present in the loaded issues list
@@ -731,7 +736,7 @@ export function BulkClient() {
   const isEstimateValid = !estimate.trim() || /^(?=.*\d)(?:\d+[wdhm]\s*)+$/i.test(estimate.trim());
   const isWorklogDurationValid = Boolean(worklogDuration.trim() && parseJiraDuration(worklogDuration.trim()));
 
-  function buildAction(): BulkAction | null {
+  const buildAction = useCallback((): BulkAction | null => {
     if (!filterProject) return null;
 
     if (operationKind === "transition") {
@@ -809,7 +814,33 @@ export function BulkClient() {
     }
 
     return Object.keys(value).length > 0 ? { kind: "update-fields", value } : null;
-  }
+  }, [
+    filterProject,
+    operationKind,
+    targetStatus,
+    worklogDuration,
+    isWorklogDurationValid,
+    worklogStarted,
+    worklogComment,
+    enabledFields,
+    clearAssignee,
+    assignee,
+    clearLabels,
+    label,
+    priority,
+    issueType,
+    clearPoints,
+    points,
+    availableFieldMap,
+    estimate,
+    isEstimateValid,
+    clearDueDate,
+    dueDate,
+    clearFixVersions,
+    fixVersions,
+    clearEpic,
+    epic,
+  ]);
 
   function toggleField(field: string) {
     if (availableFieldMap.get(field)?.available === false) return;

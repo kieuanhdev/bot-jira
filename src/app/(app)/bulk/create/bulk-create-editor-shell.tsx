@@ -74,25 +74,26 @@ export function BulkCreateEditorShell({
   focusField,
   onClearFocusRow,
 }: BulkCreateEditorShellProps) {
-  const [density, setDensityState] = useState<GridDensity>("comfortable");
-  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>([]);
+  const [density, setDensityState] = useState<GridDensity>(() => getStoredDensity());
+  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => {
+    if (!projectKey) return [];
+    const defaultsCols = getDefaultVisibleColumnIds(metadata);
+    return getStoredColumns(projectKey, defaultsCols);
+  });
+  const [prevProjectKey, setPrevProjectKey] = useState(projectKey);
+  const [prevMetadata, setPrevMetadata] = useState(metadata);
+  if (projectKey !== prevProjectKey || metadata !== prevMetadata) {
+    setPrevProjectKey(projectKey);
+    setPrevMetadata(metadata);
+    if (projectKey) {
+      const defaultsCols = getDefaultVisibleColumnIds(metadata);
+      setVisibleColumnIds(getStoredColumns(projectKey, defaultsCols));
+    }
+  }
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
-
-  // Initialize density from preference
-  useEffect(() => {
-    setDensityState(getStoredDensity());
-  }, []);
-
-  // Initialize visible columns from preference
-  useEffect(() => {
-    if (!projectKey) return;
-    const defaultsCols = getDefaultVisibleColumnIds(metadata);
-    const stored = getStoredColumns(projectKey, defaultsCols);
-    setVisibleColumnIds(stored);
-  }, [projectKey, metadata]);
 
   // Lock document body scroll when fullscreen is active
   useEffect(() => {

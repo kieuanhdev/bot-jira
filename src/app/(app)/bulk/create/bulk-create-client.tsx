@@ -66,16 +66,11 @@ export function BulkCreateClient() {
   const [focusRow, setFocusRow] = useState<number | null>(null);
   const [focusField, setFocusField] = useState<string | null>(null);
   const [draftAvailable, setDraftAvailable] = useState(false);
-  const [isEditorFullscreen, setIsEditorFullscreen] = useState(false);
+  const [isEditorFullscreen, setIsEditorFullscreen] = useState(() => getStoredEditorMode() === "fullscreen");
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [draftSavedTime, setDraftSavedTime] = useState<number | null>(null);
   const draftRestoredRef = useRef(false);
   const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    const mode = getStoredEditorMode();
-    setIsEditorFullscreen(mode === "fullscreen");
-  }, []);
 
   function handleToggleFullscreen() {
     const next = !isEditorFullscreen;

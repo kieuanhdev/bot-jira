@@ -86,26 +86,33 @@ export function TasksTab({
   });
   const jiraBaseUrl = meStatus?.jiraBaseUrl;
 
-  useEffect(() => {
+  const [prevFilters, setPrevFilters] = useState({
+    statusGroup: initialStatusGroup,
+    activity: initialActivity,
+    assignee: initialAssignee,
+  });
+
+  if (
+    initialStatusGroup !== prevFilters.statusGroup ||
+    initialActivity !== prevFilters.activity ||
+    initialAssignee !== prevFilters.assignee
+  ) {
+    setPrevFilters({
+      statusGroup: initialStatusGroup,
+      activity: initialActivity,
+      assignee: initialAssignee,
+    });
     if (initialStatusGroup !== undefined) {
       setStatusGroup(initialStatusGroup || "all");
-      setOffset(0);
     }
-  }, [initialStatusGroup]);
-
-  useEffect(() => {
     if (initialActivity !== undefined) {
       setActivity(initialActivity || "all");
-      setOffset(0);
     }
-  }, [initialActivity]);
-
-  useEffect(() => {
     if (initialAssignee !== undefined) {
       setAssignee(initialAssignee || "all");
-      setOffset(0);
     }
-  }, [initialAssignee]);
+    setOffset(0);
+  }
 
   // Notify parent of filter changes for URL sync
   useEffect(() => {

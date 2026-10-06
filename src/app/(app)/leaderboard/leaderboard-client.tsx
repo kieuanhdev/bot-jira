@@ -162,10 +162,10 @@ export function LeaderboardClient() {
     staleTime: 60_000,
   });
 
-  const members = data?.members ?? [];
+  const members = useMemo(() => data?.members ?? [], [data?.members]);
   const summary = data?.summary;
   const myPerformance = data?.myPerformance;
-  const projects = data?.projects ?? [];
+  const projects = useMemo(() => data?.projects ?? [], [data?.projects]);
 
   // Filter & sort members in table
   const filteredMembers = useMemo(() => {

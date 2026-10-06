@@ -78,25 +78,17 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
   const [isExporting, setIsExporting] = useState<boolean>(false);
 
   // Listen to browser Back / Forward history navigation
-  useEffect(() => {
-    const tabParam = searchParams.get("tab") || "overview";
-    setActiveTab(tabParam);
-
-    const statusParam = (searchParams.get("statusGroup") as ReportStatusGroup) || null;
-    setActiveStatusGroup(statusParam);
-
-    const activityParam = searchParams.get("activity") || "all";
-    setActiveActivity(activityParam);
-
-    const assigneeParam = searchParams.get("assignee") || "all";
-    setActiveAssignee(assigneeParam);
-
-    const versionParam = searchParams.get("versionId") || "all";
-    setVersionId(versionParam);
-
-    const unitParam = (searchParams.get("unit") as ReportUnit) || "auto";
-    setUnit(unitParam);
-  }, [searchParams]);
+  const searchParamsString = searchParams.toString();
+  const [prevParamsString, setPrevParamsString] = useState(searchParamsString);
+  if (searchParamsString !== prevParamsString) {
+    setPrevParamsString(searchParamsString);
+    setActiveTab(searchParams.get("tab") || "overview");
+    setActiveStatusGroup((searchParams.get("statusGroup") as ReportStatusGroup) || null);
+    setActiveActivity(searchParams.get("activity") || "all");
+    setActiveAssignee(searchParams.get("assignee") || "all");
+    setVersionId(searchParams.get("versionId") || "all");
+    setUnit((searchParams.get("unit") as ReportUnit) || "auto");
+  }
 
   // Sync state to URL
   useEffect(() => {

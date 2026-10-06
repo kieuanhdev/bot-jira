@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -164,8 +164,20 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
   const [newVersionInput, setNewVersionInput] = useState("");
   const [showAddVersion, setShowAddVersion] = useState(false);
 
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const actionParam = searchParams?.get("action");
+  const returnToParam = searchParams?.get("returnTo");
+
   // Log Work dialog state
-  const [logWorkOpen, setLogWorkOpen] = useState(false);
+  const [logWorkOpen, setLogWorkOpen] = useState(() => actionParam === "log-work");
+  const [prevActionParam, setPrevActionParam] = useState(actionParam);
+  if (actionParam !== prevActionParam) {
+    setPrevActionParam(actionParam);
+    if (actionParam === "log-work") {
+      setLogWorkOpen(true);
+    }
+  }
   const [logTimeSpent, setLogTimeSpent] = useState("");
   const [logStartedAt, setLogStartedAt] = useState(() => {
     const now = new Date();
@@ -176,17 +188,6 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
   const [submittingWorklog, setSubmittingWorklog] = useState(false);
   const [worklogError, setWorklogError] = useState<string | null>(null);
   const [worklogIdempotencyKey, setWorklogIdempotencyKey] = useState(() => crypto.randomUUID());
-
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const actionParam = searchParams?.get("action");
-  const returnToParam = searchParams?.get("returnTo");
-
-  useEffect(() => {
-    if (actionParam === "log-work") {
-      setLogWorkOpen(true);
-    }
-  }, [actionParam]);
 
   const priorities = ["Blocker", "Highest", "High", "Medium", "Low", "Lowest"];
   const projectKey = issue.jiraKey.split("-")[0];

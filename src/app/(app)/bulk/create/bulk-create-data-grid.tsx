@@ -75,6 +75,19 @@ export function BulkCreateDataGrid({
   onSelectedRowsChange,
 }: BulkCreateDataGridProps) {
   const [expandedRowIndex, setExpandedRowIndex] = useState<number | null>(null);
+  const [prevFocus, setPrevFocus] = useState<{
+    row: number | null | undefined;
+    field: string | null | undefined;
+  }>({
+    row: null,
+    field: null,
+  });
+  if (focusRow !== prevFocus.row || focusField !== prevFocus.field) {
+    setPrevFocus({ row: focusRow, field: focusField });
+    if (focusRow != null && focusRow >= 0 && focusRow < items.length && focusField === "description") {
+      setExpandedRowIndex(focusRow);
+    }
+  }
   const [detailSheetIndex, setDetailSheetIndex] = useState<number | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -102,9 +115,7 @@ export function BulkCreateDataGrid({
       const targetRowElem = tableRef.current?.querySelector(`[data-row-index="${target}"]`);
       targetRowElem?.scrollIntoView({ behavior: "smooth", block: "center" });
 
-      if (focusField === "description") {
-        setExpandedRowIndex(target);
-      } else {
+      if (focusField !== "description") {
         const inputElem = targetRowElem?.querySelector(`[data-field="${focusField || "summary"}"]`) as
           | HTMLInputElement
           | HTMLTextAreaElement

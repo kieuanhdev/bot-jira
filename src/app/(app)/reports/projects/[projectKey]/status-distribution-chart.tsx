@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import {
   PieChart as PieChartIcon,
@@ -91,30 +91,30 @@ export function StatusDistributionChart({
   const [hoveredGroup, setHoveredGroup] = useState<ReportStatusGroup | null>(null);
 
   // Sync external unit prop to internal metric
-  useEffect(() => {
+  const [prevUnit, setPrevUnit] = useState(unit);
+  if (unit !== prevUnit) {
+    setPrevUnit(unit);
     if (unit === "points") setMetric("points");
     else if (unit === "estimate") setMetric("estimate");
     else if (unit === "tasks") setMetric("count");
-  }, [unit]);
+  }
 
   // User display preferences
-  const [preferences, setPreferences] = useState<ChartPreferences>(DEFAULT_PREFERENCES);
-
-  // Load preferences from localStorage on client mount
-  useEffect(() => {
+  const [preferences, setPreferences] = useState<ChartPreferences>(() => {
+    if (typeof window === "undefined") return DEFAULT_PREFERENCES;
     try {
       const stored = localStorage.getItem(STORAGE_PREFS_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
-        setPreferences((prev) => ({
-          ...prev,
-          ...parsed,
-        }));
+        return {
+          ...DEFAULT_PREFERENCES,
+          ...JSON.parse(stored),
+        };
       }
     } catch {
       // Ignore localStorage errors
     }
-  }, []);
+    return DEFAULT_PREFERENCES;
+  });
 
   // Save preferences to localStorage
   const updatePreferences = (updater: (prev: ChartPreferences) => ChartPreferences) => {
@@ -320,7 +320,7 @@ export function StatusDistributionChart({
     const parts = period.to.split("-");
     if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
     return period.to;
-  }, [period?.to]);
+  }, [period]);
 
   return (
     <Card className="border-border shadow-sm overflow-hidden">
