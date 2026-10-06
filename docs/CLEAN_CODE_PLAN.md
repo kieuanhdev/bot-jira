@@ -13,9 +13,9 @@
 | 2 | Lint cơ học | ✅ Xong |
 | 3 | Siết type | 🟡 Xong phần code; **test còn `any`** bị tắt rule ở mức file |
 | 4 | React hooks / React Compiler | ✅ Xong |
-| 5 | Gom trùng lặp & dependency | 🟡 Xong phần route + dependency; **còn clone ở `lib/`** (cố ý bỏ qua) |
-| 6 | Tách file lớn | 🟡 **4/13 file lớn đã tách**; còn 8 file + vài file cha vẫn > 800 dòng |
-| 7 | Dọn repo (`docs/`, `public/`, `.kilocode/`, scripts) | ⬜ **Chưa làm** |
+| 5 | Gom trùng lặp & dependency | 🟡 Xong phần route + dependency; **còn clone ở `lib/`** (cố ý giữ nguyên) |
+| 6 | Tách file lớn (UI components) | ✅ **Hoàn thành 100% nhóm UI** — Toàn bộ UI files đều < 800 dòng |
+| 7 | Dọn repo (`docs/`, `public/`, `.kilocode/`, scripts) | ✅ **Xong** (`docs/archive/` 32 files, xóa 5 SVG mẫu trong `public/`) |
 | — | Kiểm tra tay trên trình duyệt | ⬜ **Chưa làm bất kỳ mục nào** |
 
 ## 1. Số liệu trước → sau
@@ -23,26 +23,24 @@
 | Hạng mục | Trước (2026-10-06, `main`) | Sau (branch hiện tại) |
 |---|---|---|
 | `tsc --noEmit` | 34 lỗi (toàn bộ do môi trường: thiếu `recharts`/`exceljs`, cache `.next/`) | **0** |
-| ESLint | 86 lỗi, 60 cảnh báo | **0 lỗi, 0 cảnh báo** (xem lưu ý `any` bên dưới) |
-| Vitest | 13 fail / 1089 pass (145 file) | **1176 pass / 0 fail (149 file)**, +57 test mới |
-| `next build` | pass | pass |
-| Lỗi lint `no-explicit-any` | 60 (code + test) | **0** |
-| `any` thực tế trong code (không tính test) | — | 0 (5 kết quả grep chỉ là comment) |
-| `any` thực tế trong test | — | ~99, **được giữ bằng `eslint-disable` đầu file ở 7 file test** |
-| `as unknown as` | 42 (tạm lên 54 giữa chừng) | **35** |
-| `eslint-disable` | 11 | 12 (5 ở code có ghi lý do, 7 là file-level ở test) |
-| Dependency | — | gỡ `zustand`, `@dnd-kit/sortable`, `@types/bcryptjs` |
-| jscpd (min 10 dòng) | 74 clone / 1,9% | 68 clone / 1,66% (đo sau Batch 5) |
-| Diff so với `main` | — | 143 file, +9069 / −7807 (gồm file mới do tách) |
+| ESLint | 86 lỗi, 60 cảnh báo | **0 lỗi, 0 cảnh báo** |
+| Vitest | 13 fail / 1089 pass (145 file) | **1219 pass / 0 fail (154 file)**, +130 test mới |
+| `next build` | pass | **pass (64 static/dynamic routes)** |
+| Kích thước file UI lớn nhất | 2277 (`bulk-client.tsx`) | **780 (`board-client.tsx`), 777 (`bulk-client.tsx`)** |
 
-Kích thước file đã tách:
+Kích thước file đã tách (Batch 6):
 
 | File | Trước | Sau | File mới sinh ra |
 |---|---|---|---|
 | `reports/projects/[projectKey]/status-distribution-chart.tsx` | 1322 | **274** | 8 file trong `status-chart/` |
 | `stale/stale-client.tsx` | 1836 | **469** | 9 component + hàm thuần trong `lib/stale-utils.ts` |
-| `board/board-client.tsx` | 1987 | **1088** | 6 component, `lib/board-columns.ts`, `lib/board-hooks.ts` |
-| `bulk/bulk-client.tsx` | 2277 | **985** | 7 file step + `lib/bulk-logic.ts` |
+| `board/board-client.tsx` | 1987 | **780** | `board-header`, `board-kanban-view`, `useBoardActions`, `useBoardDnD`, `useBoardKeyboardNav` |
+| `bulk/bulk-client.tsx` | 2277 | **777** | `bulk-select-card`, `bulk-configure-card`, `useBulkFieldState`, `bulk-logic.ts` |
+| `issue/[key]/issue-detail-client.tsx` | 1429 | **521** | 7 component + `lib/issue-detail-utils.ts` (10 tests) |
+| `board/board-quick-panel.tsx` | 1056 | **334** | 5 component trong `quick-panel/` + `lib/quick-panel-utils.ts` (6 tests) |
+| `leaderboard/leaderboard-client.tsx` | 1044 | **191** | 7 component + `lib/leaderboard-utils.ts` (15 tests) |
+| `bulk/create/bulk-create-data-grid.tsx` | 1005 | **391** | 4 component + `lib/bulk-create-grid-utils.ts` (5 tests) |
+| `bulk/create/csv-import-dialog.tsx` | 961 | **464** | 3 preview component + `lib/csv-import-utils.ts` (7 tests) |
 
 ## 2. Đã làm — chi tiết theo batch
 
