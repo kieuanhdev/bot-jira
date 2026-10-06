@@ -5,11 +5,130 @@ import * as boardMembership from "@/lib/jira/board-membership";
 import * as creds from "@/lib/user-creds";
 import { JiraRequestError } from "@/lib/jira/client";
 
+const snapshots = new Map<string, any>();
+const entries = new Map<string, any[]>();
+const users = new Map<string, any>();
+
+function snapshotKey(userId: string, projectKey: string, boardId: number) {
+  return `${userId}:${projectKey}:${boardId}`;
+}
+
 vi.mock("@/lib/jira/client", async () => {
   const actual = await vi.importActual<any>("@/lib/jira/client");
   return {
     ...actual,
     jiraWith: vi.fn().mockReturnValue({}),
+  };
+});
+
+vi.mock("@/lib/prisma", () => {
+  return {
+    prisma: {
+      user: {
+        upsert: vi.fn(async ({ where, create, update }: any) => {
+          const user = { ...(users.get(where.id) || create), ...update };
+          users.set(where.id, user);
+          return user;
+        }),
+        findUnique: vi.fn(async ({ where }: any) => {
+          return users.get(where.id) ?? null;
+        }),
+      },
+      jiraBoardMembershipSnapshot: {
+        deleteMany: vi.fn(async ({ where }: any) => {
+          if (where?.userId && where?.projectKey && where?.boardId) {
+            snapshots.delete(snapshotKey(where.userId, where.projectKey, where.boardId));
+          } else if (where?.projectKey) {
+            for (const [k, v] of snapshots.entries()) {
+              if (v.projectKey === where.projectKey) {
+                snapshots.delete(k);
+              }
+            }
+          }
+          return { count: 0 };
+        }),
+        findUnique: vi.fn(async ({ where, include }: any) => {
+          let found: any = null;
+          if (where.userId_projectKey_boardId) {
+            const { userId, projectKey, boardId } = where.userId_projectKey_boardId;
+            found = snapshots.get(snapshotKey(userId, projectKey, boardId)) ?? null;
+          } else if (where.id) {
+            for (const v of snapshots.values()) {
+              if (v.id === where.id) {
+                found = v;
+                break;
+              }
+            }
+          }
+          if (found && include?.entries) {
+            return {
+              ...found,
+              entries: entries.get(found.id) || [],
+            };
+          }
+          return found;
+        }),
+        upsert: vi.fn(async ({ where, create, update }: any) => {
+          const { userId, projectKey, boardId } = where.userId_projectKey_boardId;
+          const key = snapshotKey(userId, projectKey, boardId);
+          const existing = snapshots.get(key);
+          if (existing) {
+            const updated = { ...existing, ...update };
+            snapshots.set(key, updated);
+            return updated;
+          }
+          const created = { id: `snap_${Date.now()}_${Math.random()}`, ...create };
+          snapshots.set(key, created);
+          return created;
+        }),
+        update: vi.fn(async ({ where, data }: any) => {
+          let target: any = null;
+          let targetKey = "";
+          if (where.id) {
+            for (const [k, v] of snapshots.entries()) {
+              if (v.id === where.id) {
+                target = v;
+                targetKey = k;
+                break;
+              }
+            }
+          } else if (where.userId_projectKey_boardId) {
+            const { userId, projectKey, boardId } = where.userId_projectKey_boardId;
+            targetKey = snapshotKey(userId, projectKey, boardId);
+            target = snapshots.get(targetKey);
+          }
+          if (!target) throw new Error("Record not found");
+          const updated = { ...target, ...data };
+          snapshots.set(targetKey, updated);
+          return updated;
+        }),
+      },
+      jiraBoardMembershipEntry: {
+        findMany: vi.fn(async ({ where, select }: any) => {
+          const list = entries.get(where.snapshotId) || [];
+          return list
+            .filter((e) => e.generation === where.generation)
+            .map((e) => {
+              if (select) {
+                const res: any = {};
+                if (select.jiraKey) res.jiraKey = e.jiraKey;
+                if (select.isBacklog !== undefined) res.isBacklog = e.isBacklog;
+                return res;
+              }
+              return e;
+            });
+        }),
+        createMany: vi.fn(async ({ data }: any) => {
+          for (const item of data) {
+            const list = entries.get(item.snapshotId) || [];
+            list.push(item);
+            entries.set(item.snapshotId, list);
+          }
+          return { count: data.length };
+        }),
+        deleteMany: vi.fn(async () => ({ count: 0 })),
+      },
+    },
   };
 });
 
@@ -20,6 +139,9 @@ describe("refresh-board-membership worker", () => {
 
   beforeEach(async () => {
     vi.restoreAllMocks();
+    snapshots.clear();
+    entries.clear();
+    users.clear();
     await prisma.user.upsert({
       where: { id: testUserId },
       create: {
