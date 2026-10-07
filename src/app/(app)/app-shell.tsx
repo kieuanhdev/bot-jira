@@ -27,18 +27,15 @@ import { GlobalSyncIndicator } from "./global-sync-indicator";
 import { cn } from "@/lib/utils";
 
 const nav = [
-  // Làm việc hằng ngày
-  { href: "/board", label: "Board", icon: LayoutGrid },
-  { href: "/watch", label: "Theo dõi", icon: Eye },
-  { href: "/branches", label: "Nhánh & PR", icon: GitBranch },
-  { href: "/notifications", label: "Thông báo", icon: Bell },
-  // Quản lý & theo dõi tiến độ
-  { href: "/stale", label: "Tồn đọng", icon: BarChart3 },
-  { href: "/reports/projects", label: "Báo cáo", icon: ChartNoAxesCombined },
-  { href: "/leaderboard", label: "Xếp hạng", icon: Trophy },
-  // Vận hành
+  { href: "/board", label: "Bảng công việc", icon: LayoutGrid },
+  { href: "/stale", label: "Task tồn đọng", icon: BarChart3 },
+  { href: "/bulk", label: "Thao tác hàng loạt", icon: ListChecks },
   { href: "/release", label: "Phát hành", icon: Rocket },
-  { href: "/bulk", label: "Sửa hàng loạt", icon: ListChecks },
+  { href: "/branches", label: "Quản lý nhánh", icon: GitBranch },
+  { href: "/watch", label: "Đang theo dõi", icon: Eye },
+  { href: "/notifications", label: "Thông báo", icon: Bell },
+  { href: "/reports/projects", label: "Báo cáo", icon: ChartNoAxesCombined },
+  { href: "/leaderboard", label: "Bảng xếp hạng", icon: Trophy },
   { href: "/settings", label: "Cài đặt", icon: Settings },
 ];
 
