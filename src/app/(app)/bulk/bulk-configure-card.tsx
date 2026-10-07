@@ -1,11 +1,8 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FeedbackBanner } from "@/components/shared/feedback-banner";
-import { Loader2, Eye } from "lucide-react";
 import {
   BulkConfigureEmptyState,
   BulkFieldInputs,
@@ -49,12 +46,6 @@ export interface BulkConfigureCardProps {
   versionsLoading: boolean;
   isEstimateValid: boolean;
   resetPreview: () => void;
-  // preview
-  onPreview: () => void;
-  previewing: boolean;
-  selectionMode: "pick" | "filter";
-  selectedCount: number;
-  isActionReady: boolean;
   previewError: string | null;
 }
 
@@ -86,41 +77,26 @@ export function BulkConfigureCard({
   versionsLoading,
   isEstimateValid,
   resetPreview,
-  onPreview,
-  previewing,
-  selectionMode,
-  selectedCount,
-  isActionReady,
   previewError,
 }: BulkConfigureCardProps) {
   return (
-    <Card>
+    <Card className={effectiveCount === 0 ? "opacity-60" : undefined}>
       <CardHeader className="p-4 sm:p-5">
-        <CardTitle className="text-base flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
-              2
-            </span>
-            {operationKind === "log-work"
-              ? "Thiết lập Ghi Worklog"
-              : operationKind === "transition"
-                ? "Chuyển trạng thái hàng loạt"
-                : "Chọn các trường cần sửa"}
-          </span>
-          {filterProject && (
-            <Badge variant="outline" className="font-normal text-xs">
-              Dự án: <span className="font-semibold ml-1">{filterProject}</span>
-            </Badge>
-          )}
+        <CardTitle className="text-base">
+          {operationKind === "log-work"
+            ? "Ghi worklog"
+            : operationKind === "transition"
+              ? "Chuyển trạng thái"
+              : "Chọn trường cần sửa"}
         </CardTitle>
         <CardDescription>
           {filterProject
             ? operationKind === "log-work"
-              ? `Nhập thời lượng thực hiện để ghi nhận cộng dồn lên ${effectiveCount} task đã chọn.`
+              ? "Thời lượng sẽ được cộng dồn vào từng task đã chọn."
               : operationKind === "transition"
-                ? `Chọn trạng thái đích để chuyển đổi đồng loạt cho ${effectiveCount} task đã chọn trong dự án ${filterProject}.`
-                : `Bật một hoặc nhiều trường có sẵn của dự án ${filterProject}, nhập giá trị mới rồi xem trước trên ${effectiveCount} task đã chọn.`
-            : "Vui lòng chọn dự án ở Bước 1 trước khi cấu hình thao tác."}
+                ? "Chọn trạng thái đích cho các task đã chọn."
+                : "Bật các trường cần sửa rồi nhập giá trị mới."
+            : "Chọn dự án ở bước 1 trước."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 px-4 pb-4 sm:px-5 sm:pb-5">
@@ -185,29 +161,7 @@ export function BulkConfigureCard({
           />
         )}
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center pt-2">
-          <Button
-            onClick={onPreview}
-            disabled={
-              previewing ||
-              (selectionMode === "pick" && selectedCount === 0) ||
-              !filterProject ||
-              !isActionReady
-            }
-          >
-            {previewing ? (
-              <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
-            ) : (
-              <Eye className="h-4 w-4" aria-hidden="true" />
-            )}
-            {selectionMode === "filter"
-              ? "Xem trước thay đổi bộ lọc"
-              : `Xem trước ${selectedCount > 0 ? `${selectedCount} ` : ""}thay đổi`}
-          </Button>
-          {previewError && (
-            <FeedbackBanner tone="destructive">{previewError}</FeedbackBanner>
-          )}
-        </div>
+        {previewError && <FeedbackBanner tone="destructive">{previewError}</FeedbackBanner>}
       </CardContent>
     </Card>
   );

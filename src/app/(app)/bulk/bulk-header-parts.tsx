@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, CheckCheck, Edit3, ListPlus, Sparkles } from "lucide-react";
+import { ArrowLeft, CheckCheck, Edit3, Eye, ListPlus, Loader2, Sparkles } from "lucide-react";
 import type { OperationKind } from "./lib/bulk-logic";
 
 export function BulkTopNav() {
@@ -101,6 +101,40 @@ export function StandardizationBanner({ count }: { count: number }) {
         <Link href="/stale?view=my-work&tab=standardization">
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> Quay lại chuẩn hóa
         </Link>
+      </Button>
+    </div>
+  );
+}
+
+/** Sticky bar so the primary action stays reachable while scrolling a long task list. */
+export function BulkActionBar({
+  filterProject,
+  count,
+  disabled,
+  previewing,
+  label,
+  onPreview,
+}: {
+  filterProject: string;
+  count: number;
+  disabled: boolean;
+  previewing: boolean;
+  label: string;
+  onPreview: () => void;
+}) {
+  return (
+    <div className="sticky bottom-0 z-20 -mx-1 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-4 py-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <p className="min-w-0 truncate text-sm text-muted-foreground">
+        <span className="font-semibold tabular-nums text-foreground">{count}</span> task
+        {filterProject ? <> · <span className="font-mono">{filterProject}</span></> : null}
+      </p>
+      <Button onClick={onPreview} disabled={disabled} className="shrink-0 cursor-pointer">
+        {previewing ? (
+          <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
+        ) : (
+          <Eye className="h-4 w-4" aria-hidden="true" />
+        )}
+        {label}
       </Button>
     </div>
   );

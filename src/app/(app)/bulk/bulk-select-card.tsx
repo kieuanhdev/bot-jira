@@ -96,15 +96,8 @@ export function BulkSelectCard({
   return (
     <Card className="overflow-hidden">
       <CardHeader className="border-b p-4 sm:p-5">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
-            1
-          </span>
-          Chọn phạm vi dự án & danh sách task
-        </CardTitle>
-        <CardDescription>
-          Bắt buộc chọn một dự án trước. Thao tác hàng loạt chỉ thực hiện trên các task thuộc cùng một dự án.
-        </CardDescription>
+        <CardTitle className="text-base">Chọn task</CardTitle>
+        <CardDescription>Mỗi lần chỉ làm việc trên một dự án.</CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         <BulkProjectSelector

@@ -8,7 +8,6 @@ import { useSession } from "next-auth/react";
 import { api } from "@/lib/api-client";
 import { useIssues, fetchIssuesPage, type IssueItem } from "@/hooks/use-issues";
 import { issuesKeys, boardKeys, bulkKeys, meKeys, staleKeys } from "@/lib/query-keys";
-import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { type IssueFilters, DEFAULT_BULK_FILTERS } from "@/lib/issues/issue-filters";
 import { ListChecks } from "lucide-react";
@@ -24,7 +23,7 @@ import {
 import { previewBucket } from "./lib/bulk-utils";
 import { BulkConfirmDialog } from "./bulk-confirm-dialog";
 import { BulkHistoryCard } from "./bulk-history-card";
-import { BulkProgressSteps, BulkTopNav, StandardizationBanner } from "./bulk-header-parts";
+import { BulkActionBar, BulkProgressSteps, BulkTopNav, StandardizationBanner } from "./bulk-header-parts";
 import { BulkPreviewCard } from "./bulk-preview-step";
 import { BulkSelectCard } from "./bulk-select-card";
 import { BulkConfigureCard } from "./bulk-configure-card";
@@ -624,20 +623,8 @@ export function BulkClient() {
       <PageHeader
         eyebrow="Không gian làm việc Jira"
         icon={ListChecks}
-        title="Thao tác hàng loạt theo dự án"
-        description="Chọn dự án, lọc task, bật nhiều trường cần cập nhật và kiểm tra bản xem trước trước khi thực thi an toàn."
-        actions={
-          <>
-            {filterProject && (
-              <Badge variant="outline" className="px-3 py-1 font-mono text-xs">
-                Dự án: {filterProject}
-              </Badge>
-            )}
-            <Badge variant={effectiveCount > 0 ? "info" : "secondary"} className="w-fit px-3 py-1">
-              {effectiveCount} task sẽ được cập nhật
-            </Badge>
-          </>
-        }
+        title="Cập nhật hàng loạt"
+        description="Chọn task, chọn thay đổi, xem trước rồi mới chạy."
       />
 
       {/* Progress Steps */}
@@ -718,13 +705,28 @@ export function BulkClient() {
         versionsLoading={versionsLoading}
         isEstimateValid={isEstimateValid}
         resetPreview={resetPreview}
-        onPreview={doPreview}
-        previewing={previewing}
-        selectionMode={selectionMode}
-        selectedCount={selected.size}
-        isActionReady={Boolean(buildAction())}
         previewError={previewError}
       />
+
+      {!preview && (
+        <BulkActionBar
+          filterProject={filterProject}
+          count={effectiveCount}
+          previewing={previewing}
+          disabled={
+            previewing ||
+            (selectionMode === "pick" && selected.size === 0) ||
+            !filterProject ||
+            !buildAction()
+          }
+          label={
+            selectionMode === "filter"
+              ? "Xem trước thay đổi bộ lọc"
+              : `Xem trước ${selected.size > 0 ? `${selected.size} ` : ""}thay đổi`
+          }
+          onPreview={doPreview}
+        />
+      )}
 
       {/* Step 3 — Preview + Confirm */}
       {preview && (
