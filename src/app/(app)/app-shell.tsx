@@ -23,6 +23,7 @@ import {
 import { useUnreadCount } from "@/hooks/use-notifications";
 import { FreshnessBanner } from "./freshness-banner";
 import { ReconnectBanner } from "./reconnect-banner";
+import { GlobalSyncIndicator } from "./global-sync-indicator";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -176,6 +177,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <ReconnectBanner />
         <FreshnessBanner />
         <main className="flex-1 overflow-x-auto p-4 md:p-6">{children}</main>
+        <GlobalSyncIndicator />
       </div>
     </div>
   );

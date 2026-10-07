@@ -38,6 +38,8 @@ export async function GET(req: Request) {
       lastSuccessAt: true,
       lastErrorAt: true,
       lastError: true,
+      activeRunToken: true,
+      activeRunExpiresAt: true,
     },
   }).catch(() => null);
 
@@ -77,7 +79,13 @@ export async function GET(req: Request) {
     }
   } else {
     // Without since timestamp, derive current known state
-    if (startedMs > successMs && startedMs > errorMs && (Date.now() - startedMs < 10 * 60_000)) {
+    const isLeaseActive = Boolean(
+      cursor.activeRunToken &&
+        cursor.activeRunExpiresAt &&
+        cursor.activeRunExpiresAt.getTime() > Date.now()
+    );
+
+    if (isLeaseActive || (startedMs > successMs && startedMs > errorMs && Date.now() - startedMs < 10 * 60_000)) {
       state = "running";
     } else if (errorMs > successMs) {
       state = "failed";

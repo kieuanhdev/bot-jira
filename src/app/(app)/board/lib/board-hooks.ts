@@ -7,6 +7,7 @@ import type { BoardWidth } from "@/lib/status-groups";
 import type { BoardColumn } from "./board-columns";
 import { loadStoredColumnPreferences, saveStoredColumnPreferences } from "./board-storage";
 import type { BoardSyncState, Transition } from "./board-types";
+import { useActiveSync } from "@/hooks/use-active-sync";
 
 /** Viewport bucket used to pick the default view (narrow screens fall back to the list). */
 export function useBoardWidth(): BoardWidth {
@@ -52,6 +53,7 @@ export function useDragAutoScroll(
 /** Queue a Jira sync for the selected project and poll its status until it settles. */
 export function useJiraSync(selectedProject: string, setToast: (message: string | null) => void) {
   const qc = useQueryClient();
+  const { isTargetSyncing } = useActiveSync(selectedProject);
   const [boardSync, setBoardSync] = useState<{
     projectKey: string;
     state: BoardSyncState;
@@ -62,11 +64,23 @@ export function useJiraSync(selectedProject: string, setToast: (message: string 
     state: "idle",
   });
 
+  const effectiveBoardSync = useMemo(() => {
+    if (boardSync.state !== "idle") return boardSync;
+    if (isTargetSyncing && selectedProject) {
+      return {
+        projectKey: selectedProject,
+        state: "running" as BoardSyncState,
+      };
+    }
+    return boardSync;
+  }, [boardSync, isTargetSyncing, selectedProject]);
+
   const isCurrentProjectSyncing =
-    boardSync.projectKey === selectedProject &&
-    (boardSync.state === "enqueueing" ||
-      boardSync.state === "queued" ||
-      boardSync.state === "running");
+    (effectiveBoardSync.projectKey === selectedProject &&
+      (effectiveBoardSync.state === "enqueueing" ||
+        effectiveBoardSync.state === "queued" ||
+        effectiveBoardSync.state === "running")) ||
+    isTargetSyncing;
 
   useEffect(() => {
     if (boardSync.state !== "queued" && boardSync.state !== "running") return;
@@ -171,7 +185,7 @@ export function useJiraSync(selectedProject: string, setToast: (message: string 
     }
   };
 
-  return { boardSync, isCurrentProjectSyncing, syncJira };
+  return { boardSync: effectiveBoardSync, isCurrentProjectSyncing, syncJira };
 }
 
 /** Per-issue Jira transitions: cached, de-duplicated, and prefetched for every loaded issue. */

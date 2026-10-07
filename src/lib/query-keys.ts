@@ -77,6 +77,12 @@ export const freshnessKeys = {
   all: ["freshness"] as const,
 };
 
+export const syncKeys = {
+  all: ["sync"] as const,
+  active: ["sync", "active"] as const,
+  status: (projectKey: string) => ["sync", "status", projectKey] as const,
+};
+
 export const settingsKeys = {
   users: ["settings", "users"] as const,
 };
