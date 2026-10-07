@@ -223,9 +223,18 @@ export function BoardColumnsMenu({
             </div>
             <div className="p-1.5">
               {[
+                { key: "type", label: "Loại (Type)" },
+                { key: "points", label: "Điểm (Points)" },
                 { key: "status", label: "Trạng thái (Status)" },
                 { key: "assignee", label: "Người xử lý (Assignee)" },
                 { key: "priority", label: "Mức ưu tiên (Priority)" },
+                { key: "due", label: "Hạn hoàn thành (Due)" },
+                { key: "epic", label: "Epic" },
+                { key: "fixVersion", label: "Fix version" },
+                { key: "reporter", label: "Reporter" },
+                { key: "approver", label: "Approver" },
+                { key: "tester", label: "Tester" },
+                { key: "created", label: "Ngày tạo (Created)" },
                 { key: "updated", label: "Thời gian cập nhật (Updated)" },
               ].map((col) => {
                 const visible = !hiddenTableCols.has(col.key);

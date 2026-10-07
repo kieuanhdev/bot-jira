@@ -26,8 +26,10 @@ import {
   Clock,
   Bot,
   GitBranch,
+  CalendarClock,
 } from "lucide-react";
 import type { IssueItem } from "@/hooks/use-issues";
+import { isOverdue } from "@/lib/due-date";
 import type { QuickAction } from "./lib/board-types";
 import { priorityMeta, avatarClass, initials, typeShort, daysSince } from "./lib/board-utils";
 
@@ -53,6 +55,7 @@ export function CardContent({
   assignees?: string[];
 }) {
   const stale = daysSince(issue.updatedAt) >= 7 && !done;
+  const overdue = isOverdue(issue.dueDate, done);
   const pm = priorityMeta(issue.priority || "");
   const canPrev = (colIndex ?? 0) > 0;
   const canNext = (colIndex ?? 0) < (columnCount ?? 0) - 1;
@@ -154,7 +157,7 @@ export function CardContent({
           {issue.summary}
         </p>
 
-        {(issue.aiScore || stale || (issue.delivery && issue.delivery.branchCount > 0)) && (
+        {(issue.aiScore || stale || overdue || (issue.delivery && issue.delivery.branchCount > 0)) && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
             {issue.delivery && issue.delivery.branchCount > 0 && (
               <Badge
@@ -191,6 +194,11 @@ export function CardContent({
                 {daysSince(issue.updatedAt)}d
               </Badge>
             )}
+            {overdue && (
+              <Badge variant="danger" className="h-4 gap-1 px-1.5 text-[10px]" title={`Quá hạn ${new Date(issue.dueDate!).toLocaleDateString("vi-VN")}`}>
+                <CalendarClock className="h-2.5 w-2.5" aria-hidden /> Quá hạn
+              </Badge>
+            )}
             {issue.priority && issue.priority !== "Low" && issue.priority !== "Lowest" && (
               <span className={cn("inline-flex h-4 items-center rounded-full px-1.5 text-[10px] font-semibold", pm.badge)}>
                 {issue.priority}
@@ -220,6 +228,14 @@ export function CardContent({
             </span>
           )}
           <span className="truncate text-[11px] text-muted-foreground">{timeAgo(issue.updatedAt)}</span>
+          {(issue.originalEstimateSeconds != null || issue.timeSpent != null) && (
+            <span className="text-[10px] tabular-nums text-muted-foreground" title="Đã làm / Ước tính">
+              {issue.timeSpent != null ? `${Math.round(issue.timeSpent / 360) / 10}h` : "—"}/{issue.originalEstimateSeconds != null ? `${Math.round(issue.originalEstimateSeconds / 360) / 10}h` : "—"}
+            </span>
+          )}
+          {[['R', issue.reporterJira], ['A', issue.approverJira], ['T', issue.testerJira]].map(([role, name]) => name ? (
+            <span key={role} className={cn("flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-semibold ring-1 ring-background", avatarClass(name))} title={`${role === 'R' ? 'Reporter' : role === 'A' ? 'Approver' : 'Tester'}: ${name}`}>{role}</span>
+          ) : null)}
           {showNav && onTransition && !done && (
             <span className="ml-auto flex items-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
               <button

@@ -288,6 +288,12 @@ export function QuickPanel({
             priority={priority}
             onSetPriority={(p) => mutateField({ priority: p })}
             assigneeJira={assigneeJira}
+            reporterJira={d?.reporterJira ?? issue.reporterJira}
+            approverJira={d?.approverJira ?? issue.approverJira}
+            testerJira={d?.testerJira ?? issue.testerJira}
+            dueDate={d?.dueDate ?? issue.dueDate}
+            timeSpentSeconds={d?.timeSpentSeconds ?? issue.timeSpent}
+            originalEstimateSeconds={d?.originalEstimateSeconds ?? issue.originalEstimateSeconds}
             assignees={assignees}
             meName={me?.jiraName}
             onAssign={(a) => mutateField({ assignee: a })}

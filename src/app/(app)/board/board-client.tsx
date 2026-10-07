@@ -29,6 +29,8 @@ import {
   saveStoredProject,
   saveStoredSortMode,
   saveStoredViewMode,
+  loadStoredTeamMode,
+  saveStoredTeamMode,
 } from "./lib/board-storage";
 import { Search } from "lucide-react";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -46,6 +48,7 @@ import { BoardNoProjectsState } from "./board-empty-projects";
 import { BoardListView } from "./board-list-view";
 import { BoardHeader } from "./board-header";
 import { BoardKanbanView } from "./board-kanban-view";
+import { BoardTeamView } from "./board-team-view";
 import { useBoardKeyboardNav } from "./lib/board-keyboard-nav";
 import { useBoardActions } from "./lib/board-actions-hook";
 import { useBoardDnD } from "./lib/board-dnd-hook";
@@ -70,6 +73,7 @@ export function BoardClient() {
   const router = useRouter();
   const boardScrollRef = useRef<HTMLDivElement | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [quickFilter, setQuickFilter] = useState<"" | "overdue" | "unassigned" | "unestimated" | "stale" | "missingApprover" | "missingTester">("");
 
   useEffect(() => {
     if (!toast) return;
@@ -88,11 +92,12 @@ export function BoardClient() {
   const { data: meStatus } = useQuery({
     queryKey: meKeys.status,
     queryFn: () =>
-      api<{ jiraName: string | null; jiraBaseUrl?: string }>("/api/me/status"),
+      api<{ jiraName: string | null; jiraBaseUrl?: string; role?: string; canBoardTeam?: boolean }>("/api/me/status"),
     retry: 0,
   });
   const myName = meStatus?.jiraName ?? null;
   const jiraBaseUrl = meStatus?.jiraBaseUrl ?? "";
+  const canUseTeamMode = Boolean(meStatus?.canBoardTeam);
 
   const { data: prefs } = useQuery({
     queryKey: meKeys.prefs,
@@ -239,6 +244,7 @@ export function BoardClient() {
   const [view, setView] = useState<ViewMode>(() => {
     return loadStoredViewMode() ?? "board";
   });
+  const [teamModeState, setTeamModeState] = useState<{ project: string; enabled: boolean }>({ project: "", enabled: false });
   const [filters, setFilters] = useState<IssueFilters>(() => {
     if (searchParams && hasFilterParamsInUrl) {
       return parseIssueFilters(searchParams, DEFAULT_BOARD_FILTERS, myName);
@@ -257,6 +263,37 @@ export function BoardClient() {
       saveStoredProject(selectedProject);
     }
   }, [selectedProject]);
+
+  const teamMode = canUseTeamMode && (teamModeState.project === selectedProject
+    ? teamModeState.enabled
+    : loadStoredTeamMode(selectedProject));
+
+  function changeTeamMode(enabled: boolean) {
+    const next = canUseTeamMode && enabled;
+    setTeamModeState({ project: selectedProject, enabled: next });
+    saveStoredTeamMode(selectedProject, next);
+    setFilters((current) => ({
+      ...current,
+      assigneeScope: next
+        ? { mode: "all", roster: [], view: "all-selected" }
+        : { mode: "roster", roster: ["me"], view: "all-selected" },
+    }));
+  }
+
+  // Team mode restored from storage must also widen the assignee scope once per
+  // project, otherwise a stored "me" filter keeps showing only the leader's tasks.
+  const teamScopeAppliedRef = useRef("");
+  useEffect(() => {
+    if (!teamMode || !selectedProject || teamScopeAppliedRef.current === selectedProject) return;
+    teamScopeAppliedRef.current = selectedProject;
+    setFilters((current) => {
+      const { mode, roster } = current.assigneeScope;
+      const onlyMe = mode === "roster" && roster.length === 1 && roster[0] === "me";
+      return onlyMe
+        ? { ...current, assigneeScope: { mode: "all", roster: [], view: "all-selected" } }
+        : current;
+    });
+  }, [teamMode, selectedProject]);
 
   // Initial sync when selectedProject resolves after async preferences load
   const initialSyncDoneRef = useRef(false);
@@ -356,7 +393,18 @@ export function BoardClient() {
     q: filters.query || undefined,
     label: filters.labels.length > 0 ? filters.labels : undefined,
     priority: filters.priorities.length > 0 ? filters.priorities : undefined,
-    assignee: isAssigneeAll ? "ALL" : activeAssignees,
+    status: filters.statuses.length > 0 ? filters.statuses : undefined,
+    epic: filters.epics.length > 0 ? filters.epics : undefined,
+    reporter: filters.reporters.length > 0 ? filters.reporters : undefined,
+    approver: quickFilter === "missingApprover" ? "unassigned" : filters.approvers.length > 0 ? filters.approvers : undefined,
+    tester: quickFilter === "missingTester" ? "unassigned" : filters.testers.length > 0 ? filters.testers : undefined,
+    role: filters.roles.length > 0 ? filters.roles : undefined,
+    type: filters.types.length > 0 ? filters.types : undefined,
+    fixVersion: filters.fixVersions.length > 0 ? filters.fixVersions : undefined,
+    overdue: filters.overdue || quickFilter === "overdue" || undefined,
+    unestimated: quickFilter === "unestimated" || undefined,
+    staleDays: quickFilter === "stale" ? 7 : undefined,
+    assignee: quickFilter === "unassigned" ? "unassigned" : isAssigneeAll || filters.roles.length > 0 ? "ALL" : activeAssignees,
     includeDone: true,
     limit: 1000,
   };
@@ -372,6 +420,16 @@ export function BoardClient() {
     q: filters.query,
     label: [...filters.labels].sort(),
     priority: [...filters.priorities].sort(),
+    status: [...filters.statuses].sort(),
+    epic: [...filters.epics].sort(),
+    reporter: [...filters.reporters].sort(),
+    approver: [...filters.approvers].sort(),
+    tester: [...filters.testers].sort(),
+    role: [...filters.roles].sort(),
+    type: [...filters.types].sort(),
+    fixVersion: [...filters.fixVersions].sort(),
+    overdue: filters.overdue,
+    quickFilter,
     assignee: isAssigneeAll ? "ALL" : [...activeAssignees].sort(),
   });
   const [extraPages, setExtraPages] = useState<{ sig: string; items: IssueItem[] }>({ sig: "", items: [] });
@@ -414,7 +472,12 @@ export function BoardClient() {
     queryKey: issuesKeys.filters(selectedProject),
     enabled: effectivePreferred.length > 0,
     queryFn: () =>
-      api<{ assignees: string[]; labels: string[]; priorities: string[] }>(
+      api<{
+        assignees: string[]; labels: string[]; priorities: string[]; statuses: string[];
+        epics: string[]; types: string[]; fixVersions: string[]; reporters: string[];
+        approvers: string[]; testers: string[];
+        displayNames: Record<string, string>;
+      }>(
         `/api/issues/filters?project=${selectedProject}`
       ),
     staleTime: 5 * 60_000,
@@ -422,6 +485,16 @@ export function BoardClient() {
   });
   const assignees = optData?.assignees ?? [];
   const labelOptions = optData?.labels ?? [];
+  const personOptions = (values: string[] | undefined) => (values ?? []).map((value) => ({ value, label: optData?.displayNames?.[value] ? `${optData.displayNames[value]} (${value})` : value }));
+
+  const { data: peopleFieldData } = useQuery({
+    queryKey: ["projects", selectedProject, "people-fields"],
+    enabled: Boolean(selectedProject),
+    queryFn: () => api<{ fields: { reporter: string; approver?: string | null; tester?: string | null } }>(
+      `/api/projects/${encodeURIComponent(selectedProject)}/people-fields`
+    ),
+    staleTime: 5 * 60_000,
+  });
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -579,6 +652,12 @@ export function BoardClient() {
   }
 
   const [hiddenTableCols, setHiddenTableCols] = useState<Set<string>>(new Set());
+  const effectiveHiddenTableCols = useMemo(() => {
+    const next = new Set(hiddenTableCols);
+    if (peopleFieldData && !peopleFieldData.fields.approver) next.add("approver");
+    if (peopleFieldData && !peopleFieldData.fields.tester) next.add("tester");
+    return next;
+  }, [hiddenTableCols, peopleFieldData]);
   function toggleTableColumn(colKey: string) {
     setHiddenTableCols((prev) => {
       const next = new Set(prev);
@@ -660,12 +739,15 @@ export function BoardClient() {
         effectiveView={effectiveView}
         onViewChange={setView}
         width={width}
+        canUseTeamMode={canUseTeamMode}
+        teamMode={teamMode}
+        onTeamModeChange={changeTeamMode}
         columns={columns}
         visibleColumns={visibleColumns}
         byColumn={byColumn}
         hiddenCols={hiddenCols}
         collapsedCols={collapsedCols}
-        hiddenTableCols={hiddenTableCols}
+        hiddenTableCols={effectiveHiddenTableCols}
         onShowAllColumns={showAllColumns}
         onHideEmptyColumns={hideEmptyColumns}
         onToggleColumnVisibility={toggleColumnVisibility}
@@ -685,20 +767,46 @@ export function BoardClient() {
         defaults={DEFAULT_BOARD_FILTERS}
         onChange={setFilters}
         options={{
-          assignees,
+          assignees: personOptions(assignees),
           labels: labelOptions,
           priorities: optData?.priorities ?? ["Low", "Medium", "High", "Highest", "Blocker"],
+          statuses: optData?.statuses ?? [],
+          epics: optData?.epics ?? [],
+          types: optData?.types ?? [],
+          fixVersions: optData?.fixVersions ?? [],
+          reporters: personOptions(optData?.reporters),
+          approvers: personOptions(optData?.approvers),
+          testers: personOptions(optData?.testers),
         }}
         capabilities={{
           search: true,
           assignee: "multi",
-          status: false,
-          label: "single",
-          priority: "single",
+          status: "multi",
+          epic: "multi",
+          label: "multi",
+          priority: "multi",
+          role: "multi",
+          reporter: "multi",
+          approver: peopleFieldData?.fields.approver ? "multi" : false,
+          tester: peopleFieldData?.fields.tester ? "multi" : false,
+          type: "multi",
+          fixVersion: "multi",
+          overdue: true,
           quickSwitch: true,
         }}
         myName={myName}
         searchPlaceholder={`Tìm kiếm trong ${selectedProject}…`}
+        actions={
+          <div className="flex flex-wrap items-center gap-1">
+            {([
+              ["overdue", "Quá hạn"], ["unassigned", "Chưa assign"], ["unestimated", "Chưa estimate"], ["stale", "Stale 7d+"],
+              ...(peopleFieldData?.fields.approver ? [["missingApprover", "Thiếu Approver"]] : []),
+              ...(peopleFieldData?.fields.tester ? [["missingTester", "Thiếu Tester"]] : []),
+            ] as Array<[typeof quickFilter, string]>).map(([key, label]) => (
+              <button key={key} type="button" onClick={() => setQuickFilter((current) => current === key ? "" : key)} className={`h-7 cursor-pointer rounded-full border px-2.5 text-[11px] font-medium transition-colors ${quickFilter === key ? "border-primary/50 bg-primary/10 text-primary" : "bg-background hover:bg-muted"}`}>{label}</button>
+            ))}
+          </div>
+        }
       />
 
       <BoardSummaryCards summary={summary} loading={isLoading} />
@@ -728,6 +836,20 @@ export function BoardClient() {
           title="Không có task nào để hiển thị"
           hint="Hãy thử điều chỉnh bộ lọc, hoặc làm mới dữ liệu để cập nhật bảng."
           className="flex-1"
+        />
+      ) : effectiveView === "board" && teamMode ? (
+        <BoardTeamView
+          issues={issues}
+          columns={visibleColumns}
+          findColumn={findColumnForIssue}
+          onOpen={setQuickPanel}
+          onSelectAssignee={(assignee) => setFilters((current) => ({
+            ...current,
+            assigneeScope: assignee
+              ? { mode: "roster", roster: [assignee], view: "all-selected" }
+              : { mode: "roster", roster: ["unassigned"], view: "all-selected" },
+          }))}
+          projectKey={selectedProject}
         />
       ) : effectiveView === "board" ? (
         <BoardKanbanView
@@ -759,7 +881,7 @@ export function BoardClient() {
       ) : (
         <BoardListView
           issues={issues}
-          hiddenTableCols={hiddenTableCols}
+          hiddenTableCols={effectiveHiddenTableCols}
           hasMore={hasMore}
           loadingMore={loadingMore}
           onOpen={setQuickPanel}

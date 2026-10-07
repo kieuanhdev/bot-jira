@@ -36,6 +36,13 @@ export type IssueFilterCapabilities = {
   epic?: false | "single" | "multi";
   label?: false | "single" | "multi";
   priority?: false | "single" | "multi";
+  role?: false | "multi";
+  reporter?: false | "multi";
+  approver?: false | "multi";
+  tester?: false | "multi";
+  type?: false | "multi";
+  fixVersion?: false | "multi";
+  overdue?: boolean;
   quickSwitch?: boolean;
 };
 
@@ -47,6 +54,11 @@ export type IssueFilterOptions = {
   epics?: (string | FacetOption)[];
   labels?: (string | FacetOption)[];
   priorities?: (string | FacetOption)[];
+  reporters?: (string | FacetOption)[];
+  approvers?: (string | FacetOption)[];
+  testers?: (string | FacetOption)[];
+  types?: (string | FacetOption)[];
+  fixVersions?: (string | FacetOption)[];
 };
 
 export interface IssueFilterBarProps {
@@ -330,6 +342,49 @@ export function IssueFilterBar({
             defaultScope={defaults.assigneeScope}
             clearTarget="all"
           />
+        )}
+
+        {capabilities.role && (
+          <FacetMultiSelect
+            title="Vai trò"
+            options={[
+              { value: "assignee", label: "Tôi được giao" },
+              { value: "reporter", label: "Tôi báo cáo" },
+              ...(capabilities.approver ? [{ value: "approver", label: "Tôi là Approver" }] : []),
+              { value: "tester", label: "Tôi cần test" },
+            ]}
+            selected={value.roles}
+            onChange={(roles) => onChange({ ...value, roles })}
+          />
+        )}
+
+        {capabilities.reporter && (
+          <FacetMultiSelect title="Reporter" options={options.reporters ?? []} selected={value.reporters} onChange={(reporters) => onChange({ ...value, reporters })} searchable />
+        )}
+        {capabilities.approver && (
+          <FacetMultiSelect title="Approver" options={options.approvers ?? []} selected={value.approvers} onChange={(approvers) => onChange({ ...value, approvers })} searchable />
+        )}
+        {capabilities.tester && (
+          <FacetMultiSelect title="Tester" options={options.testers ?? []} selected={value.testers} onChange={(testers) => onChange({ ...value, testers })} searchable />
+        )}
+        {capabilities.type && (
+          <FacetMultiSelect title="Loại" options={options.types ?? []} selected={value.types} onChange={(types) => onChange({ ...value, types })} />
+        )}
+        {capabilities.fixVersion && (
+          <FacetMultiSelect title="Fix version" options={options.fixVersions ?? []} selected={value.fixVersions} onChange={(fixVersions) => onChange({ ...value, fixVersions })} searchable />
+        )}
+        {capabilities.overdue && (
+          <button
+            type="button"
+            onClick={() => onChange({ ...value, overdue: !value.overdue })}
+            className={cn(
+              "h-8 cursor-pointer rounded-md border px-3 text-xs font-medium transition-colors",
+              value.overdue ? "border-destructive/50 bg-destructive/10 text-destructive" : "border-input bg-background hover:bg-accent/40"
+            )}
+            aria-pressed={value.overdue}
+          >
+            Quá hạn
+          </button>
         )}
 
         {/* Custom page-specific children inserted right after core filters */}

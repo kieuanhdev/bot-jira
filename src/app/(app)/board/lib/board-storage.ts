@@ -11,7 +11,20 @@ export const BOARD_STORAGE_KEYS = {
   COLUMN_PREFS_PREFIX: "jira_board_column_prefs_",
   SORT_MODE: "jira_board_sort_mode",
   VIEW_MODE: "jira_board_view_mode",
+  TEAM_MODE_PREFIX: "jira_board_team_mode_",
 } as const;
+
+export function loadStoredTeamMode(projectKey: string): boolean {
+  const storage = getStorage();
+  if (!storage || !projectKey) return false;
+  return storage.getItem(BOARD_STORAGE_KEYS.TEAM_MODE_PREFIX + projectKey.toUpperCase()) === "team";
+}
+
+export function saveStoredTeamMode(projectKey: string, enabled: boolean): void {
+  const storage = getStorage();
+  if (!storage || !projectKey) return;
+  storage.setItem(BOARD_STORAGE_KEYS.TEAM_MODE_PREFIX + projectKey.toUpperCase(), enabled ? "team" : "personal");
+}
 
 export type BoardColumnPreferences = { hidden: string[]; collapsed: string[] };
 
@@ -82,6 +95,13 @@ export function loadStoredFilters(
         labels: Array.isArray(parsed.labels) ? parsed.labels : [],
         priorities: Array.isArray(parsed.priorities) ? parsed.priorities : [],
         epics: Array.isArray(parsed.epics) ? parsed.epics : [],
+        roles: Array.isArray(parsed.roles) ? parsed.roles : [],
+        reporters: Array.isArray(parsed.reporters) ? parsed.reporters : [],
+        approvers: Array.isArray(parsed.approvers) ? parsed.approvers : [],
+        testers: Array.isArray(parsed.testers) ? parsed.testers : [],
+        types: Array.isArray(parsed.types) ? parsed.types : [],
+        fixVersions: Array.isArray(parsed.fixVersions) ? parsed.fixVersions : [],
+        overdue: Boolean(parsed.overdue),
         includeDone:
           typeof parsed.includeDone === "boolean"
             ? parsed.includeDone

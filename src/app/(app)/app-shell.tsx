@@ -21,6 +21,7 @@ import {
   ChartNoAxesCombined,
   PanelLeftClose,
   PanelLeftOpen,
+  Inbox,
 } from "lucide-react";
 import { useUnreadCount } from "@/hooks/use-notifications";
 import { FreshnessBanner } from "./freshness-banner";
@@ -30,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/board", label: "Bảng công việc", icon: LayoutGrid },
+  { href: "/inbox", label: "Chờ tôi test", icon: Inbox },
   { href: "/reports/projects", label: "Báo cáo", icon: ChartNoAxesCombined },
   { href: "/leaderboard", label: "Bảng xếp hạng", icon: Trophy },
   { href: "/bulk", label: "Thao tác hàng loạt", icon: ListChecks },
@@ -48,14 +50,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("sidebar_collapsed");
-      if (saved !== null) {
-        setCollapsed(saved === "true");
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        const saved = localStorage.getItem("sidebar_collapsed");
+        if (saved !== null) {
+          setCollapsed(saved === "true");
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
-    }
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   const toggleSidebar = () => {

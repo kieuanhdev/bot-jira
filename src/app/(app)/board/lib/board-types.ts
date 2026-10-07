@@ -67,6 +67,12 @@ export type QuickPanelDetail = {
   description: string;
   status: string;
   assigneeJira: string | null;
+  reporterJira: string | null;
+  approverJira: string | null;
+  testerJira: string | null;
+  dueDate: string | null;
+  timeSpentSeconds: number | null;
+  originalEstimateSeconds: number | null;
   labels: string[];
   priority: string;
   points: number | null;

@@ -39,6 +39,12 @@ interface QuickPanelFieldsProps {
   priority?: string | null;
   onSetPriority: (priority: string) => void;
   assigneeJira?: string | null;
+  reporterJira?: string | null;
+  approverJira?: string | null;
+  testerJira?: string | null;
+  dueDate?: string | null;
+  timeSpentSeconds?: number | null;
+  originalEstimateSeconds?: number | null;
   assignees: string[];
   meName?: string | null;
   onAssign: (assignee: string | null) => void;
@@ -68,6 +74,12 @@ export function QuickPanelFields({
   priority,
   onSetPriority,
   assigneeJira,
+  reporterJira,
+  approverJira,
+  testerJira,
+  dueDate,
+  timeSpentSeconds,
+  originalEstimateSeconds,
   assignees,
   meName,
   onAssign,
@@ -222,6 +234,14 @@ export function QuickPanelFields({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </Field>
+
+        <Field label="Reporter">{reporterJira || "—"}</Field>
+        <Field label="Approver">{approverJira || "—"}</Field>
+        <Field label="Tester">{testerJira || "—"}</Field>
+        <Field label="Due date">{dueDate ? formatDateTime(dueDate) : "—"}</Field>
+        <Field label="Đã làm / Ước tính">
+          {timeSpentSeconds != null ? `${Math.round(timeSpentSeconds / 360) / 10}h` : "—"} / {originalEstimateSeconds != null ? `${Math.round(originalEstimateSeconds / 360) / 10}h` : "—"}
         </Field>
 
         <Field label="Type">{type}</Field>

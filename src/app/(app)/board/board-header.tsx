@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutGrid, List, ChevronsUpDown } from "lucide-react";
+import { LayoutGrid, List, ChevronsUpDown, User, Users } from "lucide-react";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import {
   Select,
@@ -50,6 +50,9 @@ export interface BoardHeaderProps {
   effectiveView: ViewMode;
   onViewChange: (mode: ViewMode) => void;
   width: BoardWidth;
+  canUseTeamMode: boolean;
+  teamMode: boolean;
+  onTeamModeChange: (enabled: boolean) => void;
 
   columns: BoardColumnType[];
   visibleColumns: BoardColumnType[];
@@ -98,6 +101,9 @@ export function BoardHeader({
   effectiveView,
   onViewChange,
   width,
+  canUseTeamMode,
+  teamMode,
+  onTeamModeChange,
 
   columns,
   visibleColumns,
@@ -143,6 +149,17 @@ export function BoardHeader({
       </div>
 
       <div className="flex items-center gap-2">
+        {canUseTeamMode && (
+          <SegmentedControl<"personal" | "team">
+            items={[
+              { value: "personal", label: "Cá nhân", icon: User },
+              { value: "team", label: "Team", icon: Users },
+            ]}
+            value={teamMode ? "team" : "personal"}
+            onChange={(mode) => onTeamModeChange(mode === "team")}
+            aria-label="Phạm vi board"
+          />
+        )}
         <BoardSyncButton
           boardSync={boardSync}
           selectedProject={selectedProject}

@@ -48,6 +48,7 @@ describe("board-storage unit tests", () => {
 
     it("saves and loads filters accurately", () => {
       const filters: IssueFilters = {
+        ...DEFAULT_BOARD_FILTERS,
         project: "CICM",
         query: "login bug",
         assigneeScope: {
@@ -59,6 +60,7 @@ describe("board-storage unit tests", () => {
         labels: ["backend"],
         priorities: ["High"],
         epics: [],
+        roles: [], reporters: [], approvers: [], testers: [], types: [], fixVersions: [], overdue: false,
         includeDone: false,
       };
 
@@ -76,6 +78,7 @@ describe("board-storage unit tests", () => {
         labels: ["backend"],
         priorities: ["High"],
         epics: [],
+        roles: [], reporters: [], approvers: [], testers: [], types: [], fixVersions: [], overdue: false,
         includeDone: false,
       });
     });
@@ -94,6 +97,7 @@ describe("board-storage unit tests", () => {
         labels: ["test"],
         priorities: [],
         epics: [],
+        roles: [], reporters: [], approvers: [], testers: [], types: [], fixVersions: [], overdue: false,
         includeDone: true,
       });
     });
