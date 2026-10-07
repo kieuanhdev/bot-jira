@@ -54,11 +54,11 @@ describe("can — permission matrix (REL-01)", () => {
   });
 
   it("evaluates branch permissions per BR-005 matrix", () => {
-    // member can view and confirm, but cannot manage or sync
+    // member can view, confirm and sync, but cannot manage
     expect(can(session("member"), "branch.view")).toBe(true);
     expect(can(session("member"), "branch.confirm")).toBe(true);
     expect(can(session("member"), "branch.manage")).toBe(false);
-    expect(can(session("member"), "branch.sync")).toBe(false);
+    expect(can(session("member"), "branch.sync")).toBe(true);
 
     // release_manager can do all branch actions
     expect(can(session("release_manager"), "branch.view")).toBe(true);

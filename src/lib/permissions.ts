@@ -66,7 +66,7 @@ export type Permission =
  *  | branch.view        |  yes   | yes  |       yes       |  yes  |
  *  | branch.confirm     |  yes   | yes  |       yes       |  yes  |
  *  | branch.manage      |   no   |  no  |       yes       |  yes  |
- *  | branch.sync        |   no   |  no  |       yes       |  yes  |
+ *  | branch.sync        |  yes   | yes  |       yes       |  yes  |
  *  | report.view        |  yes   | yes  |       yes       |  yes  |
  *  | report.export      |  yes   | yes  |       yes       |  yes  |
  *  | report.configure   |   no   |  no  |       no        |  yes  |
@@ -77,6 +77,7 @@ export function can(session: { user?: { role?: string } } | null | undefined, pe
     case "release.view":
     case "branch.view":
     case "branch.confirm":
+    case "branch.sync":
     case "report.view":
     case "report.export":
       return true; // any signed-in user
@@ -87,7 +88,6 @@ export function can(session: { user?: { role?: string } } | null | undefined, pe
     case "release.approve":
     case "release.publish":
     case "branch.manage":
-    case "branch.sync":
       return r === "release_manager" || r === "admin";
     case "admin.users":
     case "admin.integrations":
