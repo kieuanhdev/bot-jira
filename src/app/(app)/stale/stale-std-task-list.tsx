@@ -1,15 +1,18 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { REQUIREMENT_LABELS, formatMissingSummary } from "@/lib/issues/standardization";
+import { REQUIREMENT_LABELS } from "@/lib/issues/standardization";
 import { cn } from "@/lib/utils";
 import {
   ArrowRight,
   Check,
   CheckCircle2,
   Clock,
+  Keyboard,
   ListChecks,
   X,
 } from "lucide-react";
@@ -22,10 +25,20 @@ import {
 } from "./lib/stale-utils";
 import { StaleEmptyState } from "./stale-empty-state";
 import { BulkStandardizationAction } from "./stale-standardization-action";
+import { QuickFixVersionSelect, QuickPointsEditor } from "./stale-std-quick-edit";
+
+const POLICY_LABELS: Record<string, string> = {
+  "planned-work": "Planned",
+  "maintenance-work": "Maintenance",
+};
+const policyLabel = (id: string) => POLICY_LABELS[id] ?? "Default";
+
+const returnToStd = encodeURIComponent("/stale?view=my-work&tab=standardization");
 
 interface StdTaskItemProps {
   task: StandardizationTask;
   isSelected: boolean;
+  isActive?: boolean;
   allStdTasks: StandardizationTask[];
   onToggleSelect: (key: string) => void;
 }
@@ -59,11 +72,7 @@ function StdTaskMobileCard({ task, isSelected, allStdTasks, onToggleSelect }: St
           </Badge>
         </div>
         <Badge variant="outline" className="text-[10px]">
-          {task.policyId === "planned-work"
-            ? "Planned"
-            : task.policyId === "maintenance-work"
-            ? "Maintenance"
-            : "Default"}
+          {policyLabel(task.policyId)}
         </Badge>
       </div>
 
@@ -85,6 +94,18 @@ function StdTaskMobileCard({ task, isSelected, allStdTasks, onToggleSelect }: St
           </Badge>
         ))}
       </div>
+
+      {(task.missing.includes("FIX_VERSION") ||
+        (task.missing.includes("ESTIMATION") &&
+          getEstimationMissingLabel(task, allStdTasks) !== "Thiếu Estimate")) && (
+        <div className="mt-3 flex flex-wrap items-start gap-2">
+          {task.missing.includes("ESTIMATION") &&
+            getEstimationMissingLabel(task, allStdTasks) !== "Thiếu Estimate" && (
+              <QuickPointsEditor jiraKey={task.jiraKey} />
+            )}
+          {task.missing.includes("FIX_VERSION") && <QuickFixVersionSelect jiraKey={task.jiraKey} />}
+        </div>
+      )}
 
       {/* Secondary operational signals */}
       <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
@@ -118,9 +139,7 @@ function StdTaskMobileCard({ task, isSelected, allStdTasks, onToggleSelect }: St
               className="cursor-pointer text-xs h-7"
             >
               <Link
-                href={`/issue/${task.jiraKey}?action=log-work&returnTo=${encodeURIComponent(
-                  "/stale?view=my-work&tab=standardization"
-                )}`}
+                href={`/issue/${task.jiraKey}?action=log-work&returnTo=${returnToStd}`}
               >
                 <Clock className="h-3 w-3 mr-1" aria-hidden />
                 Ghi Worklog
@@ -143,14 +162,16 @@ function StdTaskMobileCard({ task, isSelected, allStdTasks, onToggleSelect }: St
   );
 }
 
-function StdTaskRow({ task, isSelected, allStdTasks, onToggleSelect }: StdTaskItemProps) {
+function StdTaskRow({ task, isSelected, isActive, allStdTasks, onToggleSelect }: StdTaskItemProps) {
   const missingFields = buildMissingBulkFields(new Set([task.jiraKey]), allStdTasks);
 
   return (
     <tr
+      data-task-row={task.jiraKey}
       className={cn(
         "transition-colors duration-150 hover:bg-muted/40 group",
-        isSelected && "bg-primary/[0.035]"
+        isSelected && "bg-primary/[0.035]",
+        isActive && "bg-primary/[0.07] ring-1 ring-inset ring-primary/40"
       )}
     >
       {/* Checkbox */}
@@ -173,33 +194,15 @@ function StdTaskRow({ task, isSelected, allStdTasks, onToggleSelect }: StdTaskIt
             {task.jiraKey}
           </Link>
           <span className="text-[11px] text-muted-foreground">
-            {task.projectKey} · {task.type}
+            {task.projectKey} · {task.type} · {policyLabel(task.policyId)}
           </span>
         </div>
         <p className="mt-1 line-clamp-2 text-sm font-medium text-foreground group-hover:text-primary transition-colors">
           {task.summary || "Task chưa đặt tên"}
         </p>
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          {formatMissingSummary(task.missing)}
-        </p>
-      </td>
-
-      {/* Policy and Status */}
-      <td className="px-3 py-3.5 align-top">
-        <div className="space-y-1.5">
-          <Badge variant="outline" className="text-[11px] font-normal">
-            {task.policyId === "planned-work"
-              ? "Planned"
-              : task.policyId === "maintenance-work"
-              ? "Maintenance"
-              : "Default"}
-          </Badge>
-          <div>
-            <Badge variant="secondary" className="text-[11px]">
-              {task.status}
-            </Badge>
-          </div>
-        </div>
+        <Badge variant="secondary" className="mt-1.5 text-[11px]">
+          {task.status}
+        </Badge>
       </td>
 
       {/* Checklist Badges */}
@@ -209,13 +212,18 @@ function StdTaskRow({ task, isSelected, allStdTasks, onToggleSelect }: StdTaskIt
           {task.required.includes("ESTIMATION") && (
             <div>
               {task.missing.includes("ESTIMATION") ? (
-                <Badge
-                  variant="danger"
-                  className="text-[10px] w-full justify-start font-normal"
-                >
-                  <X className="h-3 w-3 mr-1 shrink-0" aria-hidden />{" "}
-                  {getEstimationMissingLabel(task, allStdTasks)}
-                </Badge>
+                <div className="space-y-1">
+                  <Badge
+                    variant="danger"
+                    className="text-[10px] w-full justify-start font-normal"
+                  >
+                    <X className="h-3 w-3 mr-1 shrink-0" aria-hidden />{" "}
+                    {getEstimationMissingLabel(task, allStdTasks)}
+                  </Badge>
+                  {getEstimationMissingLabel(task, allStdTasks) !== "Thiếu Estimate" && (
+                    <QuickPointsEditor jiraKey={task.jiraKey} />
+                  )}
+                </div>
               ) : (
                 <Badge
                   variant="success"
@@ -237,9 +245,7 @@ function StdTaskRow({ task, isSelected, allStdTasks, onToggleSelect }: StdTaskIt
             <div>
               {task.missing.includes("WORKLOG") ? (
                 <Link
-                  href={`/issue/${task.jiraKey}?action=log-work&returnTo=${encodeURIComponent(
-                    "/stale?view=my-work&tab=standardization"
-                  )}`}
+                  href={`/issue/${task.jiraKey}?action=log-work&returnTo=${returnToStd}`}
                   title={`Ghi Worklog cho ${task.jiraKey}`}
                   className="block group/wl"
                 >
@@ -266,12 +272,15 @@ function StdTaskRow({ task, isSelected, allStdTasks, onToggleSelect }: StdTaskIt
           {task.required.includes("FIX_VERSION") && (
             <div>
               {task.missing.includes("FIX_VERSION") ? (
-                <Badge
-                  variant="danger"
-                  className="text-[10px] w-full justify-start font-normal"
-                >
-                  <X className="h-3 w-3 mr-1 shrink-0" aria-hidden /> Thiếu FixVer
-                </Badge>
+                <div className="space-y-1">
+                  <Badge
+                    variant="danger"
+                    className="text-[10px] w-full justify-start font-normal"
+                  >
+                    <X className="h-3 w-3 mr-1 shrink-0" aria-hidden /> Thiếu FixVer
+                  </Badge>
+                  <QuickFixVersionSelect jiraKey={task.jiraKey} />
+                </div>
               ) : (
                 <Badge
                   variant="success"
@@ -356,9 +365,7 @@ function StdTaskRow({ task, isSelected, allStdTasks, onToggleSelect }: StdTaskIt
               className="cursor-pointer text-xs h-8"
             >
               <Link
-                href={`/issue/${task.jiraKey}?action=log-work&returnTo=${encodeURIComponent(
-                  "/stale?view=my-work&tab=standardization"
-                )}`}
+                href={`/issue/${task.jiraKey}?action=log-work&returnTo=${returnToStd}`}
               >
                 <Clock className="h-3.5 w-3.5 mr-1" aria-hidden />
                 Ghi Worklog
@@ -398,6 +405,7 @@ export function StandardizationTaskList({
   onViewStale,
   onToggleSelect,
   onSelectAll,
+  onClearSelection,
 }: {
   filteredStdTasks: StandardizationTask[];
   allStdTasks: StandardizationTask[];
@@ -410,7 +418,61 @@ export function StandardizationTaskList({
   onViewStale: () => void;
   onToggleSelect: (key: string) => void;
   onSelectAll: (checked: boolean) => void;
+  onClearSelection: () => void;
 }) {
+  const router = useRouter();
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const keys = useMemo(() => filteredStdTasks.map((t) => t.jiraKey), [filteredStdTasks]);
+
+  const move = useCallback(
+    (delta: number) => {
+      if (keys.length === 0) return;
+      const current = activeKey ? keys.indexOf(activeKey) : -1;
+      const next = keys[Math.min(keys.length - 1, Math.max(0, current + delta))];
+      setActiveKey(next);
+      document
+        .querySelector(`[data-task-row="${CSS.escape(next)}"]`)
+        ?.scrollIntoView({ block: "nearest" });
+    },
+    [activeKey, keys]
+  );
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(el.tagName) || el.closest("[role=dialog],[role=listbox],[role=menu]"))) return;
+      const key = e.key.toLowerCase();
+      if (key === "j") move(1);
+      else if (key === "k") move(-1);
+      else if (key === "/") {
+        const search = document.querySelector<HTMLInputElement>('[aria-label="Tìm trong task chuẩn hóa"]');
+        if (search) {
+          e.preventDefault();
+          search.focus();
+        }
+      } else if (activeKey && (key === "x" || key === " ")) {
+        e.preventDefault();
+        onToggleSelect(activeKey);
+      } else if (activeKey && (key === "o" || key === "enter")) {
+        router.push(`/issue/${activeKey}`);
+      } else if (activeKey && key === "p") {
+        const input = Array.from(
+          document.querySelectorAll<HTMLInputElement>(`[data-quick-points="${CSS.escape(activeKey)}"]`)
+        ).find((node) => node.offsetParent !== null);
+        if (input) {
+          e.preventDefault();
+          input.focus();
+        }
+      } else if (activeKey && key === "w") {
+        const task = filteredStdTasks.find((t) => t.jiraKey === activeKey);
+        if (task?.missing.includes("WORKLOG")) router.push(`/issue/${activeKey}?action=log-work&returnTo=${returnToStd}`);
+      } else if (key === "escape") setActiveKey(null);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [activeKey, move, onToggleSelect, router, filteredStdTasks]);
+
   return (
     <Card className="shadow-none">
       <CardHeader className="gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
@@ -419,23 +481,31 @@ export function StandardizationTaskList({
             <ListChecks className="h-4 w-4 text-primary" aria-hidden /> Hàng đợi chuẩn hóa
           </CardTitle>
           <CardDescription className="mt-1 text-xs">
-            Hiển thị {filteredStdTasks.length} task chưa hoàn thiện tiêu chuẩn dữ liệu luồng công việc.
+            Hiển thị {filteredStdTasks.length}/{incompleteCount} task chưa đạt chuẩn dữ liệu.
           </CardDescription>
         </div>
 
-        {filteredStdTasks.length > 0 && (
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">
-              Đã chọn {selectedStdTasks.size} task
-            </span>
-            {selectedStdTasks.size > 0 && (
-              <BulkStandardizationAction
-                selectedKeys={selectedStdTasks}
-                allTasks={allStdTasks}
-                incompleteCount={incompleteCount}
-                onFilterToSingleProject={onFilterToSingleProject}
-              />
-            )}
+        {selectedStdTasks.size > 0 && (
+          <div
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5"
+            role="status"
+            aria-live="polite"
+          >
+            <span className="text-xs font-medium text-foreground">Đã chọn {selectedStdTasks.size} task</span>
+            <BulkStandardizationAction
+              selectedKeys={selectedStdTasks}
+              allTasks={allStdTasks}
+              incompleteCount={incompleteCount}
+              onFilterToSingleProject={onFilterToSingleProject}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClearSelection}
+              className="h-7 cursor-pointer text-xs text-muted-foreground hover:text-foreground"
+            >
+              Bỏ chọn
+            </Button>
           </div>
         )}
       </CardHeader>
@@ -504,14 +574,13 @@ export function StandardizationTaskList({
                           filteredStdTasks.every((t) => selectedStdTasks.has(t.jiraKey))
                         }
                         onCheckedChange={(checked) => onSelectAll(Boolean(checked))}
-                        aria-label="Chọn tất cả task trên trang"
+                        aria-label="Chọn tất cả task đang hiển thị"
                         className="cursor-pointer"
                       />
                     </th>
-                    <th className="px-4 py-3 font-medium">Task</th>
-                    <th className="px-3 py-3 font-medium">Chính sách &amp; Trạng thái</th>
+                    <th scope="col" className="px-4 py-3 font-medium">Task</th>
                     <th className="px-3 py-3 font-medium">Kiểm tra tiêu chuẩn</th>
-                    <th className="px-3 py-3 font-medium">Tín hiệu vận hành</th>
+                    <th className="px-3 py-3 font-medium">SLA &amp; rủi ro</th>
                     <th className="px-4 py-3 text-right font-medium">Hành động</th>
                   </tr>
                 </thead>
@@ -521,12 +590,22 @@ export function StandardizationTaskList({
                       key={task.jiraKey}
                       task={task}
                       isSelected={selectedStdTasks.has(task.jiraKey)}
+                      isActive={task.jiraKey === activeKey}
                       allStdTasks={allStdTasks}
                       onToggleSelect={onToggleSelect}
                     />
                   ))}
                 </tbody>
               </table>
+              <p className="hidden items-center gap-2 border-t bg-muted/20 px-4 py-2 text-[11px] text-muted-foreground lg:flex">
+                <Keyboard className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span>
+                  <kbd className="font-mono">J</kbd>/<kbd className="font-mono">K</kbd> di chuyển ·{" "}
+                  <kbd className="font-mono">X</kbd> chọn · <kbd className="font-mono">O</kbd> mở ·{" "}
+                  <kbd className="font-mono">P</kbd> nhập points · <kbd className="font-mono">W</kbd> ghi worklog ·{" "}
+                  <kbd className="font-mono">/</kbd> tìm kiếm · <kbd className="font-mono">Esc</kbd> bỏ chọn dòng
+                </span>
+              </p>
             </div>
           </>
         )}

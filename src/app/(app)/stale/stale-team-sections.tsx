@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Inbox, Sparkles, Target } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ACTION_BY_REASON, type FocusMode, type StaleResponse, type Task } from "./lib/stale-types";
@@ -135,7 +136,15 @@ export function InsightBrief({ data, staleRate }: { data: StaleResponse; staleRa
   );
 }
 
+const QUEUE_PAGE_SIZE = 6;
+
 export function ActionQueue({ tasks, focus }: { tasks: Task[]; focus: FocusMode }) {
+  const [limit, setLimit] = useState({ focus, count: QUEUE_PAGE_SIZE });
+  // Collapse back to the first page when the lens changes.
+  const visibleCount = limit.focus === focus ? limit.count : QUEUE_PAGE_SIZE;
+  const shown = Math.min(visibleCount, tasks.length);
+  const remaining = tasks.length - shown;
+
   return (
     <Card className="shadow-none">
       <CardHeader className="gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
@@ -149,7 +158,7 @@ export function ActionQueue({ tasks, focus }: { tasks: Task[]; focus: FocusMode 
           </CardDescription>
         </div>
         <Badge variant="outline" className="shrink-0">
-          {Math.min(6, tasks.length)} việc đầu tiên
+          {shown}/{tasks.length} việc
         </Badge>
       </CardHeader>
       <CardContent className="p-0">
@@ -163,7 +172,7 @@ export function ActionQueue({ tasks, focus }: { tasks: Task[]; focus: FocusMode 
           </div>
         ) : (
           <div className="divide-y">
-            {tasks.slice(0, 6).map((task, index) => (
+            {tasks.slice(0, shown).map((task, index) => (
               <Link
                 key={task.jiraKey}
                 href={`/issue/${task.jiraKey}`}
@@ -200,6 +209,31 @@ export function ActionQueue({ tasks, focus }: { tasks: Task[]; focus: FocusMode 
                 </div>
               </Link>
             ))}
+            {(remaining > 0 || visibleCount > QUEUE_PAGE_SIZE) && (
+              <div className="flex items-center justify-center gap-2 px-5 py-3">
+                {remaining > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="cursor-pointer"
+                    onClick={() => setLimit({ focus, count: visibleCount + QUEUE_PAGE_SIZE })}
+                  >
+                    Xem thêm {Math.min(QUEUE_PAGE_SIZE, remaining)} việc
+                    <span className="text-muted-foreground">(còn {remaining})</span>
+                  </Button>
+                )}
+                {visibleCount > QUEUE_PAGE_SIZE && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="cursor-pointer text-muted-foreground"
+                    onClick={() => setLimit({ focus, count: QUEUE_PAGE_SIZE })}
+                  >
+                    Thu gọn
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </CardContent>

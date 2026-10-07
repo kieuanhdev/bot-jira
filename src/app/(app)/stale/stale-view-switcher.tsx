@@ -1,6 +1,52 @@
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Clock3, ListChecks, User, Users } from "lucide-react";
 import type { StaleResponse } from "./lib/stale-types";
+
+type CountTone = "warning" | "danger" | "success" | "muted";
+
+const COUNT_TONES: Record<CountTone, string> = {
+  warning: "bg-amber-500/20 text-amber-700 dark:text-amber-400",
+  danger: "bg-red-500/20 text-red-700 dark:text-red-400",
+  success: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400",
+  muted: "bg-muted text-muted-foreground",
+};
+
+function SegmentButton({
+  active,
+  onClick,
+  icon,
+  label,
+  count,
+  tone = "muted",
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: ReactNode;
+  label: string;
+  count?: ReactNode;
+  tone?: CountTone;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {icon}
+      {label}
+      {count !== undefined && (
+        <span className={cn("ml-1 rounded-full px-1.5 text-[10px] font-semibold leading-4 tabular-nums", COUNT_TONES[tone])}>
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
 
 export function StaleViewSwitcher({
   viewMode,
@@ -17,108 +63,49 @@ export function StaleViewSwitcher({
   onViewModeChange: (mode: "my-work" | "team") => void;
   onTabChange: (tab: "standardization" | "stale") => void;
 }) {
+  const myWork = data?.myWork;
+  const myStale = myWork?.totalStale ?? 0;
+  // While "Việc của tôi" is open the sub-tabs already show these numbers, so only badge it from the team view.
+  const showMyBadge = viewMode !== "my-work" && myWork;
+
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div className="inline-flex w-fit rounded-lg border bg-muted/40 p-1" aria-label="Góc nhìn phân tích">
-        <button
-          type="button"
-          aria-pressed={viewMode === "my-work"}
+    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+      <div className="inline-flex w-fit rounded-lg border bg-muted/40 p-1" role="group" aria-label="Góc nhìn phân tích">
+        <SegmentButton
+          active={viewMode === "my-work"}
           onClick={() => onViewModeChange("my-work")}
-          className={cn(
-            "h-8 cursor-pointer rounded-md px-3 text-xs font-medium transition-colors flex items-center gap-1.5",
-            viewMode === "my-work"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <User className="h-3.5 w-3.5" aria-hidden="true" />
-          Việc của tôi
-          {data?.myWork && (
-            <span
-              className={cn(
-                "ml-1 rounded-full px-1.5 py-0.2 text-[10px] font-semibold tabular-nums",
-                incompleteCount > 0 || data.myWork.totalStale > 0
-                  ? "bg-amber-500/20 text-amber-700 dark:text-amber-400"
-                  : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400"
-              )}
-            >
-              {incompleteCount > 0 ? `${incompleteCount} thiếu chuẩn` : `${data.myWork.totalStale} tồn đọng`}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          aria-pressed={viewMode === "team"}
+          icon={<User className="h-3.5 w-3.5" aria-hidden />}
+          label="Việc của tôi"
+          count={showMyBadge ? (incompleteCount > 0 ? `${incompleteCount} thiếu chuẩn` : `${myStale} tồn đọng`) : undefined}
+          tone={incompleteCount > 0 || myStale > 0 ? "warning" : "success"}
+        />
+        <SegmentButton
+          active={viewMode === "team"}
           onClick={() => onViewModeChange("team")}
-          className={cn(
-            "h-8 cursor-pointer rounded-md px-3 text-xs font-medium transition-colors flex items-center gap-1.5",
-            viewMode === "team"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <Users className="h-3.5 w-3.5" aria-hidden="true" />
-          Toàn dự án
-          {data?.summary && (
-            <span className="ml-1 rounded-full bg-muted px-1.5 py-0.2 text-[10px] font-semibold tabular-nums text-muted-foreground">
-              {data.summary.totalStale}
-            </span>
-          )}
-        </button>
+          icon={<Users className="h-3.5 w-3.5" aria-hidden />}
+          label="Toàn dự án"
+          count={data?.summary?.totalStale}
+        />
       </div>
 
-      {/* In My Work view: Secondary Content Tabs */}
       {viewMode === "my-work" && (
-        <div className="inline-flex w-fit rounded-lg border bg-muted/40 p-1" aria-label="Phân loại việc của tôi">
-          <button
-            type="button"
-            aria-pressed={activeTab === "standardization"}
+        <div className="inline-flex w-fit rounded-lg border bg-muted/40 p-1" role="group" aria-label="Phân loại việc của tôi">
+          <SegmentButton
+            active={activeTab === "standardization"}
             onClick={() => onTabChange("standardization")}
-            className={cn(
-              "h-8 cursor-pointer rounded-md px-3 text-xs font-medium transition-colors flex items-center gap-1.5",
-              activeTab === "standardization"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <ListChecks className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            Cần chuẩn hóa
-            {incompleteCount > 0 ? (
-              <span className="ml-1 rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-semibold tabular-nums text-amber-700 dark:text-amber-400">
-                {incompleteCount}
-              </span>
-            ) : (
-              <span className="ml-1 rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[10px] font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
-                Đạt chuẩn
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            aria-pressed={activeTab === "stale"}
+            icon={<ListChecks className="h-3.5 w-3.5 text-primary" aria-hidden />}
+            label="Cần chuẩn hóa"
+            count={incompleteCount > 0 ? incompleteCount : "Đạt chuẩn"}
+            tone={incompleteCount > 0 ? "warning" : "success"}
+          />
+          <SegmentButton
+            active={activeTab === "stale"}
             onClick={() => onTabChange("stale")}
-            className={cn(
-              "h-8 cursor-pointer rounded-md px-3 text-xs font-medium transition-colors flex items-center gap-1.5",
-              activeTab === "stale"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-            Tồn đọng (SLA)
-            {data?.myWork && (
-              <span
-                className={cn(
-                  "ml-1 rounded-full px-1.5 py-0.2 text-[10px] font-semibold tabular-nums",
-                  data.myWork.totalStale > 0
-                    ? "bg-red-500/20 text-red-600 dark:text-red-400"
-                    : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400"
-                )}
-              >
-                {data.myWork.totalStale}
-              </span>
-            )}
-          </button>
+            icon={<Clock3 className="h-3.5 w-3.5" aria-hidden />}
+            label="Tồn đọng (SLA)"
+            count={myWork ? myStale : undefined}
+            tone={myStale > 0 ? "danger" : "success"}
+          />
         </div>
       )}
     </div>
