@@ -199,7 +199,7 @@ export function CardContent({
                 <CalendarClock className="h-2.5 w-2.5" aria-hidden /> Quá hạn
               </Badge>
             )}
-            {issue.priority && issue.priority !== "Low" && issue.priority !== "Lowest" && (
+            {issue.priority && ["Blocker", "Highest", "High"].includes(issue.priority) && (
               <span className={cn("inline-flex h-4 items-center rounded-full px-1.5 text-[10px] font-semibold", pm.badge)}>
                 {issue.priority}
               </span>
@@ -228,11 +228,6 @@ export function CardContent({
             </span>
           )}
           <span className="truncate text-[11px] text-muted-foreground">{timeAgo(issue.updatedAt)}</span>
-          {(issue.originalEstimateSeconds != null || issue.timeSpent != null) && (
-            <span className="text-[10px] tabular-nums text-muted-foreground" title="Đã làm / Ước tính">
-              {issue.timeSpent != null ? `${Math.round(issue.timeSpent / 360) / 10}h` : "—"}/{issue.originalEstimateSeconds != null ? `${Math.round(issue.originalEstimateSeconds / 360) / 10}h` : "—"}
-            </span>
-          )}
           {[['R', issue.reporterJira], ['A', issue.approverJira], ['T', issue.testerJira]].map(([role, name]) => name ? (
             <span key={role} className={cn("flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-semibold ring-1 ring-background", avatarClass(name))} title={`${role === 'R' ? 'Reporter' : role === 'A' ? 'Approver' : 'Tester'}: ${name}`}>{role}</span>
           ) : null)}

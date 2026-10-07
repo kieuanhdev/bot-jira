@@ -34,7 +34,7 @@ import {
 } from "./lib/board-storage";
 import { Search } from "lucide-react";
 import { EmptyState } from "@/components/shared/empty-state";
-import { BoardSummaryCards } from "./board-summary-cards";
+import { BoardStatsLine } from "./board-summary-cards";
 import { BoardSkeleton } from "./board-column";
 import { QuickPanel } from "./board-quick-panel";
 import {
@@ -43,7 +43,7 @@ import {
   type ViewMode,
 } from "./lib/board-types";
 import { sortIssues, columnKeyForIssue } from "./lib/board-utils";
-import { BoardProjectSummaryLine, HiddenColumnsBanner, StaleSyncBanner } from "./board-banners";
+import { HiddenColumnsBanner, StaleSyncBanner } from "./board-banners";
 import { BoardNoProjectsState } from "./board-empty-projects";
 import { BoardListView } from "./board-list-view";
 import { BoardHeader } from "./board-header";
@@ -582,8 +582,6 @@ export function BoardClient() {
     [columns, byColumn, issues]
   );
 
-  const activeProject = projectList.find((p) => p.key === selectedProject) ?? null;
-
   const {
     hiddenCols,
     collapsedCols,
@@ -791,13 +789,14 @@ export function BoardClient() {
           tester: peopleFieldData?.fields.tester ? "multi" : false,
           type: "multi",
           fixVersion: "multi",
-          overdue: true,
           quickSwitch: true,
         }}
         myName={myName}
         searchPlaceholder={`Tìm kiếm trong ${selectedProject}…`}
-        actions={
-          <div className="flex flex-wrap items-center gap-1">
+        collapseExtras
+        extrasActive={quickFilter ? 1 : 0}
+        extras={
+          <div className="flex flex-wrap items-center gap-1 border-l pl-2">
             {([
               ["overdue", "Quá hạn"], ["unassigned", "Chưa assign"], ["unestimated", "Chưa estimate"], ["stale", "Stale 7d+"],
               ...(peopleFieldData?.fields.approver ? [["missingApprover", "Thiếu Approver"]] : []),
@@ -809,15 +808,12 @@ export function BoardClient() {
         }
       />
 
-      <BoardSummaryCards summary={summary} loading={isLoading} />
-
-      {activeProject && (
-        <BoardProjectSummaryLine
-          projectKey={activeProject.key}
-          issueCount={issues.length}
-          lastSuccessAt={issueData?.sync.lastSuccessAt}
-        />
-      )}
+      <BoardStatsLine
+        summary={summary}
+        loading={isLoading}
+        issueCount={issues.length}
+        lastSuccessAt={issueData?.sync.lastSuccessAt}
+      />
 
       {effectiveView === "board" && hiddenCols.size > 0 && (
         <HiddenColumnsBanner

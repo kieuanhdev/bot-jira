@@ -18,28 +18,6 @@ export function StaleSyncBanner({ lastSuccessAt }: { lastSuccessAt: string | nul
   );
 }
 
-export function BoardProjectSummaryLine({
-  projectKey,
-  issueCount,
-  lastSuccessAt,
-}: {
-  projectKey: string;
-  issueCount: number;
-  lastSuccessAt: string | null | undefined;
-}) {
-  return (
-    <div className="text-sm text-muted-foreground">
-      Dự án <span className="font-semibold text-foreground">{projectKey}</span>
-      {" "}· {issueCount} task
-      {lastSuccessAt ? (
-        <>
-          {" "}· Đồng bộ <span className="font-medium text-foreground">{timeAgo(lastSuccessAt)}</span>
-        </>
-      ) : null}
-    </div>
-  );
-}
-
 /** Lists the hidden board columns with one-click restore. */
 export function HiddenColumnsBanner({
   columns,

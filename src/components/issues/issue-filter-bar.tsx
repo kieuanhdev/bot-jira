@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useState, useMemo } from "react";
-import { ChevronDown, X, Search } from "lucide-react";
+import { ChevronDown, X, Search, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { SearchField } from "@/components/shared/search-field";
@@ -73,6 +73,12 @@ export interface IssueFilterBarProps {
   className?: string;
   children?: React.ReactNode;
   actions?: React.ReactNode;
+  /** Fold the secondary facets (+ `extras`) behind a "Bộ lọc khác" toggle. */
+  collapseExtras?: boolean;
+  /** Extra controls shown inside the collapsed panel (e.g. quick-filter chips). */
+  extras?: React.ReactNode;
+  /** Active count contributed by `extras`, shown on the toggle badge. */
+  extrasActive?: number;
 }
 
 const DEFAULT_CAPABILITIES: IssueFilterCapabilities = {
@@ -284,7 +290,11 @@ export function IssueFilterBar({
   className,
   children,
   actions,
+  collapseExtras = false,
+  extras,
+  extrasActive,
 }: IssueFilterBarProps) {
+  const [moreOpen, setMoreOpen] = useState(false);
   const activeCount = useMemo(
     () => countActiveIssueFilters(value, defaults),
     [value, defaults]
@@ -320,30 +330,8 @@ export function IssueFilterBar({
     "Blocker",
   ];
 
-  return (
-    <div className={cn("flex flex-col gap-2", className)}>
-      <FilterBar activeCount={activeCount} onReset={handleReset} actions={actions}>
-        {showSearch && (
-          <SearchField
-            value={value.query}
-            onChange={(q) => onChange({ ...value, query: q })}
-            placeholder={searchPlaceholder ?? "Tìm kiếm mã Jira, tiêu đề…"}
-            ariaLabel="Tìm kiếm task"
-            className="flex-1 min-w-[200px]"
-          />
-        )}
-
-        {showAssignee && (
-          <AssigneeFilter
-            value={value.assigneeScope}
-            onChange={(assigneeScope) => onChange({ ...value, assigneeScope })}
-            options={options.assignees ?? []}
-            myName={myName}
-            defaultScope={defaults.assigneeScope}
-            clearTarget="all"
-          />
-        )}
-
+  const extraFacets = (
+    <>
         {capabilities.role && (
           <FacetMultiSelect
             title="Vai trò"
@@ -389,37 +377,6 @@ export function IssueFilterBar({
 
         {/* Custom page-specific children inserted right after core filters */}
         {children}
-
-        {/* Status Filter */}
-        {showStatus &&
-          (capabilities.status === "multi" ? (
-            <FacetMultiSelect
-              title="Trạng thái"
-              options={statusOptions}
-              selected={value.statuses}
-              onChange={(statuses) => onChange({ ...value, statuses })}
-            />
-          ) : (
-            <Select
-              value={value.statuses[0] || "ALL"}
-              onValueChange={(v) =>
-                onChange({ ...value, statuses: v === "ALL" ? [] : [v] })
-              }
-            >
-              <SelectTrigger className="w-36 h-8 text-xs">
-                <SelectValue placeholder="Trạng thái" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-                {statusOptions.map((st) => (
-                  <SelectItem key={getFacetValue(st)} value={getFacetValue(st)}>
-                    {getFacetLabel(st)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ))}
-
         {/* Epic Filter */}
         {showEpic &&
           (capabilities.epic === "multi" ? (
@@ -452,7 +409,6 @@ export function IssueFilterBar({
               </SelectContent>
             </Select>
           ))}
-
         {/* Label Filter */}
         {showLabel &&
           (capabilities.label === "multi" ? (
@@ -478,6 +434,66 @@ export function IssueFilterBar({
                 {labelOptions.map((lb) => (
                   <SelectItem key={getFacetValue(lb)} value={getFacetValue(lb)}>
                     {getFacetLabel(lb)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ))}
+    </>
+  );
+  const extraActiveCount =
+    value.roles.length + value.reporters.length + value.approvers.length + value.testers.length +
+    value.types.length + value.fixVersions.length + (value.epics?.length ?? 0) + value.labels.length +
+    (value.overdue ? 1 : 0) + (extrasActive ?? 0);
+
+  return (
+    <div className={cn("flex flex-col gap-2", className)}>
+      <FilterBar activeCount={activeCount} onReset={handleReset} actions={actions}>
+        {showSearch && (
+          <SearchField
+            value={value.query}
+            onChange={(q) => onChange({ ...value, query: q })}
+            placeholder={searchPlaceholder ?? "Tìm kiếm mã Jira, tiêu đề…"}
+            ariaLabel="Tìm kiếm task"
+            className="flex-1 min-w-[200px]"
+          />
+        )}
+
+        {showAssignee && (
+          <AssigneeFilter
+            value={value.assigneeScope}
+            onChange={(assigneeScope) => onChange({ ...value, assigneeScope })}
+            options={options.assignees ?? []}
+            myName={myName}
+            defaultScope={defaults.assigneeScope}
+            clearTarget="all"
+          />
+        )}
+
+        {/* Status Filter */}
+        {showStatus &&
+          (capabilities.status === "multi" ? (
+            <FacetMultiSelect
+              title="Trạng thái"
+              options={statusOptions}
+              selected={value.statuses}
+              onChange={(statuses) => onChange({ ...value, statuses })}
+            />
+          ) : (
+            <Select
+              value={value.statuses[0] || "ALL"}
+              onValueChange={(v) =>
+                onChange({ ...value, statuses: v === "ALL" ? [] : [v] })
+              }
+            >
+              <SelectTrigger className="w-36 h-8 text-xs">
+                <SelectValue placeholder="Trạng thái" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
+                {statusOptions.map((st) => (
+                  <SelectItem key={getFacetValue(st)} value={getFacetValue(st)}>
+                    {getFacetLabel(st)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -513,7 +529,33 @@ export function IssueFilterBar({
               </SelectContent>
             </Select>
           ))}
+
+        {!collapseExtras && extraFacets}
+        {collapseExtras && (
+          <button
+            type="button"
+            onClick={() => setMoreOpen((open) => !open)}
+            aria-expanded={moreOpen || extraActiveCount > 0}
+            className={cn(
+              "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors",
+              extraActiveCount > 0 ? "border-primary/40 bg-primary/5 text-foreground" : "border-input bg-background hover:bg-accent/40"
+            )}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+            Bộ lọc khác
+            {extraActiveCount > 0 && (
+              <span className="rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary">{extraActiveCount}</span>
+            )}
+          </button>
+        )}
       </FilterBar>
+
+      {collapseExtras && (moreOpen || extraActiveCount > 0) && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed bg-muted/30 p-2">
+          {extraFacets}
+          {extras}
+        </div>
+      )}
 
       {/* Quick Switch for multi-selected roster */}
       {showQuickSwitch && (
