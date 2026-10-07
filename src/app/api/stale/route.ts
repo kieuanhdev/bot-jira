@@ -213,6 +213,8 @@ export async function GET(req: Request) {
 
   const issues = await prisma.issueCache.findMany({
     where,
+    // raw/description are large and unused here.
+    omit: { raw: true, description: true },
     orderBy: { updatedAt: "desc" },
     take: 2000,
   });

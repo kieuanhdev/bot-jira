@@ -105,11 +105,21 @@ export class JiraRequestError extends Error {
     message: string,
     readonly status: number | null,
     readonly retryable: boolean,
-    readonly errorDetails?: string | null
+    readonly errorDetails?: string | null,
+    readonly retryAfterMs: number | null = null
   ) {
     super(message);
     this.name = "JiraRequestError";
   }
+}
+
+/** Parse a Retry-After header (delta-seconds or HTTP date) into milliseconds. */
+function parseRetryAfterMs(value: string | null): number | null {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const date = Date.parse(value);
+  return Number.isNaN(date) ? null : Math.max(0, date - Date.now());
 }
 
 /**
@@ -370,7 +380,8 @@ async function requestOnce<T>(
         message,
         res.status,
         res.status === 408 || res.status === 429 || res.status >= 500,
-        detail
+        detail,
+        parseRetryAfterMs(res.headers.get("retry-after")),
       );
     }
     if (res.status === 204) return undefined as T;
@@ -391,6 +402,7 @@ async function requestOnce<T>(
 }
 
 const MAX_RETRIES = 2;
+const MAX_RETRY_DELAY_MS = 30_000;
 const RETRY_BASE_MS = 2000;
 
 /**
@@ -412,7 +424,13 @@ async function request<T>(
       lastError = error;
       const isRetryable = error instanceof JiraRequestError && error.retryable;
       if (!isRetryable || attempt >= MAX_RETRIES) break;
-      const delayMs = RETRY_BASE_MS * 2 ** attempt;
+      const retryAfterMs = error instanceof JiraRequestError ? error.retryAfterMs : null;
+      // Honor Retry-After when Jira sends it; add jitter so parallel jobs
+      // that were throttled together do not retry in lockstep.
+      const delayMs = Math.min(
+        retryAfterMs ?? RETRY_BASE_MS * 2 ** attempt,
+        MAX_RETRY_DELAY_MS,
+      ) + Math.floor(Math.random() * 500);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }

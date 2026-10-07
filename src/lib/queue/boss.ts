@@ -405,7 +405,7 @@ export async function registerJobs(): Promise<PgBoss> {
     );
   });
 
-  await boss.work("poll-watched-issues", { pollingIntervalSeconds: 0.5 },
+  await boss.work("poll-watched-issues", { pollingIntervalSeconds: 2 },
     async () => recordRun("poll-watched-issues", runPollWatchedIssues));
   await boss.work("check-branches", async () => recordRun("check-branches", runCheckBranches));
   await boss.work("parse-comment-branches", async () => recordRun("parse-comment-branches", runParseCommentBranches));

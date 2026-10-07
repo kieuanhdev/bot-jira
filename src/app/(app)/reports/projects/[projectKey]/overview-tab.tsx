@@ -2,9 +2,23 @@
 
 import { ProjectHealthSummary } from "./project-health-summary";
 import { ProjectKpis } from "./project-kpis";
-import { StatusDistributionChart } from "./status-distribution-chart";
-import { ThroughputFlowChart } from "./throughput-flow-chart";
-import { BottleneckChart } from "./bottleneck-chart";
+import dynamic from "next/dynamic";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// recharts is heavy; load the charts on demand.
+const chartLoading = () => <Skeleton className="h-64 w-full" />;
+const StatusDistributionChart = dynamic(
+  () => import("./status-distribution-chart").then((m) => m.StatusDistributionChart),
+  { ssr: false, loading: chartLoading },
+);
+const ThroughputFlowChart = dynamic(
+  () => import("./throughput-flow-chart").then((m) => m.ThroughputFlowChart),
+  { ssr: false, loading: chartLoading },
+);
+const BottleneckChart = dynamic(
+  () => import("./bottleneck-chart").then((m) => m.BottleneckChart),
+  { ssr: false, loading: chartLoading },
+);
 import { RiskTaskTable } from "./risk-task-table";
 import { AlertTriangle } from "lucide-react";
 import type {

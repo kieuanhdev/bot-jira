@@ -47,7 +47,14 @@ import { HiddenColumnsBanner, StaleSyncBanner } from "./board-banners";
 import { BoardNoProjectsState } from "./board-empty-projects";
 import { BoardListView } from "./board-list-view";
 import { BoardHeader } from "./board-header";
-import { BoardKanbanView } from "./board-kanban-view";
+import dynamic from "next/dynamic";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// dnd-kit only loads when the board renders.
+const BoardKanbanView = dynamic(
+  () => import("./board-kanban-view").then((m) => m.BoardKanbanView),
+  { ssr: false, loading: () => <Skeleton className="h-96 w-full" /> },
+);
 import { BoardTeamView } from "./board-team-view";
 import { useBoardKeyboardNav } from "./lib/board-keyboard-nav";
 import { useBoardActions } from "./lib/board-actions-hook";
@@ -84,7 +91,7 @@ export function BoardClient() {
   const { data: projects } = useQuery({
     queryKey: boardKeys.projects,
     queryFn: () => api<{ items: Project[] }>("/api/projects"),
-    refetchInterval: 30000,
+    staleTime: 5 * 60_000,
     retry: 0,
   });
   const allProjects = useMemo(() => projects?.items ?? [], [projects?.items]);

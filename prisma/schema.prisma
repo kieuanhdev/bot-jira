@@ -111,6 +111,7 @@ model IssueCache {
   @@index([testerJira])
   @@index([epicKey])
   @@index([lastSyncedAt])
+  @@index([projectKey, deletedAt, updatedAt])
 }
 
 model CommentCache {
@@ -225,6 +226,7 @@ model Release {
   @@unique([projectKey, jiraVersionId])
   @@index([projectKey])
   @@index([archived])
+  @@index([projectKey, createdAt])
 }
 
 model ReleaseTask {

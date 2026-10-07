@@ -138,13 +138,17 @@ export async function syncProject(
       // Renew lease after Jira response, before writing cache
       await renewAndAssert();
 
+      // One query for the whole page instead of one findUnique per issue.
+      const previousRows = await prisma.issueCache.findMany({
+        where: { jiraKey: { in: result.issues.map((i) => i.key) } },
+      });
+      const previousByKey = new Map(previousRows.map((row) => [row.jiraKey, row]));
+
       for (const issue of result.issues) {
 
         seenKeys.add(issue.key);
         try {
-          const previous = await prisma.issueCache.findUnique({
-            where: { jiraKey: issue.key },
-          });
+          const previous = previousByKey.get(issue.key) ?? null;
 
           // Giai đoạn 2: Conditional upsert + link sync inside transaction.
           // Notifications are deferred until after commit succeeds.

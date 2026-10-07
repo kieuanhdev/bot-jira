@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   cursorUpdateMany: vi.fn(),
   cursorFindUnique: vi.fn(),
   issueFindUnique: vi.fn(),
+  issueFindMany: vi.fn(),
   issueUpdateMany: vi.fn(),
   search: vi.fn(),
   getComments: vi.fn(),
@@ -36,6 +37,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     issueCache: {
       findUnique: mocks.issueFindUnique,
+      findMany: mocks.issueFindMany,
       updateMany: mocks.issueUpdateMany,
     },
   },
@@ -97,6 +99,7 @@ describe("syncProject", () => {
       return { count: 1 };
     });
     mocks.issueFindUnique.mockResolvedValue(null);
+    mocks.issueFindMany.mockResolvedValue([]);
     mocks.issueUpdateMany.mockResolvedValue({ count: 2 });
     mocks.upsertJiraIssue.mockResolvedValue({ applied: true, data: { status: "In Progress" } });
     mocks.upsertJiraCommentsWithNew.mockResolvedValue({ synced: 1, newComments: [] });
@@ -357,6 +360,7 @@ describe("runPollJiraProject", () => {
       return { count: 1 };
     });
     mocks.issueFindUnique.mockResolvedValue(null);
+    mocks.issueFindMany.mockResolvedValue([]);
     mocks.upsertJiraIssue.mockResolvedValue({ applied: true, data: { status: "In Progress" } });
     mocks.search.mockResolvedValue({ total: 0, issues: [] });
   });

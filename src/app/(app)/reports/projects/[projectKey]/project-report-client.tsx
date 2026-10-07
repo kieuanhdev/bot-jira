@@ -10,7 +10,10 @@ import { ReportPeriodFilter } from "../../report-period-filter";
 import { OverviewTab } from "./overview-tab";
 import { TasksTab } from "./tasks-tab";
 import { MembersTab } from "./members-tab";
-import { TrendsTab } from "./trends-tab";
+import dynamic from "next/dynamic";
+
+// Trends tab pulls in recharts; load it only when opened.
+const TrendsTab = dynamic(() => import("./trends-tab").then((m) => m.TrendsTab), { ssr: false });
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,

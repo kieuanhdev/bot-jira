@@ -8,6 +8,11 @@ import {
   normalizeProjectKey,
 } from "@/lib/jira/project-catalog";
 
+// Filter options change only on sync, so a short per-scope cache absorbs the
+// 9 queries every page view would otherwise issue.
+const FILTERS_TTL_MS = 30_000;
+const filtersCache = new Map<string, { at: number; body: unknown }>();
+
 /**
  * Distinct filter options (assignees, labels, priorities) for the current
  * project scope. Avoids loading the full issue list just to derive dropdown
@@ -71,6 +76,12 @@ export async function GET(req: Request) {
       assignees: [], statuses: [], labels: [], priorities: [], epics: [], types: [],
       fixVersions: [], reporters: [], approvers: [], testers: [],
     });
+  }
+
+  const cacheKey = [...projects].sort().join(",");
+  const cached = filtersCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < FILTERS_TTL_MS) {
+    return NextResponse.json(cached.body);
   }
 
   const base = {
@@ -146,7 +157,7 @@ export async function GET(req: Request) {
       .map((alias) => [alias, user.displayName])
   ));
 
-  return NextResponse.json({
+  const body = {
     assignees: [...assigneeSet].sort(),
     statuses: [...statusSet].sort(),
     labels: labelRows.map((row) => row.value).filter(Boolean),
@@ -158,5 +169,8 @@ export async function GET(req: Request) {
     approvers: approvers.flatMap((row) => row.approverJira ? [row.approverJira] : []),
     testers: testers.flatMap((row) => row.testerJira ? [row.testerJira] : []),
     displayNames,
-  });
+  };
+  if (filtersCache.size > 200) filtersCache.clear();
+  filtersCache.set(cacheKey, { at: Date.now(), body });
+  return NextResponse.json(body);
 }

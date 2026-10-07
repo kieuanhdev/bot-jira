@@ -27,9 +27,9 @@ export function useUnreadCount() {
   const { data } = useQuery({
     queryKey: notificationsKeys.unreadCount,
     queryFn: () => api<{ unread: number }>("/api/notify/unread-count"),
-    // Cross-process notifications are persisted in PostgreSQL; a short poll
+    // Cross-process notifications are persisted in PostgreSQL; a modest poll
     // keeps the badge near-real-time without relying on in-memory events.
-    refetchInterval: 3000,
+    refetchInterval: 20_000,
     refetchOnWindowFocus: true,
     retry: 0,
   });
