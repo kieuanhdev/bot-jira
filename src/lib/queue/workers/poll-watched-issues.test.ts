@@ -7,11 +7,10 @@ vi.mock("@/lib/prisma", () => ({ prisma: {
   watch: { findMany: mocks.watches }, issueCache: { findUnique: mocks.previous },
 } }));
 vi.mock("@/lib/jira/client", () => ({
-  jira: { getIssue: mocks.issue, getComments: mocks.comments }, jiraIssueFields: () => "summary,updated",
+  jira: { getIssue: mocks.issue, getComments: mocks.comments }, jiraIssueFields: () => "summary,updated", hasJiraCredentials: async () => true,
 }));
 vi.mock("@/lib/issues/cache", () => ({ upsertJiraIssue: mocks.upsert, upsertJiraCommentsWithNew: mocks.syncComments }));
 vi.mock("@/lib/issues/notify-watchers", () => ({ notifyWatchersOfIssueChange: mocks.notifyIssue, notifyWatchersOfComment: mocks.notifyComment }));
-vi.mock("../guard", () => ({ hasJiraConfig: () => true }));
 import { runPollWatchedIssues } from "./poll-watched-issues";
 
 describe("fast watch reconciliation", () => {

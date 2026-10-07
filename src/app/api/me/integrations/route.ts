@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { env, hasJiraConfig, hasBitbucketConfig } from "@/lib/env";
+import { env, hasBitbucketConfig } from "@/lib/env";
 import { userJiraAuth, userBitbucketCreds } from "@/lib/user-creds";
-import { jiraWith } from "@/lib/jira/client";
+import { jiraWith, hasJiraCredentials } from "@/lib/jira/client";
 import { bitbucket as bb } from "@/lib/bitbucket/client";
 import { bitbucketRepoList } from "@/lib/env";
 
@@ -64,7 +64,7 @@ export async function GET() {
     jira: { linked: jiraLinked, status: jiraStatus, verifiedAt: user.jiraVerifiedAt },
     bitbucket: { linked: bbLinked, status: bbStatus, verifiedAt: user.bitbucketVerifiedAt },
     // System credentials may sync shared data, but are never a user fallback.
-    syncAvailable: { jira: hasJiraConfig(), bitbucket: hasBitbucketConfig() },
+    syncAvailable: { jira: await hasJiraCredentials(), bitbucket: hasBitbucketConfig() },
     bitbucketRepo: bitbucketRepoList[0] ?? null,
     bitbucketRepoCount: bitbucketRepoList.length,
   });

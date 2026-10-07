@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { sentry, type SentryIssue } from "@/lib/sentry/client";
-import { jira } from "@/lib/jira/client";
+import { jira, hasJiraCredentials } from "@/lib/jira/client";
 import { upsertJiraIssue } from "@/lib/issues/cache";
-import { guard, hasSentryConfig, hasJiraConfig } from "../guard";
+import { guard, hasSentryConfig } from "../guard";
 import { jiraProjectList, env, parseSentryMappings, resolveJiraProject } from "@/lib/env";
 import type { WorkerLog } from "../guard";
 import type { JiraIssue } from "@/lib/jira/types";
@@ -168,7 +168,7 @@ async function processIssue(issue: SentryIssue): Promise<{ ok: boolean; recovere
 
 export async function runSentryImport(): Promise<WorkerLog> {
   if (!hasSentryConfig()) return guard(hasSentryConfig(), "Sentry not configured");
-  if (!hasJiraConfig()) return guard(hasJiraConfig(), "Jira not configured");
+  if (!(await hasJiraCredentials())) return guard(false, "Jira not configured");
 
   let imported = 0;
   let recovered = 0;

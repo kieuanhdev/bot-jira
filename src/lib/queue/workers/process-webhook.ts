@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { jira, jiraIssueFields } from "@/lib/jira/client";
+import { jira, jiraIssueFields, hasJiraCredentials } from "@/lib/jira/client";
 import { upsertJiraIssue, upsertJiraCommentsWithNew } from "@/lib/issues/cache";
 import {
   notifyWatchersOfComment,
@@ -7,7 +7,7 @@ import {
 } from "@/lib/issues/notify-watchers";
 import { markEventFailed, markEventProcessed, type Source } from "@/lib/events/store";
 import type { BbUser } from "@/lib/bitbucket/client";
-import { env, hasJiraConfig, hasBitbucketConfig, hasSentryConfig } from "../guard";
+import { env, hasBitbucketConfig, hasSentryConfig } from "../guard";
 import type { WorkerLog } from "../guard";
 import { normalizeStatusToGroup } from "@/lib/reports/status";
 
@@ -79,7 +79,7 @@ async function handleJira(json: unknown): Promise<Record<string, unknown>> {
   const authorName = legacyEnvelope?.author?.name ?? legacyEnvelope?.author?.displayName ??
     j.user?.name ?? j.user?.displayName ?? j.user?.accountId ?? null;
   if (!key) return { skipped: true, reason: "no issue key" };
-  if (!hasJiraConfig()) return { skipped: true, reason: "jira not configured" };
+  if (!(await hasJiraCredentials())) return { skipped: true, reason: "jira not configured" };
 
   if (eventName === "jira:issue_commented" || Boolean(j.comment?.id)) {
     const previous = await prisma.issueCache.findUnique({ where: { jiraKey: key } });

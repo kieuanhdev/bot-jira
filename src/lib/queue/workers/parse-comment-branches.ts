@@ -1,5 +1,6 @@
 import { parseCommentsForBranches } from "@/lib/bitbucket/parse-comments";
-import { guard, hasJiraConfig } from "../guard";
+import { hasJiraCredentials } from "@/lib/jira/client";
+import { guard } from "../guard";
 import type { WorkerLog } from "../guard";
 
 /**
@@ -11,7 +12,7 @@ import type { WorkerLog } from "../guard";
  * Branches tab and release gates without needing a Bitbucket API token.
  */
 export async function runParseCommentBranches(): Promise<WorkerLog> {
-  if (!hasJiraConfig()) return guard(false, "Jira not configured");
+  if (!(await hasJiraCredentials())) return guard(false, "Jira not configured");
 
   try {
     const stats = await parseCommentsForBranches();

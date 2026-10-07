@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession, isAdmin } from "@/lib/session";
-import { jira } from "@/lib/jira/client";
+import { jira, hasJiraCredentials } from "@/lib/jira/client";
 import { bitbucket } from "@/lib/bitbucket/client";
 import { sentry } from "@/lib/sentry/client";
-import { env, hasJiraConfig, hasBitbucketConfig, hasSentryConfig, hasOllamaConfig, hasOpenAiConfig } from "@/lib/env";
+import { env, hasBitbucketConfig, hasSentryConfig, hasOllamaConfig, hasOpenAiConfig } from "@/lib/env";
 import { getWorkerHealth, isJiraFresh } from "@/lib/health/worker-health";
 
 async function ping(name: string, fn: () => Promise<unknown>): Promise<{ ok: boolean; ms: number; error?: string }> {
@@ -28,7 +28,8 @@ export async function GET() {
   const db = await ping("db", async () => prisma.$queryRaw`SELECT 1`);
   const workerHealth = await getWorkerHealth();
 
-  const jiraHealth = hasJiraConfig()
+  const jiraConfigured = await hasJiraCredentials();
+  const jiraHealth = jiraConfigured
     ? await ping("jira", () => jira.me())
     : { ok: false, ms: 0, error: "not configured" };
 
@@ -59,7 +60,7 @@ export async function GET() {
   return NextResponse.json({
     status: "ok",
     env: {
-      jiraConfigured: hasJiraConfig(),
+      jiraConfigured,
       bitbucketConfigured: hasBitbucketConfig(),
       sentryConfigured: hasSentryConfig(),
       llmProvider: env.llmProvider,

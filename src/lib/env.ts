@@ -27,6 +27,9 @@ export const env = {
   // Jira Server / Data Center
   jiraBaseUrl: str("JIRA_BASE_URL"),
   jiraUser: str("JIRA_USER"),
+  // When JIRA_TOKEN is not set, sync/webhook/system calls use the stored Jira token of
+  // this app user (matched on User.jiraUsername, case-insensitive) instead of an arbitrary one.
+  jiraSyncUsername: str("JIRA_SYNC_USERNAME"),
   jiraToken: str("JIRA_TOKEN"),
   // "Bearer" (default) or "basic". This Jira DC accepts a raw Bearer token.
   jiraAuth: str("JIRA_AUTH", "Bearer"),

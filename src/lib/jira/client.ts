@@ -208,8 +208,14 @@ export async function getSystemJiraAuth(): Promise<JiraAuth | null> {
   try {
     const { prisma } = await import("@/lib/prisma");
     const { safeDecrypt } = await import("@/lib/crypto");
+    const syncUsername = env.jiraSyncUsername.trim();
+    // A configured sync user is authoritative: never silently fall back to
+    // another person's token when theirs is missing or unreadable.
     const user = await prisma.user.findFirst({
-      where: { jiraTokenEnc: { not: null } },
+      where: {
+        jiraTokenEnc: { not: null },
+        ...(syncUsername ? { jiraUsername: { equals: syncUsername, mode: "insensitive" as const } } : {}),
+      },
       orderBy: [{ role: "asc" }, { updatedAt: "desc" }],
       select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true, jiraUsername: true },
     });
@@ -225,6 +231,16 @@ export async function getSystemJiraAuth(): Promise<JiraAuth | null> {
     // Database may not be connected yet
   }
   return null;
+}
+
+/**
+ * True when system-level Jira calls can authenticate: either JIRA_TOKEN is set
+ * or a stored user token (JIRA_SYNC_USERNAME, else any user) is available.
+ * Async replacement for the env-only `hasJiraConfig()` in worker guards.
+ */
+export async function hasJiraCredentials(): Promise<boolean> {
+  if (!env.jiraBaseUrl) return false;
+  return Boolean(await getSystemJiraAuth());
 }
 
 function authHeader(a: JiraAuth): string {

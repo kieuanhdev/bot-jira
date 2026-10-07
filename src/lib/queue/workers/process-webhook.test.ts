@@ -76,6 +76,7 @@ vi.mock("@/lib/bitbucket/notify-commit-comment", () => ({
 }));
 
 vi.mock("@/lib/jira/client", () => ({
+  hasJiraCredentials: vi.fn(async () => true),
   jiraIssueFields: vi.fn(() => "summary,status,updated"),
   jiraPointsFromFields: () => ({ points: null, fieldId: null }),
   parseJiraDate: vi.fn((value?: string) => value ? new Date(value) : null),
@@ -163,7 +164,6 @@ describe("process-webhook for Bitbucket", () => {
 describe("process-webhook for Jira", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(guardModule, "hasJiraConfig").mockReturnValue(true);
   });
 
   it("handles the standard Jira issue payload shape", async () => {

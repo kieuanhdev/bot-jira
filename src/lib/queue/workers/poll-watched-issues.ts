@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { jira, jiraIssueFields } from "@/lib/jira/client";
+import { jira, jiraIssueFields, hasJiraCredentials } from "@/lib/jira/client";
 import { upsertJiraIssue, upsertJiraCommentsWithNew } from "@/lib/issues/cache";
 import { notifyWatchersOfComment, notifyWatchersOfIssueChange } from "@/lib/issues/notify-watchers";
-import { hasJiraConfig, type WorkerLog } from "../guard";
+import type { WorkerLog } from "../guard";
 
 /** Direct reads keep watches fresh even without an inbound webhook. */
 export async function runPollWatchedIssues(): Promise<WorkerLog> {
-  if (!hasJiraConfig()) return { ok: true, skipped: true, reason: "Jira not configured" };
+  if (!(await hasJiraCredentials())) return { ok: true, skipped: true, reason: "Jira not configured" };
   const watches = await prisma.watch.findMany({ select: { jiraKey: true }, distinct: ["jiraKey"] });
   const errors: string[] = [];
   let next = 0;
