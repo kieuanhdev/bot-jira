@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
 import {
   LayoutGrid,
   Trophy,
@@ -15,7 +14,6 @@ import {
   Bot,
   ListChecks,
   Bell,
-  LogOut,
   Menu,
   X,
   ChartNoAxesCombined,
@@ -200,21 +198,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="border-t p-2 flex flex-col gap-1">
           <button
             type="button"
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className={cn(
-              "flex cursor-pointer rounded-md font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive",
-              collapsed
-                ? "h-9 w-full items-center justify-center"
-                : "w-full items-center gap-3 px-3 py-2 text-sm"
-            )}
-            title="Đăng xuất"
-            aria-label="Đăng xuất"
-          >
-            <LogOut className={cn(collapsed ? "h-4.5 w-4.5" : "h-4 w-4 shrink-0")} aria-hidden="true" />
-            {!collapsed && <span className="truncate">Đăng xuất</span>}
-          </button>
-          <button
-            type="button"
             onClick={toggleSidebar}
             className={cn(
               "flex cursor-pointer rounded-md font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
@@ -303,16 +286,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </Link>
                 );
               })}
-              <div className="mt-2 border-t pt-2">
-                <button
-                  type="button"
-                  onClick={() => signOut({ callbackUrl: "/login" })}
-                  className="flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Đăng xuất
-                </button>
-              </div>
             </nav>
           </div>
         )}
