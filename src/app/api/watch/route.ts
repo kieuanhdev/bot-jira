@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { getUserScopedProjects } from "@/lib/project-scope";
 
 /** List the current user's watched tasks, joined with their cache data. */
 export async function GET() {
@@ -14,8 +15,9 @@ export async function GET() {
   if (watches.length === 0) return NextResponse.json({ items: [] });
 
   const keys = watches.map((w) => w.jiraKey);
+  const scope = await getUserScopedProjects(session.user.id, session.user.role);
   const issues = await prisma.issueCache.findMany({
-    where: { jiraKey: { in: keys } },
+    where: { jiraKey: { in: keys }, projectKey: { in: scope } },
     select: {
       jiraKey: true,
       summary: true,

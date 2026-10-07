@@ -1,7 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import {
-  listActiveProjects,
-} from "@/lib/jira/project-catalog";
+import { resolveUserProjectScope } from "@/lib/reports/scope";
 import { jiraUsernameAliases, userJiraUsername } from "@/lib/user-creds";
 import {
   type LeaderboardTimeframe,
@@ -63,9 +61,8 @@ export async function getLeaderboardData(options: GetLeaderboardOptions): Promis
   const myUsername = currentUser ? userJiraUsername(currentUser) : null;
   const myAliases = jiraUsernameAliases(myUsername).map((a) => a.toLowerCase());
 
-  // Leaderboard tracks all active projects, not restricted to individual board settings
-  const activeCatalog = await listActiveProjects();
-  const activeProjects = activeCatalog.map((p) => p.key);
+  // Restricted to the projects the user picked on the Board (all active ones if none picked)
+  const activeProjects = (await resolveUserProjectScope(currentUserId)).allowedProjects;
   const cleanProject = project ? project.trim().toUpperCase() : null;
   const projectsInScope = cleanProject && activeProjects.includes(cleanProject)
     ? [cleanProject]

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { queryBranches, type BranchQueryParams } from "@/lib/bitbucket/branch-query";
 import { env } from "@/lib/env";
+import { getUserScopedProjects } from "@/lib/project-scope";
 
 /**
  * List tracked branches with search, filters, pagination, summary, facets, and task context.
@@ -27,7 +28,10 @@ export async function GET(req: Request) {
   const page = pageStr ? parseInt(pageStr, 10) : 1;
   const pageSize = pageSizeStr ? parseInt(pageSizeStr, 10) : 25;
 
+  const projectScope = await getUserScopedProjects(session.user.id, session.user.role);
+
   const result = await queryBranches({
+    projectScope,
     q,
     project,
     repo,

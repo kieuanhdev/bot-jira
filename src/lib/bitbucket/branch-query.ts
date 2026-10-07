@@ -5,6 +5,8 @@ import type { Prisma } from "@prisma/client";
 export type BranchQueryParams = {
   q?: string;
   project?: string;
+  /** Jira project keys the caller may see; omit/empty = no restriction. */
+  projectScope?: string[];
   repo?: string;
   link?: "ALL" | "linked" | "suggested" | "unlinked";
   pr?: "ALL" | "none" | "open" | "merged" | "declined" | "closed";
@@ -108,9 +110,26 @@ export async function queryBranches(params: BranchQueryParams): Promise<Branches
     lastError: cursor?.lastError ?? null,
   };
 
-  // BR-001: Build discrete conditions joined strictly with AND
+  // Restrict to the caller's projects. Branches with no Jira link at all stay
+  // visible so they can still be linked by hand.
+  const scope = params.projectScope?.filter(Boolean) ?? [];
+  const scopeWhere: Prisma.BranchInfoWhereInput =
+    scope.length > 0
+      ? {
+          OR: [
+            { issue: { projectKey: { in: scope } } },
+            ...scope.flatMap((k): Prisma.BranchInfoWhereInput[] => [
+              { jiraKey: { startsWith: `${k}-` } },
+              { suggestedJiraKey: { startsWith: `${k}-` } },
+            ]),
+            { jiraKey: null, suggestedJiraKey: null },
+          ],
+        }
+      : {};
+
   const andConditions: Prisma.BranchInfoWhereInput[] = [
     { deletedAt: null },
+    scopeWhere,
   ];
 
   // 1. Search text `q`
@@ -224,18 +243,18 @@ export async function queryBranches(params: BranchQueryParams): Promise<Branches
   // Fast Global Summary Counts (independent of current filters)
   const [totalActive, totalLinked, totalSuggested, totalUnlinked, totalOpenPr, totalAttention] =
     await Promise.all([
-      prisma.branchInfo.count({ where: { deletedAt: null } }),
+      prisma.branchInfo.count({ where: { deletedAt: null, AND: [scopeWhere] } }),
       prisma.branchInfo.count({
-        where: { deletedAt: null, jiraKey: { not: null }, linkState: { notIn: ["rejected", "manual_unlinked"] } },
+        where: { deletedAt: null, AND: [scopeWhere], jiraKey: { not: null }, linkState: { notIn: ["rejected", "manual_unlinked"] } },
       }),
       prisma.branchInfo.count({
-        where: { deletedAt: null, jiraKey: null, suggestedJiraKey: { not: null }, linkState: { notIn: ["rejected", "manual_unlinked"] } },
+        where: { deletedAt: null, AND: [scopeWhere], jiraKey: null, suggestedJiraKey: { not: null }, linkState: { notIn: ["rejected", "manual_unlinked"] } },
       }),
       prisma.branchInfo.count({
-        where: { deletedAt: null, jiraKey: null, suggestedJiraKey: null },
+        where: { deletedAt: null, AND: [scopeWhere], jiraKey: null, suggestedJiraKey: null },
       }),
       prisma.branchInfo.count({
-        where: { deletedAt: null, prState: { in: ["OPEN", "open"] } },
+        where: { deletedAt: null, AND: [scopeWhere], prState: { in: ["OPEN", "open"] } },
       }),
       prisma.branchInfo.count({
         where: {
@@ -335,19 +354,20 @@ export async function queryBranches(params: BranchQueryParams): Promise<Branches
   const [repoGroups, prGroups, statusGroups, assigneeGroups] = await Promise.all([
     prisma.branchInfo.groupBy({
       by: ["repo"],
-      where: { deletedAt: null },
+      where: { deletedAt: null, AND: [scopeWhere] },
       _count: { _all: true },
       orderBy: { _count: { repo: "desc" } },
     }),
     prisma.branchInfo.groupBy({
       by: ["prState"],
-      where: { deletedAt: null, prState: { not: null } },
+      where: { deletedAt: null, AND: [scopeWhere], prState: { not: null } },
       _count: { _all: true },
     }),
     prisma.issueCache.groupBy({
       by: ["status"],
       where: {
         deletedAt: null,
+        ...(scope.length > 0 ? { projectKey: { in: scope } } : {}),
         branches: { some: { deletedAt: null } },
       },
       _count: { _all: true },
@@ -357,6 +377,7 @@ export async function queryBranches(params: BranchQueryParams): Promise<Branches
       by: ["assigneeJira"],
       where: {
         deletedAt: null,
+        ...(scope.length > 0 ? { projectKey: { in: scope } } : {}),
         assigneeJira: { not: null },
         branches: { some: { deletedAt: null } },
       },

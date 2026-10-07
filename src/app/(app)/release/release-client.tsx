@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { scopeProjectItems } from "@/lib/project-scope-client";
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiError, getErrorMessage } from "@/lib/api-client";
 import { releasesKeys, boardKeys, meKeys } from "@/lib/query-keys";
@@ -50,9 +51,9 @@ export function ReleaseClient() {
   const canPublish = can(session, "release.publish");
 
   // Query projects for filter dropdown
-  const { data: projectsData } = useQuery<{ items: Array<{ key: string; openCount: number }> }>({
+  const { data: projectsData } = useQuery<{ items: Array<{ key: string; openCount: number; selected?: boolean }> }>({
     queryKey: boardKeys.projects,
-    queryFn: () => api<{ items: Array<{ key: string; openCount: number }> }>("/api/projects"),
+    queryFn: () => api<{ items: Array<{ key: string; openCount: number; selected?: boolean }> }>("/api/projects"),
   });
 
   // Query Jira base URL and me status for deep links
@@ -134,7 +135,7 @@ export function ReleaseClient() {
   // Combined Distinct projects list
   const projectList = useMemo(() => {
     const set = new Set<string>();
-    (projectsData?.items ?? []).forEach((p) => set.add(p.key));
+    scopeProjectItems(projectsData?.items ?? []).forEach((p) => set.add(p.key));
     releases.forEach((r) => {
       if (r.projectKey) set.add(r.projectKey);
     });

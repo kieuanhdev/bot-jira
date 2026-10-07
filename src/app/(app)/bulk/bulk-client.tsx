@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { scopeProjectItems } from "@/lib/project-scope-client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api-client";
@@ -155,11 +156,11 @@ export function BulkClient() {
   // Project list
   const { data: projectsData } = useQuery({
     queryKey: boardKeys.projects,
-    queryFn: () => api<{ items: { key: string; openCount: number }[] }>("/api/projects"),
+    queryFn: () => api<{ items: { key: string; openCount: number; selected?: boolean }[] }>("/api/projects"),
     staleTime: 5 * 60_000,
     retry: 0,
   });
-  const projectOptions = useMemo(() => projectsData?.items ?? [], [projectsData?.items]);
+  const projectOptions = useMemo(() => scopeProjectItems(projectsData?.items ?? []), [projectsData?.items]);
 
   // User preferences (to pre-select the active project)
   const { data: prefs } = useQuery({

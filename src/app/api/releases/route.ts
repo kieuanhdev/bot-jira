@@ -11,6 +11,7 @@ import {
 } from "@/lib/releases/release-readiness";
 import { computeReleaseSummary } from "@/lib/releases/release-summary";
 import { env } from "@/lib/env";
+import { getUserScopedProjects } from "@/lib/project-scope";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 const RELEASE_SELECT = {
@@ -60,8 +61,13 @@ export async function GET(req: Request) {
   const readinessFilter = url.searchParams.get("readiness")?.trim();
   const includeArchived = url.searchParams.get("includeArchived") === "true";
 
+  const scope = await getUserScopedProjects(session.user.id, session.user.role);
+  if (projectKey && projectKey !== "all" && !scope.includes(projectKey)) {
+    return NextResponse.json({ error: "forbidden_project" }, { status: 403 });
+  }
+
   const releases = await prisma.release.findMany({
-    where: projectKey && projectKey !== "all" ? { projectKey } : undefined,
+    where: projectKey && projectKey !== "all" ? { projectKey } : { projectKey: { in: scope } },
     orderBy: { createdAt: "desc" },
     select: RELEASE_SELECT,
   });
