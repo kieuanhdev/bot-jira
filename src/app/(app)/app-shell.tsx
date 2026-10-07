@@ -29,13 +29,13 @@ import { cn } from "@/lib/utils";
 const nav = [
   { href: "/board", label: "Bảng công việc", icon: LayoutGrid },
   { href: "/stale", label: "Task tồn đọng", icon: BarChart3 },
-  { href: "/bulk", label: "Thao tác hàng loạt", icon: ListChecks },
-  { href: "/release", label: "Phát hành", icon: Rocket },
-  { href: "/branches", label: "Quản lý nhánh", icon: GitBranch },
-  { href: "/watch", label: "Đang theo dõi", icon: Eye },
+  { href: "/bulk", label: "Cập nhật hàng loạt", icon: ListChecks },
+  { href: "/release", label: "Quản lý phát hành", icon: Rocket },
+  { href: "/branches", label: "Nhánh & Delivery", icon: GitBranch },
+  { href: "/reports/projects", label: "Báo cáo dự án", icon: ChartNoAxesCombined },
+  { href: "/leaderboard", label: "Xếp hạng", icon: Trophy },
+  { href: "/watch", label: "Task theo dõi", icon: Eye },
   { href: "/notifications", label: "Thông báo", icon: Bell },
-  { href: "/reports/projects", label: "Báo cáo", icon: ChartNoAxesCombined },
-  { href: "/leaderboard", label: "Bảng xếp hạng", icon: Trophy },
   { href: "/settings", label: "Cài đặt", icon: Settings },
 ];
 
