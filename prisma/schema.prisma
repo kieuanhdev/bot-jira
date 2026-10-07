@@ -8,6 +8,7 @@ datasource db {
 
 enum Role {
   member
+  lead
   release_manager
   admin
 }
@@ -75,6 +76,10 @@ model IssueCache {
   statusCategory String        @default("unknown")
   statusChangedAt DateTime?
   assigneeJira   String?
+  reporterJira   String?
+  approverJira   String?
+  testerJira     String?
+  epicKey        String?
   labels         String[]
   fixVersionIds  String[]
   fixVersionNames String[]
@@ -101,6 +106,10 @@ model IssueCache {
   @@index([projectKey])
   @@index([statusCategory])
   @@index([assigneeJira])
+  @@index([reporterJira])
+  @@index([approverJira])
+  @@index([testerJira])
+  @@index([epicKey])
   @@index([lastSyncedAt])
 }
 
@@ -877,4 +886,19 @@ model IssueTransitionEvent {
   @@index([assigneeJira, occurredAt])
 }
 
+enum PeopleRole {
+  reporter
+  approver
+  tester
+}
 
+model ProjectPeopleField {
+  projectKey   String
+  role         PeopleRole
+  jiraFieldId  String
+  source       String   // "detected" | "manual"
+  detectedAt   DateTime @default(now())
+
+  @@id([projectKey, role])
+  @@index([projectKey])
+}

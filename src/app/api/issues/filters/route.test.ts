@@ -4,16 +4,19 @@ const mocks = vi.hoisted(() => ({
   session: vi.fn(),
   user: vi.fn(),
   findManyIssues: vi.fn(),
+  raw: vi.fn(),
+  users: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getSession: mocks.session }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    user: { findUnique: mocks.user },
+    user: { findUnique: mocks.user, findMany: mocks.users },
     issueCache: {
       findMany: mocks.findManyIssues,
     },
     $transaction: (promises: unknown[]) => Promise.all(promises),
+    $queryRaw: mocks.raw,
   },
 }));
 vi.mock("@/lib/jira/project-catalog", () => ({
@@ -33,6 +36,7 @@ describe("GET /api/issues/filters", () => {
     mocks.user.mockResolvedValue({
       boardProjects: ["MR"],
     });
+    mocks.users.mockResolvedValue([]);
   });
 
   it("returns distinct assignees, statuses, labels, and priorities", async () => {
@@ -40,7 +44,12 @@ describe("GET /api/issues/filters", () => {
       .mockResolvedValueOnce([{ assigneeJira: "alice" }, { assigneeJira: "bob" }])
       .mockResolvedValueOnce([{ status: "In Progress" }, { status: "Done" }])
       .mockResolvedValueOnce([{ priority: "High" }, { priority: "Medium" }])
-      .mockResolvedValueOnce([{ labels: ["backend", "api"] }, { labels: ["api"] }]);
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    mocks.raw.mockResolvedValueOnce([{ value: "api" }, { value: "backend" }]).mockResolvedValueOnce([]);
 
     const res = await GET(new Request("http://localhost/api/issues/filters?project=MR"));
     expect(res.status).toBe(200);
@@ -52,6 +61,12 @@ describe("GET /api/issues/filters", () => {
       labels: ["api", "backend"],
       priorities: ["High", "Medium"],
       epics: [],
+      types: [],
+      fixVersions: [],
+      reporters: [],
+      approvers: [],
+      testers: [],
+      displayNames: {},
     });
   });
 

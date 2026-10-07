@@ -36,6 +36,9 @@ const BASE_ISSUE_FIELDS = [
   "customfield_10706", // Done At (Jira SDS custom field)
   "customfield_10709", // Work Start At (Jira SDS custom field)
   "assignee",
+  "reporter",
+  "customfield_10300", // Approver
+  "customfield_10501", // Assignee Tester
   "labels",
   "fixVersions",
   "priority",
@@ -73,8 +76,8 @@ function knownPointFieldIds(): string[] {
   return [...configuredPointField(), ...knownPointFields].map((field) => field.id);
 }
 
-export function jiraIssueFields(): string {
-  return [...BASE_ISSUE_FIELDS, ...knownPointFieldIds()]
+export function jiraIssueFields(extraFields: string[] = []): string {
+  return [...BASE_ISSUE_FIELDS, ...extraFields, ...knownPointFieldIds()]
     .filter(Boolean)
     .filter((field, index, fields) => fields.indexOf(field) === index)
     .join(",");
@@ -438,11 +441,17 @@ export function jiraWith(auth?: JiraAuth) {
 
   return {
     me: () => request<JiraUser>("/rest/api/2/myself", {}, auth),
-    search: async (jql: string, maxResults = 50, startAt = 0, signal?: AbortSignal) => {
+    search: async (
+      jql: string,
+      maxResults = 50,
+      startAt = 0,
+      signal?: AbortSignal,
+      extraFields: string[] = []
+    ) => {
       await getPointFields().catch(() => configuredPointField());
       const params = new URLSearchParams({
         jql,
-        fields: jiraIssueFields(),
+        fields: jiraIssueFields(extraFields),
         maxResults: String(maxResults),
         startAt: String(startAt),
       });

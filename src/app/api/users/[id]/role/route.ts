@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession, isAdmin } from "@/lib/session";
-import { ROLES } from "@/lib/permissions";
+import { ROLES, type Role } from "@/lib/permissions";
 
 export async function PATCH(
   req: Request,
@@ -19,7 +19,7 @@ export async function PATCH(
 
   const user = await prisma.user.update({
     where: { id },
-    data: { role: role as "member" | "release_manager" | "admin" },
+    data: { role: role as Role },
     select: { id: true, role: true },
   });
   return NextResponse.json({ user });

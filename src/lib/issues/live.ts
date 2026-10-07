@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { jiraIssueFields, jiraPointsFromFields, jiraWith, parseJiraDate } from "@/lib/jira/client";
+import { jiraPointsFromFields, jiraWith, parseJiraDate } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 import type { JiraIssue } from "@/lib/jira/types";
 import { upsertJiraComments, upsertJiraIssue } from "@/lib/issues/cache";
 import { notifyWatchersOfIssueChange } from "@/lib/issues/notify-watchers";
+import { jiraIssueFieldsForProject } from "@/lib/jira/people-fields";
 
 export type LiveComment = {
   id: string;
@@ -36,6 +37,10 @@ export type IssueView = {
   description: string;
   status: string;
   assigneeJira: string | null;
+  reporterJira: string | null;
+  approverJira: string | null;
+  testerJira: string | null;
+  dueDate: string | null;
   labels: string[];
   fixVersions: string[];
   priority: string;
@@ -83,7 +88,7 @@ export async function fetchLiveIssue(
   if (!auth) return null;
   const client = jiraWith(auth);
   try {
-    const extraFields = jiraIssueFields();
+    const extraFields = await jiraIssueFieldsForProject(key.split("-")[0]);
     const [issueRes, commentsRes] = await Promise.all([
       client.getIssue(key, extraFields),
       client.getComments(key),
@@ -176,6 +181,10 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
       description: live.description,
       status: live.status,
       assigneeJira: live.assigneeJira,
+      reporterJira: cached?.reporterJira ?? null,
+      approverJira: cached?.approverJira ?? null,
+      testerJira: cached?.testerJira ?? null,
+      dueDate: cached?.dueDate?.toISOString() ?? null,
       labels: live.labels,
       fixVersions: live.fixVersions,
       priority: live.priority,
@@ -201,6 +210,10 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
     description: cached.description,
     status: cached.status,
     assigneeJira: cached.assigneeJira,
+    reporterJira: cached.reporterJira,
+    approverJira: cached.approverJira,
+    testerJira: cached.testerJira,
+    dueDate: cached.dueDate?.toISOString() ?? null,
     labels: cached.labels,
     fixVersions: cached.fixVersionNames ?? [],
     priority: cached.priority,
@@ -210,8 +223,8 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
     originalEstimateSeconds: cached.originalEstimateSeconds ?? null,
     createdAt: cached.createdAt?.toISOString() ?? null,
     updatedAt: cached.updatedAt?.toISOString() ?? null,
-    lastSyncedAt: cached.lastSyncedAt.toISOString(),
-    comments: cached.comments.map((c) => ({
+    lastSyncedAt: cached.lastSyncedAt?.toISOString() ?? new Date().toISOString(),
+    comments: (cached.comments ?? []).map((c) => ({
       id: c.id,
       author: c.author,
       body: c.body,

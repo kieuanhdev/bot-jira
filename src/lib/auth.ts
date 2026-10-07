@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 import { checkAuthRateLimit } from "./rate-limit";
 import { verifyJiraCredential, resolveAndPersistJiraUser } from "./jira/auth-service";
+import { isKnownRole } from "./permissions";
 
 const providers: NextAuthOptions["providers"] = [
   CredentialsProvider({
@@ -116,7 +117,8 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = (token.id as string) ?? "";
-        session.user.role = (token.role as string) ?? "member";
+        const tokenRole = token.role;
+        session.user.role = isKnownRole(tokenRole) ? tokenRole : "member";
         let jUser: string | null = (token.jiraUsername as string | undefined) ?? null;
         if (!jUser || jUser === "undefined") {
           const dbUser = await prisma.user.findUnique({

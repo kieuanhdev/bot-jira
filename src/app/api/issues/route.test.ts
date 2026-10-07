@@ -227,6 +227,32 @@ describe("GET /api/issues single project board", () => {
     expect(callArgs.where.labels).toEqual({ hasSome: ["backend", "api"] });
   });
 
+  it("does not also require assignee = me when a role filter is given", async () => {
+    await GET(new Request("http://localhost/api/issues?project=MR&role=tester"));
+    const { where } = mocks.findManyIssues.mock.calls[0][0];
+    expect(where.assigneeJira).toBeUndefined();
+    expect(where.AND).toEqual([
+      { OR: [{ testerJira: { in: ["current_user", "current_user_mb"] } }] },
+    ]);
+  });
+
+  it("excludes done tasks from the stale and unestimated quick filters", async () => {
+    await GET(new Request("http://localhost/api/issues?project=MR&assignee=ALL&staleDays=7&unestimated=1&includeDone=1"));
+    const { where } = mocks.findManyIssues.mock.calls[0][0];
+    expect(where.AND).toEqual(expect.arrayContaining([{ statusCategory: { not: "done" } }]));
+    expect(where.originalEstimateSeconds).toBeNull();
+  });
+
+  it("does not treat a task due today as overdue", async () => {
+    await GET(new Request("http://localhost/api/issues?project=MR&assignee=ALL&overdue=1"));
+    const { where } = mocks.findManyIssues.mock.calls[0][0];
+    const cond = where.AND.find((c: { dueDate?: unknown }) => c.dueDate) as { dueDate: { lt: Date } };
+    const today = new Date();
+    expect(cond.dueDate.lt.toISOString()).toBe(
+      new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())).toISOString()
+    );
+  });
+
   it("returns 400 when facet value count exceeds limit 50", async () => {
     const many = Array.from({ length: 55 }, (_, i) => `user_${i}`).join(",");
     const res = await GET(

@@ -7,8 +7,9 @@ import {
   listActiveProjects,
   normalizeProjectKey,
 } from "@/lib/jira/project-catalog";
-import { jiraUsernameAliases, userJiraUsername } from "@/lib/user-creds";
-import { extractEpicKey } from "@/lib/bulk/ops";
+import { userJiraUsername } from "@/lib/user-creds";
+import { peopleFilterCondition, type PeopleField } from "@/lib/issues/people-filter";
+import { startOfTodayForDueDates } from "@/lib/due-date";
 
 function positiveLimit(raw: string | null): number {
   const parsed = Number.parseInt(raw ?? "300", 10);
@@ -18,6 +19,13 @@ function positiveLimit(raw: string | null): number {
 function nonNegativeOffset(raw: string | null): number {
   const parsed = Number.parseInt(raw ?? "0", 10);
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
+function values(url: URL, name: string): string[] {
+  return url.searchParams.getAll(name)
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 /**
@@ -83,37 +91,32 @@ export async function GET(req: Request) {
         : activeCatalog.map((p) => p.key);
   }
 
-  const rawAssignees = url.searchParams.getAll("assignee");
-  const assigneeTokens = (rawAssignees.length > 0 ? rawAssignees : ["me"])
-    .flatMap((s) => s.split(","))
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const rawAssignees = values(url, "assignee");
+  // A role filter ("tôi là Tester"...) already scopes to the current user, so
+  // without an explicit assignee it must not also demand assignee = me.
+  const hasRoleFilter = values(url, "role").length > 0;
+  const assigneeTokens = rawAssignees.length > 0 ? rawAssignees : hasRoleFilter ? ["all"] : ["me"];
   const isAllAssignees =
     assigneeTokens.length === 0 || assigneeTokens.some((a) => a.toLowerCase() === "all");
 
-  const rawStatuses = url.searchParams.getAll("status");
-  const statuses = rawStatuses
-    .flatMap((s) => s.split(","))
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  const rawLabels = url.searchParams.getAll("label");
-  const labels = rawLabels
-    .flatMap((s) => s.split(","))
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  const rawPriorities = url.searchParams.getAll("priority");
-  const priorities = rawPriorities
-    .flatMap((s) => s.split(","))
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const statuses = values(url, "status");
+  const labels = values(url, "label");
+  const priorities = values(url, "priority");
+  const reporters = values(url, "reporter");
+  const approvers = values(url, "approver");
+  const testers = values(url, "tester");
+  const roles = values(url, "role");
+  const types = values(url, "type");
+  const epics = values(url, "epic");
+  const fixVersions = values(url, "fixVersion");
 
   if (
     assigneeTokens.length > 50 ||
     statuses.length > 50 ||
     labels.length > 50 ||
-    priorities.length > 50
+    priorities.length > 50 || reporters.length > 50 || approvers.length > 50 ||
+    testers.length > 50 || roles.length > 4 || types.length > 50 ||
+    epics.length > 50 || fixVersions.length > 50
   ) {
     return NextResponse.json(
       { error: "Too many filter values (maximum 50 per facet)." },
@@ -126,7 +129,7 @@ export async function GET(req: Request) {
   const q = (url.searchParams.get("q") ?? "").trim();
   const statusCategory = (url.searchParams.get("statusCategory") ?? "").trim().toLowerCase();
   const releaseLabel = (url.searchParams.get("releaseLabel") ?? "").trim();
-  const fixVersion = (url.searchParams.get("fixVersion") ?? "").trim();
+  const dueBeforeRaw = url.searchParams.get("dueBefore");
   const limit = positiveLimit(url.searchParams.get("limit"));
   const offset = nonNegativeOffset(url.searchParams.get("offset"));
 
@@ -155,7 +158,21 @@ export async function GET(req: Request) {
     where.labels = { hasSome: labels };
   }
 
+  if (types.length === 1) where.type = types[0];
+  else if (types.length > 1) where.type = { in: types };
+
+  if (epics.length === 1) where.epicKey = epics[0];
+  else if (epics.length > 1) where.epicKey = { in: epics };
+
   const andConditions: Prisma.IssueCacheWhereInput[] = [];
+  const addCondition = (condition: Prisma.IssueCacheWhereInput | null) => {
+    if (!condition) return;
+    if (!("OR" in condition) && !("AND" in condition) && !("NOT" in condition)) {
+      Object.assign(where, condition);
+    } else {
+      andConditions.push(condition);
+    }
+  };
 
   if (releaseLabel) {
     if (labels.length > 0) {
@@ -165,35 +182,47 @@ export async function GET(req: Request) {
     }
   }
 
-  if (fixVersion) where.fixVersionNames = { has: fixVersion };
+  if (fixVersions.length === 1) where.fixVersionNames = { has: fixVersions[0] };
+  else if (fixVersions.length > 1) where.fixVersionNames = { hasSome: fixVersions };
 
-  // Assignee filtering
   if (!isAllAssignees) {
-    const hasUnassigned = assigneeTokens.some(
-      (a) => a.toLowerCase() === "unassigned" || a.toLowerCase() === "none"
-    );
-    const namedTokens = assigneeTokens.filter(
-      (a) => a.toLowerCase() !== "unassigned" && a.toLowerCase() !== "none"
-    );
+    addCondition(peopleFilterCondition("assigneeJira", assigneeTokens, jiraUsername));
+  }
+  for (const [field, tokens] of [
+    ["reporterJira", reporters], ["approverJira", approvers], ["testerJira", testers],
+  ] as Array<[PeopleField, string[]]>) {
+    const condition = peopleFilterCondition(field, tokens, jiraUsername);
+    addCondition(condition);
+  }
 
-    const aliases = Array.from(
-      new Set(
-        namedTokens.flatMap((a) => {
-          const name = a.toLowerCase() === "me" ? jiraUsername : a;
-          return jiraUsernameAliases(name);
-        })
-      )
-    );
+  if (roles.length > 0) {
+    const roleFields: Record<string, PeopleField> = {
+      assignee: "assigneeJira", reporter: "reporterJira", approver: "approverJira", tester: "testerJira",
+    };
+    const roleConditions = roles.flatMap((role) => {
+      const field = roleFields[role.toLowerCase()];
+      const condition = field ? peopleFilterCondition(field, ["me"], jiraUsername) : null;
+      return condition ? [condition] : [];
+    });
+    if (roleConditions.length > 0) andConditions.push({ OR: roleConditions });
+  }
 
-    if (hasUnassigned && aliases.length > 0) {
-      andConditions.push({
-        OR: [{ assigneeJira: { in: aliases } }, { assigneeJira: null }],
-      });
-    } else if (hasUnassigned) {
-      where.assigneeJira = null;
-    } else {
-      where.assigneeJira = aliases.length > 0 ? { in: aliases } : "__unresolved_current_user__";
-    }
+  const now = new Date();
+  if (url.searchParams.get("overdue") === "1") {
+    andConditions.push({ dueDate: { lt: startOfTodayForDueDates(now) }, statusCategory: { not: "done" } });
+  }
+  if (dueBeforeRaw) {
+    const dueBefore = new Date(dueBeforeRaw);
+    if (!Number.isNaN(dueBefore.getTime())) andConditions.push({ dueDate: { lte: dueBefore } });
+  }
+  if (url.searchParams.get("unestimated") === "1") {
+    where.originalEstimateSeconds = null;
+    andConditions.push({ statusCategory: { not: "done" } });
+  }
+  const staleDays = Number.parseInt(url.searchParams.get("staleDays") ?? "", 10);
+  if (Number.isFinite(staleDays) && staleDays > 0) {
+    where.updatedAt = { lt: new Date(Date.now() - staleDays * 86_400_000) };
+    andConditions.push({ statusCategory: { not: "done" } });
   }
 
   if (q) {
@@ -258,12 +287,18 @@ export async function GET(req: Request) {
         statusCategory: item.statusCategory,
         statusChangedAt: item.statusChangedAt,
         assigneeJira: item.assigneeJira,
+        reporterJira: item.reporterJira,
+        approverJira: item.approverJira,
+        testerJira: item.testerJira,
         labels: item.labels,
         fixVersionIds: item.fixVersionIds,
         fixVersionNames: item.fixVersionNames,
         priority: item.priority,
         points: item.points,
         type: item.type,
+        dueDate: item.dueDate,
+        timeSpent: item.timeSpent,
+        originalEstimateSeconds: item.originalEstimateSeconds,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
         lastSyncedAt: item.lastSyncedAt,
@@ -282,7 +317,7 @@ export async function GET(req: Request) {
               prMerged: item.branches.some((b) => (b.prState ?? "").toUpperCase() === "MERGED" || b.merged),
             }
           : null,
-        epic: extractEpicKey(item.raw),
+        epic: item.epicKey,
       })),
       total,
       sync: {

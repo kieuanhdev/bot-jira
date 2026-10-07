@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { userJiraAuth, userJiraUsername } from "@/lib/user-creds";
 import { env } from "@/lib/env";
+import { can } from "@/lib/permissions";
 
 /**
  * Tells the client whether the current user has their own Jira token linked,
@@ -27,6 +28,7 @@ export async function GET() {
       jiraVerifiedAt: true,
       jiraUsername: true,
       onboarded: true,
+      role: true,
     },
   });
 
@@ -39,6 +41,8 @@ export async function GET() {
       jiraVerifiedAt: user?.jiraVerifiedAt ?? null,
       jiraBaseUrl: env.jiraBaseUrl,
       bitbucketBaseUrl: env.bitbucketBaseUrl || null,
+      role: user?.role ?? session.user.role ?? "member",
+      canBoardTeam: can({ user: { role: user?.role ?? session.user.role } }, "board.team"),
     });
   }
 
@@ -49,5 +53,7 @@ export async function GET() {
     jiraVerifiedAt: user?.jiraVerifiedAt ?? null,
     jiraBaseUrl: env.jiraBaseUrl,
     bitbucketBaseUrl: env.bitbucketBaseUrl || null,
+    role: user?.role ?? session.user.role ?? "member",
+    canBoardTeam: can({ user: { role: user?.role ?? session.user.role } }, "board.team"),
   });
 }

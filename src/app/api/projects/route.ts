@@ -11,6 +11,7 @@ import {
   registerVerifiedProject,
   updateProjectBootstrapState,
 } from "@/lib/jira/project-catalog";
+import { detectPeopleFields } from "@/lib/jira/people-fields";
 
 /**
  * Project list and open counts from the shared Jira catalog and read model.
@@ -145,6 +146,12 @@ export async function POST(req: Request) {
     discoveredById: session.user.id,
     source: "user_added",
     bootstrapState: "syncing_issues",
+  });
+
+  // Detection is best-effort: an empty project or restricted editmeta must not
+  // prevent registration and the initial full sync.
+  await detectPeopleFields(verifiedKey, client).catch((error) => {
+    console.warn(`Failed to detect people fields for ${verifiedKey}:`, error);
   });
 
   // Add key to user's board preferences

@@ -140,6 +140,7 @@ describe("issue-filters unit tests", () => {
   describe("serialize and parse URL params", () => {
     it("round-trips complex filters cleanly", () => {
       const filters: IssueFilters = {
+        ...DEFAULT_BOARD_FILTERS,
         project: "EPM",
         query: "refactor",
         assigneeScope: {
@@ -151,6 +152,13 @@ describe("issue-filters unit tests", () => {
         labels: ["core"],
         priorities: ["High"],
         epics: ["EPM-10"],
+        roles: ["approver"],
+        reporters: ["alice"],
+        approvers: ["me"],
+        testers: ["unassigned"],
+        types: ["Bug"],
+        fixVersions: ["2.0"],
+        overdue: true,
         includeDone: false,
       };
 
@@ -160,6 +168,8 @@ describe("issue-filters unit tests", () => {
       expect(params.get("assigneeView")).toBe("bob");
       expect(params.get("status")).toBe("In Progress,Review");
       expect(params.get("epic")).toBe("EPM-10");
+      expect(params.get("role")).toBe("approver");
+      expect(params.get("overdue")).toBe("1");
       expect(params.get("includeDone")).toBe("0");
 
       const parsed = parseIssueFilters(params, DEFAULT_BOARD_FILTERS);
@@ -172,6 +182,11 @@ describe("issue-filters unit tests", () => {
       expect(parsed.labels).toEqual(["core"]);
       expect(parsed.priorities).toEqual(["High"]);
       expect(parsed.epics).toEqual(["EPM-10"]);
+      expect(parsed.roles).toEqual(["approver"]);
+      expect(parsed.reporters).toEqual(["alice"]);
+      expect(parsed.types).toEqual(["Bug"]);
+      expect(parsed.fixVersions).toEqual(["2.0"]);
+      expect(parsed.overdue).toBe(true);
       expect(parsed.includeDone).toBe(false);
     });
 

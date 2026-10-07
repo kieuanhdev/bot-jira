@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { jira, jiraIssueFields, hasJiraCredentials } from "@/lib/jira/client";
+import { jira, hasJiraCredentials } from "@/lib/jira/client";
 import { upsertJiraIssue, upsertJiraCommentsWithNew } from "@/lib/issues/cache";
 import {
   notifyWatchersOfComment,
@@ -10,6 +10,7 @@ import type { BbUser } from "@/lib/bitbucket/client";
 import { env, hasBitbucketConfig, hasSentryConfig } from "../guard";
 import type { WorkerLog } from "../guard";
 import { normalizeStatusToGroup } from "@/lib/reports/status";
+import { jiraIssueFieldsForProject } from "@/lib/jira/people-fields";
 
 export type ProcessWebhookJobData = {
   source: Source;
@@ -23,7 +24,7 @@ function safeError(error: unknown): string {
 /** Refresh a single Jira issue + comments into the cache (idempotent). */
 async function refreshIssue(key: string, authorName?: string | null): Promise<string[]> {
   const previous = await prisma.issueCache.findUnique({ where: { jiraKey: key } });
-  const issue = await jira.getIssue(key, jiraIssueFields());
+  const issue = await jira.getIssue(key, await jiraIssueFieldsForProject(key.split("-")[0]));
   const { applied, data: current } = await upsertJiraIssue(issue);
   if (applied) {
     await notifyWatchersOfIssueChange(previous, { jiraKey: key, ...current }, { authorName })
@@ -83,7 +84,7 @@ async function handleJira(json: unknown): Promise<Record<string, unknown>> {
 
   if (eventName === "jira:issue_commented" || Boolean(j.comment?.id)) {
     const previous = await prisma.issueCache.findUnique({ where: { jiraKey: key } });
-    const issue = await jira.getIssue(key, jiraIssueFields());
+    const issue = await jira.getIssue(key, await jiraIssueFieldsForProject(key.split("-")[0]));
     const { applied, data: current } = await upsertJiraIssue(issue);
     if (applied) {
       await notifyWatchersOfIssueChange(previous, { jiraKey: key, ...current }, { authorName })

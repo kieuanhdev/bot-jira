@@ -50,6 +50,33 @@ describe("issueCacheData", () => {
     expect(data.timeSpent).toBe(7200);
   });
 
+  it("maps reporter, approver, tester and epic fields", () => {
+    const data = issueCacheData(issue({
+      project: { key: "EPM" },
+      reporter: { name: "reporter_mb" },
+      customfield_10300: { name: "approver" },
+      customfield_10501: { name: "tester" },
+      customfield_10008: "EPM-9",
+    }));
+    expect(data).toMatchObject({
+      reporterJira: "reporter_mb",
+      approverJira: "approver",
+      testerJira: "tester",
+      epicKey: "EPM-9",
+    });
+  });
+
+  it("supports project-specific people field ids and null values", () => {
+    const data = issueCacheData(issue({
+      reporter: null,
+      customfield_20001: { name: "custom-approver" },
+      customfield_20002: null,
+    }), { reporter: "reporter", approver: "customfield_20001", tester: "customfield_20002" });
+    expect(data.reporterJira).toBeNull();
+    expect(data.approverJira).toBe("custom-approver");
+    expect(data.testerJira).toBeNull();
+  });
+
   it("defaults dueDate and timeSpent to null when absent", () => {
     const data = issueCacheData(issue({ project: { key: "EPM" } }));
     expect(data.dueDate).toBeNull();
@@ -79,4 +106,3 @@ describe("issueCacheData", () => {
     expect(emptyData.originalEstimateSeconds).toBeNull();
   });
 });
-

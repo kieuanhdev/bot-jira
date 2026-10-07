@@ -12,6 +12,7 @@ describe("roleOf", () => {
 
   it("returns known roles", () => {
     expect(roleOf(session("admin"))).toBe("admin");
+    expect(roleOf(session("lead"))).toBe("lead");
     expect(roleOf(session("release_manager"))).toBe("release_manager");
   });
 });
@@ -90,6 +91,16 @@ describe("can — permission matrix (REL-01)", () => {
 
 describe("ROLES", () => {
   it("lists all valid roles for validation", () => {
-    expect(ROLES).toEqual(["member", "release_manager", "admin"]);
+    expect(ROLES).toEqual(["member", "lead", "release_manager", "admin"]);
+  });
+});
+
+describe("board.team", () => {
+  it("allows leads, release managers and admins without granting release rights to leads", () => {
+    expect(can(session("member"), "board.team")).toBe(false);
+    expect(can(session("lead"), "board.team")).toBe(true);
+    expect(can(session("release_manager"), "board.team")).toBe(true);
+    expect(can(session("admin"), "board.team")).toBe(true);
+    expect(can(session("lead"), "release.manage")).toBe(false);
   });
 });

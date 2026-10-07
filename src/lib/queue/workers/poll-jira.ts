@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { jira, parseJiraDate } from "@/lib/jira/client";
+import { getProjectPeopleFields } from "@/lib/jira/people-fields";
 import { buildProjectPollJql } from "@/lib/jira/jql";
 import { upsertJiraCommentsWithNew, upsertJiraIssue } from "@/lib/issues/cache";
 import {
@@ -121,16 +122,17 @@ export async function syncProject(
   const isFullScan = full || !validCursor;
 
   try {
+    const peopleFields = await getProjectPeopleFields(projectKey).catch(() => null);
+    const extraPeopleFields = peopleFields
+      ? Object.values(peopleFields).filter((value): value is string => Boolean(value))
+      : [];
     for (let page = 0; page < MAX_PAGES; page++) {
       // Renew lease + check abort before each page fetch
       await renewAndAssert();
 
-      const result = await jira.search(
-        jql,
-        PAGE_SIZE,
-        page * PAGE_SIZE,
-        ...(options?.signal ? [options.signal] : [])
-      );
+      const result = extraPeopleFields.length > 0
+        ? await jira.search(jql, PAGE_SIZE, page * PAGE_SIZE, options?.signal, extraPeopleFields)
+        : await jira.search(jql, PAGE_SIZE, page * PAGE_SIZE, ...(options?.signal ? [options.signal] : []));
       stats.pages++;
 
       // Renew lease after Jira response, before writing cache

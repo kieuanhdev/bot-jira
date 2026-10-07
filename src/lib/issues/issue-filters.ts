@@ -21,8 +21,31 @@ export type IssueFilters = {
   labels: string[];
   priorities: string[];
   epics: string[];
+  roles: string[];
+  reporters: string[];
+  approvers: string[];
+  testers: string[];
+  types: string[];
+  fixVersions: string[];
+  overdue: boolean;
   includeDone: boolean;
 };
+
+type ArrayFacet = "statuses" | "labels" | "priorities" | "epics" | "roles" |
+  "reporters" | "approvers" | "testers" | "types" | "fixVersions";
+
+const ARRAY_FACETS: Array<{ key: ArrayFacet; param: string; aliases?: string[] }> = [
+  { key: "statuses", param: "status", aliases: ["statuses"] },
+  { key: "labels", param: "label", aliases: ["labels"] },
+  { key: "priorities", param: "priority", aliases: ["priorities"] },
+  { key: "epics", param: "epic", aliases: ["epics"] },
+  { key: "roles", param: "role", aliases: ["roles"] },
+  { key: "reporters", param: "reporter" },
+  { key: "approvers", param: "approver" },
+  { key: "testers", param: "tester" },
+  { key: "types", param: "type", aliases: ["types"] },
+  { key: "fixVersions", param: "fixVersion", aliases: ["fixVersions"] },
+];
 
 export const DEFAULT_BOARD_FILTERS: IssueFilters = {
   project: "",
@@ -36,6 +59,8 @@ export const DEFAULT_BOARD_FILTERS: IssueFilters = {
   labels: [],
   priorities: [],
   epics: [],
+  roles: [], reporters: [], approvers: [], testers: [], types: [], fixVersions: [],
+  overdue: false,
   includeDone: true,
 };
 
@@ -51,6 +76,8 @@ export const DEFAULT_BULK_FILTERS: IssueFilters = {
   labels: [],
   priorities: [],
   epics: [],
+  roles: [], reporters: [], approvers: [], testers: [], types: [], fixVersions: [],
+  overdue: false,
   includeDone: true,
 };
 
@@ -143,10 +170,8 @@ export function normalizeIssueFilters(
     project: input.project.trim().toUpperCase(),
     query: input.query.trim(),
     assigneeScope: normalizeAssigneeScope(input.assigneeScope, myUsername),
-    statuses: normalizeStringArray(input.statuses),
-    labels: normalizeStringArray(input.labels),
-    priorities: normalizeStringArray(input.priorities),
-    epics: normalizeStringArray(input.epics ?? []),
+    ...Object.fromEntries(ARRAY_FACETS.map(({ key }) => [key, normalizeStringArray(input[key] ?? [])])) as Pick<IssueFilters, ArrayFacet>,
+    overdue: Boolean(input.overdue),
     includeDone: Boolean(input.includeDone),
   };
 }
@@ -189,38 +214,15 @@ export function countActiveIssueFilters(
     count++;
   }
 
-  // Statuses
-  if (
-    value.statuses.length > 0 &&
-    value.statuses.slice().sort().join(",") !== defaults.statuses.slice().sort().join(",")
-  ) {
-    count += value.statuses.length;
+  for (const { key } of ARRAY_FACETS) {
+    const current = value[key] ?? [];
+    const baseline = defaults[key] ?? [];
+    if (current.length > 0 && current.slice().sort().join(",") !== baseline.slice().sort().join(",")) {
+      count += current.length;
+    }
   }
 
-  // Labels
-  if (
-    value.labels.length > 0 &&
-    value.labels.slice().sort().join(",") !== defaults.labels.slice().sort().join(",")
-  ) {
-    count += value.labels.length;
-  }
-
-  // Priorities
-  if (
-    value.priorities.length > 0 &&
-    value.priorities.slice().sort().join(",") !== defaults.priorities.slice().sort().join(",")
-  ) {
-    count += value.priorities.length;
-  }
-
-  // Epics
-  if (
-    value.epics &&
-    value.epics.length > 0 &&
-    value.epics.slice().sort().join(",") !== (defaults.epics ?? []).slice().sort().join(",")
-  ) {
-    count += value.epics.length;
-  }
+  if (value.overdue !== defaults.overdue) count++;
 
   if (value.includeDone !== defaults.includeDone) {
     count++;
@@ -265,34 +267,15 @@ export function serializeIssueFilters(
     }
   }
 
-  if (
-    value.statuses.length > 0 &&
-    value.statuses.slice().sort().join(",") !== defaults.statuses.slice().sort().join(",")
-  ) {
-    params.set("status", [...value.statuses].sort().join(","));
+  for (const { key, param } of ARRAY_FACETS) {
+    const current = value[key] ?? [];
+    const baseline = defaults[key] ?? [];
+    if (current.length > 0 && current.slice().sort().join(",") !== baseline.slice().sort().join(",")) {
+      params.set(param, [...current].sort().join(","));
+    }
   }
 
-  if (
-    value.labels.length > 0 &&
-    value.labels.slice().sort().join(",") !== defaults.labels.slice().sort().join(",")
-  ) {
-    params.set("label", [...value.labels].sort().join(","));
-  }
-
-  if (
-    value.priorities.length > 0 &&
-    value.priorities.slice().sort().join(",") !== defaults.priorities.slice().sort().join(",")
-  ) {
-    params.set("priority", [...value.priorities].sort().join(","));
-  }
-
-  if (
-    value.epics &&
-    value.epics.length > 0 &&
-    value.epics.slice().sort().join(",") !== (defaults.epics ?? []).slice().sort().join(",")
-  ) {
-    params.set("epic", [...value.epics].sort().join(","));
-  }
+  if (value.overdue !== defaults.overdue) params.set("overdue", value.overdue ? "1" : "0");
 
   if (value.includeDone !== defaults.includeDone) {
     params.set("includeDone", value.includeDone ? "1" : "0");
@@ -351,29 +334,10 @@ export function parseIssueFilters(
     assigneeScope = defaults.assigneeScope;
   }
 
-  // Statuses
-  const rawStatuses = params.get("status") ?? params.get("statuses");
-  const statuses = rawStatuses
-    ? rawStatuses.split(",").map((s) => s.trim()).filter(Boolean)
-    : defaults.statuses;
-
-  // Labels
-  const rawLabels = params.get("label") ?? params.get("labels");
-  const labels = rawLabels
-    ? rawLabels.split(",").map((s) => s.trim()).filter(Boolean)
-    : defaults.labels;
-
-  // Priorities
-  const rawPriorities = params.get("priority") ?? params.get("priorities");
-  const priorities = rawPriorities
-    ? rawPriorities.split(",").map((s) => s.trim()).filter(Boolean)
-    : defaults.priorities;
-
-  // Epics
-  const rawEpics = params.get("epic") ?? params.get("epics");
-  const epics = rawEpics
-    ? rawEpics.split(",").map((s) => s.trim()).filter(Boolean)
-    : defaults.epics ?? [];
+  const facetValues = Object.fromEntries(ARRAY_FACETS.map(({ key, param, aliases = [] }) => {
+    const raw = [param, ...aliases].map((name) => params.get(name)).find((item) => item !== null);
+    return [key, raw ? raw.split(",").map((item) => item.trim()).filter(Boolean) : defaults[key] ?? []];
+  })) as Pick<IssueFilters, ArrayFacet>;
 
   // includeDone
   const rawDone = params.get("includeDone");
@@ -385,10 +349,8 @@ export function parseIssueFilters(
       project,
       query,
       assigneeScope,
-      statuses,
-      labels,
-      priorities,
-      epics,
+      ...facetValues,
+      overdue: params.get("overdue") === "1" ? true : params.get("overdue") === "0" ? false : defaults.overdue,
       includeDone,
     },
     myUsername

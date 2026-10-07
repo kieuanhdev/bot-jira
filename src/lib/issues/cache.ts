@@ -2,8 +2,14 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { jiraPointsFromFields, parseJiraDate } from "@/lib/jira/client";
 import type { JiraComment, JiraIssue } from "@/lib/jira/types";
-import { jiraIssueFields } from "@/lib/jira/client";
 import { notifyWatchersOfIssueChange } from "@/lib/issues/notify-watchers";
+import {
+  DEFAULT_PEOPLE_FIELDS,
+  getProjectPeopleFields,
+  jiraIssueFieldsForProject,
+  type ProjectPeopleFieldsMap,
+} from "@/lib/jira/people-fields";
+import { extractEpicKey } from "@/lib/issues/epic";
 
 function descriptionText(value: unknown): string {
   if (typeof value === "string") return value;
@@ -15,7 +21,20 @@ function descriptionText(value: unknown): string {
   }
 }
 
-export function issueCacheData(issue: JiraIssue) {
+function jiraUsername(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const user = value as { name?: unknown };
+  return typeof user.name === "string" && user.name.trim() ? user.name : null;
+}
+
+export function issueCacheData(
+  issue: JiraIssue,
+  peopleFields: ProjectPeopleFieldsMap = {
+    reporter: DEFAULT_PEOPLE_FIELDS.reporter,
+    approver: DEFAULT_PEOPLE_FIELDS.approver,
+    tester: DEFAULT_PEOPLE_FIELDS.tester,
+  }
+) {
   const f = issue.fields;
   const { points, fieldId: storyField } = jiraPointsFromFields(f);
   const fixVersions = f.fixVersions ?? [];
@@ -33,6 +52,10 @@ export function issueCacheData(issue: JiraIssue) {
       parseJiraDate(f.statuscategorychangedate) ??
       null,
     assigneeJira: f.assignee?.name ?? null,
+    reporterJira: jiraUsername(f[peopleFields.reporter]),
+    approverJira: jiraUsername(f[peopleFields.approver ?? DEFAULT_PEOPLE_FIELDS.approver]),
+    testerJira: jiraUsername(f[peopleFields.tester ?? DEFAULT_PEOPLE_FIELDS.tester]),
+    epicKey: extractEpicKey(f),
     labels: f.labels ?? [],
     fixVersionIds: fixVersions.flatMap((v) => (v.id ? [v.id] : [])),
     fixVersionNames: fixVersions.flatMap((v) => (v.name ? [v.name] : [])),
@@ -150,7 +173,11 @@ export async function syncIssueLinks(
 export async function upsertJiraIssue(
   issue: JiraIssue
 ): Promise<{ applied: boolean; data: ReturnType<typeof issueCacheData> }> {
-  const data = issueCacheData(issue);
+  const projectKey = issue.fields.project?.key ?? issue.key.split("-")[0] ?? "";
+  const peopleFields = projectKey
+    ? await getProjectPeopleFields(projectKey).catch(() => undefined)
+    : undefined;
+  const data = issueCacheData(issue, peopleFields);
   const incomingUpdatedAt = data.updatedAt;
   const hasLinks = Array.isArray(issue.fields.issuelinks);
 
@@ -251,7 +278,8 @@ export async function refreshJiraIssueCache(
 ): Promise<boolean> {
   try {
     const previous = await prisma.issueCache.findUnique({ where: { jiraKey: key } });
-    const { applied, data: current } = await upsertJiraIssue(await client.getIssue(key, jiraIssueFields()));
+    const fields = await jiraIssueFieldsForProject(key.split("-")[0]);
+    const { applied, data: current } = await upsertJiraIssue(await client.getIssue(key, fields));
     if (applied) {
       await notifyWatchersOfIssueChange(previous, { jiraKey: key, ...current }, options)
         .catch(() => null);

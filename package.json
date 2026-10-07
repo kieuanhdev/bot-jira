@@ -13,6 +13,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "backfill:people": "tsx --env-file-if-exists=.env scripts/backfill-people-fields.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

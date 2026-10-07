@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { jira, jiraIssueFields, hasJiraCredentials } from "@/lib/jira/client";
+import { jira, hasJiraCredentials } from "@/lib/jira/client";
 import { upsertJiraIssue, upsertJiraCommentsWithNew } from "@/lib/issues/cache";
 import { notifyWatchersOfComment, notifyWatchersOfIssueChange } from "@/lib/issues/notify-watchers";
 import type { WorkerLog } from "../guard";
+import { jiraIssueFieldsForProject } from "@/lib/jira/people-fields";
 
 /** Direct reads keep watches fresh even without an inbound webhook. */
 export async function runPollWatchedIssues(): Promise<WorkerLog> {
@@ -15,7 +16,8 @@ export async function runPollWatchedIssues(): Promise<WorkerLog> {
       const { jiraKey } = watches[next++];
       try {
         const previous = await prisma.issueCache.findUnique({ where: { jiraKey } });
-        const { applied, data: current } = await upsertJiraIssue(await jira.getIssue(jiraKey, jiraIssueFields()));
+        const fields = await jiraIssueFieldsForProject(jiraKey.split("-")[0]);
+        const { applied, data: current } = await upsertJiraIssue(await jira.getIssue(jiraKey, fields));
         if (applied) {
           await notifyWatchersOfIssueChange(previous, { jiraKey, ...current });
         }

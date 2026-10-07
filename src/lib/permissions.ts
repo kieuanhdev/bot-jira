@@ -1,6 +1,6 @@
 // REL-01 — Central permission helper for role-gated actions.
 //
-// Roles: `member`, `release_manager`, `admin`.
+// Roles: `member`, `lead`, `release_manager`, `admin`.
 // The helper is the single source of truth for "can this user do this?" so API
 // routes (server-side enforcement, not just hiding a button) and the chat
 // command layer share identical semantics.
@@ -9,12 +9,12 @@
 // accept the raw session so the helper is importable from server code without
 // a Next dependency.
 
-export type Role = "member" | "release_manager" | "admin";
+export type Role = "member" | "lead" | "release_manager" | "admin";
 
-export const ROLES: Role[] = ["member", "release_manager", "admin"];
+export const ROLES: Role[] = ["member", "lead", "release_manager", "admin"];
 
 export function isKnownRole(role: string | null | undefined): role is Role {
-  return role === "member" || role === "release_manager" || role === "admin";
+  return role === "member" || role === "lead" || role === "release_manager" || role === "admin";
 }
 
 /** Extract the effective role from a session (defaults to "member"). */
@@ -47,27 +47,29 @@ export type Permission =
   | "branch.sync"
   | "report.view"
   | "report.export"
-  | "report.configure";
+  | "report.configure"
+  | "board.team";
 
 /**
  * Permission matrix (REL-01, BR-005, RPT-103):
  *
- *  | action            | member | release_manager | admin |
- *  |-------------------|--------|-----------------|-------|
- *  | release.view      |  yes   |      yes        |  yes  |
- *  | release.check     |  no    |      yes        |  yes  |
- *  | release.manage    |  no    |      yes        |  yes  |
- *  | release.approve   |  no    |      yes        |  yes  |
- *  | release.publish   |  no    |      yes        |  yes  |
- *  | admin.users       |  no    |      no         |  yes  |
- *  | admin.integrations|  no    |      no         |  yes  |
- *  | branch.view       |  yes   |      yes        |  yes  |
- *  | branch.confirm    |  yes   |      yes        |  yes  |
- *  | branch.manage     |  no    |      yes        |  yes  |
- *  | branch.sync       |  no    |      yes        |  yes  |
- *  | report.view       |  yes   |      yes        |  yes  |
- *  | report.export     |  yes   |      yes        |  yes  |
- *  | report.configure  |  no    |      no         |  yes  |
+ *  | action             | member | lead | release_manager | admin |
+ *  |--------------------|--------|------|-----------------|-------|
+ *  | board.team         |   no   | yes  |       yes       |  yes  |
+ *  | release.view       |  yes   | yes  |       yes       |  yes  |
+ *  | release.check      |   no   |  no  |       yes       |  yes  |
+ *  | release.manage     |   no   |  no  |       yes       |  yes  |
+ *  | release.approve    |   no   |  no  |       yes       |  yes  |
+ *  | release.publish    |   no   |  no  |       yes       |  yes  |
+ *  | admin.users        |   no   |  no  |       no        |  yes  |
+ *  | admin.integrations |   no   |  no  |       no        |  yes  |
+ *  | branch.view        |  yes   | yes  |       yes       |  yes  |
+ *  | branch.confirm     |  yes   | yes  |       yes       |  yes  |
+ *  | branch.manage      |   no   |  no  |       yes       |  yes  |
+ *  | branch.sync        |   no   |  no  |       yes       |  yes  |
+ *  | report.view        |  yes   | yes  |       yes       |  yes  |
+ *  | report.export      |  yes   | yes  |       yes       |  yes  |
+ *  | report.configure   |   no   |  no  |       no        |  yes  |
  */
 export function can(session: { user?: { role?: string } } | null | undefined, perm: Permission): boolean {
   const r = roleOf(session);
@@ -78,6 +80,8 @@ export function can(session: { user?: { role?: string } } | null | undefined, pe
     case "report.view":
     case "report.export":
       return true; // any signed-in user
+    case "board.team":
+      return r === "lead" || r === "release_manager" || r === "admin";
     case "release.check":
     case "release.manage":
     case "release.approve":

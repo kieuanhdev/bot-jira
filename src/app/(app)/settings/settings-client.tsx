@@ -11,13 +11,15 @@ import { timeAgo } from "@/lib/utils";
 import { MyIntegrations } from "./my-integrations";
 import { NotificationPreferences } from "./notification-preferences";
 import { ChatLinking } from "./chat-linking";
+import type { Role } from "@/lib/permissions";
+import { ProjectPeopleFieldsSettings } from "./project-people-fields-settings";
 
 type User = {
   id: string;
   email: string;
   displayName: string;
   jiraUsername: string | null;
-  role: "member" | "admin";
+  role: Role;
   createdAt: string;
 };
 
@@ -54,6 +56,10 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
       <MyIntegrations />
       <NotificationPreferences />
       <ChatLinking />
+      {isAdmin && (
+        <ProjectPeopleFieldsSettings />
+      )}
+
       {isAdmin && (
         <Card>
           <CardHeader>
@@ -121,13 +127,15 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
                     <td>
                       <Select
                         value={u.role}
-                        onValueChange={(v) => setRoleMutation.mutate({ id: u.id, role: v as "member" | "admin" })}
+                        onValueChange={(v) => setRoleMutation.mutate({ id: u.id, role: v as Role })}
                       >
                         <SelectTrigger className="h-8 w-32">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="member">thành viên</SelectItem>
+                          <SelectItem value="lead">trưởng nhóm</SelectItem>
+                          <SelectItem value="release_manager">quản lý phát hành</SelectItem>
                           <SelectItem value="admin">quản trị viên</SelectItem>
                         </SelectContent>
                       </Select>

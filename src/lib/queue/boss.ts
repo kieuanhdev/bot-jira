@@ -21,6 +21,7 @@ import { scheduledJiraJobAgeMs, shouldSkipStaleJiraJob } from "./jira-job-policy
 
 import { runRefreshBoardMembership, type RefreshBoardMembershipJobData } from "./workers/refresh-board-membership";
 import { captureProjectReportSnapshots } from "@/lib/reports/snapshot";
+import { runDetectPeopleFields } from "./workers/detect-people-fields";
 
 const globalForBoss = globalThis as unknown as { boss?: PgBoss; bossStart?: Promise<PgBoss> };
 let watchTimer: ReturnType<typeof setInterval> | undefined;
@@ -42,6 +43,7 @@ export const JOB_NAMES = [
   "deliver-notifications",
   "health-alert",
   "capture-project-report-snapshots",
+  "detect-people-fields",
 ] as const;
 
 export function getBoss(): PgBoss {
@@ -332,6 +334,12 @@ export async function registerJobs(): Promise<PgBoss> {
     retryLimit: 2,
     retryDelay: 60,
   });
+  await boss.schedule("detect-people-fields", "30 1 * * *", null, {
+    singletonSeconds: 3600,
+    expireInSeconds: 1800,
+    retryLimit: 2,
+    retryDelay: 60,
+  });
 
   await boss.work<PollJiraDispatchJobData>("poll-jira-dispatch", async (jobs) => {
     const job = jobs[0];
@@ -443,6 +451,9 @@ export async function registerJobs(): Promise<PgBoss> {
       const stats = await captureProjectReportSnapshots();
       return { ok: true, stats: { ...stats } };
     })
+  );
+  await boss.work("detect-people-fields", async () =>
+    recordRun("detect-people-fields", runDetectPeopleFields)
   );
   // M5 — webhook processing: one-off jobs enqueued by the webhook endpoints.
   await boss.work<ProcessWebhookJobData>("process-webhook", { pollingIntervalSeconds: 0.5 }, async (jobs) => {

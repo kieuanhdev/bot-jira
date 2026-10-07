@@ -3,11 +3,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { settingsKeys, notifyKeys } from "@/lib/query-keys";
+import type { Role } from "@/lib/permissions";
 
 export function useSetUserRole() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, role }: { id: string; role: "member" | "admin" }) =>
+    mutationFn: ({ id, role }: { id: string; role: Role }) =>
       api(`/api/users/${id}/role`, { method: "PATCH", body: { role } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: settingsKeys.users });
