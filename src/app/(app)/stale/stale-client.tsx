@@ -264,7 +264,7 @@ export function StaleClient() {
       <PageHeader
         eyebrow="Sức khỏe luồng công việc"
         icon={CircleGauge}
-        title="Phân tích task tồn đọng"
+        title="Task cần xử lý"
         description="Biến cảnh báo vượt SLA và thiếu tiêu chuẩn dữ liệu thành kế hoạch hành động cụ thể để tháo gỡ điểm nghẽn."
         meta={
           dataUpdatedAt > 0 ? (

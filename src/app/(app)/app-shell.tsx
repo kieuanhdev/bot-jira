@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/board", label: "Bảng công việc", icon: LayoutGrid },
-  { href: "/stale", label: "Task tồn đọng", icon: BarChart3 },
+  { href: "/stale", label: "Task cần xử lý", icon: BarChart3 },
   { href: "/bulk", label: "Cập nhật hàng loạt", icon: ListChecks },
   { href: "/release", label: "Quản lý phát hành", icon: Rocket },
   { href: "/branches", label: "Nhánh & Delivery", icon: GitBranch },
