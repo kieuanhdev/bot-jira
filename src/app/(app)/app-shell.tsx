@@ -27,15 +27,15 @@ import { GlobalSyncIndicator } from "./global-sync-indicator";
 import { cn } from "@/lib/utils";
 
 const nav = [
-  { href: "/board", label: "Bảng công việc", icon: LayoutGrid },
-  { href: "/reports/projects", label: "Báo cáo", icon: ChartNoAxesCombined },
-  { href: "/leaderboard", label: "Bảng xếp hạng", icon: Trophy },
-  { href: "/bulk", label: "Thao tác hàng loạt", icon: ListChecks },
-  { href: "/release", label: "Phát hành", icon: Rocket },
-  { href: "/branches", label: "Quản lý nhánh", icon: GitBranch },
-  { href: "/stale", label: "Task tồn đọng", icon: BarChart3 },
-  { href: "/watch", label: "Đang theo dõi", icon: Eye },
+  { href: "/board", label: "Board", icon: LayoutGrid },
+  { href: "/watch", label: "Theo dõi", icon: Eye },
   { href: "/notifications", label: "Thông báo", icon: Bell },
+  { href: "/stale", label: "Tồn đọng", icon: BarChart3 },
+  { href: "/branches", label: "Nhánh & PR", icon: GitBranch },
+  { href: "/reports/projects", label: "Báo cáo", icon: ChartNoAxesCombined },
+  { href: "/release", label: "Phát hành", icon: Rocket },
+  { href: "/bulk", label: "Sửa hàng loạt", icon: ListChecks },
+  { href: "/leaderboard", label: "Xếp hạng", icon: Trophy },
   { href: "/settings", label: "Cài đặt", icon: Settings },
 ];
 
