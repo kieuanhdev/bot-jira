@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { History, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, History, RefreshCw } from "lucide-react";
 import { OperationDetail } from "./bulk-operation-detail";
 import { ACTION_LABELS, type OpListItem } from "./lib/bulk-types";
 import { formatTime, stateVariant } from "./lib/bulk-utils";
@@ -23,16 +24,30 @@ export function BulkHistoryCard({
   onSelectOp: (id: string) => void;
   onRetry: (id: string) => void;
 }) {
+  const [toggled, setToggled] = useState<boolean | null>(null);
+  // Until the user toggles it, open only while an operation is being inspected.
+  const open = toggled ?? activeOp !== null;
   return (
     <Card>
-      <CardHeader className="p-4 sm:p-5">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <History className="h-4 w-4 text-primary" aria-hidden="true" />
-          Lịch sử thao tác
-        </CardTitle>
-        <CardDescription>Các thao tác hàng loạt gần đây và kết quả chi tiết từng task.</CardDescription>
+      <CardHeader className="p-0">
+        <button
+          type="button"
+          onClick={() => setToggled(!open)}
+          aria-expanded={open}
+          className="flex w-full cursor-pointer items-center justify-between gap-3 p-4 text-left sm:p-5"
+        >
+          <span>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <History className="h-4 w-4 text-primary" aria-hidden="true" />
+              Lịch sử thao tác
+              {opsLoaded && <Badge variant="secondary">{ops.length}</Badge>}
+            </CardTitle>
+            <CardDescription className="mt-1">Kết quả chi tiết từng task của các lần chạy gần đây.</CardDescription>
+          </span>
+          <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} aria-hidden="true" />
+        </button>
       </CardHeader>
-      <CardContent className="px-4 pb-4 sm:px-5 sm:pb-5">
+      {open && <CardContent className="px-4 pb-4 sm:px-5 sm:pb-5">
         {activeOp && <OperationDetail id={activeOp} jiraBaseUrl={jiraBaseUrl} />}
         {!opsLoaded ? (
           <div className="space-y-2">{[0, 1, 2].map((row) => <Skeleton key={row} className="h-16 w-full" />)}</div>
@@ -73,7 +88,7 @@ export function BulkHistoryCard({
             ))}
           </ul>
         )}
-      </CardContent>
+      </CardContent>}
     </Card>
   );
 }

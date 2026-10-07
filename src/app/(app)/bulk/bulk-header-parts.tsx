@@ -39,7 +39,7 @@ export function BulkProgressSteps({
   hasPreview: boolean;
 }) {
   return (
-    <ol aria-label="Tiến trình thao tác hàng loạt" className="grid grid-cols-3 overflow-hidden rounded-lg border bg-card">
+    <ol aria-label="Tiến trình thao tác hàng loạt" className="grid grid-cols-3 overflow-hidden rounded-md border bg-card">
       {[
         { number: 1, label: "Chọn dự án & task", active: true, done: Boolean(filterProject) && effectiveCount > 0 },
         {
@@ -58,14 +58,14 @@ export function BulkProgressSteps({
         <li
           key={step.number}
           className={cn(
-            "flex min-w-0 items-center gap-2 border-r px-3 py-3 text-xs last:border-r-0 sm:px-4 sm:text-sm",
+            "flex min-w-0 items-center gap-2 border-r px-3 py-1.5 text-xs last:border-r-0",
             step.active && "bg-primary/5",
             !step.active && "text-muted-foreground"
           )}
         >
           <span
             className={cn(
-              "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
+              "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold",
               step.done
                 ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
                 : step.active
@@ -73,7 +73,7 @@ export function BulkProgressSteps({
                   : "border-border bg-muted"
             )}
           >
-            {step.done ? <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" /> : step.number}
+            {step.done ? <CheckCheck className="h-3 w-3" aria-hidden="true" /> : step.number}
           </span>
           <span className="truncate font-medium">{step.label}</span>
         </li>

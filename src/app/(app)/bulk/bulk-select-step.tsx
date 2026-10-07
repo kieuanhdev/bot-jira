@@ -151,17 +151,11 @@ export function BulkTaskFilters({
         }}
         myName={myName}
         searchPlaceholder={`Tìm kiếm trong ${filterProject}…`}
+        collapseExtras
       />
       <p className="text-[11px] text-muted-foreground">
-        {selectionMode === "filter" ? (
-          <>
-            Hiển thị {filteredCount} task xem nhanh tại đây · Chế độ <strong className="text-foreground">Tất cả khớp bộ lọc</strong> sẽ áp dụng lên toàn bộ task của dự án {filterProject} ở server khi chạy.
-          </>
-        ) : (
-          <>
-            Có {filteredCount} task khớp bộ lọc trong dự án {filterProject}.
-          </>
-        )}
+        {filteredCount} task khớp bộ lọc
+        {selectionMode === "filter" ? " · khi chạy sẽ áp dụng cho toàn bộ task khớp trong dự án, không chỉ phần hiển thị" : ""}
       </p>
     </div>
   );
