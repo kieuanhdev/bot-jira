@@ -51,8 +51,6 @@ export async function PUT(req: Request) {
   const jiraUser = (body.jiraUser ?? "").trim();
   const bbToken = (body.bitbucketToken ?? "").trim();
   const bbUser = (body.bitbucketUser ?? "").trim();
-  const firstRepo = (await import("@/lib/env")).bitbucketRepoList[0];
-
   // Validate new credentials before persisting them. A failed attempt must not
   // replace a previously working personal credential.
   let verifiedJira: import("@/lib/jira/auth-service").JiraVerificationSuccess | null = null;
@@ -75,14 +73,14 @@ export async function PUT(req: Request) {
         { status: 400 }
       );
     }
-    if (!env.bitbucketBaseUrl || !firstRepo) {
+    if (!env.bitbucketBaseUrl) {
       return NextResponse.json(
-        { ok: false, error: "Máy chủ chưa cấu hình Bitbucket URL hoặc repository để xác minh token." },
+        { ok: false, error: "Máy chủ chưa cấu hình Bitbucket URL để xác minh token." },
         { status: 503 }
       );
     }
     try {
-      await bb.listBranches(firstRepo, { user: bbUser, token: bbToken });
+      await bb.verifyCreds({ user: bbUser, token: bbToken });
     } catch (e) {
       return NextResponse.json(
         { ok: false, error: `Không thể xác minh token Bitbucket: ${cleanError((e as Error).message)}` },
@@ -199,10 +197,9 @@ export async function verifyCreds(user: {
 
   const bbResult: { ok: boolean; detail?: string } = { ok: false };
   const bbCreds = userBitbucketCreds(user);
-  const firstRepo = (await import("@/lib/env")).bitbucketRepoList[0];
-  if (bbCreds && env.bitbucketBaseUrl && firstRepo) {
+  if (bbCreds && env.bitbucketBaseUrl) {
     try {
-      await bb.listBranches(firstRepo, bbCreds);
+      await bb.verifyCreds(bbCreds);
       bbResult.ok = true;
       bbResult.detail = bbCreds.user;
     } catch (e) {

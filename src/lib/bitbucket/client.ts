@@ -275,6 +275,23 @@ function normalizePullRequest(pullRequest: BitbucketPullRequestResponse): BbPull
 }
 
 export const bitbucket = {
+  /**
+   * Check a credential against the server itself (not a specific repo), so a
+   * token without access to the first configured repo is still accepted.
+   * Throws a "-> 401" error only when the username/token pair is rejected.
+   */
+  async verifyCreds(creds: BbCreds): Promise<void> {
+    const base = env.bitbucketBaseUrl.replace(/\/$/, "");
+    const basic = Buffer.from(`${creds.user}:${creds.token}`).toString("base64");
+    const res = await fetch(`${base}/rest/api/1.0/projects?limit=1`, {
+      headers: { Accept: "application/json", Authorization: `Basic ${basic}` },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Bitbucket projects -> ${res.status}: ${text.slice(0, 300)}`);
+    }
+  },
+
   async listBranches(repo: string, creds?: BbCreds): Promise<BbBranch[]> {
     const branches = await fetchPaged<BitbucketBranchResponse>(repo, "branches", creds);
     return branches
