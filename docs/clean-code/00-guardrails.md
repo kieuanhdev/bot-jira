@@ -112,7 +112,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 | R-02 | Lease/fencing bị đổi thứ tự khi tách worker | P0 | Characterization + PostgreSQL integration test | Open |
 | R-03 | Bulk retry tạo mutation trùng | P0 | Khóa idempotency marker và retry tests | Open |
 | R-04 | Notification chạy trước commit | P1 | Test thứ tự commit/notify | Open |
-| R-05 | API error/status đổi khi làm mỏng route | P1 | Contract tests snapshot shape/status | Open |
+| R-05 | API error/status đổi khi làm mỏng route | P1 | Dùng inventory `07-api-contract-inventory.md` làm baseline và bổ sung characterization test trước khi refactor route; hiện 18/41 route file ưu tiên có colocated test | Open |
 | R-06 | UI state reset sau khi tách component | P1 | Browser test dialog/tab/filter | Open |
 | R-07 | Import cycle khi tạo facade | P1 | Kiểm dependency graph mỗi phase | Open |
 | R-08 | Mock pass nhưng PostgreSQL thật sai | P1 | Integration suite dùng DB test riêng | Open |

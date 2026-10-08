@@ -18,6 +18,10 @@
 6. [05-progress-tracker.md](05-progress-tracker.md): bảng tiến độ duy nhất được cập nhật khi triển khai.
 7. [06-pr-checklist.md](06-pr-checklist.md): mẫu kiểm tra cho từng PR clean code.
 
+Artifact theo batch:
+
+- [07-api-contract-inventory.md](07-api-contract-inventory.md): snapshot request/response/status/consumer cho các API ưu tiên của batch 1.1.
+
 Không dùng đồng thời nhiều bảng tiến độ. `05-progress-tracker.md` là nguồn sự thật cho tiến độ mới. File [`../CLEAN_CODE_PLAN.md`](../CLEAN_CODE_PLAN.md) được giữ làm lịch sử của đợt refactor trước.
 
 ## Baseline hiện tại
@@ -62,4 +66,3 @@ Các failure hiện tại phải được xử lý trong Phase 0 trước khi re
 | `VERIFY` | Code xong, đang chạy gate/QA |
 | `DONE` | Đạt toàn bộ Definition of Done |
 | `SKIPPED` | Chủ ý không làm và đã ghi lý do |
-
