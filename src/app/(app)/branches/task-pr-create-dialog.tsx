@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, CheckCircle2, ExternalLink, GitPullRequest, MinusCircle, Search, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, ExternalLink, GitPullRequest, ChevronDown, MinusCircle, Search, XCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/api-client";
 import {
   useCreatePullRequests,
@@ -55,6 +54,8 @@ export function TaskPrCreateDialog({ jiraKey, summary, open, onOpenChange, onSuc
   const [unchecked, setUnchecked] = useState<Set<string>>(new Set());
   const [results, setResults] = useState<PrCreateResult[] | null>(null);
   const [q, setQ] = useState("");
+  const [openTarget, setOpenTarget] = useState<string | null>(null);
+  const [targetQ, setTargetQ] = useState("");
 
   const items = plan.data?.plan.items ?? [];
   const ready = items.filter((i) => i.status === "ready" && !unchecked.has(i.branchId));
@@ -87,6 +88,12 @@ export function TaskPrCreateDialog({ jiraKey, summary, open, onOpenChange, onSuc
       }
       return next;
     });
+
+  const pickTarget = (branchId: string, name: string) => {
+    setTargets((t) => ({ ...t, [branchId]: name }));
+    setOpenTarget(null);
+    setTargetQ("");
+  };
 
   const handleCreate = () => {
     createMutation.mutate(
@@ -213,7 +220,7 @@ export function TaskPrCreateDialog({ jiraKey, summary, open, onOpenChange, onSuc
                   <li
                     key={item.branchId}
                     className={cn(
-                      "flex items-center gap-2.5 rounded-md border px-3 py-2 text-xs transition-colors duration-150",
+                      "flex flex-wrap items-center gap-2.5 rounded-md border px-3 py-2 text-xs transition-colors duration-150",
                       checked ? "border-primary/50 bg-primary/5" : "border-border",
                       !isReady && "opacity-70"
                     )}
@@ -240,25 +247,74 @@ export function TaskPrCreateDialog({ jiraKey, summary, open, onOpenChange, onSuc
                     {isReady && (
                       <div className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
                         <span aria-hidden="true">→</span>
-                        <Select
-                          value={targets[item.branchId] ?? item.target}
-                          onValueChange={(v) => setTargets((t) => ({ ...t, [item.branchId]: v }))}
+                        <button
+                          type="button"
+                          aria-label={`Nhánh đích của ${item.repo}`}
+                          aria-expanded={openTarget === item.branchId}
                           disabled={createMutation.isPending}
+                          onClick={() => {
+                            setTargetQ("");
+                            setOpenTarget((cur) => (cur === item.branchId ? null : item.branchId));
+                          }}
+                          className="flex h-7 w-40 cursor-pointer items-center justify-between gap-1 rounded-md border border-input px-2 font-mono text-xs text-foreground transition-colors duration-150 hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          <SelectTrigger
-                            aria-label={`Nhánh đích của ${item.repo}`}
-                            className="h-7 w-40 cursor-pointer font-mono text-xs"
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {item.targetOptions.map((name) => (
-                              <SelectItem key={name} value={name} className="font-mono text-xs">
+                          <span className="truncate">{targets[item.branchId] ?? item.target}</span>
+                          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        </button>
+                      </div>
+                    )}
+                    {isReady && openTarget === item.branchId && (
+                      <div className="basis-full rounded-md border border-border bg-popover">
+                        <div className="relative border-b border-border p-1.5">
+                          <Search className="pointer-events-none absolute left-3.5 top-3.5 h-3 w-3 text-muted-foreground" aria-hidden="true" />
+                          <Input
+                            autoFocus
+                            value={targetQ}
+                            onChange={(e) => setTargetQ(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") {
+                                e.stopPropagation();
+                                setOpenTarget(null);
+                              } else if (e.key === "Enter" && targetQ.trim()) {
+                                e.preventDefault();
+                                const first = item.targetOptions.find((n) =>
+                                  n.toLowerCase().includes(targetQ.trim().toLowerCase())
+                                );
+                                pickTarget(item.branchId, first ?? targetQ.trim());
+                              }
+                            }}
+                            placeholder={`Tìm nhánh đích trong ${item.repo.split("/").pop()}`}
+                            className="h-7 pl-6 text-xs"
+                          />
+                        </div>
+                        <ul role="listbox" className="max-h-40 overflow-y-auto py-1">
+                          {item.targetOptions
+                            .filter((n) => n.toLowerCase().includes(targetQ.trim().toLowerCase()))
+                            .map((name) => (
+                              <li
+                                key={name}
+                                role="option"
+                                aria-selected={name === (targets[item.branchId] ?? item.target)}
+                                onClick={() => pickTarget(item.branchId, name)}
+                                className={cn(
+                                  "cursor-pointer truncate px-2.5 py-1 font-mono text-xs transition-colors duration-150 hover:bg-accent",
+                                  name === (targets[item.branchId] ?? item.target) && "font-semibold text-primary"
+                                )}
+                              >
                                 {name}
-                              </SelectItem>
+                              </li>
                             ))}
-                          </SelectContent>
-                        </Select>
+                          {targetQ.trim() && !item.targetOptions.includes(targetQ.trim()) && (
+                            <li
+                              role="option"
+                              aria-selected={false}
+                              onClick={() => pickTarget(item.branchId, targetQ.trim())}
+                              className="cursor-pointer truncate px-2.5 py-1 text-xs text-muted-foreground transition-colors duration-150 hover:bg-accent"
+                            >
+                              Dùng &quot;<span className="font-mono">{targetQ.trim()}</span>&quot;
+                            </li>
+                          )}
+                        </ul>
                       </div>
                     )}
                   </li>
