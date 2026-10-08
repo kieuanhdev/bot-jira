@@ -235,7 +235,7 @@ export function NotificationsClient() {
   const hasActiveFilters = selectedType !== "all" || severityFilter !== "all" || !!searchQuery;
 
   return (
-    <div className="container max-w-5xl py-6 px-4 sm:px-6 space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       {/* Page Header */}
       <PageHeader
         icon={Bell}
