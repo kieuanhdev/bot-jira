@@ -6,7 +6,7 @@ import { scopeProjectItems } from "@/lib/project-scope-client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { api } from "@/lib/api-client";
-import { useIssues, fetchIssuesPage, type IssueItem } from "@/hooks/use-issues";
+import { useIssues, useMoreIssues, type IssueItem } from "@/hooks/use-issues";
 import { issuesKeys, boardKeys, bulkKeys, meKeys, staleKeys } from "@/lib/query-keys";
 import { PageHeader } from "@/components/shared/page-header";
 import { type IssueFilters, DEFAULT_BULK_FILTERS } from "@/lib/issues/issue-filters";
@@ -88,49 +88,23 @@ export function BulkClient() {
 
   // Project scope (MANDATORY)
   const [filterProject, setFilterProject] = useState(initialProjectFromUrl);
-  const [extraIssues, setExtraIssues] = useState<IssueItem[]>([]);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-
   // Load issues from cache directly scoped to the selected project
-  const { data, isLoading, isFetching } = useIssues(
-    {
-      project: filterProject,
-      includeDone: true,
-      limit: 1000,
-      assignee: "all",
-    },
-    { enabled: Boolean(filterProject) }
+  const bulkFilters = { project: filterProject, includeDone: true, limit: 1000, assignee: "all" };
+  const { data, isLoading, isFetching } = useIssues(bulkFilters, { enabled: Boolean(filterProject) });
+  const firstPage = data && "items" in data ? data : null;
+  const {
+    items: extraIssues,
+    loading: isLoadingMore,
+    loadMore: handleLoadMore,
+  } = useMoreIssues(bulkFilters, firstPage);
+
+  const issues: IssueItem[] = useMemo(
+    () => (firstPage ? [...firstPage.items, ...extraIssues] : extraIssues),
+    [firstPage, extraIssues]
   );
 
-  const issues: IssueItem[] = useMemo(() => {
-    const baseItems = data && "items" in data ? data.items : [];
-    if (extraIssues.length === 0) return baseItems;
-    const seen = new Set(baseItems.map((i) => i.jiraKey));
-    const uniqueExtra = extraIssues.filter((i) => !seen.has(i.jiraKey));
-    return [...baseItems, ...uniqueExtra];
-  }, [data, extraIssues]);
-
-  const totalServerIssues = data && "total" in data ? data.total : issues.length;
+  const totalServerIssues = firstPage ? firstPage.total : issues.length;
   const isIssuesLoading = isLoading || (Boolean(filterProject) && isFetching && issues.length === 0);
-
-  async function handleLoadMore() {
-    if (!filterProject || isLoadingMore || issues.length >= totalServerIssues) return;
-    setIsLoadingMore(true);
-    try {
-      const nextPage = await fetchIssuesPage(
-        { project: filterProject, includeDone: true, assignee: "all" },
-        issues.length,
-        1000
-      );
-      if (nextPage && "items" in nextPage && Array.isArray(nextPage.items)) {
-        setExtraIssues((prev) => [...prev, ...nextPage.items]);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }
 
   // Load distinct filter options for the project from server
   const { data: filtersData } = useQuery({
@@ -181,7 +155,6 @@ export function BulkClient() {
 
     if (pick) {
       setFilterProject(pick);
-      setExtraIssues([]);
     }
   }
 
@@ -224,7 +197,6 @@ export function BulkClient() {
       const proj = searchParams?.get("project")?.trim().toUpperCase() || initialKeys[0]?.split("-")[0];
       if (proj && proj !== filterProject) {
         setFilterProject(proj);
-        setExtraIssues([]);
       }
     }
   }
@@ -376,7 +348,6 @@ export function BulkClient() {
   // Reset when changing project
   function handleProjectChange(newProject: string) {
     setFilterProject(newProject);
-    setExtraIssues([]);
     setSelected(new Set());
     setTaskFilters(DEFAULT_BULK_FILTERS);
     setFilterOnlySelected(false);

@@ -112,6 +112,9 @@ model IssueCache {
   @@index([epicKey])
   @@index([lastSyncedAt])
   @@index([projectKey, deletedAt, updatedAt])
+  // Trigram indexes so the board's case-insensitive substring search (summary / key) avoids seq scans.
+  @@index([summary(ops: raw("gin_trgm_ops"))], type: Gin, map: "IssueCache_summary_trgm_idx")
+  @@index([jiraKey(ops: raw("gin_trgm_ops"))], type: Gin, map: "IssueCache_jiraKey_trgm_idx")
 }
 
 model CommentCache {

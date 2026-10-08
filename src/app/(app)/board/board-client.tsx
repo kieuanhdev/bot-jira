@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import {
   useIssues,
-  fetchIssuesPage,
+  useMoreIssues,
   type IssueItem,
   type IssueSuccessResponse,
 } from "@/hooks/use-issues";
@@ -43,6 +43,7 @@ import {
   type SortMode,
   type ViewMode,
 } from "./lib/board-types";
+import { patchIssueLists } from "./lib/board-optimistic";
 import { sortIssues, columnKeyForIssue } from "./lib/board-utils";
 import { HiddenColumnsBanner, StaleSyncBanner } from "./board-banners";
 import { BoardNoProjectsState } from "./board-empty-projects";
@@ -462,34 +463,14 @@ export function BoardClient() {
     quickFilter,
     assignee: isAssigneeAll ? "ALL" : [...activeAssignees].sort(),
   });
-  const [extraPages, setExtraPages] = useState<{ sig: string; items: IssueItem[] }>({ sig: "", items: [] });
-  const [loadingMore, setLoadingMore] = useState(false);
-  const loadedTotal = issueData?.total ?? 0;
-
-  const extraIssues = useMemo(
-    () => (extraPages.sig === filterSig ? extraPages.items : []),
-    [extraPages, filterSig]
-  );
-  const firstPageCount = issueData?.items.length ?? 0;
-  const hasMore = firstPageCount + extraIssues.length < loadedTotal;
-
-  async function loadMore() {
-    if (!hasMore || loadingMore) return;
-    setLoadingMore(true);
-    const sig = filterSig;
-    try {
-      const offset = firstPageCount + extraIssues.length;
-      const page = await fetchIssuesPage(boardFilters, offset, 1000);
-      setExtraPages((prev) => {
-        const base = prev.sig === sig ? prev.items : [];
-        return { sig, items: [...base, ...page.items] };
-      });
-    } catch (e) {
-      setToast(`Couldn't load more tasks: ${(e as Error).message.slice(0, 80)}`);
-    } finally {
-      setLoadingMore(false);
-    }
-  }
+  const {
+    items: extraIssues,
+    hasMore,
+    loading: loadingMore,
+    loadMore,
+  } = useMoreIssues(boardFilters, issueData, {
+    onError: (e) => setToast(`Couldn't load more tasks: ${e.message.slice(0, 80)}`),
+  });
 
   const issues: IssueItem[] = useMemo(
     () => (issueData ? [...issueData.items, ...extraIssues] : [...extraIssues]),
@@ -497,15 +478,10 @@ export function BoardClient() {
   );
 
   const handleOptimisticIssueUpdate = useCallback((patch: Partial<IssueItem> & { jiraKey: string }) => {
-    setExtraPages((prev) => {
-      if (!prev.items.some((it) => it.jiraKey === patch.jiraKey)) return prev;
-      return {
-        ...prev,
-        items: prev.items.map((it) => (it.jiraKey === patch.jiraKey ? { ...it, ...patch } : it)),
-      };
-    });
+    // Every loaded page lives in the query cache, so one merge covers first and extra pages.
+    patchIssueLists(qc, new Map([[patch.jiraKey, patch]]));
     setQuickPanel((prev) => (prev && prev.jiraKey === patch.jiraKey ? { ...prev, ...patch } : prev));
-  }, []);
+  }, [qc]);
 
   const { boardSync, isCurrentProjectSyncing, syncJira } = useJiraSync(selectedProject, setToast);
 
