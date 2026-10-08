@@ -54,6 +54,7 @@ async function main() {
   }
   const unscanned = [...allRepos].filter((r) => !bitbucketRepoList.map((x) => x.toLowerCase()).includes(r.toLowerCase()));
   console.log(`Repos readable by some account but not in BITBUCKET_REPOS (scanned only via auto-discovery): ${unscanned.length}`);
+  if (unscanned.length > 0) console.log("  ->", unscanned.sort().join(", "));
 
   // 3. what the branch scan last did
   const cur = await prisma.integrationCursor.findFirst({ where: { integration: "bitbucket", scope: "branches" } });
