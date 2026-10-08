@@ -505,6 +505,27 @@ export function BoardClient() {
   const labelOptions = optData?.labels ?? [];
   const personOptions = (values: string[] | undefined) => (values ?? []).map((value) => ({ value, label: optData?.displayNames?.[value] ? `${optData.displayNames[value]} (${value})` : value }));
 
+  // Approver/tester lists only hold people already set on some issue, so pick from everyone on the project.
+  const listOptions = useMemo(() => {
+    const everyone = [
+      ...new Set([
+        ...(optData?.assignees ?? []),
+        ...(optData?.reporters ?? []),
+        ...(optData?.approvers ?? []),
+        ...(optData?.testers ?? []),
+      ]),
+    ].sort((a, b) => a.localeCompare(b));
+    return {
+      statuses: optData?.statuses ?? [],
+      assignees: everyone,
+      types: optData?.types ?? [],
+      epics: optData?.epics ?? [],
+      reporters: everyone,
+      approvers: everyone,
+      testers: everyone,
+    };
+  }, [optData]);
+
   const { data: peopleFieldData } = useQuery({
     queryKey: ["projects", selectedProject, "people-fields"],
     enabled: Boolean(selectedProject),
@@ -904,15 +925,7 @@ export function BoardClient() {
         <BoardListView
           issues={issues}
           hiddenTableCols={effectiveHiddenTableCols}
-          options={{
-            statuses: optData?.statuses ?? [],
-            assignees,
-            types: optData?.types ?? [],
-            epics: optData?.epics ?? [],
-            reporters: optData?.reporters ?? [],
-            approvers: optData?.approvers ?? [],
-            testers: optData?.testers ?? [],
-          }}
+          options={listOptions}
           statusOverrides={optimistic}
           onEdits={(targets, api, itemFor) => void handleEdits(targets, api, itemFor)}
           onTransition={(issue, id, to) => void handleInlineTransition(issue, id, to)}

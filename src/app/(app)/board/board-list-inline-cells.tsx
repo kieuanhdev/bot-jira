@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { issuesKeys, transitionsKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,41 @@ function CellTrigger({ children, label }: { children: ReactNode; label: string }
     </DropdownMenuTrigger>
   );
 }
+
+/** Search box for long menus; swallows keys so Radix typeahead doesn't steal them. */
+function MenuSearch({
+  value,
+  onChange,
+  inputRef,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  // Radix focuses the menu itself on open; take focus back once it has.
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [inputRef]);
+  return (
+    <div className="sticky top-0 z-10 -mx-1 -mt-1 mb-1 flex items-center gap-1.5 border-b bg-popover px-2 py-1.5">
+      <Search aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key !== "Escape") e.stopPropagation();
+        }}
+        placeholder="Tìm kiếm…"
+        aria-label="Tìm kiếm"
+        className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+      />
+    </div>
+  );
+}
+
+const norm = (v: string) => v.toLowerCase();
 
 function MenuLoading() {
   return (
@@ -106,12 +141,20 @@ export function SelectCell({
   clearLabel?: string;
   display?: ReactNode;
 }) {
-  const list = value && !options.includes(value) ? [value, ...options] : options;
+  const [q, setQ] = useState("");
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const all = value && !options.includes(value) ? [value, ...options] : options;
+  const searchable = all.length > 7;
+  const list = q ? all.filter((o) => norm(o).includes(norm(q))) : all;
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(o) => !o && setQ("")}>
       <CellTrigger label={label}>{display ?? value ?? "—"}</CellTrigger>
-      <DropdownMenuContent align="start" className="max-h-64 w-56 overflow-y-auto">
-        {clearLabel && (
+      <DropdownMenuContent
+        align="start"
+        className="max-h-64 w-56 overflow-y-auto"
+      >
+        {searchable && <MenuSearch value={q} onChange={setQ} inputRef={searchRef} />}
+        {clearLabel && !q && (
           <>
             <DropdownMenuItem className="text-xs" onClick={() => onChange(null)}>
               {clearLabel}
@@ -120,7 +163,9 @@ export function SelectCell({
           </>
         )}
         {list.length === 0 && (
-          <div className="px-2 py-1.5 text-xs text-muted-foreground">Chưa có lựa chọn</div>
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">
+            {q ? "Không tìm thấy" : "Chưa có lựa chọn"}
+          </div>
         )}
         {list.map((o) => (
           <DropdownMenuItem
@@ -231,23 +276,36 @@ export function FixVersionCell({
   display?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const searchRef = useRef<HTMLInputElement | null>(null);
   const { data, isLoading, isError } = useQuery({
     queryKey: issuesKeys.versions(jiraKey),
     queryFn: () => api<{ items: { id: string; name: string }[] }>(`/api/issues/${jiraKey}/versions`),
     enabled: open,
     staleTime: 60_000,
   });
-  const items = data?.items ?? [];
+  const allItems = data?.items ?? [];
+  const items = q ? allItems.filter((v) => norm(v.name).includes(norm(q))) : allItems;
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setQ("");
+      }}
+    >
       <CellTrigger label={`Đổi phiên bản ${jiraKey}`}>{display ?? (names.join(", ") || "—")}</CellTrigger>
-      <DropdownMenuContent align="start" className="max-h-64 w-60 overflow-y-auto">
+      <DropdownMenuContent
+        align="start"
+        className="max-h-64 w-60 overflow-y-auto"
+      >
+        <MenuSearch value={q} onChange={setQ} inputRef={searchRef} />
         {isLoading ? (
           <MenuLoading />
         ) : isError ? (
           <div className="px-2 py-1.5 text-xs text-destructive">Không tải được phiên bản</div>
         ) : items.length === 0 ? (
-          <div className="px-2 py-1.5 text-xs text-muted-foreground">Dự án chưa có phiên bản</div>
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">{q ? "Không tìm thấy" : "Dự án chưa có phiên bản"}</div>
         ) : (
           items.map((v) => (
             <DropdownMenuCheckboxItem
