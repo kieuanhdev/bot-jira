@@ -126,13 +126,29 @@ export function isDestinationAllowed(
   return false;
 }
 
-/** Check if a branch has been merged into an allowed destination branch. */
+/** True when the PR title or branch name carries the Jira key (e.g. "ECM-396"). */
+export function mentionsTaskKey(b: BranchDeliveryInfo, jiraKey?: string): boolean {
+  if (!jiraKey) return false;
+  const re = new RegExp(`(^|[^A-Za-z0-9])${jiraKey}(?![0-9])`, "i");
+  return re.test(b.prTitle ?? "") || re.test(b.branch ?? "");
+}
+
+/**
+ * Check if a branch has been merged into an allowed destination branch.
+ *
+ * Teams often merge a task's work into whichever branch they use, so a merged PR
+ * whose title (or branch name) carries the task key counts as delivered no matter
+ * where it was merged. The destination allow-list only applies to merged PRs that
+ * do not mention the task.
+ */
 export function isBranchMerged(
   b: BranchDeliveryInfo,
-  allowedDestinations?: string[]
+  allowedDestinations?: string[],
+  jiraKey?: string
 ): boolean {
   const isMerged = Boolean(b.merged) || (b.prState || "").toUpperCase() === "MERGED";
   if (!isMerged) return false;
+  if (mentionsTaskKey(b, jiraKey)) return true;
   if (
     allowedDestinations &&
     allowedDestinations.length > 0 &&
@@ -217,7 +233,7 @@ export function evaluateTaskReadiness(
         }
         gitComplete = false;
       } else {
-        const mergedBranches = confirmedBranches.filter((b) => isBranchMerged(b, allowedDestinations));
+        const mergedBranches = confirmedBranches.filter((b) => isBranchMerged(b, allowedDestinations, task.jiraKey));
         const openPrBranches = confirmedBranches.filter((b) => (b.prState || "").toUpperCase() === "OPEN");
 
         if (openPrBranches.length > 0) {

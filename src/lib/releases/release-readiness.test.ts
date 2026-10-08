@@ -166,30 +166,53 @@ describe("release-readiness", () => {
       expect(res.blockers[0].code).toBe("PR_NOT_MERGED");
     });
 
-    it("blocks if PR is merged into wrong destination branch", () => {
-      const res = evaluateTaskReadiness(
-        {
-          jiraKey: "EPM-109",
-          summary: "Feature merge",
-          status: "Done",
-          statusCategory: "done",
-          branches: [
-            {
-              repo: "api-service",
-              branch: "feature/EPM-109",
-              linkState: "confirmed",
-              prId: 44,
-              prUrl: "https://bitbucket.org/team/repo/pull-requests/44",
-              prState: "MERGED",
-              prDestinationBranch: "dev-feature-branch",
-              merged: true,
-            },
-          ],
-        },
+    const mergedElsewhere = (over: Record<string, unknown> = {}) => ({
+      repo: "api-service",
+      branch: "feature/login-rework",
+      linkState: "confirmed",
+      prId: 44,
+      prTitle: "Login rework",
+      prUrl: "https://bitbucket.org/team/repo/pull-requests/44",
+      prState: "MERGED",
+      prDestinationBranch: "dev-feature-branch",
+      merged: true,
+      ...over,
+    });
+    const evalWith = (branch: ReturnType<typeof mergedElsewhere>) =>
+      evaluateTaskReadiness(
+        { jiraKey: "EPM-109", summary: "Feature merge", status: "Done", statusCategory: "done", branches: [branch] },
         { allowedDestinations: ["main", "master"] }
       );
+
+    it("blocks a merged PR into an unlisted branch when nothing ties it to the task key", () => {
+      const res = evalWith(mergedElsewhere());
       expect(res.gitComplete).toBe(false);
       expect(res.blockers[0].code).toBe("WRONG_MERGE_DESTINATION");
+    });
+
+    it("accepts a merged PR into any branch when the PR title carries the task key", () => {
+      const res = evalWith(mergedElsewhere({ prTitle: "EPM-109: login rework" }));
+      expect(res.gitComplete).toBe(true);
+      expect(res.blockers).toHaveLength(0);
+    });
+
+    it("accepts a merged PR into any branch when the branch name carries the task key", () => {
+      const res = evalWith(mergedElsewhere({ branch: "feat/EPM-109" }));
+      expect(res.gitComplete).toBe(true);
+      expect(res.blockers).toHaveLength(0);
+    });
+
+    it("does not confuse EPM-1090 with EPM-109", () => {
+      const res = evalWith(mergedElsewhere({ prTitle: "EPM-1090 other work" }));
+      expect(res.blockers[0]?.code).toBe("WRONG_MERGE_DESTINATION");
+    });
+
+    it("still blocks an OPEN PR even if its title carries the key", () => {
+      const res = evalWith(
+        mergedElsewhere({ prTitle: "EPM-109 wip", prState: "OPEN", merged: false })
+      );
+      expect(res.gitComplete).toBe(false);
+      expect(res.blockers[0].code).toBe("PR_NOT_MERGED");
     });
 
     it("blocks if git data is stale or unavailable for code task", () => {

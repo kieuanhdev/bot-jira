@@ -404,6 +404,13 @@ export function QuickPanelFields({
                 >
                   <div className="flex items-center gap-2 truncate min-w-0">
                     <GitBranch className="h-3.5 w-3.5 text-primary shrink-0" />
+                    {/* Submodule-style projects reuse one branch name across many repos. */}
+                    <span
+                      className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                      title={b.repo}
+                    >
+                      {b.repo.split("/").pop()}
+                    </span>
                     {branchUrl ? (
                       <a
                         href={branchUrl}
