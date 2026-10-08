@@ -408,11 +408,19 @@ export function BoardClient() {
   const width = useBoardWidth();
   const effectiveView: ViewMode = width === "narrow" ? "list" : view;
 
+  // Debounce free-text search so each keystroke doesn't fire a 1000-row query.
+  const [debouncedQuery, setDebouncedQuery] = useState(filters.query);
+  useEffect(() => {
+    if (filters.query === debouncedQuery) return;
+    const t = setTimeout(() => setDebouncedQuery(filters.query), 300);
+    return () => clearTimeout(t);
+  }, [filters.query, debouncedQuery]);
+
   const activeAssignees = effectiveAssignees(filters.assigneeScope);
   const isAssigneeAll = activeAssignees === "ALL";
   const boardFilters: import("@/hooks/use-issues").BoardFilters = {
     ...(selectedProject ? { project: selectedProject } : {}),
-    q: filters.query || undefined,
+    q: debouncedQuery || undefined,
     label: filters.labels.length > 0 ? filters.labels : undefined,
     priority: filters.priorities.length > 0 ? filters.priorities : undefined,
     status: filters.statuses.length > 0 ? filters.statuses : undefined,
@@ -439,7 +447,7 @@ export function BoardClient() {
 
   const filterSig = JSON.stringify({
     p: selectedProject,
-    q: filters.query,
+    q: debouncedQuery,
     label: [...filters.labels].sort(),
     priority: [...filters.priorities].sort(),
     status: [...filters.statuses].sort(),

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import { syncKeys, issuesKeys, boardKeys, freshnessKeys, reportsKeys } from "@/lib/query-keys";
+import { syncKeys, issuesTouchingProjects, boardKeys, freshnessKeys, reportsKeys } from "@/lib/query-keys";
 import type { ActiveJiraSyncResponse } from "@/app/api/sync/jira/active/route";
 
 export function useActiveSync(specificProject?: string) {
@@ -35,7 +35,7 @@ export function useActiveSync(specificProject?: string) {
         setJustFinished(finished);
 
         // Auto-refresh queries when sync completes
-        void qc.invalidateQueries({ queryKey: issuesKeys.all });
+        void qc.invalidateQueries({ predicate: issuesTouchingProjects(finished) });
         void qc.invalidateQueries({ queryKey: boardKeys.projects });
         void qc.invalidateQueries({ queryKey: freshnessKeys.all });
         void qc.invalidateQueries({ queryKey: reportsKeys.all });

@@ -19,6 +19,33 @@ export const issuesKeys = {
   versions: (jiraKey: string) => ["issues", jiraKey, "versions"] as const,
 };
 
+const JIRA_KEY_RE = /^[A-Z][A-Z0-9_]*-\d+$/i;
+
+/**
+ * Predicate for `invalidateQueries` that refreshes issue queries touching any of
+ * `projects` and leaves other projects' cached board lists alone. Non-list keys
+ * (single issues, filters, dependencies...) are always refreshed.
+ */
+export function issuesTouchingProjects(projects: string[]) {
+  const wanted = new Set(projects.map((p) => p.toUpperCase()));
+  return (query: { queryKey: readonly unknown[] }): boolean => {
+    const key = query.queryKey;
+    if (key[0] !== "issues") return false;
+    const qs = key[1];
+    const isList = key.length === 2 && typeof qs === "string" && !JIRA_KEY_RE.test(qs);
+    if (!isList) return true;
+    const params = new URLSearchParams(qs === "all" ? "" : qs);
+    const scoped = [
+      params.get("project"),
+      ...(params.get("projectList")?.split(",") ?? []),
+    ]
+      .map((p) => p?.trim().toUpperCase())
+      .filter(Boolean) as string[];
+    // No project in the query means "all of the user's projects".
+    return scoped.length === 0 || scoped.some((p) => wanted.has(p));
+  };
+}
+
 export const notificationsKeys = {
   all: ["notifications"] as const,
   unreadCount: ["notifications", "unread-count"] as const,

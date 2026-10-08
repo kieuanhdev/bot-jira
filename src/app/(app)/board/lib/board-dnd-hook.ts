@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   PointerSensor,
   closestCorners,
@@ -37,6 +37,7 @@ export function useBoardDnD({
   findColumnForIssue,
   onTransition,
 }: BoardDnDOptions) {
+  const issueByKey = useMemo(() => new Map(issues.map((i) => [i.jiraKey, i])), [issues]);
   const [activeDrag, setActiveDrag] = useState<IssueItem | null>(null);
   const activeDragKeyRef = useRef<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState(false);
@@ -49,7 +50,7 @@ export function useBoardDnD({
   );
 
   function onDragStart(key: string) {
-    const issue = issues.find((item) => item.jiraKey === key) ?? null;
+    const issue = issueByKey.get(key) ?? null;
     activeDragKeyRef.current = issue?.jiraKey ?? null;
     setActiveDrag(issue);
     setAllowedCols(null);
@@ -69,7 +70,7 @@ export function useBoardDnD({
   function onDragOver(event: DragOverEvent) {
     const activeId = String(event.active.id);
     const activeKey = activeId.replace(/^card:/, "");
-    const source = issues.find((i) => i.jiraKey === activeKey);
+    const source = issueByKey.get(activeKey);
     if (!source) {
       setAllowedCols(null);
       return;
@@ -91,7 +92,7 @@ export function useBoardDnD({
     if (!over) return;
     const key = String(active.id);
     const targetColumn = String(over.id);
-    const source = issues.find((i) => i.jiraKey === key);
+    const source = issueByKey.get(key);
     if (!source) return;
     const currentCol = findColumnForIssue(source);
     if (currentCol === targetColumn) return;
@@ -107,7 +108,7 @@ export function useBoardDnD({
   function collisionDetection(args: Parameters<CollisionDetection>[0]): ReturnType<CollisionDetection> {
     const ranked = closestCorners(args);
     const activeKey = String(args.active.id).replace(/^card:/, "");
-    const source = issues.find((i) => i.jiraKey === activeKey);
+    const source = issueByKey.get(activeKey);
     if (!source) return [];
     const currentCol = findColumnForIssue(source);
     const all = transitionCache.current.get(activeKey);

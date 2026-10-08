@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import type { IssueItem } from "@/hooks/use-issues";
-import { issuesKeys, boardKeys, freshnessKeys } from "@/lib/query-keys";
+import { issuesTouchingProjects, boardKeys, freshnessKeys } from "@/lib/query-keys";
 import type { BoardWidth } from "@/lib/status-groups";
 import type { BoardColumn } from "./board-columns";
 import { loadStoredColumnPreferences, saveStoredColumnPreferences } from "./board-storage";
@@ -110,7 +110,7 @@ export function useJiraSync(selectedProject: string, setToast: (message: string 
         if (cancelled) return;
 
         if (res.state === "succeeded") {
-          void qc.invalidateQueries({ queryKey: issuesKeys.all });
+          void qc.invalidateQueries({ predicate: issuesTouchingProjects([projectKey]) });
           void qc.invalidateQueries({ queryKey: boardKeys.projects });
           void qc.invalidateQueries({ queryKey: freshnessKeys.all });
           setToast(`Đã đồng bộ ${projectKey}.`);
