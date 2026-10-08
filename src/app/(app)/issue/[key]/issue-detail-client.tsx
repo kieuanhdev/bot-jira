@@ -20,7 +20,7 @@ import { transitionsKeys, branchesForKeys, meKeys, issuesKeys } from "@/lib/quer
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { formatDateTime, timeAgo, getJiraIssueUrl, getBitbucketBranchUrl } from "@/lib/utils";
+import { formatDateTime, timeAgo, getJiraIssueUrl, getBitbucketBranchUrl, safeRandomUUID } from "@/lib/utils";
 import { wikiToHtml } from "@/lib/wiki";
 import { formatJiraDuration, isSafeReturnUrl } from "@/lib/worklogs/schema";
 import { IssueDependencies } from "@/components/issue-dependencies";
@@ -66,7 +66,7 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
   const [logComment, setLogComment] = useState("");
   const [submittingWorklog, setSubmittingWorklog] = useState(false);
   const [worklogError, setWorklogError] = useState<string | null>(null);
-  const [worklogIdempotencyKey, setWorklogIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [worklogIdempotencyKey, setWorklogIdempotencyKey] = useState(() => safeRandomUUID());
 
   const projectKey = issue.jiraKey.split("-")[0];
 
@@ -116,6 +116,11 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
 
   const jiraBaseUrl = me?.jiraBaseUrl ?? "";
   const bitbucketBaseUrl = branches?.bitbucketBaseUrl || me?.bitbucketBaseUrl || "";
+
+  const fallbackVersions = (issue.releaseTasks ?? [])
+    .map((rt) => rt.release?.version)
+    .filter(Boolean) as string[];
+  const versionsList = issue.fixVersions ?? fallbackVersions;
 
   async function refreshIssue() {
     const fresh = await api<{ issue: IssueDetail }>(`/api/issues/${issue.jiraKey}`);
@@ -200,7 +205,7 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
       setLogWorkOpen(false);
       setLogTimeSpent("");
       setLogComment("");
-      setWorklogIdempotencyKey(crypto.randomUUID());
+      setWorklogIdempotencyKey(safeRandomUUID());
 
       if (returnToParam && isSafeReturnUrl(returnToParam)) {
         router.push(returnToParam);
@@ -388,11 +393,11 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
       />
 
       <IssueDetailVersionsLabels
-        fixVersions={issue.fixVersions ?? issue.releaseTasks.map((rt) => rt.release.version)}
+        fixVersions={versionsList}
         projectVersions={projectVersions?.items ?? []}
         onAddVersion={handleAddVersion}
         onRemoveVersion={handleRemoveVersion}
-        labels={issue.labels}
+        labels={issue.labels ?? []}
         onAddLabel={handleAddLabel}
         onRemoveLabel={handleRemoveLabel}
       />
@@ -407,7 +412,7 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
         <TabsList>
           <TabsTrigger value="detail">Chi tiết</TabsTrigger>
           <TabsTrigger value="dependencies">Phụ thuộc</TabsTrigger>
-          <TabsTrigger value="comments">Bình luận ({issue.comments.length})</TabsTrigger>
+          <TabsTrigger value="comments">Bình luận ({(issue.comments ?? []).length})</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
           <TabsTrigger value="branches">Nhánh</TabsTrigger>
         </TabsList>
@@ -451,16 +456,16 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
 
           <IssueDependencies
             jiraKey={issue.jiraKey}
-            rootProjectKey={issue.jiraKey.split("-")[0]}
-            rootFixVersionNames={issue.releaseTasks.map((rt) => rt.release.version)}
+            rootProjectKey={projectKey}
+            rootFixVersionNames={versionsList}
           />
         </TabsContent>
 
         <TabsContent value="dependencies">
           <IssueDependencies
             jiraKey={issue.jiraKey}
-            rootProjectKey={issue.jiraKey.split("-")[0]}
-            rootFixVersionNames={issue.releaseTasks.map((rt) => rt.release.version)}
+            rootProjectKey={projectKey}
+            rootFixVersionNames={versionsList}
           />
         </TabsContent>
 

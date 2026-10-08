@@ -45,3 +45,18 @@ describe("getBitbucketBranchUrl", () => {
     expect(getBitbucketBranchUrl("PROJ/my-repo", "feature/abc", null, null)).toBeNull();
   });
 });
+
+describe("safeRandomUUID", () => {
+  it("generates a valid UUID v4 format string", async () => {
+    const { safeRandomUUID } = await import("./utils");
+    const uuid = safeRandomUUID();
+    expect(uuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  });
+
+  it("generates unique values on subsequent calls", async () => {
+    const { safeRandomUUID } = await import("./utils");
+    const u1 = safeRandomUUID();
+    const u2 = safeRandomUUID();
+    expect(u1).not.toBe(u2);
+  });
+});

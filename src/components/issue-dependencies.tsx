@@ -139,7 +139,7 @@ export function IssueDependencies({
               const isOtherProject = dep.projectKey && dep.projectKey !== currentProject;
               const isMissingVersion =
                 rootFixVersionNames.length > 0 &&
-                !dep.fixVersionNames.some((v) => rootFixVersionNames.includes(v));
+                !dep.fixVersionNames?.some((v) => rootFixVersionNames.includes(v));
 
               return (
                 <div
@@ -197,7 +197,7 @@ export function IssueDependencies({
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2 sm:self-center">
-                    {dep.fixVersionNames.length > 0 ? (
+                    {dep.fixVersionNames && dep.fixVersionNames.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
                         {dep.fixVersionNames.map((v) => (
                           <Badge key={v} variant="outline" className="text-xs font-mono">

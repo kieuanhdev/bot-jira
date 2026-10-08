@@ -70,3 +70,18 @@ export function getBitbucketBranchUrl(
   }
   return `${base}/projects/${encodeURIComponent(repo)}/repos/${encodeURIComponent(repo)}/browse?at=refs%2Fheads%2F${encodeURIComponent(branch)}`;
 }
+
+/**
+ * Browser-safe UUID generator that works in insecure contexts (such as HTTP on a LAN IP).
+ * Native `crypto.randomUUID` is only available in Secure Contexts (HTTPS/localhost).
+ */
+export function safeRandomUUID(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}

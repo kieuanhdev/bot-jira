@@ -43,7 +43,7 @@ export function IssueDetailHeader({
   onToggleWatch,
   onTransition,
 }: IssueDetailHeaderProps) {
-  const stale = issue.staleSnapshots[0];
+  const stale = issue.staleSnapshots?.[0];
 
   return (
     <div className="flex items-start justify-between gap-4">
@@ -73,7 +73,7 @@ export function IssueDetailHeader({
           )}
           {stale && (
             <Badge variant={stale.severity === "high" ? "danger" : stale.severity === "info" ? "info" : "warning"}>
-              {stale.staleReason.replace(/_/g, " ")} · {stale.stateAgeDays} ngày
+              {(stale.staleReason ? stale.staleReason.replace(/_/g, " ") : "stale")} · {stale.stateAgeDays ?? 0} ngày
             </Badge>
           )}
         </div>
