@@ -1,6 +1,7 @@
 import { projectBoardIds, boardBacklogColumns, projectColumns } from "@/lib/env";
 import type { JiraBoard, JiraBoardConfiguration } from "./types";
 import { JiraRequestError } from "./client";
+import { createBoardCachePolicy } from "./board-cache-policy";
 
 export type CategoryKey = "new" | "indeterminate" | "done";
 
@@ -138,22 +139,17 @@ export function isBacklogColumn(
   return false;
 }
 
-type CacheEntry = {
-  data: ResolvedBoardConfig;
-  expiresAt: number;
-  staleUntil: number;
-};
-
-const boardConfigCache = new Map<string, CacheEntry>();
-const inFlightRequests = new Map<string, Promise<ResolvedBoardConfig>>();
-
 const SUCCESS_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const FAILURE_TTL_MS = 1 * 60 * 1000; // 1 minute
 const STALE_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
 
+const boardConfigCache = createBoardCachePolicy<ResolvedBoardConfig>({
+  freshForMs: SUCCESS_TTL_MS,
+  staleForMs: STALE_WINDOW_MS,
+});
+
 export function clearBoardConfigCache(): void {
   boardConfigCache.clear();
-  inFlightRequests.clear();
 }
 
 /**
@@ -322,13 +318,15 @@ export async function resolveProjectBoardConfig(
     : `jira-board-config:${userScope}:selection:${cleanKey}`;
   const now = Date.now();
 
-  const cached = boardConfigCache.get(cacheKey);
-  if (cached && now < cached.expiresAt) {
-    return cached.data;
+  const cacheRead = boardConfigCache.read(cacheKey, now);
+  const cached = cacheRead.entry;
+  if (cacheRead.state === "fresh") {
+    return cacheRead.entry.data;
   }
 
-  if (inFlightRequests.has(cacheKey)) {
-    return inFlightRequests.get(cacheKey)!;
+  const inFlight = boardConfigCache.getInFlight(cacheKey);
+  if (inFlight) {
+    return inFlight;
   }
 
   async function runFetch(): Promise<ResolvedBoardConfig> {
@@ -359,10 +357,9 @@ export async function resolveProjectBoardConfig(
           reason = "board_not_found";
         }
         const fallback = buildFallbackConfig(cleanKey, workflowStates, reason);
-        boardConfigCache.set(cacheKey, {
-          data: fallback,
-          expiresAt: now + FAILURE_TTL_MS,
-          staleUntil: now + STALE_WINDOW_MS,
+        boardConfigCache.write(cacheKey, fallback, {
+          freshForMs: FAILURE_TTL_MS,
+          now,
         });
         return fallback;
       }
@@ -433,11 +430,7 @@ export async function resolveProjectBoardConfig(
         statusCategoryMap: Object.fromEntries(rawCategory),
       };
 
-      boardConfigCache.set(cacheKey, {
-        data: result,
-        expiresAt: now + SUCCESS_TTL_MS,
-        staleUntil: now + STALE_WINDOW_MS,
-      });
+      boardConfigCache.write(cacheKey, result, { now });
 
       return result;
     }
@@ -462,10 +455,9 @@ export async function resolveProjectBoardConfig(
         const boards = await client.getBoardsForProject(cleanKey);
         if (!boards || boards.length === 0) {
           const fallback = buildFallbackConfig(cleanKey, workflowStates, "no_boards_found");
-          boardConfigCache.set(cacheKey, {
-            data: fallback,
-            expiresAt: now + FAILURE_TTL_MS,
-            staleUntil: now + STALE_WINDOW_MS,
+          boardConfigCache.write(cacheKey, fallback, {
+            freshForMs: FAILURE_TTL_MS,
+            now,
           });
           return fallback;
         }
@@ -488,10 +480,9 @@ export async function resolveProjectBoardConfig(
               "board_selection_required",
               candidateBoards
             );
-            boardConfigCache.set(cacheKey, {
-              data: fallback,
-              expiresAt: now + FAILURE_TTL_MS,
-              staleUntil: now + STALE_WINDOW_MS,
+            boardConfigCache.write(cacheKey, fallback, {
+              freshForMs: FAILURE_TTL_MS,
+              now,
             });
             return fallback;
           }
@@ -568,13 +559,8 @@ export async function resolveProjectBoardConfig(
 
       // Populate both selection cache and board configuration cache
       const boardKey = `jira-board-config:${userScope}:board:${targetBoardId}`;
-      const entry = {
-        data: result,
-        expiresAt: now + SUCCESS_TTL_MS,
-        staleUntil: now + STALE_WINDOW_MS,
-      };
-      boardConfigCache.set(cacheKey, entry);
-      boardConfigCache.set(boardKey, entry);
+      boardConfigCache.write(cacheKey, result, { now });
+      boardConfigCache.write(boardKey, result, { now });
 
       return result;
     } catch (err: unknown) {
@@ -591,34 +577,27 @@ export async function resolveProjectBoardConfig(
       }
 
       const fallback = buildFallbackConfig(cleanKey, workflowStates, reason);
-      boardConfigCache.set(cacheKey, {
-        data: fallback,
-        expiresAt: now + FAILURE_TTL_MS,
-        staleUntil: now + STALE_WINDOW_MS,
+      boardConfigCache.write(cacheKey, fallback, {
+        freshForMs: FAILURE_TTL_MS,
+        now,
       });
       return fallback;
     }
   }
 
-  if (cached && now < cached.staleUntil) {
+  if (cacheRead.state === "stale") {
     const bgPromise = (async () => {
       try {
         return await runFetch();
       } catch {
-        return cached.data;
-      } finally {
-        inFlightRequests.delete(cacheKey);
+        return cacheRead.entry.data;
       }
     })();
-    inFlightRequests.set(cacheKey, bgPromise);
-    return { ...cached.data, stale: true };
+    boardConfigCache.track(cacheKey, bgPromise);
+    return { ...cacheRead.entry.data, stale: true };
   }
 
   const fetchPromise = runFetch();
-  inFlightRequests.set(cacheKey, fetchPromise);
-  try {
-    return await fetchPromise;
-  } finally {
-    inFlightRequests.delete(cacheKey);
-  }
+  boardConfigCache.track(cacheKey, fetchPromise);
+  return fetchPromise;
 }

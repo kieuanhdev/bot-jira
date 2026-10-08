@@ -1,6 +1,7 @@
 import { env } from "@/lib/env";
 import { JiraRequestError, type JiraClient } from "./client";
 import type { JiraBoard, JiraProject } from "./types";
+import { createBoardCachePolicy } from "./board-cache-policy";
 
 export type BoardMembership = {
   boardId: number;
@@ -13,21 +14,16 @@ export type BoardMembership = {
   truncated?: boolean;
 };
 
-type MembershipCacheEntry = {
-  data: BoardMembership;
-  expiresAt: number;
-  staleUntil: number;
-};
-
-const membershipCache = new Map<string, MembershipCacheEntry>();
-const inFlightMembership = new Map<string, Promise<BoardMembership>>();
-
 const MEMBERSHIP_TTL_MS = 2 * 60 * 1000; // 2 minutes fresh
 const STALE_WINDOW_MS = 15 * 60 * 1000; // 15 minutes stale window
 
+const membershipCache = createBoardCachePolicy<BoardMembership>({
+  freshForMs: MEMBERSHIP_TTL_MS,
+  staleForMs: STALE_WINDOW_MS,
+});
+
 export function clearBoardMembershipCache(): void {
   membershipCache.clear();
-  inFlightMembership.clear();
 }
 
 /**
@@ -236,9 +232,10 @@ export async function getBoardMembership(
   const cacheKey = `jira-board-membership:${credentialScope}:${boardId}`;
   const now = Date.now();
 
-  const cached = membershipCache.get(cacheKey);
-  if (cached && now < cached.expiresAt) {
-    return cached.data;
+  const cacheRead = membershipCache.read(cacheKey, now);
+  const cached = cacheRead.entry;
+  if (cacheRead.state === "fresh") {
+    return cacheRead.entry.data;
   }
 
   async function runFetch(): Promise<BoardMembership> {
@@ -255,41 +252,32 @@ export async function getBoardMembership(
   }
 
   // Stale-While-Revalidate: return stale cache immediately and refresh in background
-  if (cached && now < cached.staleUntil) {
-    if (!inFlightMembership.has(cacheKey)) {
+  if (cacheRead.state === "stale") {
+    if (!membershipCache.hasInFlight(cacheKey)) {
       const bgPromise = (async () => {
         try {
           const fresh = await runFetch();
-          membershipCache.set(cacheKey, {
-            data: fresh,
-            expiresAt: Date.now() + MEMBERSHIP_TTL_MS,
-            staleUntil: Date.now() + STALE_WINDOW_MS,
-          });
+          membershipCache.write(cacheKey, fresh);
         } catch (err: unknown) {
           if (err instanceof JiraRequestError && (err.status === 401 || err.status === 403)) {
             membershipCache.delete(cacheKey);
           }
-        } finally {
-          inFlightMembership.delete(cacheKey);
         }
       })();
-      inFlightMembership.set(cacheKey, bgPromise as unknown as Promise<BoardMembership>);
+      membershipCache.track(cacheKey, bgPromise);
     }
-    return { ...cached.data, stale: true };
+    return { ...cacheRead.entry.data, stale: true };
   }
 
-  if (inFlightMembership.has(cacheKey)) {
-    return inFlightMembership.get(cacheKey)!;
+  const inFlight = membershipCache.getInFlight(cacheKey);
+  if (inFlight) {
+    return inFlight;
   }
 
   const fetchPromise = (async (): Promise<BoardMembership> => {
     try {
       const result = await runFetch();
-      membershipCache.set(cacheKey, {
-        data: result,
-        expiresAt: Date.now() + MEMBERSHIP_TTL_MS,
-        staleUntil: Date.now() + STALE_WINDOW_MS,
-      });
+      membershipCache.write(cacheKey, result);
       return result;
     } catch (err: unknown) {
       if (err instanceof JiraRequestError && (err.status === 401 || err.status === 403)) {
@@ -303,10 +291,6 @@ export async function getBoardMembership(
     }
   })();
 
-  inFlightMembership.set(cacheKey, fetchPromise);
-  try {
-    return await fetchPromise;
-  } finally {
-    inFlightMembership.delete(cacheKey);
-  }
+  membershipCache.track(cacheKey, fetchPromise);
+  return fetchPromise;
 }
