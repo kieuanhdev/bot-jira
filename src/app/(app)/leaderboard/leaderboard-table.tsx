@@ -14,8 +14,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { cn } from "@/lib/utils";
 import type { LeaderboardMember } from "@/lib/leaderboard/types";
-import { getInitials } from "./lib/leaderboard-utils";
 import { RankBadge, TierIcon } from "./leaderboard-tier-icon";
+import { JiraAvatar } from "@/components/jira-avatar";
 
 interface LeaderboardTableProps {
   filteredMembers: LeaderboardMember[];
@@ -130,9 +130,12 @@ export function LeaderboardTable({
                     {/* Member Info */}
                     <td className="py-3.5 px-4 align-middle">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted font-bold text-xs ring-1 ring-border text-foreground">
-                          {getInitials(member.displayName)}
-                        </div>
+                        <JiraAvatar
+                          username={member.jiraUsername}
+                          displayName={member.displayName}
+                          size="lg"
+                          className="h-9 w-9 shrink-0 ring-1 ring-border"
+                        />
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 truncate">
                             <span className="font-semibold text-foreground text-sm truncate">

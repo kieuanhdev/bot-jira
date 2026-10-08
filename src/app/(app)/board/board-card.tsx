@@ -32,7 +32,8 @@ import {
 import type { IssueItem } from "@/hooks/use-issues";
 import { isOverdue } from "@/lib/due-date";
 import type { QuickAction } from "./lib/board-types";
-import { priorityMeta, avatarClass, initials, typeShort, daysSince } from "./lib/board-utils";
+import { priorityMeta, typeShort, daysSince } from "./lib/board-utils";
+import { JiraAvatar } from "@/components/jira-avatar";
 
 export function CardContent({
   issue,
@@ -209,28 +210,21 @@ export function CardContent({
         )}
 
         <div className="mt-2 flex items-center gap-1.5">
-          {issue.assigneeJira ? (
-            <span
-              className={cn(
-                "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
-                avatarClass(issue.assigneeJira)
-              )}
-              title={issue.assigneeJira}
-            >
-              {initials(issue.assigneeJira)}
-            </span>
-          ) : (
-            <span
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted-foreground/60"
-              title="Unassigned"
-              aria-label="Unassigned"
-            >
-              –
-            </span>
-          )}
+          <JiraAvatar username={issue.assigneeJira} size="sm" title={issue.assigneeJira ?? "Unassigned"} />
           <span className="truncate text-[11px] text-muted-foreground">{timeAgo(issue.updatedAt)}</span>
-          {[['R', issue.reporterJira], ['A', issue.approverJira], ['T', issue.testerJira]].map(([role, name]) => name ? (
-            <span key={role} className={cn("flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-semibold ring-1 ring-background", avatarClass(name))} title={`${role === 'R' ? 'Reporter' : role === 'A' ? 'Approver' : 'Tester'}: ${name}`}>{role}</span>
+          {([
+            ['R', issue.reporterJira, 'Reporter'],
+            ['A', issue.approverJira, 'Approver'],
+            ['T', issue.testerJira, 'Tester'],
+          ] as const).map(([role, name, label]) => name ? (
+            <JiraAvatar
+              key={role}
+              username={name}
+              size="xs"
+              className="ring-1 ring-background"
+              title={`${label}: ${name}`}
+              badge={role}
+            />
           ) : null)}
           {showNav && onTransition && !done && (
             <span className="ml-auto flex items-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">

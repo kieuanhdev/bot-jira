@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { LeaderboardMember } from "@/lib/leaderboard/types";
-import { getInitials } from "./lib/leaderboard-utils";
+import { JiraAvatar } from "@/components/jira-avatar";
 
 interface LeaderboardPodiumProps {
   top1: LeaderboardMember | null;
@@ -50,9 +50,12 @@ export function LeaderboardPodium({
           {top2 ? (
             <div className="flex flex-col items-center order-2 md:order-1">
               <div className="relative mb-5 flex flex-col items-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-bold text-xl ring-4 ring-slate-300 dark:ring-slate-600 shadow-md">
-                  {getInitials(top2.displayName)}
-                </div>
+                <JiraAvatar
+                  username={top2.jiraUsername}
+                  displayName={top2.displayName}
+                  size="xl"
+                  className="h-16 w-16 ring-4 ring-slate-300 dark:ring-slate-600 shadow-md text-xl"
+                />
                 <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-6.5 items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 px-2.5 text-[11px] font-bold text-slate-800 dark:text-slate-200 shadow-sm whitespace-nowrap">
                   <Zap className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400 shrink-0" aria-hidden="true" />
                   <span>TIÊN TÔN #2</span>
@@ -96,9 +99,12 @@ export function LeaderboardPodium({
           <div className="flex flex-col items-center order-1 md:order-2">
             <div className="relative mb-5 flex flex-col items-center">
               <Crown className="h-7 w-7 text-amber-500 animate-bounce mb-1" aria-hidden="true" />
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-slate-950 font-black text-2xl ring-4 ring-amber-300 dark:ring-amber-500/60 shadow-xl shadow-amber-500/25">
-                {getInitials(top1.displayName)}
-              </div>
+              <JiraAvatar
+                username={top1.jiraUsername}
+                displayName={top1.displayName}
+                size="xl"
+                className="h-20 w-20 ring-4 ring-amber-300 dark:ring-amber-500/60 shadow-xl shadow-amber-500/25 text-2xl"
+              />
               <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-7 items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-500 border border-amber-300 dark:border-amber-400 px-3 text-[11px] font-black text-slate-950 shadow-md whitespace-nowrap">
                 <Crown className="h-3.5 w-3.5 text-slate-950 shrink-0" aria-hidden="true" />
                 <span>ĐẠO TỔ #1</span>
@@ -138,9 +144,12 @@ export function LeaderboardPodium({
           {top3 ? (
             <div className="flex flex-col items-center order-3 md:order-3">
               <div className="relative mb-5 flex flex-col items-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 font-bold text-xl ring-4 ring-amber-300 dark:ring-amber-700/60 shadow-md">
-                  {getInitials(top3.displayName)}
-                </div>
+                <JiraAvatar
+                  username={top3.jiraUsername}
+                  displayName={top3.displayName}
+                  size="xl"
+                  className="h-16 w-16 ring-4 ring-amber-300 dark:ring-amber-700/60 shadow-md text-xl"
+                />
                 <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-6.5 items-center gap-1 rounded-full bg-amber-700 dark:bg-amber-800 border border-amber-600 px-2.5 text-[11px] font-bold text-white shadow-sm whitespace-nowrap">
                   <Flame className="h-3.5 w-3.5 text-amber-300 shrink-0" aria-hidden="true" />
                   <span>CHÂN QUÂN #3</span>

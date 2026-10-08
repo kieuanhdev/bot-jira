@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn, timeAgo, formatDateTime, getBitbucketBranchUrl } from "@/lib/utils";
-import { avatarClass, initials } from "../lib/board-utils";
+import { JiraAvatar } from "@/components/jira-avatar";
 import { PRIORITIES, toName } from "../lib/quick-panel-utils";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -170,14 +170,7 @@ export function QuickPanelFields({
               <button className="flex items-center gap-1.5 hover:underline text-left">
                 {assigneeJira ? (
                   <>
-                    <span
-                      className={cn(
-                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
-                        avatarClass(assigneeJira)
-                      )}
-                    >
-                      {initials(assigneeJira)}
-                    </span>
+                    <JiraAvatar username={assigneeJira} size="sm" />
                     <span className="truncate">{assigneeJira}</span>
                   </>
                 ) : (
@@ -236,9 +229,36 @@ export function QuickPanelFields({
           </DropdownMenu>
         </Field>
 
-        <Field label="Reporter">{reporterJira || "—"}</Field>
-        <Field label="Approver">{approverJira || "—"}</Field>
-        <Field label="Tester">{testerJira || "—"}</Field>
+        <Field label="Reporter">
+          {reporterJira ? (
+            <span className="flex items-center gap-1.5">
+              <JiraAvatar username={reporterJira} size="xs" />
+              <span className="truncate">{reporterJira}</span>
+            </span>
+          ) : (
+            "—"
+          )}
+        </Field>
+        <Field label="Approver">
+          {approverJira ? (
+            <span className="flex items-center gap-1.5">
+              <JiraAvatar username={approverJira} size="xs" />
+              <span className="truncate">{approverJira}</span>
+            </span>
+          ) : (
+            "—"
+          )}
+        </Field>
+        <Field label="Tester">
+          {testerJira ? (
+            <span className="flex items-center gap-1.5">
+              <JiraAvatar username={testerJira} size="xs" />
+              <span className="truncate">{testerJira}</span>
+            </span>
+          ) : (
+            "—"
+          )}
+        </Field>
         <Field label="Due date">{dueDate ? formatDateTime(dueDate) : "—"}</Field>
         <Field label="Đã làm / Ước tính">
           {timeSpentSeconds != null ? `${Math.round(timeSpentSeconds / 360) / 10}h` : "—"} / {originalEstimateSeconds != null ? `${Math.round(originalEstimateSeconds / 360) / 10}h` : "—"}

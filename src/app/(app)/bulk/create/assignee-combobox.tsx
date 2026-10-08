@@ -6,6 +6,7 @@ import { api } from "@/lib/api-client";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { bulkKeys } from "@/lib/query-keys";
+import { JiraAvatar } from "@/components/jira-avatar";
 
 type AssigneeOption = {
   id: string;
@@ -157,15 +158,13 @@ export function AssigneeCombobox({
                   }}
                   onMouseEnter={() => setHighlighted(idx)}
                 >
-                  {user.avatar ? (
-                    // Jira avatars are arbitrary remote URLs; next/image would need remotePatterns config.
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={user.avatar} alt="" className="h-5 w-5 rounded-full" />
-                  ) : (
-                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-medium">
-                      {user.displayName?.[0]?.toUpperCase() ?? "?"}
-                    </div>
-                  )}
+                  <JiraAvatar
+                    username={user.username}
+                    displayName={user.displayName}
+                    avatarUrl={user.avatar}
+                    size="sm"
+                    className="shrink-0"
+                  />
                   <div className="flex flex-col overflow-hidden">
                     <span className="truncate leading-tight">{user.displayName}</span>
                     <span className="text-[10px] text-muted-foreground leading-tight">@{user.username}</span>

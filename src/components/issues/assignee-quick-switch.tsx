@@ -4,7 +4,7 @@ import * as React from "react";
 import { UserX, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type AssigneeScope, type AssigneeToken } from "@/lib/issues/issue-filters";
-import { avatarClass, initials } from "./assignee-filter";
+import { JiraAvatar } from "@/components/jira-avatar";
 
 export interface AssigneeQuickSwitchProps {
   value: AssigneeScope;
@@ -109,15 +109,11 @@ export function AssigneeQuickSwitch({
                   <UserX className="h-2.5 w-2.5" />
                 </div>
               ) : (
-                <div
-                  className={cn(
-                    "h-4 w-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0",
-                    avatarClass(token === "me" ? (myName ?? "Me") : token)
-                  )}
-                  aria-hidden="true"
-                >
-                  {initials(token === "me" ? (myName ?? "Me") : token)}
-                </div>
+                <JiraAvatar
+                  username={token === "me" ? (myName ?? "Me") : token}
+                  size="xs"
+                  className="shrink-0"
+                />
               )}
               <span className="truncate max-w-[140px]">
                 {getMemberLabel(token)}

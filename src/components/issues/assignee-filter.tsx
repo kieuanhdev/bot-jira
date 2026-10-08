@@ -19,6 +19,7 @@ import {
   type AssigneeToken,
   normalizeAssigneeToken,
 } from "@/lib/issues/issue-filters";
+import { JiraAvatar } from "@/components/jira-avatar";
 
 const AVATAR_PALETTE = [
   "bg-teal-500/15 text-teal-700 dark:text-teal-300",
@@ -347,15 +348,7 @@ export function AssigneeFilter({
                 className="flex items-center gap-2.5 px-2 py-1.5 rounded-md cursor-pointer hover:bg-accent focus:bg-accent transition-colors"
               >
                 <Checkbox checked={isSelected("me")} className="pointer-events-none" />
-                <div
-                  className={cn(
-                    "h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0",
-                    avatarClass(myName ?? "Me")
-                  )}
-                  aria-hidden="true"
-                >
-                  {initials(myName ?? "Me")}
-                </div>
+                <JiraAvatar username={myName ?? "Me"} size="sm" />
                 <div className="flex flex-col min-w-0 flex-1">
                   <span className="text-xs font-medium truncate">
                     Bạn {myName ? <span className="text-muted-foreground font-normal">({myName})</span> : null}
@@ -405,15 +398,7 @@ export function AssigneeFilter({
                   className="flex items-center gap-2.5 px-2 py-1.5 rounded-md cursor-pointer hover:bg-accent focus:bg-accent transition-colors"
                 >
                   <Checkbox checked={checked} className="pointer-events-none" />
-                  <div
-                    className={cn(
-                      "h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0",
-                      avatarClass(opt.value)
-                    )}
-                    aria-hidden="true"
-                  >
-                    {initials(opt.value)}
-                  </div>
+                  <JiraAvatar username={opt.value} displayName={opt.label} size="sm" />
                   <span className="text-xs truncate flex-1 font-normal text-foreground">
                     {opt.label ?? opt.value}
                   </span>
