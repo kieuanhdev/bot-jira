@@ -24,9 +24,10 @@ type TaskDeliveryListProps = {
   bitbucketBaseUrl?: string | null;
   jiraBaseUrl?: string | null;
   onAttachBranch?: (task: DeliveryTaskRow) => void;
+  onCreatePrs?: (task: DeliveryTaskRow) => void;
 };
 
-export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttachBranch }: TaskDeliveryListProps) {
+export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttachBranch, onCreatePrs }: TaskDeliveryListProps) {
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
     () => new Set(tasks.slice(0, 5).map((t) => t.jiraKey))
   );
@@ -221,18 +222,32 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Các nhánh liên kết ({task.branches.length})
                     </span>
-                    {onAttachBranch && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onAttachBranch(task)}
-                        className="h-6 gap-1 px-2 text-[11px] cursor-pointer"
-                      >
-                        <Link2 className="w-3 h-3" aria-hidden="true" />
-                        Gắn nhánh
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {onCreatePrs && task.branches.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onCreatePrs(task)}
+                          className="h-6 gap-1 px-2 text-[11px] cursor-pointer"
+                        >
+                          <GitPullRequest className="w-3 h-3" aria-hidden="true" />
+                          Tạo PR hàng loạt
+                        </Button>
+                      )}
+                      {onAttachBranch && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onAttachBranch(task)}
+                          className="h-6 gap-1 px-2 text-[11px] cursor-pointer"
+                        >
+                          <Link2 className="w-3 h-3" aria-hidden="true" />
+                          Gắn nhánh
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   {task.branches.length === 0 && (
                     <p className="px-1 text-xs italic text-muted-foreground">

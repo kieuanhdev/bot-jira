@@ -534,6 +534,56 @@ export const bitbucket = {
     }
   },
 
+  /** Default branch of a repo, or null when it cannot be determined. */
+  async getDefaultBranch(repo: string, creds?: BbCreds): Promise<string | null> {
+    try {
+      const res = await request<{ displayId?: string; id?: string }>(
+        repo,
+        "branches/default",
+        {},
+        creds
+      );
+      return res?.displayId ?? res?.id?.replace(/^refs\/heads\//, "") ?? null;
+    } catch {
+      return null;
+    }
+  },
+
+  /** Open a pull request from `from` into `to` (Bitbucket Data Center). */
+  async createPullRequest(
+    repo: string,
+    data: {
+      title: string;
+      description?: string;
+      from: string;
+      to: string;
+      reviewers?: string[];
+    },
+    creds?: BbCreds
+  ): Promise<BbPullRequest> {
+    const [project, slug] = repo.split("/");
+    const ref = (branch: string) => ({
+      id: `refs/heads/${branch}`,
+      repository: { slug: slug ?? repo, project: { key: project ?? repo } },
+    });
+    const res = await request<BitbucketPullRequestResponse>(
+      repo,
+      "pull-requests",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: data.title,
+          description: data.description ?? "",
+          fromRef: ref(data.from),
+          toRef: ref(data.to),
+          reviewers: (data.reviewers ?? []).map((name) => ({ user: { name } })),
+        }),
+      },
+      creds
+    );
+    return normalizePullRequest(res);
+  },
+
   /**
    * Update title/description of a pull request. Bitbucket requires the current
    * `version`; reviewers are re-sent so the update never clears them.

@@ -26,6 +26,7 @@ import { BranchCardList } from "./branch-card-list";
 import { BranchDetailSheet } from "./branch-detail-sheet";
 import { BranchLinkDialog } from "./branch-link-dialog";
 import { TaskBranchLinkDialog } from "./task-branch-link-dialog";
+import { TaskPrCreateDialog } from "./task-pr-create-dialog";
 import { BranchEmptyState } from "./branch-empty-state";
 import {
   type BranchFilterState,
@@ -47,6 +48,7 @@ export function BranchesClient() {
   const [selectedBranchForDrawer, setSelectedBranchForDrawer] = useState<BranchRowItem | null>(null);
   const [selectedBranchForLink, setSelectedBranchForLink] = useState<BranchRowItem | null>(null);
   const [attachTask, setAttachTask] = useState<{ jiraKey: string; summary: string } | null>(null);
+  const [prTask, setPrTask] = useState<{ jiraKey: string; summary: string } | null>(null);
   const [bulkLinkIds, setBulkLinkIds] = useState<string[] | undefined>(undefined);
 
   const syncMutation = useBranchSync();
@@ -378,6 +380,7 @@ export function BranchesClient() {
                   bitbucketBaseUrl={bitbucketBaseUrl}
                   jiraBaseUrl={jiraBaseUrl}
                   onAttachBranch={(task) => setAttachTask({ jiraKey: task.jiraKey, summary: task.summary })}
+                  onCreatePrs={(task) => setPrTask({ jiraKey: task.jiraKey, summary: task.summary })}
                 />
               ) : (
                 <BranchEmptyState
@@ -541,6 +544,20 @@ export function BranchesClient() {
           onSuccess={(note) =>
             showToast(note ? `Đã gắn nhánh vào ${attachTask.jiraKey} — ${note}` : `Đã gắn nhánh vào ${attachTask.jiraKey}`)
           }
+        />
+      )}
+
+      {/* Bulk-create pull requests for a task's branches (one per repo) */}
+      {prTask && (
+        <TaskPrCreateDialog
+          key={prTask.jiraKey}
+          jiraKey={prTask.jiraKey}
+          summary={prTask.summary}
+          open
+          onOpenChange={(open) => {
+            if (!open) setPrTask(null);
+          }}
+          onSuccess={(note) => showToast(`${prTask.jiraKey}: ${note}`)}
         />
       )}
 
