@@ -20,10 +20,12 @@ import {
   Loader2,
   FileText,
   ListTodo,
+  ListPlus,
   ExternalLink,
 } from "lucide-react";
 import { useSaveReleaseNotes } from "@/hooks/use-releases";
 import { ReleaseTaskList } from "./release-task-list";
+import { ReleaseAddTasksDialog } from "./release-add-tasks-dialog";
 import { ReleasePublishDialog } from "./release-publish-dialog";
 import type { TaskReadinessResult, ReleaseReadinessState } from "@/lib/releases/release-readiness";
 
@@ -80,6 +82,7 @@ export function ReleaseCard({
   onRefresh,
 }: ReleaseCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [addTasksOpen, setAddTasksOpen] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [notes, setNotes] = useState(release.notes || "");
   const [activeTab, setActiveTab] = useState("tasks");
@@ -272,6 +275,20 @@ export function ReleaseCard({
                 </TabsList>
 
                 <TabsContent value="tasks" className="mt-0">
+                  {canManage && !isReleased && !release.archived && (
+                    <div className="mb-2 flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAddTasksOpen(true)}
+                        className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer"
+                      >
+                        <ListPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                        Thêm task vào phiên bản
+                      </Button>
+                    </div>
+                  )}
                   <ReleaseTaskList tasks={release.tasks} jiraBaseUrl={jiraBaseUrl} canManage={canManage} />
                 </TabsContent>
 
@@ -308,6 +325,16 @@ export function ReleaseCard({
           )}
         </CardContent>
       </Card>
+
+      {addTasksOpen && (
+        <ReleaseAddTasksDialog
+          projectKey={release.projectKey}
+          version={release.version}
+          open
+          onOpenChange={setAddTasksOpen}
+          onSuccess={onRefresh}
+        />
+      )}
 
       {/* Publish confirmation dialog */}
       <ReleasePublishDialog

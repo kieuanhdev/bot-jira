@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { userJiraAuth } from "@/lib/user-creds";
+import { getSystemJiraAuth } from "@/lib/jira/client";
 import { getIssueView } from "@/lib/issues/live";
 import { IssueDetailClient } from "./issue-detail-client";
 
@@ -22,9 +23,10 @@ export default async function IssuePage({ params }: { params: Promise<{ key: str
       })
     : null;
 
-  // Read live from Jira (as the user) so comments posted from the web / Jira
+  // Read live from Jira (as user or system) so comments posted from the web / Jira
   // show up on first paint; fall back to the cache when no token / on error.
-  const view = await getIssueView(key, userJiraAuth(user));
+  const auth = userJiraAuth(user) || (await getSystemJiraAuth());
+  const view = await getIssueView(key, auth);
   if (!view) notFound();
   return <IssueDetailClient issue={view} />;
 }

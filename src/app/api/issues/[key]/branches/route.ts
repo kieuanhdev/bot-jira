@@ -10,12 +10,23 @@ import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 /** Branches confirmed-linked to this task (a branch may deliver several tasks). */
 async function loadTaskBranches(key: string) {
-  const links = await prisma.branchIssueLink.findMany({
-    where: { jiraKey: key, linkState: "confirmed", branch: { deletedAt: null } },
-    include: { branch: true },
-    orderBy: { branch: { checkedAt: "desc" } },
-  });
-  return links.map((l) => l.branch);
+  try {
+    const links = await prisma.branchIssueLink.findMany({
+      where: { jiraKey: key, linkState: "confirmed", branch: { deletedAt: null } },
+      include: { branch: true },
+      orderBy: { branch: { checkedAt: "desc" } },
+    });
+    return links.map((l) => l.branch);
+  } catch {
+    return prisma.branchInfo.findMany({
+      where: {
+        deletedAt: null,
+        jiraKey: key,
+        linkState: { notIn: ["rejected", "manual_unlinked"] },
+      },
+      orderBy: { checkedAt: "desc" },
+    });
+  }
 }
 
 /**

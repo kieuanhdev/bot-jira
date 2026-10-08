@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, getErrorMessage } from "@/lib/api-client";
+import { meKeys } from "@/lib/query-keys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TaskBranchLinkDialog } from "../branches/task-branch-link-dialog";
@@ -16,6 +19,8 @@ import {
   Ban,
   User,
   Link2,
+  UserCheck,
+  Loader2,
 } from "lucide-react";
 import type { TaskReadinessResult, ReleaseBlocker } from "@/lib/releases/release-readiness";
 
@@ -28,6 +33,25 @@ interface ReleaseTaskListProps {
 
 export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: ReleaseTaskListProps) {
   const [attachTask, setAttachTask] = useState<{ jiraKey: string; summary: string } | null>(null);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const qc = useQueryClient();
+
+  const { data: me } = useQuery({
+    queryKey: meKeys.status,
+    queryFn: () => api<{ jiraName: string | null; jiraBaseUrl?: string }>("/api/me/status"),
+    staleTime: 60_000,
+  });
+  const meName = me?.jiraName ?? null;
+
+  const assignToMe = useMutation({
+    mutationFn: (jiraKey: string) =>
+      api(`/api/issues/${jiraKey}`, { method: "PATCH", body: { assignee: meName } }),
+    onMutate: () => setAssignError(null),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["releases"] });
+    },
+    onError: (err, jiraKey) => setAssignError(`${jiraKey}: ${getErrorMessage(err)}`),
+  });
 
   if (tasks.length === 0) {
     return (
@@ -51,6 +75,11 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
 
   return (
     <>
+    {assignError && (
+      <div role="alert" className="mb-2 rounded border border-destructive/20 bg-destructive/10 p-2 text-xs text-destructive">
+        Gán task thất bại — {assignError}
+      </div>
+    )}
     <div className="divide-y divide-border rounded-md border border-border bg-card overflow-hidden">
       {sortedTasks.map((t) => {
         const isDone = t.isDone;
@@ -101,11 +130,26 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[11px] text-muted-foreground">
-                    {t.assignee && (
-                      <span className="inline-flex items-center gap-1">
-                        <User className="h-3 w-3" aria-hidden="true" />
-                        <span>{t.assignee}</span>
-                      </span>
+                    <span className="inline-flex items-center gap-1">
+                      <User className="h-3 w-3" aria-hidden="true" />
+                      <span>{t.assignee ?? "Chưa gán"}</span>
+                    </span>
+
+                    {meName && t.assignee !== meName && (
+                      <button
+                        type="button"
+                        onClick={() => assignToMe.mutate(t.jiraKey)}
+                        disabled={assignToMe.isPending}
+                        title={`Gán nhanh cho tôi (${meName})`}
+                        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/10 cursor-pointer transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {assignToMe.isPending && assignToMe.variables === t.jiraKey ? (
+                          <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                        ) : (
+                          <UserCheck className="h-3 w-3" aria-hidden="true" />
+                        )}
+                        Gán cho tôi
+                      </button>
                     )}
 
                     {t.points != null && (

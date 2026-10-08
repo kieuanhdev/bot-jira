@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { jiraWith } from "@/lib/jira/client";
+import { getSystemJiraAuth, jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 import { getIssueView } from "@/lib/issues/live";
 import { refreshJiraIssueCache } from "@/lib/issues/cache";
@@ -17,10 +17,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ key: string }>
     where: { id: session.user.id },
     select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true },
   });
-  const auth = userJiraAuth(user);
-  if (!auth) {
-    return jiraCredentialsRequired();
-  }
+  const auth = userJiraAuth(user) || (await getSystemJiraAuth());
   const view = await getIssueView(key, auth);
   if (!view) return NextResponse.json({ error: "not found" }, { status: 404 });
   return NextResponse.json({ issue: view });
@@ -183,6 +180,12 @@ export async function PATCH(
     if (patch.approver !== undefined) directUpdate.approverJira = patch.approver;
     if (patch.tester !== undefined) directUpdate.testerJira = patch.tester;
 
+    // Keep the local release membership (ReleaseTask) and cached fix versions in
+    // step with Jira so the release page reflects the change immediately.
+    if (patch.addFixVersion || patch.removeFixVersion) {
+      await syncLocalFixVersion(key, patch.addFixVersion?.trim(), patch.removeFixVersion?.trim()).catch(() => null);
+    }
+
     if (Object.keys(directUpdate).length > 1) {
       await prisma.issueCache
         .updateMany({
@@ -199,4 +202,33 @@ export async function PATCH(
     excludeUserId: session.user.id,
   });
   return NextResponse.json({ ok: true, cacheSynced });
+}
+
+async function syncLocalFixVersion(key: string, add?: string, remove?: string) {
+  const projectKey = key.split("-")[0];
+  const issue = await prisma.issueCache.findUnique({
+    where: { jiraKey: key },
+    select: { fixVersionNames: true },
+  });
+  if (!issue) return;
+
+  const names = new Set(issue.fixVersionNames);
+  if (add) names.add(add);
+  if (remove) names.delete(remove);
+  await prisma.issueCache.update({ where: { jiraKey: key }, data: { fixVersionNames: [...names] } });
+
+  if (add) {
+    const releases = await prisma.release.findMany({ where: { projectKey, version: add }, select: { id: true } });
+    if (releases.length > 0) {
+      await prisma.releaseTask.createMany({
+        data: releases.map((r) => ({ releaseId: r.id, jiraKey: key })),
+        skipDuplicates: true,
+      });
+    }
+  }
+  if (remove) {
+    await prisma.releaseTask.deleteMany({
+      where: { jiraKey: key, release: { projectKey, version: remove } },
+    });
+  }
 }

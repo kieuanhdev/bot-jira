@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { jiraWith } from "@/lib/jira/client";
+import { getSystemJiraAuth, jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
@@ -17,9 +17,9 @@ export async function GET(
     where: { id: session.user.id },
     select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true },
   });
-  const auth = userJiraAuth(user);
+  const auth = userJiraAuth(user) || (await getSystemJiraAuth());
   if (!auth) {
-    return jiraCredentialsRequired();
+    return NextResponse.json({ transitions: [] });
   }
   const client = jiraWith(auth);
 
