@@ -187,7 +187,7 @@ export function BoardListView({
   );
 
   return (
-    <div className="flex-1 overflow-auto rounded-lg border">
+    <div className="max-h-[calc(100dvh-15rem)] min-h-[24rem] flex-1 overflow-auto overscroll-x-contain rounded-lg border">
       {selected.length > 0 && (
         <BoardListBulkBar
           selected={selected}
@@ -197,10 +197,10 @@ export function BoardListView({
           onClear={() => setSelectedKeys(new Set())}
         />
       )}
-      <table className="w-full text-sm">
+      <table className="w-full min-w-max whitespace-nowrap text-sm">
         <thead
           className={cn(
-            "sticky bg-muted/50 text-left text-xs text-muted-foreground",
+            "sticky z-10 bg-muted text-left text-xs text-muted-foreground",
             selected.length > 0 ? "top-[3.25rem]" : "top-0"
           )}
         >

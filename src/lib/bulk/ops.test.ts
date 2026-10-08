@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setEpicLinkFieldIds } from "@/lib/issues/epic";
 import { validateBulkRequest, previewBulk, extractEpicKey, resolveFilterKeys } from "./ops";
 import { prisma } from "@/lib/prisma";
 import * as depModule from "@/lib/issues/dependencies";
@@ -196,9 +197,12 @@ describe("Bulk operations dependency expansion & safe removal (DEP-06, DEP-07, D
     it("extracts epic key correctly from raw Jira issue representations", () => {
       expect(extractEpicKey(null)).toBeNull();
       expect(extractEpicKey({})).toBeNull();
-      expect(extractEpicKey({ parent: { key: "EPM-99" } })).toBe("EPM-99");
+      expect(extractEpicKey({ parent: { key: "EPM-99", fields: { issuetype: { name: "Epic" } } } })).toBe("EPM-99");
+      expect(extractEpicKey({ parent: { key: "EPM-98", fields: { issuetype: { name: "Story" } } } })).toBeNull();
       expect(extractEpicKey({ epic: { key: "EPM-88" } })).toBe("EPM-88");
+      setEpicLinkFieldIds(["customfield_10014"]);
       expect(extractEpicKey({ customfield_10014: "EPM-77" })).toBe("EPM-77");
+      setEpicLinkFieldIds([]);
     });
   });
 
@@ -520,7 +524,7 @@ describe("Bulk operations dependency expansion & safe removal (DEP-06, DEP-07, D
   describe("resolveFilterKeys with epics", () => {
     it("filters issues by epic key and none/unassigned", async () => {
       vi.mocked(prisma.issueCache.findMany).mockResolvedValue([
-        { jiraKey: "EPM-1", raw: { parent: { key: "EPM-10" } } },
+        { jiraKey: "EPM-1", raw: { parent: { key: "EPM-10", fields: { issuetype: { name: "Epic" } } } } },
         { jiraKey: "EPM-2", raw: { epic: { key: "EPM-20" } } },
         { jiraKey: "EPM-3", raw: {} },
       ] as never);

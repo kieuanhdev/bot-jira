@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { issueCacheData } from "./cache";
+import { setEpicLinkFieldIds } from "./epic";
 import type { JiraIssue } from "@/lib/jira/types";
 
 function issue(fields: JiraIssue["fields"]): JiraIssue {
@@ -51,6 +52,7 @@ describe("issueCacheData", () => {
   });
 
   it("maps reporter, approver, tester and epic fields", () => {
+    setEpicLinkFieldIds(["customfield_10008"]);
     const data = issueCacheData(issue({
       project: { key: "EPM" },
       reporter: { name: "reporter_mb" },
@@ -104,5 +106,13 @@ describe("issueCacheData", () => {
 
     const emptyData = issueCacheData(issue({ project: { key: "EPM" } }));
     expect(emptyData.originalEstimateSeconds).toBeNull();
+  });
+
+  it("only treats a parent as epic when its type is Epic", () => {
+    setEpicLinkFieldIds([]);
+    const sub = issueCacheData(issue({ parent: { key: "EPM-5", fields: { issuetype: { name: "Story" } } } }));
+    const epic = issueCacheData(issue({ parent: { key: "EPM-6", fields: { issuetype: { name: "Epic" } } } }));
+    expect(sub.epicKey).toBeNull();
+    expect(epic.epicKey).toBe("EPM-6");
   });
 });

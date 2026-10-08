@@ -1,17 +1,44 @@
-/** Epic key of an issue's raw Jira fields (parent, epic link object, or a custom field holding a key). */
+const KEY_PATTERN = /^[A-Z][A-Z0-9_]+-\d+$/i;
+
+let epicLinkFieldIds: string[] = [];
+
+/** Remember the Jira "Epic Link" custom field ids (discovered from /field) so they are fetched and read. */
+export function setEpicLinkFieldIds(ids: string[]): void {
+  epicLinkFieldIds = [...new Set(ids)];
+}
+
+export function getEpicLinkFieldIds(): string[] {
+  return epicLinkFieldIds;
+}
+
+/** True for the Jira "Epic Link" field definition. */
+export function isEpicLinkField(field: { name?: string; schema?: { custom?: string } | null }): boolean {
+  return (
+    field.schema?.custom === "com.pyxis.greenhopper.jira:gh-epic-link" ||
+    field.name?.trim().toLowerCase() === "epic link"
+  );
+}
+
+/**
+ * Epic key of an issue's raw Jira fields. Only a real Epic counts: the Epic Link custom field,
+ * an explicit `epic` object, or a `parent` whose issue type is Epic (sub-task parents are
+ * Tasks/Stories and must not be reported as epics).
+ */
 export function extractEpicKey(raw: unknown): string | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
-  if (r.parent && typeof r.parent === "object" && typeof (r.parent as { key?: unknown }).key === "string") {
-    return (r.parent as { key: string }).key;
+
+  for (const id of epicLinkFieldIds) {
+    const val = r[id];
+    if (typeof val === "string" && KEY_PATTERN.test(val.trim())) return val.trim().toUpperCase();
   }
   if (r.epic && typeof r.epic === "object" && typeof (r.epic as { key?: unknown }).key === "string") {
     return (r.epic as { key: string }).key;
   }
-  for (const [key, val] of Object.entries(r)) {
-    if (key.startsWith("customfield_") && typeof val === "string" && /^[A-Z][A-Z0-9_]+-\d+$/i.test(val)) {
-      return val.toUpperCase();
-    }
+  const parent = r.parent as { key?: unknown; fields?: { issuetype?: { name?: unknown } } } | null | undefined;
+  if (parent && typeof parent === "object" && typeof parent.key === "string") {
+    const typeName = parent.fields?.issuetype?.name;
+    if (typeof typeName === "string" && typeName.trim().toLowerCase() === "epic") return parent.key;
   }
   return null;
 }

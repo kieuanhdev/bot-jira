@@ -29,6 +29,7 @@ export interface BoardHeaderProps {
   boardValidating: boolean;
   boardValidateError: string | null;
   onSelectProject: (key: string) => void;
+  onPrefetchProject?: (key: string) => void;
   onOpenPicker: () => void;
   onClosePicker: () => void;
   onTogglePicker: (key: string) => void;
@@ -85,6 +86,7 @@ export function BoardHeader({
   boardValidating,
   boardValidateError,
   onSelectProject,
+  onPrefetchProject,
   onOpenPicker,
   onClosePicker,
   onTogglePicker,
@@ -138,6 +140,7 @@ export function BoardHeader({
           boardValidating={boardValidating}
           boardValidateError={boardValidateError}
           onSelectProject={onSelectProject}
+          onPrefetchProject={onPrefetchProject}
           onOpenPicker={onOpenPicker}
           onClosePicker={onClosePicker}
           onTogglePicker={onTogglePicker}

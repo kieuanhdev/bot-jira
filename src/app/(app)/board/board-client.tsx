@@ -208,6 +208,20 @@ export function BoardClient() {
     }
   }
 
+  // Warm the per-project caches on hover so the switch doesn't wait on three cold requests.
+  function handlePrefetchProject(key: string) {
+    void qc.prefetchQuery({
+      queryKey: boardKeys.statuses(key),
+      queryFn: () => api<BoardStatusesResponse>(`/api/board/statuses?project=${key}`),
+      staleTime: 5 * 60_000,
+    });
+    void qc.prefetchQuery({
+      queryKey: issuesKeys.filters(key),
+      queryFn: () => api(`/api/issues/filters?project=${key}`),
+      staleTime: 5 * 60_000,
+    });
+  }
+
   async function handleAddProjectToBoard() {
     const key = boardNewKey.trim().toUpperCase();
     if (!key) return;
@@ -770,6 +784,7 @@ export function BoardClient() {
         boardValidating={boardValidating}
         boardValidateError={boardValidateError}
         onSelectProject={handleSelectProject}
+        onPrefetchProject={handlePrefetchProject}
         onOpenPicker={openPicker}
         onClosePicker={closePicker}
         onTogglePicker={togglePicker}

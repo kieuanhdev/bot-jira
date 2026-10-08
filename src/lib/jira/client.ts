@@ -25,6 +25,8 @@ import type {
   JiraBoardConfiguration,
 } from "./types";
 
+import { getEpicLinkFieldIds, isEpicLinkField, setEpicLinkFieldIds } from "@/lib/issues/epic";
+
 const BASE_ISSUE_FIELDS = [
   "project",
   "parent",
@@ -68,6 +70,7 @@ function configuredPointField(): JiraFieldDefinition[] {
 }
 
 function rememberPointFields(fields: JiraFieldDefinition[]): JiraFieldDefinition[] {
+  setEpicLinkFieldIds(fields.filter(isEpicLinkField).map((field) => field.id));
   knownPointFields = fields.filter(isPointField);
   return knownPointFields;
 }
@@ -77,7 +80,7 @@ function knownPointFieldIds(): string[] {
 }
 
 export function jiraIssueFields(extraFields: string[] = []): string {
-  return [...BASE_ISSUE_FIELDS, ...extraFields, ...knownPointFieldIds()]
+  return [...BASE_ISSUE_FIELDS, ...extraFields, ...knownPointFieldIds(), ...getEpicLinkFieldIds()]
     .filter(Boolean)
     .filter((field, index, fields) => fields.indexOf(field) === index)
     .join(",");
@@ -479,7 +482,7 @@ export function jiraWith(auth?: JiraAuth) {
       const fields = new URLSearchParams();
       if (extraFields) {
         await getPointFields().catch(() => configuredPointField());
-        const requested = [...extraFields.split(","), ...knownPointFieldIds()]
+        const requested = [...extraFields.split(","), ...knownPointFieldIds(), ...getEpicLinkFieldIds()]
           .filter(Boolean)
           .filter((field, index, all) => all.indexOf(field) === index);
         fields.set("fields", requested.join(","));

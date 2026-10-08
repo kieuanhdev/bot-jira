@@ -22,6 +22,7 @@ interface BoardProjectTabsProps {
   boardValidating: boolean;
   boardValidateError: string | null;
   onSelectProject: (key: string) => void;
+  onPrefetchProject?: (key: string) => void;
   onOpenPicker: () => void;
   onClosePicker: () => void;
   onTogglePicker: (key: string) => void;
@@ -44,6 +45,7 @@ export function BoardProjectTabs({
   boardValidating,
   boardValidateError,
   onSelectProject,
+  onPrefetchProject,
   onOpenPicker,
   onClosePicker,
   onTogglePicker,
@@ -57,6 +59,8 @@ export function BoardProjectTabs({
       {projectList.map((p) => (
         <button
           key={p.key}
+          onPointerEnter={() => onPrefetchProject?.(p.key)}
+          onFocus={() => onPrefetchProject?.(p.key)}
           onClick={() => {
             onSelectProject(p.key);
           }}
