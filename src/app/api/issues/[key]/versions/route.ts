@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { getSystemJiraAuth, jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
-import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ key: string }> }) {
   const session = await getSession();

@@ -118,6 +118,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 | R-08 | Mock pass nhưng PostgreSQL thật sai | P1 | Integration suite dùng DB test riêng | Open |
 | R-09 | Tài liệu cũ và mới cùng được cập nhật | P2 | Chỉ tracker mới là nguồn tiến độ | Open |
 | R-10 | Test double lệch Jira/Prisma contract tạo error log giả | P1 | Bổ sung Jira/project catalog/people-field mocks, assert log abort/lease chủ ý; 79/79 test liên quan và full suite pass | Closed |
+| R-11 | Warning lint mới lọt qua CI vì ESLint vẫn trả exit code 0 | P2 | `npm run lint` dùng `eslint --max-warnings=0`; xác nhận lint sạch ở cuối Phase 0 | Closed |
 
 ## 7. Quy tắc Dừng
 

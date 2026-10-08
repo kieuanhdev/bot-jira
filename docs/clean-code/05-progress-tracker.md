@@ -10,10 +10,10 @@
 |---|---:|---:|---|
 | TypeScript errors | 0 | 0 | `npm run typecheck` (batch 0.1) |
 | ESLint errors | 0 | 0 | `npm run lint` (batch 0.1) |
-| ESLint warnings | 3 | 3 | `npm run lint`; không có warning mới, xử lý ở batch 0.3 |
+| ESLint warnings | 3 | 0 | `npm run lint`; `eslint --max-warnings=0` pass |
 | Failing tests | 4 | 0 | `npm test`: 1.289/1.289 pass |
 | Failing test files | 2 | 0 | `jira-sync-race`, `jira-sync-integration`: 22/22 pass |
-| Build | Chưa đo lại | | `npm run build` |
+| Build | Chưa đo lại | Pass | `npm run build`; Next.js 16.3.5 production build |
 | API routes | 101 | | `find src/app/api -name route.ts` |
 | Routes import Prisma | 73 | | `rg '@/lib/prisma' src/app/api` |
 | Routes >150 dòng | 15 | | `wc -l` |
@@ -23,7 +23,7 @@
 
 | Phase | Nội dung | Trạng thái | Owner | Bắt đầu | Kết thúc | Ghi chú |
 |---|---|---|---|---|---|---|
-| 0 | Baseline xanh | IN_PROGRESS | Codex | 2026-10-08 | | Batch 0.1-0.2 hoàn tất; dừng trước batch 0.3 |
+| 0 | Baseline xanh | DONE | Codex | 2026-10-08 | 2026-10-08 | Typecheck, lint zero-warning, 1.289 test và build đều pass; dừng trước Phase 1 |
 | 1 | Contracts và dependency direction | TODO | | | | |
 | 2 | Jira và Issues | TODO | | | | |
 | 3 | Queue và Sync | TODO | | | | |
@@ -40,7 +40,7 @@
 |---|---|---|---|---|---|---|
 | 0.1 | Jira sync test doubles | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint` pass, 3 warning baseline; 22/22 test liên quan và 1.289/1.289 full test pass; manual QA N/A | Mock `issueCache.findMany` đúng semantics `where.jiraKey.in`; không đổi production code |
 | 0.2 | Mock contract hygiene | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint` pass, 3 warning baseline; 79/79 test liên quan và 1.289/1.289 full test pass (26,52 giây); manual QA N/A | Không còn stderr do mock thiếu; stderr full suite còn lại thuộc 5 failure-path được chủ ý test |
-| 0.3 | Lint zero-warning | TODO | | | | |
+| 0.3 | Lint zero-warning | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 4/4 test liên quan và 1.289/1.289 full test pass (22,53 giây); build pass; manual QA N/A | Xóa đúng 3 import thừa; script lint nay fail khi có warning; không đổi hành vi route/UI |
 | 1.1 | API contract inventory | TODO | | | | |
 | 1.2 | Shared contracts | TODO | | | | |
 | 1.3 | Shared helper direction | TODO | | | | |
@@ -89,6 +89,7 @@
 |---|---|---|---|---|
 | 2026-10-08 | D-001 | Test double `issueCache.findMany` lọc in-memory store theo `where.jiraKey.in`; không sửa production code và không xử lý log mock khác | Giữ đúng contract truy vấn của `poll-jira`, khôi phục 4 test đỏ mà không lấn sang batch 0.2 | Codex |
 | 2026-10-08 | D-002 | Đồng bộ test doubles với Jira `getProjectStatuses`, Prisma project catalog/people fields và mock auto-discovery tại boundary; assert/suppress riêng log abort/lease | Loại error log giả mà không sửa production code; giữ rõ các log failure-path có chủ ý và không lấn sang lint batch 0.3 | Codex |
+| 2026-10-08 | D-003 | Đặt `--max-warnings=0` trong script `npm run lint` thay vì một workflow CI riêng | Repo không có cấu hình CI; mọi local/CI caller của script chuẩn đều nhận cùng chính sách zero-warning | Codex |
 
 ## Findings Ngoài Phạm Vi
 
@@ -107,6 +108,7 @@
 | 2026-10-08 | `10401ab` | Pass | Pass, 3 warnings | Fail, 4 tests | Chưa chạy | Chưa chạy | Codex |
 | 2026-10-08 | Worktree, không commit | Pass | Pass, 3 warning baseline | Pass, 165 file / 1.289 test | Không chạy; gate cuối phase/merge | N/A; chỉ sửa test double, race/failure path đã được automated test | Codex |
 | 2026-10-08 | Worktree batch 0.2, không commit | Pass | Pass, 3 warning baseline | Pass, 79 test liên quan; 165 file / 1.289 test full suite trong 26,52 giây | Không chạy; gate cuối Phase 0 | N/A; chỉ sửa test doubles, failure-path log được automated test | Codex |
+| 2026-10-08 | Worktree batch 0.3, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 4 test liên quan; 165 file / 1.289 test full suite trong 22,53 giây | Pass, Next.js 16.3.5 | N/A; chỉ xóa import chết và siết lint script | Codex |
 
 ## Completion Report
 
