@@ -3,11 +3,12 @@ import {
   PRIORITY_RANK,
   PRIORITY_META,
   PRIORITY_NEUTRAL,
-  AVATAR_PALETTE,
   CATEGORY_DOTS,
   CATEGORY_TEXT,
   type SortMode,
 } from "./board-types";
+
+export { avatarClass, initials } from "@/lib/avatar";
 
 export function daysSince(d: string | null): number {
   if (!d) return 0;
@@ -35,21 +36,6 @@ export function sortIssues(items: IssueItem[], mode: SortMode): IssueItem[] {
 
 export function priorityMeta(priority: string) {
   return PRIORITY_META[priority] ?? PRIORITY_NEUTRAL;
-}
-
-export function avatarClass(name: string | null | undefined): string {
-  if (!name) return "bg-muted text-muted-foreground";
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
-}
-
-export function initials(name: string | null | undefined): string {
-  if (!name) return "?";
-  const parts = name.trim().split(/[\s._-]+/).filter(Boolean);
-  if (parts.length === 0) return name.slice(0, 1).toUpperCase();
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export function typeShort(type: string): string {

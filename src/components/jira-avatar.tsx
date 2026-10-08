@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { avatarClass, initials } from "@/app/(app)/board/lib/board-utils";
+import { avatarClass, initials } from "@/lib/avatar";
 
 export interface JiraAvatarProps {
   username?: string | null;

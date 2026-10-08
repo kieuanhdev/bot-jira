@@ -16,6 +16,28 @@ const eslintConfig = defineConfig([
     ".kilocode/**",
     ".cleanup/**",
   ]),
+  // Import boundary: reusable production modules must not depend on app routes/features.
+  {
+    files: [
+      "src/components/**/*.{ts,tsx}",
+      "src/hooks/**/*.{ts,tsx}",
+      "src/lib/**/*.{ts,tsx}",
+    ],
+    ignores: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/app/*", "@/app/**"],
+              message: "Reusable modules must not import route or feature implementation from @/app.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Import boundary: shared/ must not import from route/domain/hook layers.
   {
     files: ["src/components/shared/**"],

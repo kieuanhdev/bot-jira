@@ -31,15 +31,7 @@ export const PRIORITY_META: Record<string, { rail: string; badge: string }> = {
 };
 export const PRIORITY_NEUTRAL = { rail: "bg-transparent", badge: "bg-muted text-muted-foreground" };
 
-export const AVATAR_PALETTE = [
-  "bg-teal-500/15 text-teal-700 dark:text-teal-300",
-  "bg-sky-500/15 text-sky-700 dark:text-sky-300",
-  "bg-violet-500/15 text-violet-700 dark:text-violet-300",
-  "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  "bg-rose-500/15 text-rose-700 dark:text-rose-300",
-  "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300",
-];
+export { AVATAR_PALETTE } from "@/lib/avatar";
 
 export const CATEGORY_DOTS: Record<string, string[]> = {
   new: ["bg-sky-400", "bg-cyan-500", "bg-blue-400", "bg-indigo-400", "bg-teal-400", "bg-sky-600", "bg-cyan-400", "bg-blue-500"],

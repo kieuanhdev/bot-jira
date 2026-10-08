@@ -91,6 +91,7 @@ Database test phải dùng database riêng, có setup/teardown rõ và không đ
 - [ ] Diff chỉ chứa scope đã ghi trong batch.
 - [ ] Không có format churn không liên quan.
 - [ ] Public export bị di chuyển có facade/re-export.
+- [ ] Reusable `components`, `hooks` và `lib` không import route hoặc feature implementation từ `@/app`.
 - [ ] Không đổi literal API/queue/env nếu không được chủ ý.
 - [ ] Không đổi transaction boundary ngoài kế hoạch.
 - [ ] Không thêm fallback credential.
@@ -158,4 +159,3 @@ Mỗi batch ghi vào tracker:
 - Kết quả bốn lệnh gate.
 - QA scenarios đã chạy.
 - Risk còn mở và quyết định giữ nguyên.
-
