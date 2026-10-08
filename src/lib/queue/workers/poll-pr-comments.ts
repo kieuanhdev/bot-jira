@@ -145,7 +145,7 @@ export async function runPollPrComments(): Promise<WorkerLog> {
   let newCommentsNotified = 0;
   let skippedUnauthorizedRepos = 0;
 
-  for (const repo of bitbucket.repos()) {
+  for (const repo of await bitbucket.allRepos()) {
     checkedRepos++;
     const scope = `pr-comments:${repo}`;
 

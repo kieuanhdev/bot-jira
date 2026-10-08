@@ -277,6 +277,59 @@ function normalizePullRequest(pullRequest: BitbucketPullRequestResponse): BbPull
   };
 }
 
+type BitbucketRepoResponse = {
+  slug: string;
+  archived?: boolean;
+  project: { key: string };
+};
+
+const DISCOVERY_TTL_MS = 30 * 60 * 1000;
+let discoveryCache: { at: number; repos: string[] } | null = null;
+
+/**
+ * Repos readable by any stored Bitbucket account (system token + every user who
+ * saved a token). Accounts are independent: one that cannot see a repo never
+ * hides it from another that can. Personal (`~user`) and archived repos are skipped.
+ * Also primes the per-repo credential cache with an account that can read the repo.
+ */
+export async function discoverBitbucketRepos(force = false): Promise<string[]> {
+  if (!force && discoveryCache && Date.now() - discoveryCache.at < DISCOVERY_TTL_MS) {
+    return discoveryCache.repos;
+  }
+  const base = env.bitbucketBaseUrl.replace(/\/$/, "");
+  const found = new Map<string, BbCreds>();
+
+  for (const cred of await getAllBitbucketCreds()) {
+    const basic = Buffer.from(`${cred.user}:${cred.token}`).toString("base64");
+    try {
+      let start = 0;
+      for (let page = 0; page < 50; page++) {
+        const res = await fetch(`${base}/rest/api/1.0/repos?limit=100&start=${start}`, {
+          headers: { Accept: "application/json", Authorization: `Basic ${basic}` },
+        });
+        if (!res.ok) break; // this account is rejected; others may still work
+        const body = (await res.json()) as Paged<BitbucketRepoResponse>;
+        for (const r of body.values ?? []) {
+          if (r.archived || r.project.key.startsWith("~")) continue;
+          const repo = `${r.project.key}/${r.slug}`;
+          if (!found.has(repo)) found.set(repo, cred);
+        }
+        if (body.isLastPage) break;
+        start = (body as { nextPageStart?: number }).nextPageStart ?? start + 100;
+      }
+    } catch {
+      // Network failure for one account must not stop discovery for the rest.
+    }
+  }
+
+  for (const [repo, cred] of found) {
+    if (!repoCredCache.has(repo)) repoCredCache.set(repo, cred);
+  }
+  const repos = Array.from(found.keys());
+  discoveryCache = { at: Date.now(), repos };
+  return repos;
+}
+
 export const bitbucket = {
   /**
    * Check a credential against the server itself (not a specific repo), so a
@@ -559,5 +612,14 @@ export const bitbucket = {
 
   repos(): string[] {
     return bitbucketRepoList;
+  },
+
+  /** Configured repos plus (unless disabled) every repo a stored account can read. */
+  async allRepos(): Promise<string[]> {
+    const configured = bitbucketRepoList;
+    if (!env.bitbucketAutoDiscover) return configured;
+    const discovered = await discoverBitbucketRepos().catch(() => [] as string[]);
+    const seen = new Set(configured.map((r) => r.toLowerCase()));
+    return [...configured, ...discovered.filter((r) => !seen.has(r.toLowerCase()))];
   },
 };

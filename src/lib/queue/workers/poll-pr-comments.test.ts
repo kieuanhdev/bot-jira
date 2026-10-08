@@ -40,6 +40,7 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/bitbucket/client", () => ({
   bitbucket: {
     repos: vi.fn(),
+    allRepos: vi.fn(),
     listPullRequests: vi.fn(),
     listOpenPullRequests: vi.fn(),
     listPullRequestActivities: vi.fn(),
@@ -118,7 +119,7 @@ describe("runPollPrComments", () => {
   });
 
   it("skips notifications on initial run and sets baseline cursor", async () => {
-    vi.mocked(bitbucket.repos).mockReturnValue(["EPM/easy_pos"]);
+    vi.mocked(bitbucket.allRepos).mockResolvedValue(["EPM/easy_pos"]);
     vi.mocked(prisma.integrationCursor.findUnique).mockResolvedValue(null);
     const mockPr = { id: 10, title: "Test PR", state: "OPEN", fromRef: { branch: "feat/1" } } satisfies BbPullRequest;
     vi.mocked(bitbucket.listPullRequests).mockResolvedValue([mockPr]);
@@ -150,7 +151,7 @@ describe("runPollPrComments", () => {
   it("notifies for comments newer than the existing cursor on OPEN and MERGED PRs", async () => {
     const now = Date.now();
     const cursorTime = now - 5000;
-    vi.mocked(bitbucket.repos).mockReturnValue(["EPM/easy_pos"]);
+    vi.mocked(bitbucket.allRepos).mockResolvedValue(["EPM/easy_pos"]);
     vi.mocked(prisma.integrationCursor.findUnique).mockResolvedValue(cursorRow(String(cursorTime)));
     vi.mocked(prisma.user.findMany).mockResolvedValue([
       { id: "u1", jiraUsername: "anhnk_mb", email: "anhnk@intern.vn", bitbucketUserEnc: null },

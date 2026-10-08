@@ -25,7 +25,7 @@ export async function runCheckBranches(): Promise<WorkerLog> {
   });
   const validKeys = new Set(activeIssues.map((i) => i.jiraKey));
 
-  for (const repo of bitbucket.repos()) {
+  for (const repo of await bitbucket.allRepos()) {
     const syncStartedAt = new Date();
     let repoSuccess = false;
     try {

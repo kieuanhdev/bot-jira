@@ -3,6 +3,7 @@ import {
   normalizeProjectKey,
   isValidProjectKeyFormat,
 } from "@/lib/jira/project-catalog";
+import { registerAccessibleConfiguredProjects } from "@/lib/jira/project-access";
 import { enqueueJiraProjectSync } from "@/lib/queue/boss";
 import type { WorkerLog } from "../guard";
 import type { JiraSyncSource } from "./poll-jira";
@@ -15,6 +16,11 @@ export type PollJiraDispatchJobData = {
 };
 
 export async function runPollJiraDispatch(data: PollJiraDispatchJobData = {}): Promise<WorkerLog> {
+  // Pick up configured projects that a stored account can read but the catalog lacks.
+  await registerAccessibleConfiguredProjects().catch((err) =>
+    console.warn("[poll-jira-dispatch] project auto-discovery failed:", err instanceof Error ? err.message : err)
+  );
+
   const rawProjects = data.projectKeys && data.projectKeys.length > 0
     ? data.projectKeys
     : await listSyncEnabledProjectKeys();

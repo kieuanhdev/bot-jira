@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { jira, parseJiraDate } from "@/lib/jira/client";
+import { jira as systemJira, jiraWith, parseJiraDate } from "@/lib/jira/client";
 import { getProjectPeopleFields } from "@/lib/jira/people-fields";
 import { buildProjectPollJql } from "@/lib/jira/jql";
 import { upsertJiraCommentsWithNew, upsertJiraIssue } from "@/lib/issues/cache";
@@ -73,12 +73,35 @@ export function safeError(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 300);
 }
 
+/**
+ * Client to sync `projectKey` with: the first stored account that can read it.
+ * Any failure while resolving falls back to the system client so discovery can
+ * never block a sync that used to work.
+ */
+async function jiraClientForProject(projectKey: string): Promise<typeof systemJira> {
+  try {
+    const { resolveJiraAuthForProject } = await import("@/lib/jira/project-access");
+    const { getSystemJiraAuth } = await import("@/lib/jira/client");
+    const [resolved, system] = await Promise.all([
+      resolveJiraAuthForProject(projectKey),
+      getSystemJiraAuth(),
+    ]);
+    if (resolved && (!system || resolved.token !== system.token || resolved.user !== system.user)) {
+      return jiraWith(resolved);
+    }
+  } catch {
+    // fall through to the system client
+  }
+  return systemJira;
+}
+
 export async function syncProject(
   projectKey: string,
   full: boolean,
   options?: { signal?: AbortSignal; runToken?: string }
 ): Promise<ProjectStats> {
   const runToken = options?.runToken ?? randomUUID();
+  const jira = await jiraClientForProject(projectKey);
   const isFullScan_precomputed = full; // may adjust after cursor check
   const leaseTtlSeconds = computeLeaseTtlSeconds(isFullScan_precomputed);
   const expiresAt = new Date(Date.now() + leaseTtlSeconds * 1000);

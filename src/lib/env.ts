@@ -30,6 +30,8 @@ export const env = {
   // When JIRA_TOKEN is not set, sync/webhook/system calls use the stored Jira token of
   // this app user (matched on User.jiraUsername, case-insensitive) instead of an arbitrary one.
   jiraSyncUsername: str("JIRA_SYNC_USERNAME"),
+  // Sync each project with whichever stored Jira account can read it.
+  jiraAutoDiscover: bool("JIRA_AUTO_DISCOVER", true),
   jiraToken: str("JIRA_TOKEN"),
   // "Bearer" (default) or "basic". This Jira DC accepts a raw Bearer token.
   jiraAuth: str("JIRA_AUTH", "Bearer"),
@@ -82,6 +84,8 @@ export const env = {
   bitbucketToken: str("BITBUCKET_TOKEN"),
   // Comma-separated project/repo slugs, e.g. "team/app1,team/app2"
   bitbucketRepos: str("BITBUCKET_REPOS"),
+  // Also scan every repo that any stored Bitbucket account can read.
+  bitbucketAutoDiscover: bool("BITBUCKET_AUTO_DISCOVER", true),
   // Default base branch considered "merged into" for the branch check.
   bitbucketBaseBranch: str("BITBUCKET_BASE_BRANCH", "main"),
 
