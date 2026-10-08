@@ -155,6 +155,8 @@ export async function rejectBranchSuggestion(
   return { ok: true, branch: updated };
 }
 
+const JIRA_KEY_FORMAT = /^[A-Z][A-Z0-9]+-\d+$/;
+
 /**
  * Manually link or relink a branch to a specific Jira task.
  */
@@ -169,22 +171,15 @@ export async function manualRelinkBranch(
   if (!branch) return { ok: false, error: "Branch not found" };
 
   const normalizedKey = targetJiraKey.trim().toUpperCase();
-  let issue = await prisma.issueCache.findUnique({ where: { jiraKey: normalizedKey } });
+  if (!JIRA_KEY_FORMAT.test(normalizedKey)) {
+    return { ok: false, error: `Mã Jira "${normalizedKey}" không hợp lệ (ví dụ: EPM-3395)` };
+  }
+  const issue = await prisma.issueCache.findUnique({
+    where: { jiraKey: normalizedKey },
+    select: { jiraKey: true },
+  });
   if (!issue) {
-    issue = await prisma.issueCache.create({
-      data: {
-        jiraKey: normalizedKey,
-        projectKey: normalizedKey.split("-")[0] || "",
-        summary: normalizedKey,
-        status: "Unknown",
-        statusCategory: "unknown",
-        priority: "Medium",
-        type: "Task",
-        fixVersionIds: [],
-        fixVersionNames: [],
-        labels: [],
-      },
-    });
+    return { ok: false, error: `Không tìm thấy task ${normalizedKey} trong bộ nhớ đệm Jira` };
   }
 
   const before = {
@@ -243,6 +238,32 @@ export async function manualRelinkBranch(
   });
 
   return { ok: true, branch: updated };
+}
+
+/**
+ * Link several branches to the same Jira task. Continues past individual failures and
+ * returns them so the UI can report them.
+ */
+export async function manualRelinkBranches(
+  branchIds: string[],
+  targetJiraKey: string,
+  actorId: string,
+  actorEmail?: string,
+  reason?: string
+): Promise<{ ok: true; count: number; failed: { id: string; error: string }[] } | { ok: false; error: string }> {
+  const ids = Array.from(new Set(branchIds.filter((id) => typeof id === "string" && id)));
+  if (ids.length === 0) return { ok: false, error: "Chưa chọn nhánh nào" };
+  if (ids.length > 100) return { ok: false, error: "Chỉ gắn tối đa 100 nhánh mỗi lần" };
+
+  let count = 0;
+  const failed: { id: string; error: string }[] = [];
+  for (const id of ids) {
+    const res = await manualRelinkBranch(id, targetJiraKey, actorId, actorEmail, reason);
+    if (res.ok) count++;
+    else failed.push({ id, error: res.error ?? "Unknown error" });
+  }
+  if (count === 0) return { ok: false, error: failed[0]?.error ?? "Không gắn được nhánh nào" };
+  return { ok: true, count, failed };
 }
 
 /**

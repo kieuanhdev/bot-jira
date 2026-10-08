@@ -45,6 +45,7 @@ export function BranchesClient() {
   const [toast, setToast] = useState<string | null>(null);
   const [selectedBranchForDrawer, setSelectedBranchForDrawer] = useState<BranchRowItem | null>(null);
   const [selectedBranchForLink, setSelectedBranchForLink] = useState<BranchRowItem | null>(null);
+  const [bulkLinkIds, setBulkLinkIds] = useState<string[] | undefined>(undefined);
 
   const syncMutation = useBranchSync();
   const linkMutation = useBranchLink();
@@ -420,6 +421,10 @@ export function BranchesClient() {
                   onLink={(item: UnlinkedBranchItem) =>
                     setSelectedBranchForLink(toBranchRow(item))
                   }
+                  onLinkMany={(picked: UnlinkedBranchItem[]) => {
+                    setBulkLinkIds(picked.map((p) => p.id));
+                    setSelectedBranchForLink(toBranchRow(picked[0]));
+                  }}
                 />
               ) : (
                 <EmptyState
@@ -504,14 +509,19 @@ export function BranchesClient() {
       {selectedBranchForLink && (
         <BranchLinkDialog
           branch={selectedBranchForLink}
+          bulkIds={bulkLinkIds}
           bitbucketBaseUrl={bitbucketBaseUrl}
           open={Boolean(selectedBranchForLink)}
           onOpenChange={(open) => {
-            if (!open) setSelectedBranchForLink(null);
+            if (!open) {
+              setSelectedBranchForLink(null);
+              setBulkLinkIds(undefined);
+            }
           }}
           onSuccess={() => {
             showToast("Cập nhật liên kết Jira task thành công");
             setSelectedBranchForLink(null);
+            setBulkLinkIds(undefined);
           }}
         />
       )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { timeAgo, getBitbucketBranchUrl } from "@/lib/utils";
@@ -10,9 +11,23 @@ type UnlinkedBranchViewProps = {
   items: UnlinkedBranchItem[];
   bitbucketBaseUrl?: string | null;
   onLink: (item: UnlinkedBranchItem) => void;
+  onLinkMany: (items: UnlinkedBranchItem[]) => void;
 };
 
-export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink }: UnlinkedBranchViewProps) {
+export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink, onLinkMany }: UnlinkedBranchViewProps) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Ignore ids that left the list (page change, linked elsewhere).
+  const selectedItems = items.filter((i) => selected.has(i.id));
+  const allSelected = items.length > 0 && selectedItems.length === items.length;
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   return (
     <div className="space-y-3">
       <div className="p-3 bg-muted/40 border border-border rounded-xl text-xs text-muted-foreground flex items-center gap-2">
@@ -23,6 +38,28 @@ export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink }: Unlinked
         </span>
       </div>
 
+      <div className="flex items-center justify-between gap-2 px-1 text-xs">
+        <label className="flex cursor-pointer items-center gap-2 text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={() => setSelected(allSelected ? new Set() : new Set(items.map((i) => i.id)))}
+            className="h-3.5 w-3.5 cursor-pointer accent-teal-600"
+          />
+          Chọn tất cả ({items.length})
+        </label>
+        {selectedItems.length > 0 && (
+          <Button
+            size="sm"
+            onClick={() => onLinkMany(selectedItems)}
+            className="gap-1.5 text-xs bg-teal-600 hover:bg-teal-500 text-white cursor-pointer"
+          >
+            <LinkIcon className="w-3.5 h-3.5" />
+            <span>Gắn {selectedItems.length} nhánh vào 1 task</span>
+          </Button>
+        )}
+      </div>
+
       {items.map((item) => {
         const gitUrl = getBitbucketBranchUrl(item.repo, item.branch, bitbucketBaseUrl, item.prUrl);
         return (
@@ -30,7 +67,14 @@ export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink }: Unlinked
             key={item.id}
             className="p-3.5 rounded-xl border border-border bg-card hover:border-border/80 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
           >
-            <div className="space-y-1 min-w-0">
+            <input
+              type="checkbox"
+              checked={selected.has(item.id)}
+              onChange={() => toggle(item.id)}
+              aria-label={`Chọn nhánh ${item.branch}`}
+              className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-teal-600"
+            />
+            <div className="space-y-1 min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-mono bg-muted text-muted-foreground px-2 py-0.5 rounded">
                   {item.repo}
@@ -99,17 +143,17 @@ export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink }: Unlinked
                   <ExternalLink className="w-3 h-3" />
                 </a>
               )}
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => onLink(item)}
-              className="gap-1.5 text-xs bg-teal-600 hover:bg-teal-500 text-white cursor-pointer"
-            >
-              <LinkIcon className="w-3.5 h-3.5" />
-              <span>Gắn Jira task</span>
-            </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => onLink(item)}
+                className="gap-1.5 text-xs bg-teal-600 hover:bg-teal-500 text-white cursor-pointer"
+              >
+                <LinkIcon className="w-3.5 h-3.5" />
+                <span>Gắn Jira task</span>
+              </Button>
+            </div>
           </div>
-        </div>
         );
       })}
     </div>

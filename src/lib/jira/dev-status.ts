@@ -189,6 +189,20 @@ export type SyncedBranchResult = {
 /**
  * Fetch and synchronize Jira Dev Status branches/PRs into the BranchInfo table for a single Jira task.
  */
+/**
+ * Dev Status must not override a user decision: unlinked/rejected branches stay
+ * untouched, and a manual/explicit link to a different task is preserved.
+ */
+function shouldSkipDevStatusLink(
+  existing: { linkState: string | null; jiraKey: string | null; linkSource: string | null } | null,
+  jiraKey: string
+): boolean {
+  if (!existing) return false;
+  if (existing.linkState === "manual_unlinked" || existing.linkState === "rejected") return true;
+  const pinned = existing.linkSource === "manual" || existing.linkSource === "explicit";
+  return pinned && !!existing.jiraKey && existing.jiraKey !== jiraKey;
+}
+
 export async function syncJiraDevStatusForIssue(
   jiraKey: string,
   auth?: JiraAuth
@@ -251,9 +265,9 @@ export async function syncJiraDevStatusForIssue(
       // Respect manual unlink / rejection decisions (BR-003, BR-202)
       const existing = await prisma.branchInfo.findUnique({
         where: { repo_branch: { repo, branch: branchName } },
-        select: { linkState: true, jiraKey: true },
+        select: { linkState: true, jiraKey: true, linkSource: true },
       });
-      if (existing?.linkState === "manual_unlinked" || existing?.linkState === "rejected") {
+      if (shouldSkipDevStatusLink(existing, jiraKey)) {
         continue;
       }
 
@@ -327,9 +341,9 @@ export async function syncJiraDevStatusForIssue(
       // Respect manual decisions
       const existing = await prisma.branchInfo.findUnique({
         where: { repo_branch: { repo, branch: branchName } },
-        select: { linkState: true, jiraKey: true },
+        select: { linkState: true, jiraKey: true, linkSource: true },
       });
-      if (existing?.linkState === "manual_unlinked" || existing?.linkState === "rejected") {
+      if (shouldSkipDevStatusLink(existing, jiraKey)) {
         continue;
       }
 

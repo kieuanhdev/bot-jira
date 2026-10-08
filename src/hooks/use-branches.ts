@@ -1,12 +1,13 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 
 type SyncResult = { queued?: boolean };
 type LinkBody =
   | { action: "confirm" | "reject" | "unlink" | "confirm_all" }
-  | { jiraKey: string | null; reason?: string };
+  | { jiraKey: string | null; reason?: string }
+  | { action: "link_many"; ids: string[]; jiraKey: string; reason?: string };
 
 export function useBranchSync() {
   const qc = useQueryClient();
@@ -28,5 +29,25 @@ export function useBranchLink() {
       qc.invalidateQueries({ queryKey: ["branches"] });
       qc.invalidateQueries({ queryKey: ["branches-tasks"] });
     },
+  });
+}
+
+export type IssueSearchItem = {
+  jiraKey: string;
+  summary: string;
+  status: string;
+  statusCategory: string;
+  assigneeJira: string | null;
+};
+
+export function useIssueSearch(q: string) {
+  const term = q.trim();
+  return useQuery({
+    queryKey: ["issue-search", term],
+    queryFn: () =>
+      api<{ items: IssueSearchItem[] }>(`/api/issues/search?q=${encodeURIComponent(term)}`),
+    enabled: term.length >= 2,
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
   });
 }

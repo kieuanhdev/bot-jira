@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -14,20 +15,35 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, Link2, Unlink, ExternalLink } from "lucide-react";
 import { getErrorMessage } from "@/lib/api-client";
-import { useBranchLink } from "@/hooks/use-branches";
+import { useBranchLink, useIssueSearch } from "@/hooks/use-branches";
 import { getBitbucketBranchUrl } from "@/lib/utils";
 import type { BranchRowItem } from "./branch-types";
 
 type BranchLinkDialogProps = {
   branch: BranchRowItem | null;
+  /** When set, links all these branches to the chosen task instead of just `branch`. */
+  bulkIds?: string[];
   bitbucketBaseUrl?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 };
 
+const JIRA_KEY_FORMAT = /^[A-Z][A-Z0-9]+-\d+$/;
+
+/** Turns `feature/add-login-page` or the PR title into plain words for task search. */
+function branchSearchHint(branch: BranchRowItem): string {
+  const source = branch.prTitle || branch.branch;
+  return source
+    .replace(/^(feature|feat|bugfix|fix|hotfix|chore|refactor)[/_-]/i, "")
+    .replace(/[/_-]+/g, " ")
+    .trim()
+    .slice(0, 80);
+}
+
 export function BranchLinkDialog({
   branch,
+  bulkIds,
   bitbucketBaseUrl,
   open,
   onOpenChange,
@@ -37,19 +53,32 @@ export function BranchLinkDialog({
   const [reasonInput, setReasonInput] = useState("");
   const linkMutation = useBranchLink();
 
+  const typed = jiraKeyInput.trim();
+  // With nothing typed, search by words from the branch name / PR title as a hint.
+  const hint = branch ? branchSearchHint(branch) : "";
+  const searchTerm = typed.length >= 2 ? typed : hint;
+  const search = useIssueSearch(searchTerm);
+  const results = search.data?.items ?? [];
+  const exactPicked = results.some((r) => r.jiraKey === typed.toUpperCase());
+
   if (!branch) return null;
+
+  const isBulk = Boolean(bulkIds && bulkIds.length > 1);
+  const keyValid = JIRA_KEY_FORMAT.test(typed.toUpperCase());
 
   const gitUrl = getBitbucketBranchUrl(branch.repo, branch.branch, bitbucketBaseUrl, branch.prUrl);
   const error = linkMutation.error ? getErrorMessage(linkMutation.error) : null;
 
   const handleSave = (unlink = false) => {
+    const jiraKey = jiraKeyInput.trim().toUpperCase();
+    const reason = reasonInput.trim() || undefined;
     linkMutation.mutate(
-      {
-        branchId: branch.id,
-        body: unlink
-          ? { jiraKey: null }
-          : { jiraKey: jiraKeyInput.trim().toUpperCase() || null, reason: reasonInput.trim() || undefined },
-      },
+      isBulk
+        ? { branchId: "bulk", body: { action: "link_many", ids: bulkIds!, jiraKey, reason } }
+        : {
+            branchId: branch.id,
+            body: unlink ? { jiraKey: null } : { jiraKey: jiraKey || null, reason },
+          },
       {
         onSuccess: () => {
           onSuccess();
@@ -69,9 +98,10 @@ export function BranchLinkDialog({
             Liên kết Jira Task
           </DialogTitle>
           <DialogDescription className="font-mono text-xs">
-            Nhánh:{" "}
-            {gitUrl ? (
-              <a
+            {isBulk ? (
+              <span className="font-semibold text-foreground">{bulkIds!.length} nhánh đã chọn</span>
+            ) : gitUrl ? (
+              <>Nhánh:{" "}<a
                 href={gitUrl}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -80,9 +110,9 @@ export function BranchLinkDialog({
               >
                 <span>{branch.branch}</span>
                 <ExternalLink className="h-3 w-3 opacity-60" />
-              </a>
+              </a></>
             ) : (
-              <span className="font-semibold text-foreground">{branch.branch}</span>
+              <span className="font-semibold text-foreground">Nhánh: {branch.branch}</span>
             )}
           </DialogDescription>
         </DialogHeader>
@@ -103,13 +133,44 @@ export function BranchLinkDialog({
               id="jira-key-input"
               value={jiraKeyInput}
               onChange={(e) => setJiraKeyInput(e.target.value.toUpperCase())}
-              placeholder="Ví dụ: EPM-3395"
+              placeholder="Nhập mã hoặc tên task, ví dụ: EPM-3395"
               className="font-mono text-sm uppercase"
+              autoComplete="off"
               disabled={linkMutation.isPending}
             />
-            <span className="text-[11px] text-muted-foreground">
-              Mã task phải tồn tại trong bộ nhớ đệm Jira.
-            </span>
+            {!exactPicked && results.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <span className="text-[11px] text-muted-foreground">
+                  {typed.length >= 2 ? "Kết quả tìm kiếm" : "Gợi ý theo tên nhánh"}
+                </span>
+                <ul className="max-h-48 overflow-y-auto rounded-md border border-border divide-y divide-border">
+                  {results.map((r) => (
+                    <li key={r.jiraKey}>
+                      <button
+                        type="button"
+                        onClick={() => setJiraKeyInput(r.jiraKey)}
+                        disabled={linkMutation.isPending}
+                        className="flex w-full cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted/60"
+                      >
+                        <span className="font-mono font-semibold text-primary shrink-0">{r.jiraKey}</span>
+                        <span className="truncate text-foreground">{r.summary}</span>
+                        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{r.status}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {typed.length >= 2 && !search.isFetching && results.length === 0 && (
+              <span className="text-[11px] text-muted-foreground">
+                Không tìm thấy task nào khớp trong bộ nhớ đệm Jira.
+              </span>
+            )}
+            {typed.length > 0 && !keyValid && (
+              <span className={cn("text-[11px] text-muted-foreground")}>
+                Chọn một task trong danh sách hoặc nhập đúng mã (ví dụ EPM-3395).
+              </span>
+            )}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -128,7 +189,7 @@ export function BranchLinkDialog({
         </div>
 
         <DialogFooter className="flex flex-row items-center justify-between sm:justify-between">
-          {branch.jiraKey ? (
+          {branch.jiraKey && !isBulk ? (
             <Button
               type="button"
               variant="outline"
@@ -156,7 +217,7 @@ export function BranchLinkDialog({
             <Button
               type="button"
               size="sm"
-              disabled={linkMutation.isPending || !jiraKeyInput.trim()}
+              disabled={linkMutation.isPending || !keyValid}
               onClick={() => handleSave(false)}
             >
               {linkMutation.isPending ? "Đang lưu..." : "Lưu liên kết"}

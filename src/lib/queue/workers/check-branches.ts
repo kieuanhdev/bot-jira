@@ -55,7 +55,7 @@ export async function runCheckBranches(): Promise<WorkerLog> {
           }
         }
 
-        const linkRes = resolveBranchLink({
+        let linkRes = resolveBranchLink({
           branch: s.branch.name,
           prTitle: s.prTitle,
           commitMessages,
@@ -65,25 +65,40 @@ export async function runCheckBranches(): Promise<WorkerLog> {
           validJiraKeys: validKeys,
         });
 
-        // Ensure issue exists in IssueCache so foreign key is satisfied
+        // Never invent an issue: a key that is not in IssueCache yet becomes a suggestion,
+        // and is promoted to a confirmed link on a later run once the issue is synced.
         if (linkRes.jiraKey && !validKeys.has(linkRes.jiraKey)) {
-          await prisma.issueCache.upsert({
-            where: { jiraKey: linkRes.jiraKey },
-            create: {
-              jiraKey: linkRes.jiraKey,
-              projectKey: linkRes.jiraKey.split("-")[0] || "",
-              summary: linkRes.jiraKey,
-              status: "Unknown",
-              statusCategory: "unknown",
-              priority: "Medium",
-              type: "Task",
-              fixVersionIds: [],
-              fixVersionNames: [],
-              labels: [],
-            },
-            update: {},
+          linkRes = {
+            jiraKey: null,
+            linkSource: linkRes.linkSource,
+            linkConfidence: linkRes.linkConfidence,
+            linkState: "suggested",
+            suggestedJiraKey: linkRes.jiraKey,
+            reason: `Task ${linkRes.jiraKey} chưa có trong bộ nhớ đệm Jira`,
+          };
+        }
+
+        // Adopt a suggestion parsed from a Jira comment for the same branch name.
+        const placeholders = await prisma.branchInfo.findMany({
+          where: { branch: s.branch.name, repo: { startsWith: "jira-comment:" }, deletedAt: null },
+          select: { id: true, suggestedJiraKey: true },
+        });
+        if (placeholders.length > 0) {
+          const hint = placeholders.find((p) => p.suggestedJiraKey && validKeys.has(p.suggestedJiraKey));
+          if (!linkRes.jiraKey && !linkRes.suggestedJiraKey && linkRes.linkState === "unlinked" && hint) {
+            linkRes = {
+              jiraKey: null,
+              linkSource: "comment",
+              linkConfidence: 60,
+              linkState: "suggested",
+              suggestedJiraKey: hint.suggestedJiraKey,
+            };
+          }
+          // The real Bitbucket row supersedes the comment placeholder.
+          await prisma.branchInfo.updateMany({
+            where: { id: { in: placeholders.map((p) => p.id) } },
+            data: { deletedAt: new Date() },
           });
-          validKeys.add(linkRes.jiraKey);
         }
 
         await prisma.branchInfo.upsert({
