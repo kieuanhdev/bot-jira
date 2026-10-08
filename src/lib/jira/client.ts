@@ -1,31 +1,17 @@
 import { env } from "@/lib/env";
-import type {
-  JiraIssue,
-  JiraSearchResult,
-  JiraTransition,
-  JiraComment,
-  JiraProject,
-  JiraUser,
-  JiraProjectStatus,
-  JiraCommentPage,
-  JiraVersion,
-  JiraComponent,
-  JiraFieldDefinition,
-  JiraEditMeta,
-  JiraWorklog,
-  JiraMyPermissions,
-  JiraCreateMetaResponse,
-  JiraCreateMetaField,
-  JiraCreateMetaIssueTypesResponse,
-  JiraCreateMetaFieldsResponse,
-  CreateIssueInput,
-  CreateIssueResult,
-  JiraBoard,
-  JiraBoardPage,
-  JiraBoardConfiguration,
-} from "./types";
-
 import { getEpicLinkFieldIds, isEpicLinkField, setEpicLinkFieldIds } from "@/lib/issues/epic";
+import type { JiraFieldDefinition, JiraMyPermissions, JiraUser } from "./types";
+import type { JiraAuth } from "./auth";
+import { JiraRequestError } from "./errors";
+import { createBoardResource } from "./resources/boards";
+import { createIssueResource } from "./resources/issues";
+import { createPermissionResource } from "./resources/permissions";
+import { createProjectResource } from "./resources/projects";
+import { createVersionResource } from "./resources/versions";
+import { createWorklogResource } from "./resources/worklogs";
+
+export type { JiraAuth } from "./auth";
+export { JiraRequestError } from "./errors";
 
 const BASE_ISSUE_FIELDS = [
   "project",
@@ -35,12 +21,12 @@ const BASE_ISSUE_FIELDS = [
   "status",
   "statuscategorychangedate",
   "resolutiondate",
-  "customfield_10706", // Done At (Jira SDS custom field)
-  "customfield_10709", // Work Start At (Jira SDS custom field)
+  "customfield_10706",
+  "customfield_10709",
   "assignee",
   "reporter",
-  "customfield_10300", // Approver
-  "customfield_10501", // Assignee Tester
+  "customfield_10300",
+  "customfield_10501",
   "labels",
   "fixVersions",
   "priority",
@@ -65,7 +51,14 @@ function isPointField(field: Pick<JiraFieldDefinition, "name" | "schema">): bool
 
 function configuredPointField(): JiraFieldDefinition[] {
   return env.jiraPointsFieldId
-    ? [{ id: env.jiraPointsFieldId, name: "Configured points", custom: true, schema: { type: "number" } }]
+    ? [
+        {
+          id: env.jiraPointsFieldId,
+          name: "Configured points",
+          custom: true,
+          schema: { type: "number" },
+        },
+      ]
     : [];
 }
 
@@ -86,7 +79,6 @@ export function jiraIssueFields(extraFields: string[] = []): string {
     .join(",");
 }
 
-/** Extract the active points value and field id from a Jira issue payload. */
 export function jiraPointsFromFields(fields: Record<string, unknown>): {
   points: number | null;
   fieldId: string | null;
@@ -103,20 +95,6 @@ export function jiraPointsFromFields(fields: Record<string, unknown>): {
   return { points: null, fieldId: candidates[0]?.id ?? null };
 }
 
-export class JiraRequestError extends Error {
-  constructor(
-    message: string,
-    readonly status: number | null,
-    readonly retryable: boolean,
-    readonly errorDetails?: string | null,
-    readonly retryAfterMs: number | null = null
-  ) {
-    super(message);
-    this.name = "JiraRequestError";
-  }
-}
-
-/** Parse a Retry-After header (delta-seconds or HTTP date) into milliseconds. */
 function parseRetryAfterMs(value: string | null): number | null {
   if (!value) return null;
   const seconds = Number(value);
@@ -125,11 +103,10 @@ function parseRetryAfterMs(value: string | null): number | null {
   return Number.isNaN(date) ? null : Math.max(0, date - Date.now());
 }
 
-/**
- * Safely extracts error messages and field-specific errors from Jira REST JSON error responses.
- * Rejects non-JSON (like HTML error pages), strips any HTML tags, and truncates to maxLength.
- */
-export function extractJiraErrorDetail(rawBody?: string | null, maxLength = 300): string | null {
+export function extractJiraErrorDetail(
+  rawBody?: string | null,
+  maxLength = 300
+): string | null {
   if (!rawBody || typeof rawBody !== "string") return null;
   const trimmed = rawBody.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return null;
@@ -143,75 +120,54 @@ export function extractJiraErrorDetail(rawBody?: string | null, maxLength = 300)
     if (!parsed || typeof parsed !== "object") return null;
 
     const parts: string[] = [];
-
     if (parsed.errors && typeof parsed.errors === "object" && !Array.isArray(parsed.errors)) {
-      for (const [field, val] of Object.entries(parsed.errors)) {
-        if (typeof val === "string" && val.trim()) {
-          const cleanVal = val.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
-          if (cleanVal) parts.push(`${field}: ${cleanVal}`);
+      for (const [field, value] of Object.entries(parsed.errors)) {
+        if (typeof value === "string" && value.trim()) {
+          const cleanValue = value.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+          if (cleanValue) parts.push(`${field}: ${cleanValue}`);
         }
       }
     }
 
     if (Array.isArray(parsed.errorMessages)) {
-      for (const msg of parsed.errorMessages) {
-        if (typeof msg === "string" && msg.trim()) {
-          const cleanMsg = msg.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
-          if (cleanMsg) parts.push(cleanMsg);
+      for (const message of parsed.errorMessages) {
+        if (typeof message === "string" && message.trim()) {
+          const cleanMessage = message.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+          if (cleanMessage) parts.push(cleanMessage);
         }
       }
     } else if (typeof parsed.message === "string" && parsed.message.trim()) {
-      const cleanMsg = parsed.message.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
-      if (cleanMsg) parts.push(cleanMsg);
+      const cleanMessage = parsed.message.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+      if (cleanMessage) parts.push(cleanMessage);
     }
 
     if (parts.length === 0) return null;
-
     let combined = parts.join("; ");
-    if (combined.length > maxLength) {
-      combined = combined.slice(0, maxLength - 3) + "...";
-    }
+    if (combined.length > maxLength) combined = combined.slice(0, maxLength - 3) + "...";
     return combined;
   } catch {
     return null;
   }
 }
 
-/** Normalize a Jira date (ISO, often with a +0000 offset) to a Date. */
-export function parseJiraDate(s?: string | null): Date | undefined {
-  if (!s) return undefined;
-  // "2024-01-01T10:00:00.000+0000" -> "2024-01-01T10:00:00.000+00:00"
-  const iso = s.replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? undefined : d;
+export function parseJiraDate(value?: string | null): Date | undefined {
+  if (!value) return undefined;
+  const iso = value.replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-/**
- * Check whether the user's Jira permissions grant rights to create/administer Fix Versions in a project.
- * Jira project versions can be created by users with ADMINISTER_PROJECTS permission on the project,
- * or global Jira administrators (ADMINISTER or SYSTEM_ADMIN).
- */
 export function canCreateProjectVersion(response?: JiraMyPermissions | null): boolean {
-  if (!response || typeof response !== "object" || !response.permissions) {
-    return false;
-  }
-  const perms = response.permissions;
+  if (!response || typeof response !== "object" || !response.permissions) return false;
+  const permissions = response.permissions;
   return Boolean(
-    perms.ADMINISTER_PROJECTS?.havePermission ||
-    perms.MANAGE_VERSIONS?.havePermission ||
-    perms.PROJECT_ADMIN?.havePermission ||
-    perms.ADMINISTER?.havePermission ||
-    perms.SYSTEM_ADMIN?.havePermission
+    permissions.ADMINISTER_PROJECTS?.havePermission ||
+      permissions.MANAGE_VERSIONS?.havePermission ||
+      permissions.PROJECT_ADMIN?.havePermission ||
+      permissions.ADMINISTER?.havePermission ||
+      permissions.SYSTEM_ADMIN?.havePermission
   );
 }
-
-/** Auth material for a single Jira caller. */
-export type JiraAuth = {
-  user: string;
-  token: string;
-  /** "Bearer" or "basic". */
-  authMode: "Bearer" | "basic";
-};
 
 export async function getSystemJiraAuth(): Promise<JiraAuth | null> {
   if (env.jiraToken) {
@@ -225,12 +181,12 @@ export async function getSystemJiraAuth(): Promise<JiraAuth | null> {
     const { prisma } = await import("@/lib/prisma");
     const { safeDecrypt } = await import("@/lib/crypto");
     const syncUsername = env.jiraSyncUsername.trim();
-    // A configured sync user is authoritative: never silently fall back to
-    // another person's token when theirs is missing or unreadable.
     const user = await prisma.user.findFirst({
       where: {
         jiraTokenEnc: { not: null },
-        ...(syncUsername ? { jiraUsername: { equals: syncUsername, mode: "insensitive" as const } } : {}),
+        ...(syncUsername
+          ? { jiraUsername: { equals: syncUsername, mode: "insensitive" as const } }
+          : {}),
       },
       orderBy: [{ role: "asc" }, { updatedAt: "desc" }],
       select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true, jiraUsername: true },
@@ -239,37 +195,28 @@ export async function getSystemJiraAuth(): Promise<JiraAuth | null> {
       const token = safeDecrypt(user.jiraTokenEnc);
       if (token) {
         const username = user.jiraUsername || safeDecrypt(user.jiraUserEnc) || "";
-        const authMode = (user.jiraAuth || "Bearer").toLowerCase() === "basic" ? "basic" : "Bearer";
+        const authMode =
+          (user.jiraAuth || "Bearer").toLowerCase() === "basic" ? "basic" : "Bearer";
         return { user: username, token, authMode };
       }
     }
   } catch {
-    // Database may not be connected yet
+    // Database may not be connected yet.
   }
   return null;
 }
 
-/**
- * True when system-level Jira calls can authenticate: either JIRA_TOKEN is set
- * or a stored user token (JIRA_SYNC_USERNAME, else any user) is available.
- * Async replacement for the env-only `hasJiraConfig()` in worker guards.
- */
 export async function hasJiraCredentials(): Promise<boolean> {
   if (!env.jiraBaseUrl) return false;
   return Boolean(await getSystemJiraAuth());
 }
 
-function authHeader(a: JiraAuth): string {
-  return a.authMode === "basic"
-    ? `Basic ${Buffer.from(`${a.user}:${a.token}`).toString("base64")}`
-    : `Bearer ${a.token}`;
+function authHeader(auth: JiraAuth): string {
+  return auth.authMode === "basic"
+    ? `Basic ${Buffer.from(`${auth.user}:${auth.token}`).toString("base64")}`
+    : `Bearer ${auth.token}`;
 }
 
-/**
- * Probe /myself with both auth styles and report which one this Jira accepts.
- * Used on credential save so we store the mode that actually works — the user
- * doesn't have to guess Bearer vs Basic.
- */
 export async function detectJiraAuth(
   token: string,
   username: string
@@ -288,44 +235,40 @@ export async function detectJiraAuth(
     { user: username, token, authMode: "Bearer" },
     ...(username ? [{ user: username, token, authMode: "basic" as const }] : []),
   ];
-  for (const a of candidates) {
+  for (const auth of candidates) {
     try {
-      const res = await fetch(`${base}/rest/api/2/myself`, {
-        headers: { Accept: "application/json", Authorization: authHeader(a) },
+      const response = await fetch(`${base}/rest/api/2/myself`, {
+        headers: { Accept: "application/json", Authorization: authHeader(auth) },
       });
-      if (res.ok) {
-        const me = (await res.json()) as JiraUser;
-        const identityKey = computeJiraIdentityKey(me);
+      if (response.ok) {
+        const user = (await response.json()) as JiraUser;
+        const identityKey = computeJiraIdentityKey(user);
         return {
-          mode: a.authMode,
-          name: me.name || me.displayName,
-          key: me.key,
-          displayName: me.displayName,
-          emailAddress: me.emailAddress,
-          active: me.active,
+          mode: auth.authMode,
+          name: user.name || user.displayName,
+          key: user.key,
+          displayName: user.displayName,
+          emailAddress: user.emailAddress,
+          active: user.active,
           jiraIdentityKey: identityKey ?? undefined,
         };
       }
     } catch {
-      /* try next */
+      // Try the next auth mode.
     }
   }
   return null;
 }
 
-/**
- * Check whether a user's Jira credential actually authenticates. Missing auth
- * is always rejected; user-initiated work must never fall back to system auth.
- */
 export async function probeJiraAuth(userAuth: JiraAuth | null): Promise<boolean> {
   if (!userAuth) return false;
   try {
     const base = env.jiraBaseUrl.replace(/\/$/, "");
-    const res = await fetch(`${base}/rest/api/2/myself`, {
+    const response = await fetch(`${base}/rest/api/2/myself`, {
       headers: { Accept: "application/json", Authorization: authHeader(userAuth) },
       signal: AbortSignal.timeout(env.jiraRequestTimeoutMs),
     });
-    return res.ok;
+    return response.ok;
   } catch {
     return false;
   }
@@ -338,8 +281,8 @@ async function requestOnce<T>(
 ): Promise<T> {
   let effectiveAuth = auth;
   if (!effectiveAuth || !effectiveAuth.token) {
-    const sys = await getSystemJiraAuth();
-    if (sys) effectiveAuth = sys;
+    const systemAuth = await getSystemJiraAuth();
+    if (systemAuth) effectiveAuth = systemAuth;
   }
   if (!effectiveAuth || !effectiveAuth.token) {
     throw new JiraRequestError(
@@ -348,6 +291,7 @@ async function requestOnce<T>(
       false
     );
   }
+
   const url = env.jiraBaseUrl.replace(/\/$/, "") + path;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), env.jiraRequestTimeoutMs);
@@ -357,8 +301,9 @@ async function requestOnce<T>(
   } else {
     init.signal?.addEventListener("abort", abortFromCaller, { once: true });
   }
+
   try {
-    const res = await fetch(url, {
+    const response = await fetch(url, {
       ...init,
       signal: controller.signal,
       headers: {
@@ -368,27 +313,24 @@ async function requestOnce<T>(
         ...(init.headers ?? {}),
       },
     });
-    if (!res.ok) {
+    if (!response.ok) {
       let detail: string | null = null;
       try {
-        const text = await res.text();
-        detail = extractJiraErrorDetail(text);
+        detail = extractJiraErrorDetail(await response.text());
       } catch {
-        // Upstream response bodies can contain internal HTML, user content or
-        // diagnostics. Keep the error useful without reflecting that data.
+        // Do not reflect an unreadable upstream body.
       }
-      const baseMessage = `Jira ${init.method ?? "GET"} ${path.split("?")[0]} -> ${res.status}`;
-      const message = detail ? `${baseMessage}: ${detail}` : baseMessage;
+      const baseMessage = `Jira ${init.method ?? "GET"} ${path.split("?")[0]} -> ${response.status}`;
       throw new JiraRequestError(
-        message,
-        res.status,
-        res.status === 408 || res.status === 429 || res.status >= 500,
+        detail ? `${baseMessage}: ${detail}` : baseMessage,
+        response.status,
+        response.status === 408 || response.status === 429 || response.status >= 500,
         detail,
-        parseRetryAfterMs(res.headers.get("retry-after")),
+        parseRetryAfterMs(response.headers.get("retry-after"))
       );
     }
-    if (res.status === 204) return undefined as T;
-    return res.json() as Promise<T>;
+    if (response.status === 204) return undefined as T;
+    return response.json() as Promise<T>;
   } catch (error) {
     if (controller.signal.aborted && !init.signal?.aborted) {
       throw new JiraRequestError(
@@ -408,12 +350,6 @@ const MAX_RETRIES = 2;
 const MAX_RETRY_DELAY_MS = 30_000;
 const RETRY_BASE_MS = 2000;
 
-/**
- * Jira HTTP request with automatic retry for retryable errors (timeouts,
- * 429 rate-limit, 5xx server errors). Retries up to MAX_RETRIES times with
- * exponential backoff (2s → 4s) to absorb transient Jira slowdowns without
- * failing entire poll-jira jobs.
- */
 async function request<T>(
   path: string,
   init: RequestInit = {},
@@ -428,22 +364,15 @@ async function request<T>(
       const isRetryable = error instanceof JiraRequestError && error.retryable;
       if (!isRetryable || attempt >= MAX_RETRIES) break;
       const retryAfterMs = error instanceof JiraRequestError ? error.retryAfterMs : null;
-      // Honor Retry-After when Jira sends it; add jitter so parallel jobs
-      // that were throttled together do not retry in lockstep.
-      const delayMs = Math.min(
-        retryAfterMs ?? RETRY_BASE_MS * 2 ** attempt,
-        MAX_RETRY_DELAY_MS,
-      ) + Math.floor(Math.random() * 500);
+      const delayMs =
+        Math.min(retryAfterMs ?? RETRY_BASE_MS * 2 ** attempt, MAX_RETRY_DELAY_MS) +
+        Math.floor(Math.random() * 500);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }
   throw lastError;
 }
 
-/**
- * Build a scoped Jira client that uses the explicitly supplied auth,
- * or dynamically falls back to the system/configured user auth.
- */
 export function jiraWith(auth?: JiraAuth) {
   let pointFieldsPromise: Promise<JiraFieldDefinition[]> | null = null;
   const getPointFields = async (): Promise<JiraFieldDefinition[]> => {
@@ -460,785 +389,33 @@ export function jiraWith(auth?: JiraAuth) {
     return pointFieldsPromise;
   };
 
+  const boundRequest = <T>(path: string, init: RequestInit = {}) =>
+    request<T>(path, init, auth);
+  const boundRequestOnce = <T>(path: string, init: RequestInit = {}) =>
+    requestOnce<T>(path, init, auth);
+
   return {
-    me: () => request<JiraUser>("/rest/api/2/myself", {}, auth),
-    search: async (
-      jql: string,
-      maxResults = 50,
-      startAt = 0,
-      signal?: AbortSignal,
-      extraFields: string[] = []
-    ) => {
-      await getPointFields().catch(() => configuredPointField());
-      const params = new URLSearchParams({
-        jql,
-        fields: jiraIssueFields(extraFields),
-        maxResults: String(maxResults),
-        startAt: String(startAt),
-      });
-      return request<JiraSearchResult>(`/rest/api/2/search?${params}`, { signal }, auth);
-    },
-    getIssue: async (key: string, extraFields?: string) => {
-      const fields = new URLSearchParams();
-      if (extraFields) {
-        await getPointFields().catch(() => configuredPointField());
-        const requested = [...extraFields.split(","), ...knownPointFieldIds(), ...getEpicLinkFieldIds()]
-          .filter(Boolean)
-          .filter((field, index, all) => all.indexOf(field) === index);
-        fields.set("fields", requested.join(","));
-      }
-      const qs = fields.toString();
-      return request<JiraIssue>(`/rest/api/2/issue/${encodeURIComponent(key)}${qs ? `?${qs}` : ""}`, {}, auth);
-    },
-    getEditMeta: (key: string) =>
-      request<JiraEditMeta>(`/rest/api/2/issue/${encodeURIComponent(key)}/editmeta`, {}, auth),
-    getFields: getPointFields,
-    resolvePointsField: async (key: string): Promise<JiraFieldDefinition | null> => {
-      const meta = await request<JiraEditMeta>(`/rest/api/2/issue/${encodeURIComponent(key)}/editmeta`, {}, auth);
-      const editable = Object.entries(meta.fields ?? {})
-        .map(([id, field]) => ({ id, name: field.name, schema: field.schema }))
-        .filter(isPointField);
-      return editable.find((field) => field.id === env.jiraPointsFieldId) ?? editable[0] ?? null;
-    },
-    getCommentsPage: (key: string, startAt = 0, maxResults = 100, signal?: AbortSignal) =>
-      request<JiraCommentPage>(
-        `/rest/api/2/issue/${encodeURIComponent(key)}/comment?orderBy=created&startAt=${startAt}&maxResults=${maxResults}`,
-        { signal },
-        auth
-      ),
-    getComments: async (key: string, signal?: AbortSignal) => {
-      const out: JiraComment[] = [];
-      const pageSize = 100;
-      for (let page = 0; page < 100; page++) {
-        if (signal?.aborted) {
-          throw new JiraRequestError(`Jira comments fetch aborted for ${key}`, null, false);
-        }
-        const startAt = page * pageSize;
-        const res = await request<JiraCommentPage>(
-          `/rest/api/2/issue/${encodeURIComponent(key)}/comment?orderBy=created&startAt=${startAt}&maxResults=${pageSize}`,
-          { signal },
-          auth
-        );
-        const rows = res.comments ?? res.issues ?? [];
-        out.push(...rows);
-        const total = res.total ?? rows.length;
-        if (rows.length < pageSize || startAt + rows.length >= total) break;
-      }
-      return out;
-    },
-    getTransitions: async (key: string) => {
-      const res = await request<{ transitions: JiraTransition[] }>(
-        `/rest/api/2/issue/${encodeURIComponent(key)}/transitions`,
-        {},
-        auth
-      );
-      return res.transitions;
-    },
-    transition: (key: string, transitionId: string, fields?: Record<string, unknown>) =>
-      request(
-        `/rest/api/2/issue/${encodeURIComponent(key)}/transitions`,
-        { method: "POST", body: JSON.stringify({ transition: { id: transitionId }, fields }) },
-        auth
-      ),
-    findTransition: async (key: string, targetStatus: string) => {
-      const transitions = await request<{ transitions: JiraTransition[] }>(
-        `/rest/api/2/issue/${encodeURIComponent(key)}/transitions`,
-        {},
-        auth
-      );
-      const target = targetStatus.toLowerCase();
-      return (
-        transitions.transitions.find((t) => t.to?.name?.toLowerCase() === target) ?? null
-      );
-    },
-    /**
-     * Resolve a version name to a Fix Version id for a project. Returns null if
-     * the version does not exist. Used by bulk fix-version actions to add or
-     * remove a version by name.
-     */
-    resolveVersionId: async (projectKey: string, name: string): Promise<string | null> => {
-      const versions = await request<JiraVersion[]>(
-        `/rest/api/2/project/${encodeURIComponent(projectKey)}/versions`,
-        {},
-        auth
-      );
-      const match = versions.find(
-        (v) => v.name.toLowerCase() === name.toLowerCase()
-      );
-      return match?.id ?? null;
-    },
-    updateIssue: async (
-      key: string,
-      patch: {
-        summary?: string;
-        description?: string;
-        assignee?: string | null;
-        labels?: string[];
-        priority?: string;
-        issueType?: string;
-        points?: number | null;
-        fixVersions?: string[];
-        dueDate?: string | null;
-        originalEstimate?: string;
-        epic?: string | null;
-        /** Raw Jira field map merged last, e.g. people custom fields. */
-        extraFields?: Record<string, unknown>;
-      }
-    ) => {
-      const fields: Record<string, unknown> = { ...(patch.extraFields ?? {}) };
-      if (patch.summary !== undefined) fields.summary = patch.summary;
-      if (patch.description !== undefined) fields.description = patch.description;
-      if (patch.assignee !== undefined)
-        fields.assignee = patch.assignee === null ? null : { name: patch.assignee };
-      if (patch.labels !== undefined) fields.labels = patch.labels;
-      if (patch.priority !== undefined) fields.priority = { name: patch.priority };
-      if (patch.issueType !== undefined) fields.issuetype = { name: patch.issueType };
-      if (patch.points !== undefined) {
-        const pointField = await (async () => {
-          const meta = await request<JiraEditMeta>(
-            `/rest/api/2/issue/${encodeURIComponent(key)}/editmeta`,
-            {},
-            auth
-          );
-          const editable = Object.entries(meta.fields ?? {})
-            .map(([id, field]) => ({ id, name: field.name, schema: field.schema }))
-            .filter(isPointField);
-          return editable.find((field) => field.id === env.jiraPointsFieldId) ?? editable[0] ?? null;
-        })();
-        if (!pointField) {
-          throw new JiraRequestError("Jira issue has no editable Story Points/Task Points field", 400, false);
-        }
-        fields[pointField.id] = patch.points;
-      }
-      if (patch.fixVersions !== undefined)
-        fields.fixVersions = patch.fixVersions.map((id) => ({ id }));
-      if (patch.dueDate !== undefined) fields.duedate = patch.dueDate;
-      if (patch.originalEstimate !== undefined) {
-        fields.timetracking = { originalEstimate: patch.originalEstimate };
-      }
-      if (patch.epic !== undefined) {
-        let epicFieldId: string | null = null;
-        let isParentField = false;
-        try {
-          const meta = await request<JiraEditMeta>(
-            `/rest/api/2/issue/${encodeURIComponent(key)}/editmeta`,
-            {},
-            auth
-          );
-          for (const [id, field] of Object.entries(meta.fields ?? {})) {
-            const lowerName = field.name?.trim().toLowerCase() ?? "";
-            if (
-              (field.schema as { custom?: string })?.custom === "com.pyxis.greenhopper.jira:gh-epic-link" ||
-              lowerName === "epic link" ||
-              lowerName === "epic"
-            ) {
-              epicFieldId = id;
-              break;
-            }
-            if (id === "parent" || field.schema?.system === "parent") {
-              epicFieldId = id;
-              isParentField = true;
-            }
-          }
-        } catch {
-          // ignore editmeta fetch error and fallback to parent
-        }
-
-        if (epicFieldId && !isParentField) {
-          fields[epicFieldId] = patch.epic;
-        } else {
-          fields.parent = patch.epic ? { key: patch.epic } : null;
-        }
-      }
-      if (Object.keys(fields).length === 0) return;
-      return request(`/rest/api/2/issue/${encodeURIComponent(key)}`, {
-        method: "PUT",
-        body: JSON.stringify({ fields }),
-      }, auth);
-    },
-    addWorklog: (
-      key: string,
-      data: { timeSpent: string; started?: string; comment?: string },
-      adjustEstimate: "auto" | "leave" = "leave"
-    ): Promise<JiraWorklog> =>
-      requestOnce<JiraWorklog>(
-        `/rest/api/2/issue/${encodeURIComponent(key)}/worklog?adjustEstimate=${adjustEstimate}`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            timeSpent: data.timeSpent,
-            ...(data.started ? { started: data.started } : {}),
-            ...(data.comment ? { comment: data.comment } : {}),
-          }),
-        },
-        auth
-      ),
-    getWorklogs: (
-      key: string
-    ): Promise<{ startAt?: number; maxResults?: number; total?: number; worklogs?: JiraWorklog[] }> =>
-      request(
-        `/rest/api/2/issue/${encodeURIComponent(key)}/worklog`,
-        { method: "GET" },
-        auth
-      ),
-    createIssue: (data: CreateIssueInput) => {
-      const issueFields: Record<string, unknown> = {
-        project: { key: data.projectKey },
-        summary: data.summary,
-        issuetype: data.issueTypeId ? { id: data.issueTypeId } : { name: data.issueType ?? "Bug" },
-        ...(data.fields ?? {}),
-      };
-      if (data.description !== undefined) {
-        issueFields.description = data.description;
-      }
-      if (data.assignee !== undefined) {
-        issueFields.assignee = data.assignee ? { name: data.assignee } : null;
-      }
-      if (data.priorityId) {
-        issueFields.priority = { id: data.priorityId };
-      } else if (data.priority) {
-        issueFields.priority = { name: data.priority };
-      }
-
-      const labels = new Set<string>(data.labels ?? []);
-      if (data.idempotencyMarker) {
-        labels.add(data.idempotencyMarker);
-      }
-      if (labels.size > 0 || data.labels !== undefined || data.idempotencyMarker) {
-        issueFields.labels = Array.from(labels);
-      }
-
-      return request<CreateIssueResult>(
-        "/rest/api/2/issue",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            fields: issueFields,
-          }),
-        },
-        auth
-      );
-    },
-    getCreateMetaIssueTypes: (
-      projectKey: string
-    ): Promise<JiraCreateMetaIssueTypesResponse> =>
-      request<JiraCreateMetaIssueTypesResponse>(
-        `/rest/api/2/issue/createmeta/${encodeURIComponent(projectKey)}/issuetypes`,
-        {},
-        auth
-      ),
-    getCreateMetaFields: (
-      projectKey: string,
-      issueTypeId: string
-    ): Promise<JiraCreateMetaFieldsResponse> =>
-      request<JiraCreateMetaFieldsResponse>(
-        `/rest/api/2/issue/createmeta/${encodeURIComponent(projectKey)}/issuetypes/${encodeURIComponent(issueTypeId)}`,
-        {},
-        auth
-      ),
-    getCreateMetadata: async (
-      projectKey: string,
-      issueTypeId?: string
-    ): Promise<JiraCreateMetaResponse> => {
-      try {
-        let url = `/rest/api/2/issue/createmeta?projectKeys=${encodeURIComponent(projectKey)}&expand=projects.issuetypes.fields`;
-        if (issueTypeId) {
-          url += `&issuetypeIds=${encodeURIComponent(issueTypeId)}`;
-        }
-        return await request<JiraCreateMetaResponse>(url, {}, auth);
-      } catch (err: unknown) {
-        if ((err as JiraRequestError)?.status !== 404) {
-          throw err;
-        }
-        // Jira 9.0+ removed the monolithic createmeta endpoint. Fallback to subresource endpoints.
-        const project = await request<JiraProject>(
-          `/rest/api/2/project/${encodeURIComponent(projectKey)}`,
-          {},
-          auth
-        );
-        const typesRes = await request<JiraCreateMetaIssueTypesResponse>(
-          `/rest/api/2/issue/createmeta/${encodeURIComponent(projectKey)}/issuetypes`,
-          {},
-          auth
-        );
-        const filteredTypes = issueTypeId
-          ? (typesRes.values || []).filter((t) => t.id === issueTypeId)
-          : typesRes.values || [];
-
-        const issueTypesWithFields = await Promise.all(
-          filteredTypes.map(async (t) => {
-            try {
-              const fieldsRes = await request<JiraCreateMetaFieldsResponse>(
-                `/rest/api/2/issue/createmeta/${encodeURIComponent(projectKey)}/issuetypes/${encodeURIComponent(t.id)}`,
-                {},
-                auth
-              );
-              const fieldsRecord: Record<string, JiraCreateMetaField> = {};
-              for (const f of fieldsRes.values || []) {
-                const legacy = f as { key?: string; id?: string };
-                const id = f.fieldId || legacy.key || legacy.id;
-                if (id) {
-                  fieldsRecord[id] = f;
-                }
-              }
-              return {
-                ...t,
-                fields: fieldsRecord,
-              };
-            } catch {
-              return {
-                ...t,
-                fields: {},
-              };
-            }
-          })
-        );
-
-        return {
-          projects: [
-            {
-              id: project.id || "",
-              key: project.key,
-              name: project.name,
-              issuetypes: issueTypesWithFields,
-            },
-          ],
-        };
-      }
-    },
-    findIssueByBulkMarker: async (
-      projectKey: string,
-      marker: string
-    ): Promise<JiraIssue | null> => {
-      const jql = `project = "${projectKey.replace(/"/g, '\\"')}" AND labels = "${marker.replace(/"/g, '\\"')}"`;
-      const res = await request<JiraSearchResult>(
-        `/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=5&fields=id,key,summary,status`,
-        {},
-        auth
-      );
-      if (!res.issues || res.issues.length === 0) return null;
-      if (res.issues.length > 1) {
-        throw new JiraRequestError(
-          `Tìm thấy nhiều hơn một issue cho marker ${marker}`,
-          409,
-          false
-        );
-      }
-      return res.issues[0];
-    },
-    removeIssueLabel: async (
-      key: string,
-      label: string
-    ): Promise<void> => {
-      // Jira REST API v2 supports removing a label via the update operation
-      try {
-        await request(
-          `/rest/api/2/issue/${encodeURIComponent(key)}`,
-          {
-            method: "PUT",
-            body: JSON.stringify({
-              update: {
-                labels: [{ remove: label }],
-              },
-            }),
-          },
-          auth
-        );
-      } catch {
-        // Fallback: If update syntax is rejected on specific Jira instances,
-        // fetch current labels and update fields.labels without the label.
-        try {
-          const issue = await request<{ fields?: { labels?: string[] } }>(
-            `/rest/api/2/issue/${encodeURIComponent(key)}?fields=labels`,
-            {},
-            auth
-          );
-          const currentLabels = issue?.fields?.labels ?? [];
-          if (currentLabels.includes(label)) {
-            const nextLabels = currentLabels.filter((l) => l !== label);
-            await request(
-              `/rest/api/2/issue/${encodeURIComponent(key)}`,
-              {
-                method: "PUT",
-                body: JSON.stringify({
-                  fields: { labels: nextLabels },
-                }),
-              },
-              auth
-            );
-          }
-        } catch {
-          // Best-effort cleanup, ignore failure so issue creation status is not broken
-        }
-      }
-    },
-    getProjects: () => request<JiraProject[]>("/rest/api/2/project", {}, auth),
-    getProject: (projectKey: string) =>
-      request<JiraProject>(`/rest/api/2/project/${encodeURIComponent(projectKey)}`, {}, auth),
-    /**
-     * The project's workflow: each issue type with its statuses in workflow
-     * order (the order an issue moves through them). Backed by Jira REST v2
-     * `/project/{key}/statuses` (v3 is not available on this DC instance).
-     */
-    getProjectStatuses: (projectKey: string) =>
-      request<JiraProjectStatus[]>(`/rest/api/2/project/${encodeURIComponent(projectKey)}/statuses`, {}, auth),
-    addComment: (key: string, body: string) =>
-      request<JiraComment>(
-        `/rest/api/2/issue/${encodeURIComponent(key)}/comment`,
-        { method: "POST", body: JSON.stringify({ body }) },
-        auth
-      ),
-    /** List the Fix Versions (release versions) of a project. */
-    getVersions: (projectKey: string) =>
-      request<JiraVersion[]>(
-        `/rest/api/2/project/${encodeURIComponent(projectKey)}/versions`,
-        {},
-        auth
-      ),
-    /** Global Jira configuration (time tracking on/off, etc.). */
+    me: () => boundRequest<JiraUser>("/rest/api/2/myself"),
     getConfiguration: () =>
-      request<{ timeTrackingEnabled?: boolean }>("/rest/api/2/configuration", {}, auth),
-    /** Get a single Fix Version by ID. */
-    getVersion: (versionId: string) =>
-      request<JiraVersion>(`/rest/api/2/version/${encodeURIComponent(versionId)}`, {}, auth),
-    /** List the components of a project. */
-    getProjectComponents: (projectKey: string) =>
-      request<JiraComponent[]>(
-        `/rest/api/2/project/${encodeURIComponent(projectKey)}/components`,
-        {},
-        auth
-      ),
-    /**
-     * Query effective permissions of the authenticated user for a specific project.
-     * Backed by Jira REST v2 `GET /rest/api/2/mypermissions?projectKey={key}`.
-     * Throws 401 if personal token is missing to prevent fallback to system auth.
-     */
-    getMyPermissions: async (projectKey: string): Promise<JiraMyPermissions> => {
-      if (!auth?.token) {
-        throw new JiraRequestError(
-          "Yêu cầu token Jira cá nhân để kiểm tra quyền dự án",
-          401,
-          false
-        );
-      }
-      return request<JiraMyPermissions>(
-        `/rest/api/2/mypermissions?projectKey=${encodeURIComponent(projectKey)}`,
-        {},
-        auth
-      );
-    },
-    /** Create a new Fix Version on a project. */
-    createVersion: (projectKey: string, name: string, description?: string) =>
-      request<JiraVersion>(
-        "/rest/api/2/version",
-        {
-          method: "POST",
-          body: JSON.stringify({ name, description, project: projectKey }),
-        },
-        auth
-      ),
-    /** Update an existing Fix Version (name/description/release date). */
-    updateVersion: (
-      versionId: string,
-      data: { name?: string; description?: string; releaseDate?: string | null }
-    ) =>
-      request<JiraVersion>(`/rest/api/2/version/${encodeURIComponent(versionId)}`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-      }, auth),
-    /** Mark a Fix Version as released with a release date. */
-    releaseVersion: (versionId: string) =>
-      request<JiraVersion>(`/rest/api/2/version/${encodeURIComponent(versionId)}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          released: true,
-          releaseDate: new Date().toISOString().slice(0, 10),
-        }),
-      }, auth),
-    /**
-     * Search assignable users for a project.
-     * Tries the project-level assignable search first, falls back to global user search.
-     */
-    searchAssignableUsers: async (
-      projectKey: string,
-      query: string,
-      limit: number
-    ): Promise<JiraUser[]> => {
-      const q = encodeURIComponent(query);
-      const maxResults = Math.min(Math.max(1, limit), 50);
-      try {
-        // Try project-specific assignable search (available on newer DC versions)
-        const res = await request<
-          | JiraUser[]
-          | {
-              startAt?: number;
-              maxResults?: number;
-              total?: number;
-              values?: JiraUser[];
-            }
-        >(
-          `/rest/api/2/user/assignable/search?projectKey=${encodeURIComponent(projectKey)}&maxResults=${maxResults}${query ? `&username=${q}` : ""}`,
-          {},
-          auth
-        );
-        // Jira Server/Data Center returns an array, while some newer/custom
-        // deployments wrap results in a paginated `values` object.
-        const users = (Array.isArray(res) ? res : res.values ?? []).filter(
-          (u) => u.active !== false
-        );
-        if (users.length > 0) return users;
-      } catch {
-        // Fall through to global search
-      }
-      // Fallback: global user search filtered by query
-      const searchUrl = query
-        ? `/rest/api/2/user/search?username=${q}&maxResults=${maxResults}`
-        : `/rest/api/2/user/search?maxResults=${maxResults}`;
-      const res = await request<JiraUser[]>(searchUrl, {}, auth);
-      return (res ?? []).filter((u) => u.active !== false);
-    },
-
-    /**
-     * Search parent issues (non-subtask) in a project.
-     * Used for the parent picker when creating sub-tasks.
-     */
-    searchParentIssues: async (
-      projectKey: string,
-      query: string,
-      limit: number
-    ): Promise<Array<{ key: string; summary: string; issueTypeName: string; status: string }>> => {
-      const maxResults = Math.min(Math.max(1, limit), 50);
-      // JQL: search in project, exclude subtasks, filter by key or summary
-      let jql: string;
-      if (query) {
-        // If query looks like a key (PROJECT-123), search by key
-        if (/^[A-Z][A-Z0-9_]+-\d+$/.test(query)) {
-          jql = `project = "${projectKey}" AND key = "${query}" AND "issuetype" != "Sub-task"`;
-        } else {
-          const escaped = query.replace(/"/g, '\\"');
-          jql = `project = "${projectKey}" AND (key ~ "${escaped}" OR summary ~ "${escaped}") AND "issuetype" != "Sub-task"`;
-        }
-      } else {
-        jql = `project = "${projectKey}" AND "issuetype" != "Sub-task" ORDER BY key DESC`;
-      }
-
-      const res = await request<JiraSearchResult>(
-        `/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=${maxResults}&fields=summary,issuetype,status`,
-        {},
-        auth
-      );
-
-      return (res.issues ?? [])
-        .filter((issue) => {
-          const it = issue.fields.issuetype?.name?.toLowerCase();
-          return it !== "sub-task";
-        })
-        .map((issue) => ({
-          key: issue.key,
-          summary: issue.fields.summary ?? "",
-          issueTypeName: issue.fields.issuetype?.name ?? "Unknown",
-          status: issue.fields.status?.name ?? "Unknown",
-        }));
-    },
-
-    /**
-     * Search issues in a project to use as templates (both standard issues and subtasks).
-     * If query is empty, returns the most recently updated issues in the project.
-     */
-    searchTemplateIssues: async (
-      projectKey: string,
-      query: string,
-      limit: number
-    ): Promise<Array<{
-      key: string;
-      summary: string;
-      issueTypeName: string;
-      issueTypeId: string;
-      isSubtask: boolean;
-      parentKey?: string;
-      parentSummary?: string;
-      status: string;
-      assignee?: string;
-      updated?: string;
-    }>> => {
-      const maxResults = Math.min(Math.max(1, limit), 50);
-      let jql: string;
-      if (query) {
-        if (/^[A-Z][A-Z0-9_]+-\d+$/i.test(query)) {
-          jql = `project = "${projectKey}" AND key = "${query.toUpperCase()}"`;
-        } else {
-          const escaped = query.replace(/["\\]/g, '\\$&');
-          jql = `project = "${projectKey}" AND (key ~ "${escaped}*" OR summary ~ "${escaped}") ORDER BY updated DESC`;
-        }
-      } else {
-        jql = `project = "${projectKey}" ORDER BY updated DESC`;
-      }
-
-      let res: JiraSearchResult;
-      try {
-        res = await request<JiraSearchResult>(
-          `/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=${maxResults}&fields=summary,issuetype,status,assignee,updated,parent`,
-          {},
-          auth
-        );
-      } catch {
-        const fallbackJql = query
-          ? `project = "${projectKey}" AND summary ~ "${query.replace(/["\\]/g, '\\$&')}" ORDER BY updated DESC`
-          : `project = "${projectKey}" ORDER BY updated DESC`;
-        res = await request<JiraSearchResult>(
-          `/rest/api/2/search?jql=${encodeURIComponent(fallbackJql)}&maxResults=${maxResults}&fields=summary,issuetype,status,assignee,updated,parent`,
-          {},
-          auth
-        );
-      }
-
-      return (res.issues ?? []).map((issue) => {
-        const isSubtask =
-          (issue.fields.issuetype as { subtask?: boolean } | undefined)?.subtask === true ||
-          issue.fields.issuetype?.name?.toLowerCase() === "sub-task" ||
-          Boolean(issue.fields.parent);
-        const parent = issue.fields.parent as
-          | { key?: string; fields?: { summary?: string } }
-          | undefined;
-
-        return {
-          key: issue.key,
-          summary: issue.fields.summary ?? "",
-          issueTypeId: issue.fields.issuetype?.id ?? "",
-          issueTypeName: issue.fields.issuetype?.name ?? "Unknown",
-          isSubtask,
-          parentKey: parent?.key,
-          parentSummary: parent?.fields?.summary,
-          status: issue.fields.status?.name ?? "Unknown",
-          assignee: issue.fields.assignee?.displayName ?? issue.fields.assignee?.name,
-          updated: issue.fields.updated,
-        };
-      });
-    },
-
-    /**
-     * List Jira Agile boards for a given project key.
-     * Backed by Jira Agile REST v1.0 GET /rest/agile/1.0/board?projectKeyOrId={projectKey}
-     */
-    getBoardsForProject: async (projectKey: string): Promise<JiraBoard[]> => {
-      const cleanKey = projectKey.trim().toUpperCase();
-      if (!cleanKey) return [];
-      const boards: JiraBoard[] = [];
-      let startAt = 0;
-      const maxResults = 50;
-      while (true) {
-        const url = `/rest/agile/1.0/board?projectKeyOrId=${encodeURIComponent(cleanKey)}&startAt=${startAt}&maxResults=${maxResults}`;
-        const res = await request<JiraBoardPage>(url, {}, auth);
-        const values = res?.values ?? [];
-        boards.push(...values);
-        if (res?.isLast || values.length === 0 || (res?.total !== undefined && boards.length >= res.total)) {
-          break;
-        }
-        startAt += values.length;
-        if (boards.length > 500) break;
-      }
-      return boards;
-    },
-
-    /**
-     * Get Jira Agile board configuration (including column configuration and status mappings).
-     * Backed by Jira Agile REST v1.0 GET /rest/agile/1.0/board/{boardId}/configuration
-     */
-    getBoardConfiguration: async (boardId: number): Promise<JiraBoardConfiguration> => {
-      if (!Number.isInteger(boardId) || boardId <= 0) {
-        throw new JiraRequestError(`Invalid boardId: ${boardId}`, 400, false);
-      }
-      return request<JiraBoardConfiguration>(`/rest/agile/1.0/board/${boardId}/configuration`, {}, auth);
-    },
-
-    /**
-     * Get a Jira Agile board by ID.
-     * Backed by Jira Agile REST v1.0 GET /rest/agile/1.0/board/{boardId}
-     */
-    getBoard: async (boardId: number): Promise<JiraBoard> => {
-      if (!Number.isInteger(boardId) || boardId <= 0) {
-        throw new JiraRequestError(`Invalid boardId: ${boardId}`, 400, false);
-      }
-      return request<JiraBoard>(`/rest/agile/1.0/board/${boardId}`, {}, auth);
-    },
-
-    /**
-     * Get projects associated with a Jira Agile board.
-     * Backed by Jira Agile REST v1.0 GET /rest/agile/1.0/board/{boardId}/project
-     */
-    getBoardProjects: async (boardId: number): Promise<JiraProject[]> => {
-      if (!Number.isInteger(boardId) || boardId <= 0) {
-        throw new JiraRequestError(`Invalid boardId: ${boardId}`, 400, false);
-      }
-      const res = await request<JiraProject[] | { values?: JiraProject[] }>(
-        `/rest/agile/1.0/board/${boardId}/project`,
-        {},
-        auth
-      );
-      if (Array.isArray(res)) return res;
-      return res?.values ?? [];
-    },
-
-    /**
-     * Get issues belonging to a Jira Agile board.
-     * Backed by Jira Agile REST v1.0 GET /rest/agile/1.0/board/{boardId}/issue
-     */
-    getBoardIssues: async (
-      boardId: number,
-      options?: { startAt?: number; maxResults?: number; jql?: string; fields?: string }
-    ): Promise<JiraSearchResult> => {
-      if (!Number.isInteger(boardId) || boardId <= 0) {
-        throw new JiraRequestError(`Invalid boardId: ${boardId}`, 400, false);
-      }
-      const startAt = options?.startAt ?? 0;
-      const maxResults = options?.maxResults ?? 50;
-      const query = new URLSearchParams({
-        startAt: String(startAt),
-        maxResults: String(maxResults),
-        fields: options?.fields ?? "id,key",
-      });
-      if (options?.jql) {
-        query.set("jql", options.jql);
-      }
-      return request<JiraSearchResult>(
-        `/rest/agile/1.0/board/${boardId}/issue?${query.toString()}`,
-        {},
-        auth
-      );
-    },
-
-    /**
-     * Get backlog issues belonging to a Jira Agile board.
-     * Backed by Jira Agile REST v1.0 GET /rest/agile/1.0/board/{boardId}/backlog
-     */
-    getBoardBacklog: async (
-      boardId: number,
-      options?: { startAt?: number; maxResults?: number; jql?: string; fields?: string }
-    ): Promise<JiraSearchResult> => {
-      if (!Number.isInteger(boardId) || boardId <= 0) {
-        throw new JiraRequestError(`Invalid boardId: ${boardId}`, 400, false);
-      }
-      const startAt = options?.startAt ?? 0;
-      const maxResults = options?.maxResults ?? 50;
-      const query = new URLSearchParams({
-        startAt: String(startAt),
-        maxResults: String(maxResults),
-        fields: options?.fields ?? "id,key",
-      });
-      if (options?.jql) {
-        query.set("jql", options.jql);
-      }
-      return request<JiraSearchResult>(
-        `/rest/agile/1.0/board/${boardId}/backlog?${query.toString()}`,
-        {},
-        auth
-      );
-    },
+      boundRequest<{ timeTrackingEnabled?: boolean }>("/rest/api/2/configuration"),
+    ...createIssueResource({
+      request: boundRequest,
+      getPointFields,
+      configuredPointFields: configuredPointField,
+      issueFields: jiraIssueFields,
+      knownPointFieldIds,
+      epicLinkFieldIds: getEpicLinkFieldIds,
+      isPointField,
+      configuredPointFieldId: env.jiraPointsFieldId,
+    }),
+    ...createWorklogResource({ request: boundRequest, requestOnce: boundRequestOnce }),
+    ...createPermissionResource(boundRequest, auth),
+    ...createProjectResource(boundRequest),
+    ...createVersionResource(boundRequest),
+    ...createBoardResource(boundRequest),
   };
 }
 
 export type JiraClient = ReturnType<typeof jiraWith>;
 
-// System client for workers, webhooks and health checks.
-// Falls back to system credentials from .env, or the first configured user in DB.
 export const jira = jiraWith();

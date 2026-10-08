@@ -55,6 +55,55 @@ describe("Jira HTTP transport", () => {
     vi.useRealTimers();
   });
 
+  it("keeps the jiraWith public method surface stable", () => {
+    expect(Object.keys(jiraWith(bearerAuth)).sort()).toEqual(
+      [
+        "addComment",
+        "addWorklog",
+        "createIssue",
+        "createVersion",
+        "findIssueByBulkMarker",
+        "findTransition",
+        "getBoard",
+        "getBoardBacklog",
+        "getBoardConfiguration",
+        "getBoardIssues",
+        "getBoardProjects",
+        "getBoardsForProject",
+        "getComments",
+        "getCommentsPage",
+        "getConfiguration",
+        "getCreateMetaFields",
+        "getCreateMetaIssueTypes",
+        "getCreateMetadata",
+        "getEditMeta",
+        "getFields",
+        "getIssue",
+        "getMyPermissions",
+        "getProject",
+        "getProjectComponents",
+        "getProjectStatuses",
+        "getProjects",
+        "getTransitions",
+        "getVersion",
+        "getVersions",
+        "getWorklogs",
+        "me",
+        "releaseVersion",
+        "removeIssueLabel",
+        "resolvePointsField",
+        "resolveVersionId",
+        "search",
+        "searchAssignableUsers",
+        "searchParentIssues",
+        "searchTemplateIssues",
+        "transition",
+        "updateIssue",
+        "updateVersion",
+      ].sort()
+    );
+  });
+
   it("sends the normalized URL and default JSON headers with Bearer auth", async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ name: "alice" }));
     vi.stubGlobal("fetch", fetchMock);

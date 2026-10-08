@@ -120,6 +120,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 | R-10 | Test double lệch Jira/Prisma contract tạo error log giả | P1 | Bổ sung Jira/project catalog/people-field mocks, assert log abort/lease chủ ý; 79/79 test liên quan và full suite pass | Closed |
 | R-11 | Warning lint mới lọt qua CI vì ESLint vẫn trả exit code 0 | P2 | `npm run lint` dùng `eslint --max-warnings=0`; xác nhận lint sạch ở cuối Phase 0 | Closed |
 | R-12 | Caller abort của Jira search bị trì hoãn khi cold-cache field metadata | P1 | Đã ghi F-007; giữ nguyên behavior trong batch 2.1 và tách bug batch có test riêng trước khi sửa | Open |
+| R-13 | Tách Jira resources làm mất method hoặc đổi auth/retry/error behavior | P0 | Snapshot đủ 42 method; resource không import facade; 138 Jira test, full suite và production build pass | Closed |
 
 ## 7. Quy tắc Dừng
 

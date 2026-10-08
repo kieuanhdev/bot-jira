@@ -25,7 +25,7 @@
 |---|---|---|---|---|---|---|
 | 0 | Baseline xanh | DONE | Codex | 2026-10-08 | 2026-10-08 | Typecheck, lint zero-warning, 1.289 test và build đều pass; dừng trước Phase 1 |
 | 1 | Contracts và dependency direction | DONE | Codex | 2026-10-08 | 2026-10-08 | Shared contracts/helper đúng dependency direction; lint boundary, full test và build pass; dừng trước Phase 2 |
-| 2 | Jira và Issues | IN_PROGRESS | Codex | 2026-10-08 | | Batch 2.1 hoàn tất; dừng trước batch 2.2 |
+| 2 | Jira và Issues | IN_PROGRESS | Codex | 2026-10-08 | | Batch 2.1–2.2 hoàn tất; dừng trước batch 2.3 |
 | 3 | Queue và Sync | TODO | | | | |
 | 4 | Bulk | TODO | | | | |
 | 5 | Bitbucket và Releases | TODO | | | | |
@@ -45,7 +45,7 @@
 | 1.2 | Shared contracts | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 8/8 route contract test và 1.289/1.289 full test pass (20,80 giây); manual QA N/A | Tách contract Jira active sync và Bulk Create template vào `src/lib/contracts/`; route giữ type re-export; production import scan sạch |
 | 1.3 | Shared helper direction | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 4/4 unit test mới và 1.293/1.293 full test pass (19,28 giây); build pass; manual QA N/A | Chuyển avatar helpers/palette sang `src/lib/avatar.ts`; giữ re-export; thêm ESLint boundary và dependency scans sạch |
 | 2.1 | Jira transport characterization | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 45/45 test Jira transport/auth/error liên quan và 1.301/1.301 full test pass (19,37 giây); manual QA N/A | Thêm 8 test khóa headers, Bearer/Basic, backoff, hai dạng `Retry-After`, timeout, abort và error parsing; không đổi production |
-| 2.2 | Jira resource extraction | TODO | | | | |
+| 2.2 | Jira resource extraction | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 138/138 Jira test và 1.302/1.302 full test pass (20,08 giây); build pass; manual QA N/A | Tách permissions/projects/versions/boards/issues/worklogs thành resource factories; `jiraWith()` giữ đủ 42 methods và compatibility exports |
 | 2.3 | Board cache policy | TODO | | | | |
 | 2.4 | Issue mapping | TODO | | | | |
 | 2.5 | Issue persistence | TODO | | | | |
@@ -94,6 +94,7 @@
 | 2026-10-08 | D-005 | Đặt shared DTO theo domain tại `src/lib/contracts/jira-sync.ts` và `bulk-create-template.ts`; route re-export tạm các type cũ | UI/hook không còn phụ thuộc route implementation, trong khi các import cũ bên ngoài repo (nếu có) vẫn tương thích ở bước chuyển tiếp | Codex |
 | 2026-10-08 | D-006 | Đặt avatar fallback palette/helpers tại `src/lib/avatar.ts`, giữ re-export ở Board và dùng ESLint chặn `components/hooks/lib` import từ `@/app` | Đảo dependency về đúng hướng mà không phá import cũ; biến quy tắc review thành gate tự động đơn giản và ổn định | Codex |
 | 2026-10-08 | D-007 | Characterize Jira transport qua public `jiraWith()` bằng mocked fetch và fake timers; không export hàm transport private hoặc sửa implementation | Khóa contract quan sát được cho batch 2.2, tránh tạo test coupling với cấu trúc nội bộ trước khi extraction | Codex |
+| 2026-10-08 | D-008 | Giữ transport/auth/facade trong `client.ts`; resource factories nhận request đã bind auth, còn `JiraAuth`/`JiraRequestError` chuyển sang module lõi và được facade re-export | Tránh resource import ngược facade/cycle, giữ nguyên import công khai và cho phép tách từng resource mà không đổi retry/auth semantics | Codex |
 
 ## Findings Ngoài Phạm Vi
 
@@ -119,6 +120,7 @@
 | 2026-10-08 | Worktree batch 1.2, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 2 file / 8 route contract test; 165 file / 1.289 test full suite trong 20,80 giây | Không chạy; type-only boundary refactor, build là gate cuối phase | N/A; không đổi runtime/UI, JSON hoặc status | Codex |
 | 2026-10-08 | Worktree batch 1.3, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 4/4 unit test liên quan; 166 file / 1.293 test full suite trong 19,28 giây | Pass, Next.js 16.3.5 | N/A; helper/class output giữ nguyên và được unit test khóa | Codex |
 | 2026-10-08 | Worktree batch 2.1, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 5 file / 45 test liên quan; 167 file / 1.301 test full suite trong 19,37 giây | Không chạy; test-only batch, build là gate cuối Phase 2 | N/A; chỉ thêm characterization tests, không đổi runtime/UI | Codex |
+| 2026-10-08 | Worktree batch 2.2, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 17 file / 138 Jira test; 167 file / 1.302 test full suite trong 20,08 giây | Pass, Next.js 16.3.5 | N/A; internal Jira boundary refactor, public facade/transport behavior giữ nguyên | Codex |
 
 ## Completion Report
 
