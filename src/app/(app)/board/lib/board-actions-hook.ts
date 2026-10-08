@@ -9,6 +9,7 @@ import { transitionTarget } from "@/lib/jira/board-transitions";
 import type { BoardColumn } from "./board-columns";
 import { findTransition } from "./board-columns";
 import type { QuickAction, Transition } from "./board-types";
+import { applyOptimisticIssuePatch } from "./board-optimistic";
 
 interface BoardActionsOptions {
   issues: IssueItem[];
@@ -139,21 +140,33 @@ export function useBoardActions({
           return;
         }
         case "assignee": {
-          await api(`/api/issues/${key}`, {
-            method: "PATCH",
-            body: { assignee: action.value },
-          });
-          await qc.invalidateQueries({ queryKey: issuesKeys.all });
-          setToast(action.value ? `${key} → ${action.value}` : `${key} unassigned`);
+          const rollback = applyOptimisticIssuePatch(qc, key, { assignee: action.value });
+          try {
+            await api(`/api/issues/${key}`, {
+              method: "PATCH",
+              body: { assignee: action.value },
+            });
+            void qc.invalidateQueries({ queryKey: issuesKeys.all });
+            setToast(action.value ? `${key} → ${action.value}` : `${key} unassigned`);
+          } catch (e) {
+            rollback();
+            throw e;
+          }
           return;
         }
         case "priority": {
-          await api(`/api/issues/${key}`, {
-            method: "PATCH",
-            body: { priority: action.value },
-          });
-          await qc.invalidateQueries({ queryKey: issuesKeys.all });
-          setToast(`${key} priority → ${action.value}`);
+          const rollback = applyOptimisticIssuePatch(qc, key, { priority: action.value });
+          try {
+            await api(`/api/issues/${key}`, {
+              method: "PATCH",
+              body: { priority: action.value },
+            });
+            void qc.invalidateQueries({ queryKey: issuesKeys.all });
+            setToast(`${key} priority → ${action.value}`);
+          } catch (e) {
+            rollback();
+            throw e;
+          }
           return;
         }
         case "done": {

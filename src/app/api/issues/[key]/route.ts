@@ -125,6 +125,24 @@ export async function PATCH(
 
     // Push metadata changes to Jira (source of truth).
     await client.updateIssue(key, updatePayload);
+
+    // Eagerly update local DB cache so immediate DB reads reflect the changes
+    const directUpdate: Record<string, unknown> = { updatedAt: new Date() };
+    if (updatePayload.points !== undefined) directUpdate.points = updatePayload.points;
+    if (updatePayload.priority !== undefined) directUpdate.priority = updatePayload.priority;
+    if (updatePayload.assignee !== undefined) directUpdate.assigneeJira = updatePayload.assignee;
+    if (updatePayload.summary !== undefined) directUpdate.summary = updatePayload.summary;
+    if (updatePayload.description !== undefined) directUpdate.description = updatePayload.description;
+    if (updatePayload.labels !== undefined) directUpdate.labels = updatePayload.labels;
+
+    if (Object.keys(directUpdate).length > 1) {
+      await prisma.issueCache
+        .updateMany({
+          where: { jiraKey: key },
+          data: directUpdate,
+        })
+        .catch(() => null);
+    }
   } catch (e) {
     return NextResponse.json({ error: `Jira update failed: ${(e as Error).message}` }, { status: 502 });
   }

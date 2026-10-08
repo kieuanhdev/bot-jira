@@ -16,17 +16,20 @@ import { QuickPanelActions } from "./quick-panel/quick-panel-actions";
 import { QuickPanelFields } from "./quick-panel/quick-panel-fields";
 import { QuickPanelComments } from "./quick-panel/quick-panel-comments";
 import { QuickPanelFooter } from "./quick-panel/quick-panel-footer";
+import { applyOptimisticIssuePatch } from "./lib/board-optimistic";
 
 export function QuickPanel({
   issue,
   jiraBaseUrl,
   assignees,
   onClose,
+  onOptimisticUpdate,
 }: {
   issue: IssueItem;
   jiraBaseUrl: string;
   assignees: string[];
   onClose: () => void;
+  onOptimisticUpdate?: (patch: Partial<IssueItem> & { jiraKey: string }) => void;
 }) {
   const router = useRouter();
   const qc = useQueryClient();
@@ -34,6 +37,7 @@ export function QuickPanel({
   const [copied, setCopied] = useState(false);
   const [creatingBranch, setCreatingBranch] = useState(false);
   const [branchMsg, setBranchMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [optimisticOverrides, setOptimisticOverrides] = useState<Record<string, unknown>>({});
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   const { data: me } = useQuery({
@@ -77,19 +81,25 @@ export function QuickPanel({
   });
 
   const d = detail?.issue;
-  const summary = d?.summary || issue.summary || "(no summary)";
+  const summary = (optimisticOverrides.summary as string | undefined) ?? d?.summary ?? issue.summary ?? "(no summary)";
   const status = d?.status ?? issue.status;
   const statusCat = issue.statusCategory;
-  const priority = d?.priority ?? issue.priority;
-  const assigneeJira = d?.assigneeJira ?? issue.assigneeJira;
-  const points = d?.points ?? issue.points;
+  const priority = (optimisticOverrides.priority as string | undefined) ?? d?.priority ?? issue.priority;
+  const assigneeJira =
+    optimisticOverrides.assignee !== undefined
+      ? (optimisticOverrides.assignee as string | null)
+      : (d?.assigneeJira ?? issue.assigneeJira);
+  const points =
+    optimisticOverrides.points !== undefined
+      ? (optimisticOverrides.points as number | null)
+      : (d?.points ?? issue.points);
   const type = d?.type ?? issue.type ?? "—";
   const updatedAt = d?.updatedAt ?? issue.updatedAt;
   const createdAt = d?.createdAt ?? issue.createdAt;
   const lastSyncedAt = d?.lastSyncedAt ?? issue.lastSyncedAt;
   const aiScore = d?.aiScore ?? issue.aiScore;
   const aiDecision = d?.aiDecision ?? issue.aiDecision;
-  const description = d?.description ?? issue.description;
+  const description = (optimisticOverrides.description as string | undefined) ?? d?.description ?? issue.description;
   const stale = d?.staleSnapshots?.[0] ?? null;
 
   // Auto-focus the panel on open; trap Tab inside; Escape closes.
@@ -134,11 +144,32 @@ export function QuickPanel({
   }
 
   async function mutateField(patch: Record<string, unknown>) {
+    // 1. Instant optimistic update for the QuickPanel UI (0ms)
+    setOptimisticOverrides((prev) => ({ ...prev, ...patch }));
+
+    // 2. Instant optimistic update for TanStack Query caches (detail & board list)
+    const rollback = applyOptimisticIssuePatch(qc, issue.jiraKey, patch, issue);
+
+    // 3. Notify parent (board-client) to keep its local state in sync
+    onOptimisticUpdate?.({
+      jiraKey: issue.jiraKey,
+      ...(patch.points !== undefined ? { points: patch.points as number | null } : {}),
+      ...(patch.assignee !== undefined ? { assigneeJira: patch.assignee as string | null } : {}),
+      ...(patch.priority !== undefined ? { priority: patch.priority as string } : {}),
+    });
+
     try {
       await api(`/api/issues/${issue.jiraKey}`, { method: "PATCH", body: patch });
-      await invalidate();
+      // Invalidate in the background silently
+      void invalidate();
     } catch {
-      // ignore
+      // Revert upon network or validation failure
+      rollback();
+      setOptimisticOverrides((prev) => {
+        const next = { ...prev };
+        for (const k of Object.keys(patch)) delete next[k];
+        return next;
+      });
     }
   }
 
@@ -192,15 +223,17 @@ export function QuickPanel({
         return;
       }
       if (action.kind === "assignee") {
-        await api(`/api/issues/${key}`, { method: "PATCH", body: { assignee: action.value } });
-      } else if (action.kind === "priority") {
-        await api(`/api/issues/${key}`, { method: "PATCH", body: { priority: action.value } });
-      } else {
-        const done = (transitions?.transitions ?? []).find(
-          (t) => toName(t) && statusCatOf(t, issue)
-        );
-        if (done) await api(`/api/issues/${key}/transition`, { method: "POST", body: { transitionId: done.id } });
+        await mutateField({ assignee: action.value });
+        return;
       }
+      if (action.kind === "priority") {
+        await mutateField({ priority: action.value });
+        return;
+      }
+      const done = (transitions?.transitions ?? []).find(
+        (t) => toName(t) && statusCatOf(t, issue)
+      );
+      if (done) await api(`/api/issues/${key}/transition`, { method: "POST", body: { transitionId: done.id } });
       await invalidate();
     } catch {
       // Swallow; the board refetches on its own poll.

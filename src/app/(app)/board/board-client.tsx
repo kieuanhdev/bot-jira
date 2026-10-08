@@ -473,6 +473,17 @@ export function BoardClient() {
     [issueData, extraIssues]
   );
 
+  const handleOptimisticIssueUpdate = useCallback((patch: Partial<IssueItem> & { jiraKey: string }) => {
+    setExtraPages((prev) => {
+      if (!prev.items.some((it) => it.jiraKey === patch.jiraKey)) return prev;
+      return {
+        ...prev,
+        items: prev.items.map((it) => (it.jiraKey === patch.jiraKey ? { ...it, ...patch } : it)),
+      };
+    });
+    setQuickPanel((prev) => (prev && prev.jiraKey === patch.jiraKey ? { ...prev, ...patch } : prev));
+  }, []);
+
   const { boardSync, isCurrentProjectSyncing, syncJira } = useJiraSync(selectedProject, setToast);
 
   const { data: optData } = useQuery({
@@ -898,6 +909,7 @@ export function BoardClient() {
           jiraBaseUrl={jiraBaseUrl}
           assignees={assignees}
           onClose={() => setQuickPanel(null)}
+          onOptimisticUpdate={handleOptimisticIssueUpdate}
         />
       )}
     </div>
