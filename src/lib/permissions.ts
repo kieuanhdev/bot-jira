@@ -51,44 +51,26 @@ export type Permission =
   | "board.team";
 
 /**
- * Permission matrix (REL-01, BR-005, RPT-103):
- *
- *  | action             | member | lead | release_manager | admin |
- *  |--------------------|--------|------|-----------------|-------|
- *  | board.team         |   no   | yes  |       yes       |  yes  |
- *  | release.view       |  yes   | yes  |       yes       |  yes  |
- *  | release.check      |   no   |  no  |       yes       |  yes  |
- *  | release.manage     |   no   |  no  |       yes       |  yes  |
- *  | release.approve    |   no   |  no  |       yes       |  yes  |
- *  | release.publish    |   no   |  no  |       yes       |  yes  |
- *  | admin.users        |   no   |  no  |       no        |  yes  |
- *  | admin.integrations |   no   |  no  |       no        |  yes  |
- *  | branch.view        |  yes   | yes  |       yes       |  yes  |
- *  | branch.confirm     |  yes   | yes  |       yes       |  yes  |
- *  | branch.manage      |   no   |  no  |       yes       |  yes  |
- *  | branch.sync        |  yes   | yes  |       yes       |  yes  |
- *  | report.view        |  yes   | yes  |       yes       |  yes  |
- *  | report.export      |  yes   | yes  |       yes       |  yes  |
- *  | report.configure   |   no   |  no  |       no        |  yes  |
+ * Permission policy: every signed-in user shares one effective role for
+ * release, branch, board and report actions. Only the admin-level actions
+ * (user management, integrations, report configuration) remain admin-only.
  */
 export function can(session: { user?: { role?: string } } | null | undefined, perm: Permission): boolean {
   const r = roleOf(session);
   switch (perm) {
     case "release.view":
-    case "branch.view":
-    case "branch.confirm":
-    case "branch.sync":
-    case "report.view":
-    case "report.export":
-      return true; // any signed-in user
-    case "board.team":
-      return r === "lead" || r === "release_manager" || r === "admin";
     case "release.check":
     case "release.manage":
     case "release.approve":
     case "release.publish":
+    case "branch.view":
+    case "branch.confirm":
     case "branch.manage":
-      return r === "release_manager" || r === "admin";
+    case "branch.sync":
+    case "report.view":
+    case "report.export":
+    case "board.team":
+      return true; // any signed-in user
     case "admin.users":
     case "admin.integrations":
     case "report.configure":

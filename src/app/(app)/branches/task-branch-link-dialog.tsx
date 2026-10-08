@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getErrorMessage } from "@/lib/api-client";
 import { useBranchLink, useUnlinkedBranchPicker } from "@/hooks/use-branches";
-import { timeAgo } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
 
 type TaskBranchLinkDialogProps = {
   jiraKey: string;
@@ -108,10 +108,17 @@ export function TaskBranchLinkDialog({
               </p>
             </div>
           ) : (
-            <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-md border border-border">
+            <ul className="flex max-h-72 flex-col gap-1.5 overflow-y-auto pr-1">
               {items.map((item) => (
                 <li key={item.id}>
-                  <label className="flex cursor-pointer items-start gap-2.5 px-3 py-2 text-xs transition-colors hover:bg-muted/50">
+                  <label
+                    className={cn(
+                      "flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2 text-xs transition-colors duration-150",
+                      selected.has(item.id)
+                        ? "border-primary/50 bg-primary/5"
+                        : "border-border hover:bg-muted/50"
+                    )}
+                  >
                     <input
                       type="checkbox"
                       checked={selected.has(item.id)}

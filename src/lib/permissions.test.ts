@@ -24,9 +24,9 @@ describe("can — permission matrix (REL-01)", () => {
     expect(can(session("admin"), "release.view")).toBe(true);
   });
 
-  it("member cannot check, manage, approve or publish", () => {
+  it("member can check, manage, approve and publish (single shared role)", () => {
     for (const perm of ["release.check", "release.manage", "release.approve", "release.publish"] as const) {
-      expect(can(session("member"), perm)).toBe(false);
+      expect(can(session("member"), perm)).toBe(true);
     }
   });
 
@@ -54,10 +54,10 @@ describe("can — permission matrix (REL-01)", () => {
   });
 
   it("evaluates branch permissions per BR-005 matrix", () => {
-    // member can view, confirm and sync, but cannot manage
+    // member can do all branch actions
     expect(can(session("member"), "branch.view")).toBe(true);
     expect(can(session("member"), "branch.confirm")).toBe(true);
-    expect(can(session("member"), "branch.manage")).toBe(false);
+    expect(can(session("member"), "branch.manage")).toBe(true);
     expect(can(session("member"), "branch.sync")).toBe(true);
 
     // release_manager can do all branch actions
@@ -96,11 +96,11 @@ describe("ROLES", () => {
 });
 
 describe("board.team", () => {
-  it("allows leads, release managers and admins without granting release rights to leads", () => {
-    expect(can(session("member"), "board.team")).toBe(false);
+  it("is open to every role", () => {
+    expect(can(session("member"), "board.team")).toBe(true);
     expect(can(session("lead"), "board.team")).toBe(true);
     expect(can(session("release_manager"), "board.team")).toBe(true);
     expect(can(session("admin"), "board.team")).toBe(true);
-    expect(can(session("lead"), "release.manage")).toBe(false);
+    expect(can(session("lead"), "release.manage")).toBe(true);
   });
 });
