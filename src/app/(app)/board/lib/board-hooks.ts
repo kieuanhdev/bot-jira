@@ -188,8 +188,8 @@ export function useJiraSync(selectedProject: string, setToast: (message: string 
   return { boardSync: effectiveBoardSync, isCurrentProjectSyncing, syncJira };
 }
 
-/** Per-issue Jira transitions: cached, de-duplicated, and prefetched for every loaded issue. */
-export function useTransitionCache(issues: IssueItem[]) {
+/** Per-issue Jira transitions: cached and de-duplicated, fetched lazily (drag start / action), never in bulk. */
+export function useTransitionCache() {
   const transitionCache = useRef(new Map<string, Transition[]>());
   const transitionRequests = useRef(new Map<string, Promise<Transition[]>>());
 
@@ -214,26 +214,6 @@ export function useTransitionCache(issues: IssueItem[]) {
     transitionCache.current.delete(key);
     transitionRequests.current.delete(key);
   }
-
-  const transitionKeys = useMemo(() => issues.map((i) => i.jiraKey).join("|"), [issues]);
-  useEffect(() => {
-    const keys = transitionKeys ? transitionKeys.split("|") : [];
-    let cancelled = false;
-    void (async () => {
-      for (const key of keys) {
-        if (cancelled) return;
-        if (transitionCache.current.has(key)) continue;
-        try {
-          await fetchTransitions(key);
-        } catch {
-          // Leave it uncached; drag-start and transition execution retry it.
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [transitionKeys, fetchTransitions]);
 
   return { transitionCache, fetchTransitions, invalidateTransitionCache };
 }

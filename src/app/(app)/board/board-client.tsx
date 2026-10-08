@@ -39,6 +39,7 @@ import { BoardSkeleton } from "./board-column";
 import { QuickPanel } from "./board-quick-panel";
 import {
   type Project,
+  type QuickAction,
   type SortMode,
   type ViewMode,
 } from "./lib/board-types";
@@ -515,7 +516,7 @@ export function BoardClient() {
     staleTime: 5 * 60_000,
     retry: 0,
   });
-  const assignees = optData?.assignees ?? [];
+  const assignees = useMemo(() => optData?.assignees ?? [], [optData?.assignees]);
   const labelOptions = optData?.labels ?? [];
   const personOptions = (values: string[] | undefined) => (values ?? []).map((value) => ({ value, label: optData?.displayNames?.[value] ? `${optData.displayNames[value]} (${value})` : value }));
 
@@ -652,7 +653,7 @@ export function BoardClient() {
 
   const columnKeys = useMemo(() => visibleColumns.map((c) => c.key), [visibleColumns]);
 
-  const { transitionCache, fetchTransitions, invalidateTransitionCache } = useTransitionCache(issues);
+  const { transitionCache, fetchTransitions, invalidateTransitionCache } = useTransitionCache();
 
   const {
     transitionBusy,
@@ -676,6 +677,24 @@ export function BoardClient() {
     findColumnForIssue,
     onOptimisticIssueUpdate: handleOptimisticIssueUpdate,
   });
+
+  // Stable identities so memoized columns/cards don't re-render on unrelated state changes.
+  const latestActions = useRef({ handleTransition, handleQuickAction });
+  useEffect(() => {
+    latestActions.current = { handleTransition, handleQuickAction };
+  });
+  const stableTransition = useCallback(
+    (key: string, target: string) => latestActions.current.handleTransition(key, target),
+    []
+  );
+  const stableQuickAction = useCallback(
+    (key: string, action: QuickAction) => latestActions.current.handleQuickAction(key, action),
+    []
+  );
+  const openQuickPanel = useCallback((issue: IssueItem) => setQuickPanel(issue), []);
+  const registerCardRef = useCallback((key: string, el: HTMLElement | null) => {
+    cardRefs.current.set(key, el);
+  }, []);
 
   const dnd = useBoardDnD({
     boardScrollRef,
@@ -929,11 +948,11 @@ export function BoardClient() {
           growColumn={growColumn}
           toggleCollapse={toggleCollapse}
           hideColumn={hideColumn}
-          onOpen={(issue) => setQuickPanel(issue)}
-          onQuickAction={handleQuickAction}
-          onTransition={handleTransition}
+          onOpen={openQuickPanel}
+          onQuickAction={stableQuickAction}
+          onTransition={stableTransition}
           assignees={assignees}
-          registerRef={(key, el) => cardRefs.current.set(key, el)}
+          registerRef={registerCardRef}
           focusKey={focusKey}
         />
       ) : (

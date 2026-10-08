@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { memo, useEffect } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,7 +17,7 @@ import type { QuickAction } from "./lib/board-types";
 import { statusText } from "./lib/board-utils";
 import { DraggableCard } from "./board-card";
 
-export function BoardColumn({
+export const BoardColumn = memo(function BoardColumn({
   id,
   label,
   category,
@@ -231,7 +231,7 @@ export function BoardColumn({
                       busy={busy}
                       dndDisabled={dndDisabled}
                       showNavButtons
-                      onOpen={() => onOpen(shown)}
+                      onOpen={onOpen}
                       onQuickAction={onQuickAction}
                       assignees={assignees}
                       registerRef={registerRef}
@@ -254,7 +254,7 @@ export function BoardColumn({
       </div>
     </div>
   );
-}
+});
 
 export function BoardSkeleton({ columnCount }: { columnCount: number }) {
   const count = Math.max(3, Math.min(columnCount, 6));

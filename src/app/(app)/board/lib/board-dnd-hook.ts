@@ -74,9 +74,13 @@ export function useBoardDnD({
       setAllowedCols(null);
       return;
     }
-    const all = transitionCache.current.get(activeKey) ?? [];
+    const all = transitionCache.current.get(activeKey);
+    if (!all) return; // still loading; onDragStart sets allowedCols when it resolves
     const currentCol = findColumnForIssue(source);
-    setAllowedCols(allowedColumnKeys(columns, statusCategoryMap, currentCol, all));
+    const next = allowedColumnKeys(columns, statusCategoryMap, currentCol, all);
+    setAllowedCols((prev) =>
+      prev && prev.size === next.size && [...next].every((k) => prev.has(k)) ? prev : next
+    );
   }
 
   function onDragEnd(event: DragEndEvent) {
@@ -106,7 +110,9 @@ export function useBoardDnD({
     const source = issues.find((i) => i.jiraKey === activeKey);
     if (!source) return [];
     const currentCol = findColumnForIssue(source);
-    const all = transitionCache.current.get(activeKey) ?? [];
+    const all = transitionCache.current.get(activeKey);
+    // Transitions not loaded yet: don't block the drop; handleTransition validates it.
+    if (!all) return ranked.length > 0 ? [ranked[0]] : [];
     const allowed = allowedColumnKeys(columns, statusCategoryMap, currentCol, all);
     const first = ranked.find((r) => allowed.has(String(r.id)));
     return first ? [first] : [];

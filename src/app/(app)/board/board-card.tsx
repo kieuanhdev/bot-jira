@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { cn, timeAgo } from "@/lib/utils";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
@@ -259,7 +260,7 @@ export function CardContent({
   );
 }
 
-export function DraggableCard({
+export const DraggableCard = memo(function DraggableCard({
   issue,
   done,
   colIndex,
@@ -341,4 +342,4 @@ export function DraggableCard({
       </div>
     </div>
   );
-}
+});

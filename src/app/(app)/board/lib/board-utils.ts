@@ -15,27 +15,22 @@ export function daysSince(d: string | null): number {
 }
 
 export function sortIssues(items: IssueItem[], mode: SortMode): IssueItem[] {
-  const arr = [...items];
+  // Parse each date once instead of inside the comparator (O(n log n) Date parses).
+  const decorated = items.map((issue) => ({
+    issue,
+    ts: issue.updatedAt ? new Date(issue.updatedAt).getTime() : 0,
+    rank: PRIORITY_RANK[issue.priority] ?? 9,
+  }));
+  const now = Date.now();
+  const age = (ts: number) => (ts ? Math.floor((now - ts) / 86_400_000) : 0);
   if (mode === "priority") {
-    arr.sort((a, b) => {
-      const ra = PRIORITY_RANK[a.priority] ?? 9;
-      const rb = PRIORITY_RANK[b.priority] ?? 9;
-      if (ra !== rb) return ra - rb;
-      return daysSince(b.updatedAt) - daysSince(a.updatedAt);
-    });
+    decorated.sort((a, b) => a.rank - b.rank || age(b.ts) - age(a.ts));
   } else if (mode === "updated") {
-    arr.sort((a, b) => {
-      const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-      const tb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-      if (tb !== ta) return tb - ta;
-      const ra = PRIORITY_RANK[a.priority] ?? 9;
-      const rb = PRIORITY_RANK[b.priority] ?? 9;
-      return ra - rb;
-    });
+    decorated.sort((a, b) => b.ts - a.ts || a.rank - b.rank);
   } else {
-    arr.sort((a, b) => daysSince(b.updatedAt) - daysSince(a.updatedAt));
+    decorated.sort((a, b) => age(b.ts) - age(a.ts));
   }
-  return arr;
+  return decorated.map((d) => d.issue);
 }
 
 export function priorityMeta(priority: string) {

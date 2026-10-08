@@ -130,6 +130,8 @@ export async function GET(req: Request) {
   const statusCategory = (url.searchParams.get("statusCategory") ?? "").trim().toLowerCase();
   const releaseLabel = (url.searchParams.get("releaseLabel") ?? "").trim();
   const dueBeforeRaw = url.searchParams.get("dueBefore");
+  // The list never renders descriptions (the quick panel loads them from the detail endpoint).
+  const includeDescription = url.searchParams.get("includeDescription") === "1";
   const limit = positiveLimit(url.searchParams.get("limit"));
   const offset = nonNegativeOffset(url.searchParams.get("offset"));
 
@@ -245,6 +247,7 @@ export async function GET(req: Request) {
       orderBy: [{ updatedAt: "desc" }, { jiraKey: "asc" }],
       skip: offset,
       take: limit,
+      omit: { description: !includeDescription },
       include: {
         aiScore: { include: { decisions: { orderBy: { decidedAt: "desc" }, take: 1 } } },
         branches: {
@@ -281,7 +284,7 @@ export async function GET(req: Request) {
         jiraKey: item.jiraKey,
         projectKey: item.projectKey,
         summary: item.summary,
-        description: item.description,
+        description: item.description ?? "",
         status: item.status,
         statusId: item.statusId,
         statusCategory: item.statusCategory,
