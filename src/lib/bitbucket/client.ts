@@ -286,39 +286,46 @@ type BitbucketRepoResponse = {
 const DISCOVERY_TTL_MS = 30 * 60 * 1000;
 let discoveryCache: { at: number; repos: string[] } | null = null;
 
+/** Repos one account can read. Personal (`~user`) and archived repos are skipped. */
+export async function listReposForCred(cred: BbCreds): Promise<string[]> {
+  const base = env.bitbucketBaseUrl.replace(/\/$/, "");
+  const basic = Buffer.from(`${cred.user}:${cred.token}`).toString("base64");
+  const repos: string[] = [];
+  try {
+    let start = 0;
+    for (let page = 0; page < 50; page++) {
+      const res = await fetch(`${base}/rest/api/1.0/repos?limit=100&start=${start}`, {
+        headers: { Accept: "application/json", Authorization: `Basic ${basic}` },
+      });
+      if (!res.ok) break; // this account is rejected; others may still work
+      const body = (await res.json()) as Paged<BitbucketRepoResponse>;
+      for (const r of body.values ?? []) {
+        if (r.archived || r.project.key.startsWith("~")) continue;
+        repos.push(`${r.project.key}/${r.slug}`);
+      }
+      if (body.isLastPage) break;
+      start = (body as { nextPageStart?: number }).nextPageStart ?? start + 100;
+    }
+  } catch {
+    // A network failure for one account must not stop discovery for the rest.
+  }
+  return repos;
+}
+
 /**
  * Repos readable by any stored Bitbucket account (system token + every user who
  * saved a token). Accounts are independent: one that cannot see a repo never
- * hides it from another that can. Personal (`~user`) and archived repos are skipped.
+ * hides it from another that can.
  * Also primes the per-repo credential cache with an account that can read the repo.
  */
 export async function discoverBitbucketRepos(force = false): Promise<string[]> {
   if (!force && discoveryCache && Date.now() - discoveryCache.at < DISCOVERY_TTL_MS) {
     return discoveryCache.repos;
   }
-  const base = env.bitbucketBaseUrl.replace(/\/$/, "");
   const found = new Map<string, BbCreds>();
-
   for (const cred of await getAllBitbucketCreds()) {
-    const basic = Buffer.from(`${cred.user}:${cred.token}`).toString("base64");
-    try {
-      let start = 0;
-      for (let page = 0; page < 50; page++) {
-        const res = await fetch(`${base}/rest/api/1.0/repos?limit=100&start=${start}`, {
-          headers: { Accept: "application/json", Authorization: `Basic ${basic}` },
-        });
-        if (!res.ok) break; // this account is rejected; others may still work
-        const body = (await res.json()) as Paged<BitbucketRepoResponse>;
-        for (const r of body.values ?? []) {
-          if (r.archived || r.project.key.startsWith("~")) continue;
-          const repo = `${r.project.key}/${r.slug}`;
-          if (!found.has(repo)) found.set(repo, cred);
-        }
-        if (body.isLastPage) break;
-        start = (body as { nextPageStart?: number }).nextPageStart ?? start + 100;
-      }
-    } catch {
-      // Network failure for one account must not stop discovery for the rest.
+    for (const repo of await listReposForCred(cred)) {
+      if (!found.has(repo)) found.set(repo, cred);
     }
   }
 

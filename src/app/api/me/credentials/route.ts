@@ -164,13 +164,67 @@ export async function PUT(req: Request) {
   if (verify.bitbucket.ok) patch.bitbucketVerifiedAt = now;
   if (Object.keys(patch).length) await prisma.user.update({ where: { id }, data: patch });
 
+  // Best-effort: a freshly saved token may unlock repos/projects nobody could
+  // read before. Look them up and start syncing right away. Never fails the save.
+  const discovery = await runOnboarding(user, {
+    bitbucket: Boolean(bbToken) && !body.disconnectBitbucket && verify.bitbucket.ok,
+    jira: Boolean(jiraToken) && !body.disconnectJira && verify.jira.ok,
+  });
+
   return NextResponse.json({
     ok: true,
     verify,
+    discovery,
     // Never echo tokens back. Report which services are now linked.
     jiraLinked: Boolean(user.jiraTokenEnc),
     bitbucketLinked: Boolean(user.bitbucketTokenEnc),
   });
+}
+
+type Discovery = {
+  bitbucket?: { readable: number; newRepos: string[] };
+  jira?: { readable: number; registered: string[] };
+};
+
+async function runOnboarding(
+  user: Parameters<typeof verifyCreds>[0],
+  which: { bitbucket: boolean; jira: boolean }
+): Promise<Discovery> {
+  const { userJiraAuth, userBitbucketCreds } = await import("@/lib/user-creds");
+  const out: Discovery = {};
+  let syncBranches = false;
+  let syncJira = false;
+
+  const bbCreds = which.bitbucket ? userBitbucketCreds(user) : null;
+  if (bbCreds) {
+    try {
+      const { onboardBitbucketToken } = await import("@/lib/bitbucket/token-onboarding");
+      out.bitbucket = await onboardBitbucketToken(bbCreds);
+      syncBranches = out.bitbucket.newRepos.length > 0;
+    } catch (e) {
+      console.warn("Bitbucket token onboarding failed:", (e as Error).message);
+    }
+  }
+
+  const jiraAuth = which.jira ? userJiraAuth(user) : null;
+  if (jiraAuth) {
+    try {
+      const { onboardJiraToken } = await import("@/lib/jira/token-onboarding");
+      out.jira = await onboardJiraToken(jiraAuth);
+      syncJira = out.jira.registered.length > 0;
+    } catch (e) {
+      console.warn("Jira token onboarding failed:", (e as Error).message);
+    }
+  }
+
+  try {
+    const { enqueueCheckBranches, enqueueJiraDispatch } = await import("@/lib/queue/boss");
+    if (syncBranches) await enqueueCheckBranches();
+    if (syncJira) await enqueueJiraDispatch({ source: "admin" });
+  } catch (e) {
+    console.warn("Could not enqueue sync after token save:", (e as Error).message);
+  }
+  return out;
 }
 
 /** Decrypt a user's stored creds and ping each service to confirm they work. */

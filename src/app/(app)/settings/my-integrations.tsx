@@ -105,6 +105,18 @@ export function MyIntegrations() {
           const parts: string[] = [];
           parts.push(j.ok ? `Jira ✓ (${j.detail})` : `Jira ✗ ${j.detail ?? "chưa liên kết"}`);
           if (b.detail) parts.push(b.ok ? `Bitbucket ✓ (${b.detail})` : `Bitbucket ✗ ${b.detail}`);
+          const found = result.discovery;
+          if (found?.bitbucket) {
+            const n = found.bitbucket.newRepos.length;
+            parts.push(
+              n > 0
+                ? `Bitbucket mở khóa ${n} repo mới (đang đồng bộ): ${found.bitbucket.newRepos.slice(0, 5).join(", ")}${n > 5 ? "…" : ""}`
+                : `Bitbucket đọc được ${found.bitbucket.readable} repo`
+            );
+          }
+          if (found?.jira && found.jira.registered.length > 0) {
+            parts.push(`Jira thêm dự án: ${found.jira.registered.join(", ")} (đang đồng bộ)`);
+          }
           setSaveMsg({
             ok: j.ok && (!result.bitbucketLinked || b.ok),
             text: parts.join(" · "),

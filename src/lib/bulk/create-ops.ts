@@ -905,7 +905,9 @@ async function processCreateItem(
       if (reqData.dueDate) {
         extraFields.duedate = reqData.dueDate;
       }
-      if (reqData.originalEstimate) {
+      const typeFields = reqData.issueTypeId ? meta?.fieldsByIssueType[reqData.issueTypeId] : undefined;
+      const timetrackingOnScreen = !typeFields || typeFields.some((f) => f.id === "timetracking");
+      if (reqData.originalEstimate && timetrackingOnScreen) {
         extraFields.timetracking = { originalEstimate: reqData.originalEstimate };
       }
       if (reqData.fixVersionIds && reqData.fixVersionIds.length > 0) {
@@ -954,7 +956,7 @@ async function processCreateItem(
         }
       }
 
-      const created = await jira.createIssue({
+      const createInput = {
         projectKey,
         issueTypeId: reqData.issueTypeId,
         summary: reqData.summary || `Task #${rowIndex + 1}`,
@@ -964,7 +966,22 @@ async function processCreateItem(
         labels: reqData.labels ?? [],
         idempotencyMarker: marker,
         fields: extraFields,
-      });
+      };
+
+      // If the project's Create screen lacks Time Tracking (and we couldn't tell up front),
+      // Jira rejects the whole issue; skip the estimate and create the task without it.
+      let created: Awaited<ReturnType<typeof jira.createIssue>>;
+      try {
+        created = await jira.createIssue(createInput);
+      } catch (createErr) {
+        if (extraFields.timetracking && /timetracking/i.test((createErr as Error).message || "")) {
+          const { timetracking: _omit, ...restFields } = extraFields;
+          void _omit;
+          created = await jira.createIssue({ ...createInput, fields: restFields });
+        } else {
+          throw createErr;
+        }
+      }
 
       success = true;
       finalJiraKey = created.key;

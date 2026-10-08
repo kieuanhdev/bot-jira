@@ -476,7 +476,7 @@ export function validateAndNormalizeItem(
         warnings.push({
           field: "originalEstimate",
           code: "TIMETRACKING_UNAVAILABLE",
-          message: "Dự án không bật tính năng Time Tracking",
+          message: "Dự án không có trường Time Tracking trên màn hình tạo task, Original Estimate sẽ được bỏ qua",
         });
       }
     }

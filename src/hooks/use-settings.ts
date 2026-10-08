@@ -32,6 +32,11 @@ export type SaveCredentialsResult = {
   };
   jiraLinked: boolean;
   bitbucketLinked: boolean;
+  /** What a freshly saved token unlocked (repos/projects nobody could read before). */
+  discovery?: {
+    bitbucket?: { readable: number; newRepos: string[] };
+    jira?: { readable: number; registered: string[] };
+  };
 };
 
 export function useSaveCredentials() {
