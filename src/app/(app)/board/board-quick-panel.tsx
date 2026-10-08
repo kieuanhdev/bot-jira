@@ -270,7 +270,7 @@ export function QuickPanel({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="flex h-full w-full max-w-md flex-col overflow-hidden border-l bg-card shadow-2xl outline-none motion-safe:animate-[panelIn_180ms_ease-out]"
+        className="flex h-full w-full flex-col sm:w-1/2 sm:min-w-[32rem] overflow-hidden border-l bg-card shadow-2xl outline-none motion-safe:animate-[panelIn_180ms_ease-out]"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <QuickPanelHeader

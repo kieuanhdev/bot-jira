@@ -50,7 +50,7 @@ COPY --from=build --chown=node:node /app/scripts ./scripts
 COPY --from=build --chown=node:node /app/tsconfig.json ./tsconfig.json
 COPY --from=build --chown=node:node /app/package.json ./package.json
 USER node
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && npm run worker"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && exec npm run worker"]
 
 # ── Runtime ───────────────────────────────────────────────────────────
 FROM base AS runner
@@ -78,4 +78,4 @@ EXPOSE 3100
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD node -e "require('net').connect(process.env.PORT||3100,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"
 # Apply migrations, seed the admin, then start the server.
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node scripts/seed-admin.mjs && node server.js"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node scripts/seed-admin.mjs && exec node server.js"]

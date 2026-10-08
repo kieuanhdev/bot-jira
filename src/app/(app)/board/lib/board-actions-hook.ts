@@ -9,7 +9,7 @@ import { transitionTarget } from "@/lib/jira/board-transitions";
 import type { BoardColumn } from "./board-columns";
 import { findTransition } from "./board-columns";
 import type { QuickAction, Transition } from "./board-types";
-import { applyOptimisticIssuePatch } from "./board-optimistic";
+import { applyOptimisticIssuePatch, patchIssueLists } from "./board-optimistic";
 
 interface BoardActionsOptions {
   issues: IssueItem[];
@@ -24,6 +24,8 @@ interface BoardActionsOptions {
   router: { push: (url: string) => void };
   qc: QueryClient;
   findColumnForIssue: (issue: IssueItem) => string;
+  /** Mirrors an optimistic change into board-local state (paged-in rows). */
+  onOptimisticIssueUpdate?: (patch: Partial<IssueItem> & { jiraKey: string }) => void;
 }
 
 export function useBoardActions({
@@ -39,6 +41,7 @@ export function useBoardActions({
   router,
   qc,
   findColumnForIssue,
+  onOptimisticIssueUpdate,
 }: BoardActionsOptions) {
   const [transitionBusy, setTransitionBusy] = useState(false);
 
@@ -115,6 +118,105 @@ export function useBoardActions({
     } finally {
       setTransitionBusy(false);
     }
+  }
+
+  /**
+   * Table edit for one or many issues: optimistic list patch, PATCH fan-out
+   * (4 at a time), per-issue revert on failure. Returns the failed keys.
+   */
+  async function handleEdits(
+    targets: IssueItem[],
+    apiPatch: Record<string, unknown>,
+    itemPatchFor: (issue: IssueItem) => Partial<IssueItem>
+  ): Promise<string[]> {
+    const apply = (patches: Map<string, Partial<IssueItem>>) => {
+      patchIssueLists(qc, patches);
+      for (const [jiraKey, p] of patches) onOptimisticIssueUpdate?.({ jiraKey, ...p });
+    };
+    apply(new Map(targets.map((t) => [t.jiraKey, itemPatchFor(t)])));
+
+    const failed: { issue: IssueItem; err: ApiError }[] = [];
+    const queue = [...targets];
+    const worker = async () => {
+      for (let t = queue.shift(); t; t = queue.shift()) {
+        try {
+          await api(`/api/issues/${t.jiraKey}`, { method: "PATCH", body: apiPatch });
+        } catch (e) {
+          failed.push({ issue: t, err: e as ApiError });
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, targets.length) }, worker));
+
+    if (failed.length > 0) {
+      apply(
+        new Map(
+          failed.map(({ issue }) => [
+            issue.jiraKey,
+            Object.fromEntries(
+              Object.keys(itemPatchFor(issue)).map((k) => [k, issue[k as keyof IssueItem]])
+            ) as Partial<IssueItem>,
+          ])
+        )
+      );
+      const first = failed[0].err;
+      const reason = first.status ? `HTTP ${first.status}` : first.message;
+      setToast(
+        targets.length === 1
+          ? `${targets[0].jiraKey}: update failed (${reason})`.slice(0, 120)
+          : `Cập nhật lỗi ${failed.length}/${targets.length} task (${reason})`.slice(0, 120)
+      );
+    } else if (targets.length > 1) {
+      setToast(`Đã cập nhật ${targets.length} task`);
+    }
+    void qc.invalidateQueries({ queryKey: issuesKeys.all });
+    return failed.map((f) => f.issue.jiraKey);
+  }
+
+  /** Bulk status change: each issue picks the transition that lands on `toStatus`. */
+  async function handleBulkTransition(targets: IssueItem[], toStatus: string) {
+    setToast(null);
+    const want = toStatus.trim().toLowerCase();
+    let ok = 0;
+    let skipped = 0;
+    let failed = 0;
+    const queue = targets.filter((t) => t.status.toLowerCase() !== want);
+    skipped += targets.length - queue.length;
+    const worker = async () => {
+      for (let t = queue.shift(); t; t = queue.shift()) {
+        try {
+          const { transitions } = await api<{ transitions: Transition[] }>(
+            `/api/issues/${t.jiraKey}/transitions`
+          );
+          const found = transitions.find((tr) => transitionTarget(tr).toLowerCase() === want);
+          if (!found) {
+            skipped++;
+            continue;
+          }
+          await api(`/api/issues/${t.jiraKey}/transition`, {
+            method: "POST",
+            body: { transitionId: found.id },
+          });
+          invalidateTransitionCache(t.jiraKey);
+          ok++;
+        } catch {
+          failed++;
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
+    setToast(
+      `Chuyển "${toStatus}": ${ok} thành công` +
+        (skipped ? `, ${skipped} bỏ qua (không có transition)` : "") +
+        (failed ? `, ${failed} lỗi` : "")
+    );
+    await qc.invalidateQueries({ queryKey: issuesKeys.all });
+  }
+
+  async function handleInlineTransition(issue: IssueItem, transitionId: string, toStatus: string) {
+    setToast(null);
+    setOptimisticStatus(issue.jiraKey, toStatus || null);
+    await doTransition(issue.jiraKey, transitionId, null);
   }
 
   async function handleQuickAction(key: string, action: QuickAction) {
@@ -201,5 +303,8 @@ export function useBoardActions({
     transitionBusy,
     handleTransition,
     handleQuickAction,
+    handleEdits,
+    handleBulkTransition,
+    handleInlineTransition,
   };
 }

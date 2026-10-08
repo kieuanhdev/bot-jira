@@ -619,7 +619,14 @@ export function BoardClient() {
 
   const { transitionCache, fetchTransitions, invalidateTransitionCache } = useTransitionCache(issues);
 
-  const { transitionBusy, handleTransition, handleQuickAction } = useBoardActions({
+  const {
+    transitionBusy,
+    handleTransition,
+    handleQuickAction,
+    handleEdits,
+    handleBulkTransition,
+    handleInlineTransition,
+  } = useBoardActions({
     issues,
     columns,
     columnKeys,
@@ -632,6 +639,7 @@ export function BoardClient() {
     router,
     qc,
     findColumnForIssue,
+    onOptimisticIssueUpdate: handleOptimisticIssueUpdate,
   });
 
   const dnd = useBoardDnD({
@@ -896,6 +904,19 @@ export function BoardClient() {
         <BoardListView
           issues={issues}
           hiddenTableCols={effectiveHiddenTableCols}
+          options={{
+            statuses: optData?.statuses ?? [],
+            assignees,
+            types: optData?.types ?? [],
+            epics: optData?.epics ?? [],
+            reporters: optData?.reporters ?? [],
+            approvers: optData?.approvers ?? [],
+            testers: optData?.testers ?? [],
+          }}
+          statusOverrides={optimistic}
+          onEdits={(targets, api, itemFor) => void handleEdits(targets, api, itemFor)}
+          onTransition={(issue, id, to) => void handleInlineTransition(issue, id, to)}
+          onBulkTransition={(targets, to) => void handleBulkTransition(targets, to)}
           hasMore={hasMore}
           loadingMore={loadingMore}
           onOpen={setQuickPanel}

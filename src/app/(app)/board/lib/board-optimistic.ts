@@ -163,3 +163,18 @@ export function applyOptimisticIssuePatch(
     }
   };
 }
+
+/** Merge per-issue field patches straight into every cached issue list. */
+export function patchIssueLists(qc: QueryClient, patches: Map<string, Partial<IssueItem>>): void {
+  qc.setQueriesData<IssueQueryResult>({ queryKey: issuesKeys.all }, (old) => {
+    if (!old || !("items" in old) || !Array.isArray(old.items)) return old;
+    let changed = false;
+    const items = old.items.map((item) => {
+      const p = patches.get(item.jiraKey);
+      if (!p) return item;
+      changed = true;
+      return { ...item, ...p };
+    });
+    return changed ? { ...old, items } : old;
+  });
+}

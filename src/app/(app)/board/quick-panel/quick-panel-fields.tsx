@@ -124,7 +124,7 @@ export function QuickPanelFields({
     <>
       <h2 className="text-base font-semibold leading-snug">{summary}</h2>
 
-      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm xl:grid-cols-3">
         <Field label="Status">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

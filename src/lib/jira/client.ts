@@ -578,9 +578,11 @@ export function jiraWith(auth?: JiraAuth) {
         dueDate?: string | null;
         originalEstimate?: string;
         epic?: string | null;
+        /** Raw Jira field map merged last, e.g. people custom fields. */
+        extraFields?: Record<string, unknown>;
       }
     ) => {
-      const fields: Record<string, unknown> = {};
+      const fields: Record<string, unknown> = { ...(patch.extraFields ?? {}) };
       if (patch.summary !== undefined) fields.summary = patch.summary;
       if (patch.description !== undefined) fields.description = patch.description;
       if (patch.assignee !== undefined)

@@ -6,6 +6,7 @@ import { userJiraAuth } from "@/lib/user-creds";
 import { getIssueView } from "@/lib/issues/live";
 import { refreshJiraIssueCache } from "@/lib/issues/cache";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
+import { getProjectPeopleFields } from "@/lib/jira/people-fields";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ key: string }> }) {
   const session = await getSession();
@@ -44,6 +45,13 @@ export async function PATCH(
     removeFixVersion?: string;
     addLabel?: string;
     removeLabel?: string;
+    issueType?: string;
+    /** YYYY-MM-DD or null to clear. */
+    dueDate?: string | null;
+    epic?: string | null;
+    reporter?: string | null;
+    approver?: string | null;
+    tester?: string | null;
   };
 
   // Act as the current user if they linked their own Jira token.
@@ -66,6 +74,10 @@ export async function PATCH(
       priority?: string;
       points?: number | null;
       fixVersions?: string[];
+      issueType?: string;
+      dueDate?: string | null;
+      epic?: string | null;
+      extraFields?: Record<string, unknown>;
     } = {};
 
     if (patch.summary !== undefined) updatePayload.summary = patch.summary;
@@ -74,6 +86,34 @@ export async function PATCH(
     if (patch.priority !== undefined) updatePayload.priority = patch.priority;
     if (patch.points !== undefined) updatePayload.points = patch.points;
     if (patch.fixVersions !== undefined) updatePayload.fixVersions = patch.fixVersions;
+
+    if (patch.issueType !== undefined) updatePayload.issueType = patch.issueType;
+    if (patch.dueDate !== undefined) {
+      if (patch.dueDate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(patch.dueDate)) {
+        return NextResponse.json({ error: "dueDate must be YYYY-MM-DD" }, { status: 400 });
+      }
+      updatePayload.dueDate = patch.dueDate;
+    }
+    if (patch.epic !== undefined) updatePayload.epic = patch.epic;
+
+    // People fields: the Jira field id is configured per project.
+    const peopleEdits = (["reporter", "approver", "tester"] as const).filter((r) => patch[r] !== undefined);
+    if (peopleEdits.length > 0) {
+      const map = await getProjectPeopleFields(key.split("-")[0]);
+      const extra: Record<string, unknown> = {};
+      for (const role of peopleEdits) {
+        const fieldId = map[role];
+        if (!fieldId) {
+          return NextResponse.json(
+            { error: `Dự án chưa cấu hình trường ${role}` },
+            { status: 400 }
+          );
+        }
+        const name = patch[role];
+        extra[fieldId] = name ? { name } : null;
+      }
+      updatePayload.extraFields = extra;
+    }
 
     // Handle add/remove labels
     if (patch.labels !== undefined) {
@@ -134,6 +174,14 @@ export async function PATCH(
     if (updatePayload.summary !== undefined) directUpdate.summary = updatePayload.summary;
     if (updatePayload.description !== undefined) directUpdate.description = updatePayload.description;
     if (updatePayload.labels !== undefined) directUpdate.labels = updatePayload.labels;
+    if (updatePayload.issueType !== undefined) directUpdate.type = updatePayload.issueType;
+    if (updatePayload.dueDate !== undefined) {
+      directUpdate.dueDate = updatePayload.dueDate ? new Date(`${updatePayload.dueDate}T00:00:00.000Z`) : null;
+    }
+    if (updatePayload.epic !== undefined) directUpdate.epicKey = updatePayload.epic;
+    if (patch.reporter !== undefined) directUpdate.reporterJira = patch.reporter;
+    if (patch.approver !== undefined) directUpdate.approverJira = patch.approver;
+    if (patch.tester !== undefined) directUpdate.testerJira = patch.tester;
 
     if (Object.keys(directUpdate).length > 1) {
       await prisma.issueCache
