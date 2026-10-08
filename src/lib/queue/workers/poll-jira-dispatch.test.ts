@@ -15,6 +15,9 @@ vi.mock("@/lib/jira/project-catalog", async (importOriginal) => {
 vi.mock("@/lib/queue/boss", () => ({
   enqueueJiraProjectSync: mocks.enqueueJiraProjectSync,
 }));
+vi.mock("@/lib/jira/project-access", () => ({
+  registerAccessibleConfiguredProjects: vi.fn().mockResolvedValue([]),
+}));
 
 import { runPollJiraDispatch } from "./poll-jira-dispatch";
 

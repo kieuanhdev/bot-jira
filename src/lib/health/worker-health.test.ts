@@ -1,13 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const { prismaMock } = vi.hoisted(() => ({
-  prismaMock: { integrationCursor: { findMany: vi.fn() } },
+  prismaMock: {
+    integrationCursor: { findMany: vi.fn() },
+    jiraProject: { findMany: vi.fn() },
+  },
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/env", () => ({
   env: { jiraFreshnessMinutes: 5 },
   jiraProjectList: [],
+}));
+vi.mock("@/lib/jira/project-catalog", () => ({
+  listSyncEnabledProjectKeys: async () => {
+    const { jiraProjectList } = await import("@/lib/env");
+    return [...jiraProjectList];
+  },
 }));
 
 import { getWorkerHealth, isJiraFresh } from "./worker-health";
@@ -19,7 +28,10 @@ function rows(r: Record<string, unknown>[]) {
   prismaMock.integrationCursor.findMany.mockResolvedValue(r);
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  prismaMock.jiraProject.findMany.mockResolvedValue([]);
+});
 
 describe("getWorkerHealth", () => {
   it("is unknown on a brand-new install (no cursor rows)", async () => {

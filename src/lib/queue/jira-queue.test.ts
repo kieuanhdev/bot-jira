@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   start: vi.fn(),
   cursorUpsert: vi.fn(),
   cursorUpdate: vi.fn(),
+  jiraProjectFindMany: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -12,6 +13,9 @@ vi.mock("@/lib/prisma", () => ({
     integrationCursor: {
       upsert: mocks.cursorUpsert,
       update: mocks.cursorUpdate,
+    },
+    jiraProject: {
+      findMany: mocks.jiraProjectFindMany,
     },
   },
 }));
@@ -31,11 +35,15 @@ vi.mock("pg-boss", () => {
 });
 
 import { enqueueJiraProjectSync, enqueueJiraDispatch, enqueueJiraSync } from "./boss";
+import { jiraProjectList } from "@/lib/env";
 
 describe("Jira Queue Enqueueing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.send.mockResolvedValue("job-123");
+    mocks.jiraProjectFindMany.mockResolvedValue(
+      jiraProjectList.map((key) => ({ key }))
+    );
   });
 
   it("enqueueJiraProjectSync normalizes projectKey and sets priority 10 for manual sync", async () => {

@@ -16,6 +16,7 @@ vi.mock("@/lib/jira/client", () => ({
   jira: {
     search: vi.fn(),
     getComments: vi.fn(),
+    getProjectStatuses: vi.fn().mockResolvedValue([]),
   },
   parseJiraDate: (d?: string) => (d ? new Date(d) : null),
   jiraPointsFromFields: () => ({ points: null, fieldId: null }),
@@ -379,6 +380,7 @@ describe("Jira Sync Race & Lease Scenarios", () => {
 
   // 4. Job A full scan mất lease trước finalize → không soft-delete.
   it("4. Job A full scan loses lease before finalize -> does not soft-delete", async () => {
+    const warningLog = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     cursorStore.set("jira:EPM", {
       id: "cur-1",
       integration: "jira",
@@ -437,6 +439,11 @@ describe("Jira Sync Race & Lease Scenarios", () => {
 
     // EPM-OLD must NOT be soft-deleted
     expect(issueStore.get("EPM-OLD")?.deletedAt).toBeNull();
+    expect(warningLog).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to refresh workflow statuses for EPM"),
+      expect.stringContaining("lease lost")
+    );
+    warningLog.mockRestore();
   });
 
   // 5. Job abort giữa pagination → release lease của chính nó.

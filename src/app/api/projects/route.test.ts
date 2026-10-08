@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => ({
   listActiveProjects: vi.fn(),
   registerVerifiedProject: vi.fn(),
   updateProjectBootstrapState: vi.fn(),
+  peopleFieldsFindMany: vi.fn(),
+  peopleFieldsUpsert: vi.fn(),
+  getProjectStatuses: vi.fn(),
+  search: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getSession: mocks.session }));
@@ -17,6 +21,10 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: { findUnique: mocks.user, update: mocks.userUpdate },
     issueCache: { groupBy: mocks.issueGroupBy },
+    projectPeopleField: {
+      findMany: mocks.peopleFieldsFindMany,
+      upsert: mocks.peopleFieldsUpsert,
+    },
   },
 }));
 vi.mock("@/lib/user-creds", () => ({
@@ -28,6 +36,8 @@ vi.mock("@/lib/jira/client", () => ({
   getSystemJiraAuth: () => null,
   jiraWith: () => ({
     getProject: mocks.getProject,
+    getProjectStatuses: mocks.getProjectStatuses,
+    search: mocks.search,
   }),
 }));
 vi.mock("@/lib/queue/boss", () => ({
@@ -62,6 +72,10 @@ describe("/api/projects", () => {
     mocks.issueGroupBy.mockResolvedValue([
       { projectKey: "EPM", _count: { _all: 5 } },
     ]);
+    mocks.peopleFieldsFindMany.mockResolvedValue([]);
+    mocks.peopleFieldsUpsert.mockResolvedValue({});
+    mocks.getProjectStatuses.mockResolvedValue([]);
+    mocks.search.mockResolvedValue({ issues: [] });
   });
 
   describe("GET /api/projects", () => {

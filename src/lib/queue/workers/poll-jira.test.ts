@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   issueUpdateMany: vi.fn(),
   search: vi.fn(),
   getComments: vi.fn(),
+  getProjectStatuses: vi.fn(),
   upsertJiraIssue: vi.fn(),
   upsertJiraCommentsWithNew: vi.fn(),
   notifyIssue: vi.fn(),
@@ -47,6 +48,7 @@ vi.mock("@/lib/jira/client", () => ({
   jira: {
     search: mocks.search,
     getComments: mocks.getComments,
+    getProjectStatuses: mocks.getProjectStatuses,
   },
   parseJiraDate: (d: string) => (d ? new Date(d) : null),
   getSystemJiraAuth: mocks.getSystemJiraAuth,
@@ -100,6 +102,7 @@ describe("syncProject", () => {
     });
     mocks.issueFindUnique.mockResolvedValue(null);
     mocks.issueFindMany.mockResolvedValue([]);
+    mocks.getProjectStatuses.mockResolvedValue([]);
     mocks.issueUpdateMany.mockResolvedValue({ count: 2 });
     mocks.upsertJiraIssue.mockResolvedValue({ applied: true, data: { status: "In Progress" } });
     mocks.upsertJiraCommentsWithNew.mockResolvedValue({ synced: 1, newComments: [] });
@@ -403,6 +406,7 @@ describe("runPollJiraProject", () => {
   });
 
   it("stops pagination and does not update cursor if signal is aborted mid-sync", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const controller = new AbortController();
     mocks.search.mockImplementation(async () => {
       controller.abort();
@@ -430,6 +434,8 @@ describe("runPollJiraProject", () => {
     expect(res.ok).toBe(false);
     expect(res.errors?.[0]).toContain("aborted");
     expect(mocks.issueUpdateMany).not.toHaveBeenCalled();
+    expect(errorLog).toHaveBeenCalledWith(expect.stringContaining('"level":"error"'));
+    errorLog.mockRestore();
   });
 
   it("treats an active lease held by another job as a skipped coalesced run", async () => {
@@ -465,6 +471,7 @@ describe("runPollJiraProject", () => {
   });
 
   it("does not soft-delete issues when full sync is aborted", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const controller = new AbortController();
     controller.abort();
 
@@ -481,5 +488,7 @@ describe("runPollJiraProject", () => {
     expect(res.ok).toBe(false);
     expect(res.errors?.[0]).toContain("aborted");
     expect(mocks.issueUpdateMany).not.toHaveBeenCalled();
+    expect(errorLog).toHaveBeenCalledWith(expect.stringContaining('"level":"error"'));
+    errorLog.mockRestore();
   });
 });

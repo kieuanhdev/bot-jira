@@ -35,6 +35,7 @@ vi.mock("@/lib/jira/client", () => ({
   jira: {
     search: vi.fn(),
     getComments: vi.fn(),
+    getProjectStatuses: vi.fn().mockResolvedValue([]),
   },
   parseJiraDate: (d?: string) => (d ? new Date(d) : null),
   jiraPointsFromFields: () => ({ points: null, fieldId: null }),

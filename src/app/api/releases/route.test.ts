@@ -38,6 +38,9 @@ const { prismaMock, sessionMock, canMock, userJiraAuthMock, jiraWithMock, create
     integrationCursor: {
       findUnique: vi.fn(),
     },
+    jiraProject: {
+      findMany: vi.fn(),
+    },
   };
   return { prismaMock, sessionMock, canMock, userJiraAuthMock, jiraWithMock, createVersionMock, getVersionsMock, getMyPermissionsMock };
 });
@@ -68,6 +71,28 @@ beforeEach(() => {
   prismaMock.branchIssueLink.findMany.mockResolvedValue([]);
   prismaMock.issueCache.findMany.mockResolvedValue([]);
   prismaMock.integrationCursor.findUnique.mockResolvedValue(null);
+  prismaMock.jiraProject.findMany.mockResolvedValue([
+    {
+      key: "EIM",
+      name: "EIM",
+      active: true,
+      syncEnabled: true,
+      bootstrapState: "ready",
+      lastBootstrapAt: null,
+      lastBootstrapError: null,
+      source: "bootstrap",
+    },
+    {
+      key: "EPM",
+      name: "EPM",
+      active: true,
+      syncEnabled: true,
+      bootstrapState: "ready",
+      lastBootstrapAt: null,
+      lastBootstrapError: null,
+      source: "bootstrap",
+    },
+  ]);
   getMyPermissionsMock.mockResolvedValue({
     permissions: {
       ADMINISTER_PROJECTS: { id: "23", name: "Administer Projects", havePermission: true },
