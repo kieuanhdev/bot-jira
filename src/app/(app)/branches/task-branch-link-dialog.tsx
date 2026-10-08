@@ -64,7 +64,7 @@ export function TaskBranchLinkDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="grid-cols-[minmax(0,1fr)] overflow-hidden sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-4 w-4 text-primary" aria-hidden="true" />
@@ -73,7 +73,7 @@ export function TaskBranchLinkDialog({
           <DialogDescription className="line-clamp-1 text-xs">{summary}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3 py-2">
+        <div className="flex min-w-0 flex-col gap-3 py-2">
           {error && (
             <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-xs text-red-600 dark:text-red-400">
               <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
