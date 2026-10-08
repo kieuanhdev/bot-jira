@@ -176,6 +176,13 @@ describe("Integration: Jira Sync Fencing Scenarios", () => {
     vi.spyOn(prisma.issueCache as any, "findUnique").mockImplementation(async ({ where }: any) => {
       return issueStore.get(where.jiraKey) ?? null;
     });
+    vi.spyOn(prisma.issueCache as any, "findMany").mockImplementation(async ({ where }: any) => {
+      const jiraKeys = where.jiraKey.in as string[];
+      return jiraKeys.flatMap((jiraKey) => {
+        const issue = issueStore.get(jiraKey);
+        return issue ? [issue] : [];
+      });
+    });
     vi.spyOn(prisma.issueCache as any, "create").mockImplementation(async ({ data }: any) => {
       if (issueStore.has(data.jiraKey)) throw new Error("P2002: Unique constraint violation");
       issueStore.set(data.jiraKey, { ...data, deletedAt: null });
