@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -104,6 +104,11 @@ function SortTh({
 }
 
 
+// Windowing: rows are single-line, so only the rows near the viewport are mounted.
+const WINDOW_THRESHOLD = 100;
+const OVERSCAN = 12;
+const FALLBACK_ROW_HEIGHT = 41;
+
 /** Table view of all loaded issues: inline-editable cells, sorting and bulk edit. */
 export function BoardListView({
   issues,
@@ -164,6 +169,62 @@ export function BoardListView({
       return next;
     });
 
+  // Windowing state: scroll offset (relative to the first row) and measured row height.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const tbodyRef = useRef<HTMLTableSectionElement | null>(null);
+  const [win, setWin] = useState({ top: 0, height: 800 });
+  const [rowHeight, setRowHeight] = useState(FALLBACK_ROW_HEIGHT);
+  const windowed = rows.length > WINDOW_THRESHOLD;
+
+  const measure = useCallback(() => {
+    const el = scrollRef.current;
+    const body = tbodyRef.current;
+    if (!el || !body) return;
+    const top = Math.max(0, el.scrollTop - body.offsetTop);
+    setWin((prev) =>
+      Math.abs(prev.top - top) < rowHeight / 2 && prev.height === el.clientHeight
+        ? prev
+        : { top, height: el.clientHeight }
+    );
+  }, [rowHeight]);
+
+  useEffect(() => {
+    if (!windowed) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(measure);
+    };
+    measure();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    const ro = new ResizeObserver(onScroll);
+    ro.observe(el);
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener("scroll", onScroll);
+      ro.disconnect();
+    };
+  }, [windowed, measure]);
+
+  // Measure a real row once so the spacers match the actual row height.
+  useEffect(() => {
+    if (!windowed) return;
+    const row = tbodyRef.current?.querySelector<HTMLTableRowElement>("tr[data-row]");
+    const h = row?.offsetHeight;
+    if (h && Math.abs(h - rowHeight) > 1) setRowHeight(h);
+  }, [windowed, rowHeight, rows.length, hiddenTableCols]);
+
+  const startIdx = windowed ? Math.max(0, Math.floor(win.top / rowHeight) - OVERSCAN) : 0;
+  const endIdx = windowed
+    ? Math.min(rows.length, Math.ceil((win.top + win.height) / rowHeight) + OVERSCAN)
+    : rows.length;
+  const visibleRows = windowed ? rows.slice(startIdx, endIdx) : rows;
+  const padTop = startIdx * rowHeight;
+  const padBottom = (rows.length - endIdx) * rowHeight;
+  const colSpan = 16; // checkbox + key + summary + 13 optional columns (extra span is harmless)
+
   const show = (col: string) => !hiddenTableCols.has(col);
   const edit = (issue: IssueItem, api: Record<string, unknown>, item: Partial<IssueItem>) =>
     onEdits([issue], api, () => item);
@@ -187,7 +248,7 @@ export function BoardListView({
   );
 
   return (
-    <div className="max-h-[calc(100dvh-15rem)] min-h-[24rem] flex-1 overflow-auto overscroll-x-contain rounded-lg border">
+    <div ref={scrollRef} className="max-h-[calc(100dvh-15rem)] min-h-[24rem] flex-1 overflow-auto overscroll-x-contain rounded-lg border">
       {selected.length > 0 && (
         <BoardListBulkBar
           selected={selected}
@@ -229,13 +290,19 @@ export function BoardListView({
             {show("updated") && th("updated", "Updated")}
           </tr>
         </thead>
-        <tbody>
-          {rows.map((issue) => {
+        <tbody ref={tbodyRef}>
+          {padTop > 0 && (
+            <tr aria-hidden style={{ height: padTop }}>
+              <td colSpan={colSpan} />
+            </tr>
+          )}
+          {visibleRows.map((issue) => {
             const overdue =
               issue.dueDate && new Date(issue.dueDate) < new Date() && issue.statusCategory !== "done";
             return (
               <tr
                 key={issue.jiraKey}
+                data-row
                 data-selected={selectedKeys.has(issue.jiraKey) || undefined}
                 className="cursor-pointer border-t transition-colors hover:bg-muted/30 data-[selected]:bg-primary/5"
                 onClick={() => onOpen(issue)}
@@ -353,6 +420,11 @@ export function BoardListView({
               </tr>
             );
           })}
+          {padBottom > 0 && (
+            <tr aria-hidden style={{ height: padBottom }}>
+              <td colSpan={colSpan} />
+            </tr>
+          )}
         </tbody>
       </table>
       {hasMore && (

@@ -8,6 +8,9 @@ import { CardContent } from "./board-card";
 import { cn } from "@/lib/utils";
 import { isOverdue } from "@/lib/due-date";
 
+/** Cards rendered per lane cell before "Xem thêm". */
+const CELL_LIMIT = 25;
+
 export function BoardTeamView({
   issues,
   columns,
@@ -24,14 +27,33 @@ export function BoardTeamView({
   projectKey: string;
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [expandedCells, setExpandedCells] = useState<Set<string>>(new Set());
   const lanes = useMemo(() => {
     const map = new Map<string, IssueItem[]>();
     for (const issue of issues) {
       const key = issue.assigneeJira ?? "__unassigned__";
-      map.set(key, [...(map.get(key) ?? []), issue]);
+      const lane = map.get(key);
+      if (lane) lane.push(issue);
+      else map.set(key, [issue]);
     }
     return [...map.entries()].sort(([a], [b]) => a === "__unassigned__" ? 1 : b === "__unassigned__" ? -1 : a.localeCompare(b));
   }, [issues]);
+
+  // assignee -> column key -> issues, computed in one pass instead of lanes x columns filters.
+  const buckets = useMemo(() => {
+    const out = new Map<string, Map<string, IssueItem[]>>();
+    for (const [assignee, items] of lanes) {
+      const byCol = new Map<string, IssueItem[]>();
+      for (const item of items) {
+        const col = findColumn(item);
+        const list = byCol.get(col);
+        if (list) list.push(item);
+        else byCol.set(col, [item]);
+      }
+      out.set(assignee, byCol);
+    }
+    return out;
+  }, [lanes, findColumn]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto rounded-lg border bg-muted/10 p-2">
@@ -67,12 +89,19 @@ export function BoardTeamView({
             {!isCollapsed && (
               <div className="grid min-w-max gap-2 p-2" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(16rem, 1fr))` }}>
                 {columns.map((column) => {
-                  const bucket = items.filter((item) => findColumn(item) === column.key);
+                  const bucket = buckets.get(assignee)?.get(column.key) ?? [];
+                  const cellId = `${assignee}|${column.key}`;
+                  const shown = expandedCells.has(cellId) ? bucket : bucket.slice(0, CELL_LIMIT);
                   return (
                     <div key={column.key} className="min-h-20 rounded-md bg-muted/30 p-2">
                       <div className="mb-2 flex items-center justify-between text-xs font-medium"><span>{column.label}</span><span className="tabular-nums text-muted-foreground">{bucket.length}</span></div>
                       <div className="space-y-2">
-                        {bucket.map((issue) => <button key={issue.jiraKey} type="button" onClick={() => onOpen(issue)} className={cn("block w-full cursor-pointer text-left")}><CardContent issue={issue} done={issue.statusCategory === "done"} /></button>)}
+                        {shown.map((issue) => <button key={issue.jiraKey} type="button" onClick={() => onOpen(issue)} className={cn("block w-full cursor-pointer text-left")}><CardContent issue={issue} done={issue.statusCategory === "done"} /></button>)}
+                        {shown.length < bucket.length && (
+                          <button type="button" onClick={() => setExpandedCells((current) => new Set(current).add(cellId))} className="w-full cursor-pointer rounded-lg border border-dashed py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary">
+                            Xem thêm {bucket.length - shown.length}
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
