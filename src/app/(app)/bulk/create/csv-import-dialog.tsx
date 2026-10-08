@@ -29,6 +29,7 @@ import type {
 import {
   calcRemainingCapacity,
   generateCsvTemplate,
+  resolveCsvNamesToIds,
   validateImportFile,
 } from "./lib/csv-import-utils";
 import { CsvImportFormattingGuide } from "./csv-import-formatting-guide";
@@ -212,7 +213,11 @@ export function CsvImportDialog({
   }
 
   // Calculate items to import
-  const rawItems = excelResult ? excelResult.items : parsed ? parsed.items : [];
+  const rawItems = excelResult
+    ? excelResult.items
+    : parsed
+      ? resolveCsvNamesToIds(parsed.items, metadata)
+      : [];
   const itemsToImport = rawItems.slice(0, remainingCapacity);
   const hasTruncation = rawItems.length > remainingCapacity;
   const excelHasErrors = Boolean(excelResult?.errors?.length);

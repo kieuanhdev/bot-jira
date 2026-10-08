@@ -895,6 +895,9 @@ export function jiraWith(auth?: JiraAuth) {
         {},
         auth
       ),
+    /** Global Jira configuration (time tracking on/off, etc.). */
+    getConfiguration: () =>
+      request<{ timeTrackingEnabled?: boolean }>("/rest/api/2/configuration", {}, auth),
     /** Get a single Fix Version by ID. */
     getVersion: (versionId: string) =>
       request<JiraVersion>(`/rest/api/2/version/${encodeURIComponent(versionId)}`, {}, auth),

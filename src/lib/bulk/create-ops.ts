@@ -207,6 +207,17 @@ export async function fetchBulkCreateMetadata(
     // Non-fatal, use whatever fixVersions allowedValues had
   }
 
+  // Time Tracking is often enabled but absent from the Create screen, so createmeta
+  // alone under-reports it. Fall back to the instance-wide setting.
+  if (!supportsTimeTracking) {
+    try {
+      const cfg = await jira.getConfiguration();
+      if (cfg?.timeTrackingEnabled) supportsTimeTracking = true;
+    } catch {
+      // Non-fatal; keep createmeta-based detection
+    }
+  }
+
   // Fetch components from project components API
   let components: Array<{ id: string; name: string; description?: string }> = [];
   try {

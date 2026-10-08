@@ -1,4 +1,8 @@
-import { MAX_BULK_CREATE_ITEMS } from "@/lib/bulk/create-types";
+import {
+  MAX_BULK_CREATE_ITEMS,
+  type BulkCreateProjectMetadata,
+  type BulkCreateRowInput,
+} from "@/lib/bulk/create-types";
 
 export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 export const ALLOWED_EXTENSIONS = [".xlsx", ".csv", ".tsv", ".txt"] as const;
@@ -50,4 +54,29 @@ export function generateCsvTemplate(): string {
     `TASK-002,Thiết kế schema,Sub-task,TASK-001,,Mô tả schema,user.name,Medium,backend,2,2h,2026-10-08,"Release 1"\n` +
     `TASK-003,Test với task cha cũ,Sub-task,,ABC-123,Mô tả test,user.name,Medium,test,1,1h,2026-10-09,"Release 1"\n`
   );
+}
+
+/**
+ * CSV cells carry display names ("Task", "High"), but the grid selects are keyed by Jira IDs.
+ * Resolve names to IDs using project metadata; unknown values are kept so the validator reports them.
+ */
+export function resolveCsvNamesToIds(
+  items: BulkCreateRowInput[],
+  metadata?: BulkCreateProjectMetadata
+): BulkCreateRowInput[] {
+  if (!metadata) return items;
+  const resolve = (value: string | undefined, options: Array<{ id: string; name: string }>) => {
+    if (!value) return value;
+    const v = value.trim().toLowerCase();
+    return (
+      options.find((o) => o.id === value.trim())?.id ??
+      options.find((o) => o.name.trim().toLowerCase() === v)?.id ??
+      value
+    );
+  };
+  return items.map((item) => ({
+    ...item,
+    issueTypeId: resolve(item.issueTypeId, metadata.issueTypes),
+    priorityId: resolve(item.priorityId, metadata.priorityOptions),
+  }));
 }

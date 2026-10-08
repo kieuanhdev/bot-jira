@@ -3,6 +3,7 @@ import {
   validateImportFile,
   calcRemainingCapacity,
   generateCsvTemplate,
+  resolveCsvNamesToIds,
   MAX_FILE_SIZE_BYTES,
 } from "./csv-import-utils";
 import { MAX_BULK_CREATE_ITEMS } from "@/lib/bulk/create-types";
@@ -56,5 +57,26 @@ describe("csv-import-utils", () => {
       expect(csv).toContain("issueType");
       expect(csv).toContain("TASK-001");
     });
+  });
+});
+
+describe("resolveCsvNamesToIds", () => {
+  const metadata = {
+    issueTypes: [{ id: "10001", name: "Task" }, { id: "10002", name: "Sub-task" }],
+    priorityOptions: [{ id: "2", name: "High" }, { id: "3", name: "Medium" }],
+  } as unknown as Parameters<typeof resolveCsvNamesToIds>[1];
+
+  it("maps names (case-insensitive) to ids, keeps ids and unknown values", () => {
+    const out = resolveCsvNamesToIds(
+      [
+        { clientRef: "a", summary: "x", issueTypeId: "task", priorityId: "HIGH" },
+        { clientRef: "b", summary: "y", issueTypeId: "10002", priorityId: "Nope" },
+      ] as never,
+      metadata
+    );
+    expect(out[0].issueTypeId).toBe("10001");
+    expect(out[0].priorityId).toBe("2");
+    expect(out[1].issueTypeId).toBe("10002");
+    expect(out[1].priorityId).toBe("Nope");
   });
 });
