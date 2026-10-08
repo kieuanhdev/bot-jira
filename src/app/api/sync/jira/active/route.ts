@@ -1,19 +1,17 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import type {
+  ActiveJiraSync,
+  ActiveJiraSyncResponse,
+} from "@/lib/contracts/jira-sync";
+
+export type {
+  ActiveJiraSync,
+  ActiveJiraSyncResponse,
+} from "@/lib/contracts/jira-sync";
 
 export const dynamic = "force-dynamic";
-
-export type ActiveJiraSync = {
-  projectKey: string;
-  startedAt: string | null;
-};
-
-export type ActiveJiraSyncResponse = {
-  syncingProjects: string[];
-  activeSyncs: ActiveJiraSync[];
-  timestamp: string;
-};
 
 export async function GET() {
   const session = await getSession();
@@ -68,11 +66,13 @@ export async function GET() {
 
     const syncingProjects = activeSyncs.map((s) => s.projectKey);
 
-    return NextResponse.json({
+    const response: ActiveJiraSyncResponse = {
       syncingProjects,
       activeSyncs,
       timestamp: now.toISOString(),
-    });
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
     return NextResponse.json(
       { error: "internal_error", message: (error as Error).message },

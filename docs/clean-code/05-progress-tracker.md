@@ -24,7 +24,7 @@
 | Phase | Nội dung | Trạng thái | Owner | Bắt đầu | Kết thúc | Ghi chú |
 |---|---|---|---|---|---|---|
 | 0 | Baseline xanh | DONE | Codex | 2026-10-08 | 2026-10-08 | Typecheck, lint zero-warning, 1.289 test và build đều pass; dừng trước Phase 1 |
-| 1 | Contracts và dependency direction | IN_PROGRESS | Codex | 2026-10-08 | | Batch 1.1 hoàn tất; dừng trước batch 1.2 |
+| 1 | Contracts và dependency direction | IN_PROGRESS | Codex | 2026-10-08 | | Batch 1.1–1.2 hoàn tất; dừng trước batch 1.3 |
 | 2 | Jira và Issues | TODO | | | | |
 | 3 | Queue và Sync | TODO | | | | |
 | 4 | Bulk | TODO | | | | |
@@ -42,7 +42,7 @@
 | 0.2 | Mock contract hygiene | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint` pass, 3 warning baseline; 79/79 test liên quan và 1.289/1.289 full test pass (26,52 giây); manual QA N/A | Không còn stderr do mock thiếu; stderr full suite còn lại thuộc 5 failure-path được chủ ý test |
 | 0.3 | Lint zero-warning | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 4/4 test liên quan và 1.289/1.289 full test pass (22,53 giây); build pass; manual QA N/A | Xóa đúng 3 import thừa; script lint nay fail khi có warning; không đổi hành vi route/UI |
 | 1.1 | API contract inventory | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 109/109 test route liên quan và 1.289/1.289 full test pass (19,69 giây); manual QA N/A | Snapshot 41 route file, 49 handler/50 flow tại `07-api-contract-inventory.md`; không đổi implementation/API |
-| 1.2 | Shared contracts | TODO | | | | |
+| 1.2 | Shared contracts | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 8/8 route contract test và 1.289/1.289 full test pass (20,80 giây); manual QA N/A | Tách contract Jira active sync và Bulk Create template vào `src/lib/contracts/`; route giữ type re-export; production import scan sạch |
 | 1.3 | Shared helper direction | TODO | | | | |
 | 2.1 | Jira transport characterization | TODO | | | | |
 | 2.2 | Jira resource extraction | TODO | | | | |
@@ -91,6 +91,7 @@
 | 2026-10-08 | D-002 | Đồng bộ test doubles với Jira `getProjectStatuses`, Prisma project catalog/people fields và mock auto-discovery tại boundary; assert/suppress riêng log abort/lease | Loại error log giả mà không sửa production code; giữ rõ các log failure-path có chủ ý và không lấn sang lint batch 0.3 | Codex |
 | 2026-10-08 | D-003 | Đặt `--max-warnings=0` trong script `npm run lint` thay vì một workflow CI riêng | Repo không có cấu hình CI; mọi local/CI caller của script chuẩn đều nhận cùng chính sách zero-warning | Codex |
 | 2026-10-08 | D-004 | Chốt inventory batch 1.1 theo 5 nhóm ưu tiên, gồm 41 route file, 49 HTTP handler và 50 contract flow; chỉ ghi nhận contract hiện hành, không sửa implementation | Tạo baseline review được cho các phase refactor sau; `POST /api/bulk/create` có hai mode preview/confirm nên được ghi thành hai flow riêng | Codex |
+| 2026-10-08 | D-005 | Đặt shared DTO theo domain tại `src/lib/contracts/jira-sync.ts` và `bulk-create-template.ts`; route re-export tạm các type cũ | UI/hook không còn phụ thuộc route implementation, trong khi các import cũ bên ngoài repo (nếu có) vẫn tương thích ở bước chuyển tiếp | Codex |
 
 ## Findings Ngoài Phạm Vi
 
@@ -98,7 +99,7 @@
 |---|---|---|---|---|---|
 | 2026-10-08 | F-001 | Jira sync test doubles thiếu `issueCache.findMany` | P0 | Đã xử lý trong Phase 0.1 | N/A (không commit theo yêu cầu) |
 | 2026-10-08 | F-002 | Một số Jira/Prisma mocks thiếu method/model và tạo error log giả | P1 | Đã xử lý trong Phase 0.2 | N/A (không commit theo yêu cầu) |
-| 2026-10-08 | F-003 | UI import DTO trực tiếp từ API route | P1 | Phase 1.2 | |
+| 2026-10-08 | F-003 | UI import DTO trực tiếp từ API route | P1 | Đã xử lý trong Phase 1.2 | N/A (không commit theo yêu cầu) |
 | 2026-10-08 | F-004 | Shared JiraAvatar import helper từ Board feature | P1 | Phase 1.3 | |
 | 2026-10-08 | F-005 | Board membership SWR inflight promise có nguy cơ trả `undefined` | P1 | Bug batch riêng | |
 | 2026-10-08 | F-006 | 23/41 route file ưu tiên chưa có colocated route test | P1 | Bổ sung characterization test trước khi refactor từng route ở Phase 2–8 | |
@@ -112,6 +113,7 @@
 | 2026-10-08 | Worktree batch 0.2, không commit | Pass | Pass, 3 warning baseline | Pass, 79 test liên quan; 165 file / 1.289 test full suite trong 26,52 giây | Không chạy; gate cuối Phase 0 | N/A; chỉ sửa test doubles, failure-path log được automated test | Codex |
 | 2026-10-08 | Worktree batch 0.3, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 4 test liên quan; 165 file / 1.289 test full suite trong 22,53 giây | Pass, Next.js 16.3.5 | N/A; chỉ xóa import chết và siết lint script | Codex |
 | 2026-10-08 | Worktree batch 1.1, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 18 file / 109 test route liên quan; 165 file / 1.289 test full suite trong 19,69 giây | Không chạy; batch docs-only, build là gate cuối phase | N/A; inventory tài liệu, không đổi runtime/UI | Codex |
+| 2026-10-08 | Worktree batch 1.2, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 2 file / 8 route contract test; 165 file / 1.289 test full suite trong 20,80 giây | Không chạy; type-only boundary refactor, build là gate cuối phase | N/A; không đổi runtime/UI, JSON hoặc status | Codex |
 
 ## Completion Report
 

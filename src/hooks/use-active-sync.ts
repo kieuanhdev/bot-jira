@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { syncKeys, issuesTouchingProjects, boardKeys, freshnessKeys, reportsKeys } from "@/lib/query-keys";
-import type { ActiveJiraSyncResponse } from "@/app/api/sync/jira/active/route";
+import type { ActiveJiraSyncResponse } from "@/lib/contracts/jira-sync";
 
 export function useActiveSync(specificProject?: string) {
   const qc = useQueryClient();

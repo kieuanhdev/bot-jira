@@ -114,7 +114,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 | R-04 | Notification chạy trước commit | P1 | Test thứ tự commit/notify | Open |
 | R-05 | API error/status đổi khi làm mỏng route | P1 | Dùng inventory `07-api-contract-inventory.md` làm baseline và bổ sung characterization test trước khi refactor route; hiện 18/41 route file ưu tiên có colocated test | Open |
 | R-06 | UI state reset sau khi tách component | P1 | Browser test dialog/tab/filter | Open |
-| R-07 | Import cycle khi tạo facade | P1 | Kiểm dependency graph mỗi phase | Open |
+| R-07 | Import cycle khi tạo facade | P1 | Contract modules không có import; production scan không còn import `@/app/api/**/route` sau batch 1.2; tiếp tục kiểm dependency graph mỗi phase | Open |
 | R-08 | Mock pass nhưng PostgreSQL thật sai | P1 | Integration suite dùng DB test riêng | Open |
 | R-09 | Tài liệu cũ và mới cùng được cập nhật | P2 | Chỉ tracker mới là nguồn tiến độ | Open |
 | R-10 | Test double lệch Jira/Prisma contract tạo error log giả | P1 | Bổ sung Jira/project catalog/people-field mocks, assert log abort/lease chủ ý; 79/79 test liên quan và full suite pass | Closed |

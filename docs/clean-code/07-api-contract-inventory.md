@@ -121,14 +121,16 @@ Route-test coverage: notification list/delete, preferences và SSE có test. Mar
 
 ## 7. Consumer và ownership findings
 
-### Dependency-direction violations đã xác nhận
+### Dependency-direction violations đã xác nhận tại batch 1.1
 
-| Consumer | Import hiện tại | Contract cần chuyển ở batch 1.2 |
+| Consumer | Import tại batch 1.1 | Contract cần chuyển ở batch 1.2 |
 |---|---|---|
 | `src/hooks/use-active-sync.ts` | `@/app/api/sync/jira/active/route` | `ActiveJiraSync`, `ActiveJiraSyncResponse` |
 | `src/app/(app)/bulk/create/jira-template-dialog.tsx` | `@/app/api/bulk/create/templates/route` | `BulkCreateTemplateRow`, `BulkCreateTemplateIssueItem` |
 
 Đích đến: contract thuần đặt theo domain trong `src/lib/contracts/`; route có thể re-export tạm thời để giữ compatibility, nhưng UI/hook không import từ `src/app/api`.
+
+Trạng thái sau batch 1.2: cả hai consumer đã chuyển sang `src/lib/contracts/`; route giữ type re-export tương thích và production import scan không còn import từ `@/app/api/**/route`.
 
 ### Contract đang bị định nghĩa lặp ở client
 

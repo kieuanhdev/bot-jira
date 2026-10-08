@@ -9,9 +9,10 @@ import {
   type BulkCreateProjectMetadata,
 } from "@/lib/bulk/create-types";
 import type {
+  BulkCreateTemplateDetailResponse,
   BulkCreateTemplateRow,
-  BulkCreateTemplateIssueItem,
-} from "@/app/api/bulk/create/templates/route";
+  BulkCreateTemplateSearchResponse,
+} from "@/lib/contracts/bulk-create-template";
 import {
   Dialog,
   DialogContent,
@@ -81,7 +82,7 @@ export function JiraTemplateDialog({
   } = useQuery({
     queryKey: bulkKeys.createTemplateIssues(projectKey, debouncedQuery),
     queryFn: () =>
-      api<{ issues: BulkCreateTemplateIssueItem[] }>(
+      api<BulkCreateTemplateSearchResponse>(
         `/api/bulk/create/templates?project=${encodeURIComponent(projectKey)}&q=${encodeURIComponent(debouncedQuery)}&limit=15`
       ),
     enabled: open,
@@ -98,7 +99,7 @@ export function JiraTemplateDialog({
   } = useQuery({
     queryKey: bulkKeys.createTemplate(projectKey, selectedKey ?? ""),
     queryFn: () =>
-      api<{ template: BulkCreateTemplateRow }>(
+      api<BulkCreateTemplateDetailResponse>(
         `/api/bulk/create/templates?project=${encodeURIComponent(projectKey)}&issueKey=${encodeURIComponent(selectedKey!)}`
       ),
     enabled: Boolean(selectedKey),

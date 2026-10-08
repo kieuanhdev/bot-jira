@@ -4,6 +4,17 @@ import { prisma } from "@/lib/prisma";
 import { userJiraAuth } from "@/lib/user-creds";
 import { jiraWith, JiraRequestError, jiraIssueFields } from "@/lib/jira/client";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
+import type {
+  BulkCreateTemplateDetailResponse,
+  BulkCreateTemplateIssueItem,
+  BulkCreateTemplateRow,
+  BulkCreateTemplateSearchResponse,
+} from "@/lib/contracts/bulk-create-template";
+
+export type {
+  BulkCreateTemplateIssueItem,
+  BulkCreateTemplateRow,
+} from "@/lib/contracts/bulk-create-template";
 
 /**
  * BC-SMART-303 — Read a Jira issue or search issues to use as Bulk Create templates.
@@ -20,51 +31,6 @@ const templateSearchCache = new Map<
   string,
   { issues: BulkCreateTemplateIssueItem[]; expiresAt: number }
 >();
-
-export type BulkCreateTemplateRow = {
-  summary: string;
-  description?: string;
-  issueTypeId?: string;
-  issueTypeName?: string;
-  assignee?: string | null;
-  assigneeDisplayName?: string;
-  priorityId?: string;
-  priorityName?: string;
-  labels?: string[];
-  points?: number | null;
-  originalEstimate?: string;
-  dueDate?: string | null;
-  fixVersionIds?: string[];
-  fixVersionNames?: string[];
-  customFields?: Record<string, unknown>;
-  /** Fields that were skipped because they are not valid for create. */
-  skippedFields?: Array<{ field: string; reason: string }>;
-  /** Whether the source issue is a sub-task. */
-  sourceIsSubtask?: boolean;
-  /** Parent Jira key if the source issue is a sub-task. */
-  parentKey?: string;
-  /** Parent issue summary. */
-  parentSummary?: string;
-  /** Parent issue type ID. */
-  parentIssueTypeId?: string;
-  /** Parent issue type name. */
-  parentIssueTypeName?: string;
-  /** Full parent template row if user wants to import both parent and subtask into the batch. */
-  parentTemplate?: BulkCreateTemplateRow;
-};
-
-export type BulkCreateTemplateIssueItem = {
-  key: string;
-  summary: string;
-  issueTypeId: string;
-  issueTypeName: string;
-  isSubtask: boolean;
-  parentKey?: string;
-  parentSummary?: string;
-  status: string;
-  assignee?: string;
-  updated?: string;
-};
 
 const pointFieldCandidates = ["story_points", "customfield_10016", "customfield_10028"];
 
@@ -217,7 +183,8 @@ export async function GET(req: Request) {
         }
       }
 
-      return NextResponse.json({ template });
+      const response: BulkCreateTemplateDetailResponse = { template };
+      return NextResponse.json(response);
     } catch (err) {
       if (err instanceof JiraRequestError) {
         if (err.status === 404) {
@@ -246,13 +213,15 @@ export async function GET(req: Request) {
   const cacheKey = `${auth.token.slice(0, 8)}:${project}:${query.toLowerCase()}:${limit}`;
   const cached = templateSearchCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
-    return NextResponse.json({ issues: cached.issues });
+    const response: BulkCreateTemplateSearchResponse = { issues: cached.issues };
+    return NextResponse.json(response);
   }
 
   try {
     const issues = await jira.searchTemplateIssues(project, query, limit);
     templateSearchCache.set(cacheKey, { issues, expiresAt: Date.now() + TEMPLATE_SEARCH_CACHE_TTL_MS });
-    return NextResponse.json({ issues });
+    const response: BulkCreateTemplateSearchResponse = { issues };
+    return NextResponse.json(response);
   } catch (err) {
     if (err instanceof JiraRequestError) {
       return NextResponse.json({ error: err.message }, { status: err.status || 500 });
