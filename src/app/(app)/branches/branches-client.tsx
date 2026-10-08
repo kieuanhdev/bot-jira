@@ -520,8 +520,8 @@ export function BranchesClient() {
               setBulkLinkIds(undefined);
             }
           }}
-          onSuccess={() => {
-            showToast("Cập nhật liên kết Jira task thành công");
+          onSuccess={(note) => {
+            showToast(note ? `Cập nhật liên kết Jira task thành công — ${note}` : "Cập nhật liên kết Jira task thành công");
             setSelectedBranchForLink(null);
             setBulkLinkIds(undefined);
           }}
@@ -538,7 +538,9 @@ export function BranchesClient() {
           onOpenChange={(open) => {
             if (!open) setAttachTask(null);
           }}
-          onSuccess={() => showToast(`Đã gắn nhánh vào ${attachTask.jiraKey}`)}
+          onSuccess={(note) =>
+            showToast(note ? `Đã gắn nhánh vào ${attachTask.jiraKey} — ${note}` : `Đã gắn nhánh vào ${attachTask.jiraKey}`)
+          }
         />
       )}
 

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
+import { prisma } from "@/lib/prisma";
+import { userBitbucketCreds } from "@/lib/user-creds";
+import { summarizePrSync, syncPullRequestJiraKey } from "@/lib/bitbucket/pr-jira-sync";
 import {
   confirmBranchLink,
   confirmAllBranchSuggestions,
@@ -9,6 +12,24 @@ import {
   manualRelinkBranches,
   manualUnlinkBranch,
 } from "@/lib/bitbucket/link-service";
+
+/** Best-effort: put the task key into each branch's PR so Jira links it. */
+async function syncPrs(
+  branchIds: string[],
+  jiraKey: string,
+  actor: { id: string; email?: string }
+): Promise<{ summary: string; results: Awaited<ReturnType<typeof syncPullRequestJiraKey>>[] }> {
+  const user = await prisma.user.findUnique({
+    where: { id: actor.id },
+    select: { bitbucketUserEnc: true, bitbucketTokenEnc: true },
+  });
+  const creds = userBitbucketCreds(user);
+  const results = [];
+  for (const id of branchIds) {
+    results.push(await syncPullRequestJiraKey(id, jiraKey.trim().toUpperCase(), creds, actor));
+  }
+  return { summary: summarizePrSync(results), results };
+}
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -33,7 +54,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       replace: body.replace === true,
     });
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
-    return NextResponse.json({ ok: true, count: res.count, failed: res.failed });
+    const prSync = body.syncPr === true
+      ? await syncPrs(ids, rawJiraKey, { id: session.user.id, email: session.user.email ?? undefined })
+      : undefined;
+    return NextResponse.json({ ok: true, count: res.count, failed: res.failed, prSync });
   }
 
   if (action === "confirm_all" || id === "all") {
@@ -83,7 +107,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       replace: body.replace === true,
     });
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
-    return NextResponse.json({ ok: true, branch: res.branch });
+    const prSync = body.syncPr === true
+      ? await syncPrs([id], rawJiraKey, { id: session.user.id, email: session.user.email ?? undefined })
+      : undefined;
+    return NextResponse.json({ ok: true, branch: res.branch, prSync });
   }
 
   return NextResponse.json({ error: "Invalid action or parameters" }, { status: 400 });

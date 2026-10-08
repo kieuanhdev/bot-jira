@@ -22,7 +22,7 @@ type TaskBranchLinkDialogProps = {
   summary?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: (note?: string) => void;
 };
 
 /** Attach existing Bitbucket branches to a Jira task. A branch may serve several tasks. */
@@ -34,6 +34,7 @@ export function TaskBranchLinkDialog({
   onSuccess,
 }: TaskBranchLinkDialogProps) {
   const [q, setQ] = useState("");
+  const [syncPr, setSyncPr] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const linkMutation = useBranchLink();
   const picker = useBranchPicker(jiraKey, q, open);
@@ -50,10 +51,10 @@ export function TaskBranchLinkDialog({
 
   const handleSave = () => {
     linkMutation.mutate(
-      { branchId: "bulk", body: { action: "link_many", ids: Array.from(selected), jiraKey } },
+      { branchId: "bulk", body: { action: "link_many", ids: Array.from(selected), jiraKey, syncPr: syncPr || undefined } },
       {
-        onSuccess: () => {
-          onSuccess();
+        onSuccess: (res) => {
+          onSuccess(res?.prSync?.summary || undefined);
           onOpenChange(false);
           linkMutation.reset();
         },
@@ -149,6 +150,20 @@ export function TaskBranchLinkDialog({
               ))}
             </ul>
           )}
+
+          <label className="flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={syncPr}
+              onChange={(e) => setSyncPr(e.target.checked)}
+              disabled={linkMutation.isPending}
+              className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-teal-600"
+            />
+            <span>
+              Cập nhật PR trên Bitbucket để Jira nhận (thêm <code className="font-mono">Jira: {jiraKey}</code> vào mô
+              tả PR đang mở). Cần quyền sửa PR; nhánh chưa có PR sẽ được bỏ qua.
+            </span>
+          </label>
         </div>
 
         <DialogFooter>

@@ -54,7 +54,10 @@ export type BbPrActivity = {
 
 export type BbPullRequest = {
   id: number;
+  /** Optimistic-lock version, required by Bitbucket when updating a PR. */
+  version?: number;
   title?: string;
+  description?: string;
   state?: string;
   fromRef: { branch: string };
   toRef?: { branch: string };
@@ -469,6 +472,29 @@ export const bitbucket = {
       if (msg.includes("404")) return null;
       throw e;
     }
+  },
+
+  /**
+   * Update title/description of a pull request. Bitbucket requires the current
+   * `version`; reviewers are re-sent so the update never clears them.
+   */
+  async updatePullRequest(
+    repo: string,
+    prId: number,
+    data: {
+      version: number;
+      title: string;
+      description?: string;
+      reviewers?: { user: { name: string } }[];
+    },
+    creds?: BbCreds
+  ): Promise<void> {
+    await request<unknown>(
+      repo,
+      `pull-requests/${prId}`,
+      { method: "PUT", body: JSON.stringify(data) },
+      creds
+    );
   },
 
   async listPullRequestActivities(

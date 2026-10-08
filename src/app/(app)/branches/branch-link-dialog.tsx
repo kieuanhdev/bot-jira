@@ -26,7 +26,7 @@ type BranchLinkDialogProps = {
   bitbucketBaseUrl?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: (note?: string) => void;
 };
 
 const JIRA_KEY_FORMAT = /^[A-Z][A-Z0-9]+-\d+$/;
@@ -52,6 +52,7 @@ export function BranchLinkDialog({
   const [jiraKeyInput, setJiraKeyInput] = useState(branch?.suggestedJiraKey ?? branch?.jiraKey ?? "");
   const [reasonInput, setReasonInput] = useState("");
   const [replace, setReplace] = useState(false);
+  const [syncPr, setSyncPr] = useState(false);
   const linkMutation = useBranchLink();
 
   const typed = jiraKeyInput.trim();
@@ -76,14 +77,14 @@ export function BranchLinkDialog({
     const replaceExisting = replace && Boolean(branch.jiraKey) ? true : undefined;
     linkMutation.mutate(
       isBulk
-        ? { branchId: "bulk", body: { action: "link_many", ids: bulkIds!, jiraKey, reason, replace: replaceExisting } }
+        ? { branchId: "bulk", body: { action: "link_many", ids: bulkIds!, jiraKey, reason, replace: replaceExisting, syncPr: syncPr || undefined } }
         : {
             branchId: branch.id,
-            body: unlink ? { jiraKey: null } : { jiraKey: jiraKey || null, reason, replace: replaceExisting },
+            body: unlink ? { jiraKey: null } : { jiraKey: jiraKey || null, reason, replace: replaceExisting, syncPr: syncPr || undefined },
           },
       {
-        onSuccess: () => {
-          onSuccess();
+        onSuccess: (res) => {
+          onSuccess(res?.prSync?.summary || undefined);
           onOpenChange(false);
           linkMutation.reset();
         },
@@ -204,6 +205,20 @@ export function BranchLinkDialog({
               </span>
             </label>
           )}
+
+          <label className="flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={syncPr}
+              onChange={(e) => setSyncPr(e.target.checked)}
+              disabled={linkMutation.isPending}
+              className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-teal-600"
+            />
+            <span>
+              Cập nhật PR trên Bitbucket để Jira nhận (thêm <code className="font-mono">Jira: {jiraKeyInput.trim().toUpperCase() || "KEY"}</code> vào mô
+              tả PR đang mở). Cần quyền sửa PR; nhánh chưa có PR sẽ được bỏ qua.
+            </span>
+          </label>
         </div>
 
         <DialogFooter className="flex flex-row items-center justify-between sm:justify-between">

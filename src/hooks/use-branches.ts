@@ -3,11 +3,12 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 
+type LinkResult = { ok?: boolean; prSync?: { summary: string } };
 type SyncResult = { queued?: boolean };
 type LinkBody =
   | { action: "confirm" | "reject" | "unlink" | "confirm_all" }
-  | { jiraKey: string | null; reason?: string; replace?: boolean; unlinkJiraKey?: string }
-  | { action: "link_many"; ids: string[]; jiraKey: string; reason?: string; replace?: boolean };
+  | { jiraKey: string | null; reason?: string; replace?: boolean; syncPr?: boolean; unlinkJiraKey?: string }
+  | { action: "link_many"; ids: string[]; jiraKey: string; reason?: string; replace?: boolean; syncPr?: boolean };
 
 export function useBranchSync() {
   const qc = useQueryClient();
@@ -24,7 +25,7 @@ export function useBranchLink() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ branchId, body }: { branchId: string; body: LinkBody }) =>
-      api(`/api/branches/${branchId}/link`, { method: "PATCH", body }),
+      api<LinkResult>(`/api/branches/${branchId}/link`, { method: "PATCH", body }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["branches"] });
       qc.invalidateQueries({ queryKey: ["branches-tasks"] });
