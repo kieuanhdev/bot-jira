@@ -2,6 +2,7 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import type { TaskDeliveryQueryResult } from "@/lib/bitbucket/task-delivery-query";
 
 type SyncResult = { queued?: boolean };
 type LinkBody =
@@ -28,6 +29,7 @@ export function useBranchLink() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["branches"] });
       qc.invalidateQueries({ queryKey: ["branches-tasks"] });
+      qc.invalidateQueries({ queryKey: ["releases"] });
     },
   });
 }
@@ -48,6 +50,21 @@ export function useIssueSearch(q: string) {
       api<{ items: IssueSearchItem[] }>(`/api/issues/search?q=${encodeURIComponent(term)}`),
     enabled: term.length >= 2,
     staleTime: 30_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Unlinked branches (no Jira task yet) for the "attach branch to task" picker. */
+export function useUnlinkedBranchPicker(q: string, enabled: boolean) {
+  const term = q.trim();
+  return useQuery({
+    queryKey: ["branches-tasks", "picker", term],
+    queryFn: () =>
+      api<TaskDeliveryQueryResult>(
+        `/api/branches/tasks?view=unlinked&pageSize=15&q=${encodeURIComponent(term)}`
+      ),
+    enabled,
+    staleTime: 15_000,
     placeholderData: keepPreviousData,
   });
 }

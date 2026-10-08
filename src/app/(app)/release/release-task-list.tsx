@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { TaskBranchLinkDialog } from "../branches/task-branch-link-dialog";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -12,15 +15,20 @@ import {
   Clock,
   Ban,
   User,
+  Link2,
 } from "lucide-react";
 import type { TaskReadinessResult, ReleaseBlocker } from "@/lib/releases/release-readiness";
 
 interface ReleaseTaskListProps {
   tasks: TaskReadinessResult[];
   jiraBaseUrl?: string;
+  /** Allows attaching unlinked branches to a task (branch.manage). */
+  canManage?: boolean;
 }
 
-export function ReleaseTaskList({ tasks, jiraBaseUrl }: ReleaseTaskListProps) {
+export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: ReleaseTaskListProps) {
+  const [attachTask, setAttachTask] = useState<{ jiraKey: string; summary: string } | null>(null);
+
   if (tasks.length === 0) {
     return (
       <div className="py-8 text-center text-muted-foreground text-sm flex flex-col items-center justify-center">
@@ -42,6 +50,7 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl }: ReleaseTaskListProps) {
   });
 
   return (
+    <>
     <div className="divide-y divide-border rounded-md border border-border bg-card overflow-hidden">
       {sortedTasks.map((t) => {
         const isDone = t.isDone;
@@ -167,6 +176,21 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl }: ReleaseTaskListProps) {
               </div>
             )}
 
+            {canManage && !t.noCode && (
+              <div className="mt-1.5 ml-7">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAttachTask({ jiraKey: t.jiraKey, summary: t.summary })}
+                  className="h-6 gap-1 px-2 text-[11px] cursor-pointer"
+                >
+                  <Link2 className="h-3 w-3" aria-hidden="true" />
+                  Gắn nhánh
+                </Button>
+              </div>
+            )}
+
             {/* Branch and PR reference */}
             {primaryBranch && !t.noCode && (
               <div className="mt-1.5 ml-7 text-[11px] text-muted-foreground flex items-center gap-2">
@@ -191,6 +215,19 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl }: ReleaseTaskListProps) {
         );
       })}
     </div>
+    {attachTask && (
+      <TaskBranchLinkDialog
+        key={attachTask.jiraKey}
+        jiraKey={attachTask.jiraKey}
+        summary={attachTask.summary}
+        open
+        onOpenChange={(open) => {
+          if (!open) setAttachTask(null);
+        }}
+        onSuccess={() => setAttachTask(null)}
+      />
+    )}
+    </>
   );
 }
 

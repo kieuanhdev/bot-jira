@@ -272,7 +272,7 @@ export function ReleaseCard({
                 </TabsList>
 
                 <TabsContent value="tasks" className="mt-0">
-                  <ReleaseTaskList tasks={release.tasks} jiraBaseUrl={jiraBaseUrl} />
+                  <ReleaseTaskList tasks={release.tasks} jiraBaseUrl={jiraBaseUrl} canManage={canManage} />
                 </TabsContent>
 
                 <TabsContent value="notes" className="mt-0 space-y-3">

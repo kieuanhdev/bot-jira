@@ -25,6 +25,7 @@ import { BranchTable } from "./branch-table";
 import { BranchCardList } from "./branch-card-list";
 import { BranchDetailSheet } from "./branch-detail-sheet";
 import { BranchLinkDialog } from "./branch-link-dialog";
+import { TaskBranchLinkDialog } from "./task-branch-link-dialog";
 import { BranchEmptyState } from "./branch-empty-state";
 import {
   type BranchFilterState,
@@ -45,6 +46,7 @@ export function BranchesClient() {
   const [toast, setToast] = useState<string | null>(null);
   const [selectedBranchForDrawer, setSelectedBranchForDrawer] = useState<BranchRowItem | null>(null);
   const [selectedBranchForLink, setSelectedBranchForLink] = useState<BranchRowItem | null>(null);
+  const [attachTask, setAttachTask] = useState<{ jiraKey: string; summary: string } | null>(null);
   const [bulkLinkIds, setBulkLinkIds] = useState<string[] | undefined>(undefined);
 
   const syncMutation = useBranchSync();
@@ -375,7 +377,7 @@ export function BranchesClient() {
                   tasks={taskQueryResult.data.tasks}
                   bitbucketBaseUrl={bitbucketBaseUrl}
                   jiraBaseUrl={jiraBaseUrl}
-                  onOpenRelink={(jiraKey) => setSelectedBranchForLink(toBranchRow({ id: "", repo: "", branch: "", jiraKey }))}
+                  onAttachBranch={(task) => setAttachTask({ jiraKey: task.jiraKey, summary: task.summary })}
                 />
               ) : (
                 <BranchEmptyState
@@ -523,6 +525,20 @@ export function BranchesClient() {
             setSelectedBranchForLink(null);
             setBulkLinkIds(undefined);
           }}
+        />
+      )}
+
+      {/* Attach unlinked branches to a task (from the task list) */}
+      {attachTask && (
+        <TaskBranchLinkDialog
+          key={attachTask.jiraKey}
+          jiraKey={attachTask.jiraKey}
+          summary={attachTask.summary}
+          open
+          onOpenChange={(open) => {
+            if (!open) setAttachTask(null);
+          }}
+          onSuccess={() => showToast(`Đã gắn nhánh vào ${attachTask.jiraKey}`)}
         />
       )}
 

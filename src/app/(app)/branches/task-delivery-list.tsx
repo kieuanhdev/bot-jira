@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { timeAgo, getBitbucketBranchUrl, getJiraIssueUrl } from "@/lib/utils";
 import type { DeliveryTaskRow } from "@/lib/bitbucket/task-delivery-query";
 import {
@@ -15,16 +16,17 @@ import {
   CheckCircle2,
   Clock,
   ArrowRight,
+  Link2,
 } from "lucide-react";
 
 type TaskDeliveryListProps = {
   tasks: DeliveryTaskRow[];
   bitbucketBaseUrl?: string | null;
   jiraBaseUrl?: string | null;
-  onOpenRelink?: (jiraKey: string) => void;
+  onAttachBranch?: (task: DeliveryTaskRow) => void;
 };
 
-export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl }: TaskDeliveryListProps) {
+export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttachBranch }: TaskDeliveryListProps) {
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
     () => new Set(tasks.slice(0, 5).map((t) => t.jiraKey))
   );
@@ -215,9 +217,28 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl }: TaskD
 
                 {/* Sub-Branch Items */}
                 <div className="space-y-1.5">
-                  <div className="text-xs font-semibold text-muted-foreground px-1 uppercase tracking-wider">
-                    Các nhánh liên kết ({task.branches.length})
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Các nhánh liên kết ({task.branches.length})
+                    </span>
+                    {onAttachBranch && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onAttachBranch(task)}
+                        className="h-6 gap-1 px-2 text-[11px] cursor-pointer"
+                      >
+                        <Link2 className="w-3 h-3" aria-hidden="true" />
+                        Gắn nhánh
+                      </Button>
+                    )}
                   </div>
+                  {task.branches.length === 0 && (
+                    <p className="px-1 text-xs italic text-muted-foreground">
+                      Task này chưa có nhánh nào. Bấm &quot;Gắn nhánh&quot; để chọn từ các nhánh chưa gắn.
+                    </p>
+                  )}
                   {task.branches.map((b) => {
                     const branchGitUrl = getBitbucketBranchUrl(b.repo, b.branch, bitbucketBaseUrl, b.prUrl);
                     return (
