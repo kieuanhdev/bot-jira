@@ -1,5 +1,9 @@
 # Clean code toàn dự án — kế hoạch & tiến độ
 
+> **Lưu ý:** Tài liệu này là lịch sử của đợt refactor trước. Kế hoạch và
+> checklist đang sử dụng nằm tại [`docs/clean-code/README.md`](clean-code/README.md).
+> Không cập nhật tiến độ mới trong file này.
+
 > Cập nhật: 2026-10-06 · Branch: `chore/clean-code-20261006` (từ `main`) · **Chưa merge, chưa push**
 > Mục tiêu: repo sạch hơn, type chặt hơn, file nhỏ hơn — **hành vi không đổi**.
 > Đây là refactor, không phải rewrite, không nâng dependency, không thêm feature.
