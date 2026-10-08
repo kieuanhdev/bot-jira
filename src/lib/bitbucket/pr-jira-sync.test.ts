@@ -4,13 +4,19 @@ const mocks = vi.hoisted(() => ({
   branch: vi.fn(),
   getPr: vi.fn(),
   updatePr: vi.fn(),
+  listOpen: vi.fn(),
+  branchUpdate: vi.fn(),
   audit: vi.fn(),
 }));
 
-vi.mock("@/lib/prisma", () => ({ prisma: { branchInfo: { findUnique: mocks.branch } } }));
+vi.mock("@/lib/prisma", () => ({ prisma: { branchInfo: { findUnique: mocks.branch, update: mocks.branchUpdate } } }));
 vi.mock("@/lib/audit", () => ({ audit: mocks.audit }));
 vi.mock("./client", () => ({
-  bitbucket: { getPullRequest: mocks.getPr, updatePullRequest: mocks.updatePr },
+  bitbucket: {
+    getPullRequest: mocks.getPr,
+    updatePullRequest: mocks.updatePr,
+    listOpenPullRequests: mocks.listOpen,
+  },
   isBitbucketPermissionError: (e: unknown) => String((e as Error)?.message).includes("-> 403"),
 }));
 
@@ -67,11 +73,37 @@ describe("syncPullRequestJiraKey", () => {
     expect((await syncPullRequestJiraKey("b1", "EPM-3071", creds, actor)).status).toBe("updated");
   });
 
-  it("skips branches without a PR, closed PRs and missing credentials", async () => {
-    mocks.branch.mockResolvedValueOnce({ repo: "EPM/app", branch: "b", prId: null, prState: null });
+  it("finds a PR created after the last branch scan by looking it up live", async () => {
+    mocks.branch.mockResolvedValueOnce({ repo: "EPM/app", branch: "feat/x", prId: null, prState: null });
+    mocks.listOpen.mockResolvedValueOnce([
+      { id: 9, title: "Other", fromRef: { branch: "feat/other" } },
+      { id: 7, title: "Add login", url: "http://bb/pr/7", fromRef: { branch: "feat/x" }, toRef: { branch: "dev" } },
+    ]);
+    const res = await syncPullRequestJiraKey("b1", "EPM-3071", creds, actor);
+    expect(res.status).toBe("updated");
+    expect(mocks.getPr).toHaveBeenCalledWith("EPM/app", 7, creds);
+    expect(mocks.branchUpdate).toHaveBeenCalledWith({
+      where: { id: "b1" },
+      data: expect.objectContaining({ prId: 7, prState: "OPEN", prDestinationBranch: "dev" }),
+    });
+  });
+
+  it("reports no_pr only when Bitbucket has no open PR for the branch", async () => {
+    mocks.branch.mockResolvedValueOnce({ repo: "EPM/app", branch: "feat/x", prId: null, prState: null });
+    mocks.listOpen.mockResolvedValueOnce([{ id: 9, fromRef: { branch: "feat/other" } }]);
     expect((await syncPullRequestJiraKey("b1", "EPM-1", creds, actor)).status).toBe("no_pr");
-    mocks.branch.mockResolvedValueOnce({ repo: "EPM/app", branch: "b", prId: 7, prState: "MERGED" });
+    expect(mocks.updatePr).not.toHaveBeenCalled();
+  });
+
+  it("trusts the live PR state over a stale cached one", async () => {
+    mocks.branch.mockResolvedValueOnce({ repo: "EPM/app", branch: "feat/x", prId: 7, prState: "MERGED" });
+    expect((await syncPullRequestJiraKey("b1", "EPM-1", creds, actor)).status).toBe("updated");
+    mocks.branch.mockResolvedValueOnce({ repo: "EPM/app", branch: "feat/x", prId: 7, prState: "OPEN" });
+    mocks.getPr.mockResolvedValueOnce(openPr({ state: "MERGED" }));
     expect((await syncPullRequestJiraKey("b1", "EPM-1", creds, actor)).status).toBe("pr_closed");
+  });
+
+  it("skips when there are no credentials", async () => {
     expect((await syncPullRequestJiraKey("b1", "EPM-1", null, actor)).status).toBe("no_credentials");
     expect(mocks.updatePr).not.toHaveBeenCalled();
   });

@@ -48,13 +48,32 @@ export async function syncPullRequestJiraKey(
   const name = branch?.branch ?? "";
   const done = (status: PrSyncStatus): PrSyncResult => ({ branchId, branch: name, status });
 
-  if (!branch || !branch.prId) return done("no_pr");
-  if (branch.prState && branch.prState.toUpperCase() !== "OPEN") return done("pr_closed");
+  if (!branch) return done("no_pr");
   if (!creds) return done("no_credentials");
 
   try {
+    // The cached PR can lag behind Bitbucket (the branch scan runs every few
+    // minutes), so look the PR up live instead of trusting prId/prState.
+    let prId = branch.prId;
+    if (!prId) {
+      const open = await bitbucket.listOpenPullRequests(branch.repo, creds);
+      const found = open.find((p) => p.fromRef.branch === branch.branch);
+      if (!found) return done("no_pr");
+      prId = found.id;
+      await prisma.branchInfo.update({
+        where: { id: branchId },
+        data: {
+          prId: found.id,
+          prTitle: found.title ?? null,
+          prUrl: found.url ?? null,
+          prState: "OPEN",
+          prDestinationBranch: found.toRef?.branch ?? null,
+        },
+      });
+    }
+
     for (let attempt = 0; attempt < 2; attempt++) {
-      const pr = await bitbucket.getPullRequest(branch.repo, branch.prId, creds);
+      const pr = await bitbucket.getPullRequest(branch.repo, prId, creds);
       if (!pr) return done("pr_not_found");
       if (pr.state && pr.state.toUpperCase() !== "OPEN") return done("pr_closed");
       if (mentionsKey(pr.title, jiraKey) || mentionsKey(pr.description, jiraKey)) {
@@ -65,7 +84,7 @@ export async function syncPullRequestJiraKey(
       try {
         await bitbucket.updatePullRequest(
           branch.repo,
-          branch.prId,
+          prId,
           {
             version: pr.version,
             title: pr.title,
@@ -86,7 +105,7 @@ export async function syncPullRequestJiraKey(
         action: "branch.pr_jira_sync",
         source: "web",
         target: `${branch.repo}:${branch.branch}`,
-        after: { prId: branch.prId, jiraKey },
+        after: { prId, jiraKey },
       });
       return done("updated");
     }
