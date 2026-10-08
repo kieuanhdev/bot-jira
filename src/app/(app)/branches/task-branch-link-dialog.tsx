@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getErrorMessage } from "@/lib/api-client";
-import { useBranchLink, useUnlinkedBranchPicker } from "@/hooks/use-branches";
+import { useBranchLink, useBranchPicker } from "@/hooks/use-branches";
 import { cn, timeAgo } from "@/lib/utils";
 
 type TaskBranchLinkDialogProps = {
@@ -25,7 +25,7 @@ type TaskBranchLinkDialogProps = {
   onSuccess: () => void;
 };
 
-/** Attach existing, not-yet-linked Bitbucket branches to a given Jira task. */
+/** Attach existing Bitbucket branches to a Jira task. A branch may serve several tasks. */
 export function TaskBranchLinkDialog({
   jiraKey,
   summary,
@@ -36,8 +36,8 @@ export function TaskBranchLinkDialog({
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const linkMutation = useBranchLink();
-  const picker = useUnlinkedBranchPicker(q, open);
-  const items = picker.data?.unlinkedItems ?? [];
+  const picker = useBranchPicker(jiraKey, q, open);
+  const items = picker.data?.items ?? [];
   const error = linkMutation.error ? getErrorMessage(linkMutation.error) : null;
 
   const toggle = (id: string) =>
@@ -102,9 +102,9 @@ export function TaskBranchLinkDialog({
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
                 <GitBranch className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
               </div>
-              <p className="text-sm font-medium text-foreground">Không có nhánh nào chưa gắn</p>
+              <p className="text-sm font-medium text-foreground">Không tìm thấy nhánh phù hợp</p>
               <p className="text-xs text-muted-foreground">
-                {q.trim() ? "Thử từ khóa khác." : "Tất cả nhánh đang hoạt động đã có Jira task."}
+                {q.trim() ? "Thử từ khóa khác." : "Không còn nhánh nào để gắn thêm vào task này."}
               </p>
             </div>
           ) : (
@@ -127,7 +127,17 @@ export function TaskBranchLinkDialog({
                       className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-teal-600"
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-mono font-semibold text-foreground">{item.branch}</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="truncate font-mono font-semibold text-foreground">{item.branch}</span>
+                        {item.linkedKeys.length > 0 && (
+                          <span
+                            className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                            title="Nhánh này đã gắn với task khác, gắn thêm sẽ dùng chung nhánh"
+                          >
+                            đã gắn: {item.linkedKeys.join(", ")}
+                          </span>
+                        )}
+                      </span>
                       <span className="block truncate text-muted-foreground">
                         {item.repo}
                         {item.prTitle ? ` · PR: ${item.prTitle}` : ""}

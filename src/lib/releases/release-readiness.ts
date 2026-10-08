@@ -1,3 +1,4 @@
+import { loadConfirmedBranchRows } from "@/lib/bitbucket/branch-links";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 
@@ -408,28 +409,7 @@ export async function getReleaseReadiness(
   const jiraKeys = activeTasks.map((t) => t.jiraKey);
 
   // Load all active branches linked to these Jira tasks
-  const branchRows = jiraKeys.length > 0
-    ? await prisma.branchInfo.findMany({
-        where: {
-          jiraKey: { in: jiraKeys },
-          deletedAt: null,
-        },
-        select: {
-          jiraKey: true,
-          repo: true,
-          branch: true,
-          linkState: true,
-          prId: true,
-          prTitle: true,
-          prUrl: true,
-          prState: true,
-          prDestinationBranch: true,
-          merged: true,
-          checkedAt: true,
-          deletedAt: true,
-        },
-      })
-    : [];
+  const branchRows = await loadConfirmedBranchRows(jiraKeys);
 
   const branchesByKey = new Map<string, BranchDeliveryInfo[]>();
   for (const b of branchRows) {

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   user: vi.fn(),
   issueFindUnique: vi.fn(),
   branchFindMany: vi.fn(),
+  linkFindMany: vi.fn(),
   syncJiraDevStatusForIssue: vi.fn(),
   createBranchForIssue: vi.fn(),
 }));
@@ -15,6 +16,7 @@ vi.mock("@/lib/prisma", () => ({
     user: { findUnique: mocks.user },
     issueCache: { findUnique: mocks.issueFindUnique },
     branchInfo: { findMany: mocks.branchFindMany },
+    branchIssueLink: { findMany: mocks.linkFindMany },
   },
 }));
 vi.mock("@/lib/user-creds", () => ({
@@ -62,11 +64,10 @@ describe("GET /api/issues/[key]/branches", () => {
   it("returns cached branches when present", async () => {
     mocks.session.mockResolvedValueOnce({ user: { id: "user-1" } });
     mocks.issueFindUnique.mockResolvedValueOnce({ labels: [] });
-    mocks.branchFindMany
-      .mockResolvedValueOnce([
-        { repo: "EPM/feat_bill", branch: "hotfix/EPM-4365", jiraKey: "EPM-4365" },
-      ])
-      .mockResolvedValueOnce([]); // suggested
+    mocks.linkFindMany.mockResolvedValueOnce([
+      { jiraKey: "EPM-4365", branch: { repo: "EPM/feat_bill", branch: "hotfix/EPM-4365", jiraKey: "EPM-4365" } },
+    ]);
+    mocks.branchFindMany.mockResolvedValueOnce([]); // suggested
 
     const res = await GET(new Request("http://localhost"), ctx);
     expect(res.status).toBe(200);
@@ -80,12 +81,12 @@ describe("GET /api/issues/[key]/branches", () => {
     mocks.user.mockResolvedValueOnce({ jiraTokenEnc: "tok" });
     mocks.issueFindUnique.mockResolvedValueOnce({ labels: [] });
     // First query empty -> sync -> second query returns branch
-    mocks.branchFindMany
+    mocks.linkFindMany
       .mockResolvedValueOnce([]) // initial
       .mockResolvedValueOnce([
-        { repo: "EPM/feat_bill", branch: "hotfix/EPM-4365", jiraKey: "EPM-4365" },
-      ]) // after sync
-      .mockResolvedValueOnce([]); // suggested
+        { jiraKey: "EPM-4365", branch: { repo: "EPM/feat_bill", branch: "hotfix/EPM-4365", jiraKey: "EPM-4365" } },
+      ]); // after sync
+    mocks.branchFindMany.mockResolvedValueOnce([]); // suggested
 
     mocks.syncJiraDevStatusForIssue.mockResolvedValueOnce({
       ok: true,

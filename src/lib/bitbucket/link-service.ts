@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
+import { markBranchLinkRemoved, recomputePrimaryLink, upsertBranchLink } from "./branch-links";
 
 export type LinkServiceResult = {
   ok: boolean;
@@ -80,6 +81,13 @@ export async function confirmBranchLink(
     },
   });
 
+  await upsertBranchLink(
+    branchId,
+    targetKey,
+    { source: "manual", confidence: 100, reason: reason ?? "Confirmed from suggestion", actorId },
+    { force: true }
+  );
+
   const after = {
     jiraKey: updated.jiraKey,
     suggestedJiraKey: updated.suggestedJiraKey,
@@ -124,6 +132,10 @@ export async function rejectBranchSuggestion(
     linkConfidence: branch.linkConfidence,
   };
 
+  if (branch.suggestedJiraKey) {
+    await markBranchLinkRemoved(branchId, branch.suggestedJiraKey, "rejected", actorId, reason);
+  }
+
   const updated = await prisma.branchInfo.update({
     where: { id: branchId },
     data: {
@@ -165,7 +177,8 @@ export async function manualRelinkBranch(
   targetJiraKey: string,
   actorId: string,
   actorEmail?: string,
-  reason?: string
+  reason?: string,
+  opts: { replace?: boolean } = {}
 ): Promise<LinkServiceResult> {
   const branch = await prisma.branchInfo.findUnique({ where: { id: branchId } });
   if (!branch) return { ok: false, error: "Branch not found" };
@@ -190,14 +203,29 @@ export async function manualRelinkBranch(
     linkConfidence: branch.linkConfidence,
   };
 
+  // Link is additive: a branch may deliver several tasks. `replace` swaps the
+  // existing confirmed links for this one (the old "relink" behaviour).
+  if (opts.replace) {
+    const others = await prisma.branchIssueLink.findMany({
+      where: { branchId, linkState: "confirmed", jiraKey: { not: normalizedKey } },
+      select: { jiraKey: true },
+    });
+    for (const o of others) {
+      await markBranchLinkRemoved(branchId, o.jiraKey, "manual_unlinked", actorId, reason);
+    }
+  }
+  await upsertBranchLink(
+    branchId,
+    normalizedKey,
+    { source: "manual", confidence: 100, reason: reason ?? "Manually linked", actorId },
+    { force: true }
+  );
+  await recomputePrimaryLink(branchId);
+
   const updated = await prisma.branchInfo.update({
     where: { id: branchId },
     data: {
-      jiraKey: normalizedKey,
       suggestedJiraKey: null,
-      linkState: "confirmed",
-      linkSource: "manual",
-      linkConfidence: 100,
       linkReason: reason ?? "Manually linked",
       linkReviewedAt: new Date(),
       linkReviewedById: actorId,
@@ -249,7 +277,8 @@ export async function manualRelinkBranches(
   targetJiraKey: string,
   actorId: string,
   actorEmail?: string,
-  reason?: string
+  reason?: string,
+  opts: { replace?: boolean } = {}
 ): Promise<{ ok: true; count: number; failed: { id: string; error: string }[] } | { ok: false; error: string }> {
   const ids = Array.from(new Set(branchIds.filter((id) => typeof id === "string" && id)));
   if (ids.length === 0) return { ok: false, error: "Chưa chọn nhánh nào" };
@@ -258,7 +287,7 @@ export async function manualRelinkBranches(
   let count = 0;
   const failed: { id: string; error: string }[] = [];
   for (const id of ids) {
-    const res = await manualRelinkBranch(id, targetJiraKey, actorId, actorEmail, reason);
+    const res = await manualRelinkBranch(id, targetJiraKey, actorId, actorEmail, reason, opts);
     if (res.ok) count++;
     else failed.push({ id, error: res.error ?? "Unknown error" });
   }
@@ -275,10 +304,38 @@ export async function manualUnlinkBranch(
   branchId: string,
   actorId: string,
   actorEmail?: string,
-  reason?: string
+  reason?: string,
+  jiraKey?: string
 ): Promise<LinkServiceResult> {
   const branch = await prisma.branchInfo.findUnique({ where: { id: branchId } });
   if (!branch) return { ok: false, error: "Branch not found" };
+
+  // Remove a single task from a branch that delivers several: only that pair is
+  // unlinked and the branch stays linked to the rest.
+  const confirmed = await prisma.branchIssueLink.findMany({
+    where: { branchId, linkState: "confirmed" },
+    select: { jiraKey: true },
+  });
+  const target = jiraKey?.trim().toUpperCase();
+  if (target && confirmed.some((l) => l.jiraKey === target) && confirmed.length > 1) {
+    await markBranchLinkRemoved(branchId, target, "manual_unlinked", actorId, reason);
+    await recomputePrimaryLink(branchId);
+    const partial = await prisma.branchInfo.findUnique({ where: { id: branchId } });
+    await audit({
+      actorId,
+      actorEmail,
+      action: "branch.unlink",
+      source: "web",
+      target: `${branch.repo}:${branch.branch}`,
+      before: { jiraKey: target },
+      after: { removedJiraKey: target, primaryJiraKey: partial?.jiraKey ?? null, reason },
+    });
+    return { ok: true, branch: partial };
+  }
+
+  for (const l of confirmed) {
+    await markBranchLinkRemoved(branchId, l.jiraKey, "manual_unlinked", actorId, reason);
+  }
 
   const before = {
     jiraKey: branch.jiraKey,
@@ -334,7 +391,7 @@ export async function recordExplicitBranchLink(
 ): Promise<void> {
   try {
     const normalizedKey = jiraKey.trim().toUpperCase();
-    await prisma.branchInfo.upsert({
+    const row = await prisma.branchInfo.upsert({
       where: { repo_branch: { repo, branch } },
       create: {
         repo,
@@ -353,6 +410,12 @@ export async function recordExplicitBranchLink(
         suggestedJiraKey: null,
       },
     });
+    await upsertBranchLink(
+      row.id,
+      normalizedKey,
+      { source: "explicit", confidence: 100, reason: "Branch created from task" },
+      { force: true }
+    );
   } catch {
     // Best-effort non-blocking
   }
@@ -411,6 +474,18 @@ export async function confirmAllBranchSuggestions(
           linkReviewedById: actorId,
         },
       });
+
+      await upsertBranchLink(
+        b.id,
+        targetKey,
+        {
+          source: b.linkSource ?? "pr_title",
+          confidence: b.linkConfidence ?? 85,
+          reason: "Auto-confirmed suggestion",
+          actorId,
+        },
+        { force: true }
+      );
 
       confirmedCount++;
     }

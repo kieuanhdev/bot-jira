@@ -8,6 +8,16 @@ import { createBranchForIssue, type BranchParams } from "@/lib/bulk/ops";
 import { env } from "@/lib/env";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 
+/** Branches confirmed-linked to this task (a branch may deliver several tasks). */
+async function loadTaskBranches(key: string) {
+  const links = await prisma.branchIssueLink.findMany({
+    where: { jiraKey: key, linkState: "confirmed", branch: { deletedAt: null } },
+    include: { branch: true },
+    orderBy: { branch: { checkedAt: "desc" } },
+  });
+  return links.map((l) => l.branch);
+}
+
 /**
  * Branches linked to this issue via confirmed `BranchInfo.jiraKey`,
  * plus pending suggestions for this issue.
@@ -27,14 +37,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ key: string }> 
   const forceSync = url.searchParams.get("sync") === "true";
 
   // Confirmed links from database relation
-  let rows = await prisma.branchInfo.findMany({
-    where: {
-      deletedAt: null,
-      jiraKey: key,
-      linkState: { notIn: ["rejected", "manual_unlinked"] },
-    },
-    orderBy: { checkedAt: "desc" },
-  });
+  let rows = await loadTaskBranches(key);
 
   // If sync requested or no branches cached yet, sync from Jira Dev Status
   if (forceSync || rows.length === 0) {
@@ -52,14 +55,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ key: string }> 
     const auth = userJiraAuth(user) || (await getSystemJiraAuth());
     if (auth) {
       await syncJiraDevStatusForIssue(key, auth).catch(() => null);
-      rows = await prisma.branchInfo.findMany({
-        where: {
-          deletedAt: null,
-          jiraKey: key,
-          linkState: { notIn: ["rejected", "manual_unlinked"] },
-        },
-        orderBy: { checkedAt: "desc" },
-      });
+      rows = await loadTaskBranches(key);
     }
   }
 

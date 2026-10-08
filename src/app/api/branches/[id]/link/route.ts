@@ -29,7 +29,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (typeof rawJiraKey !== "string" || !rawJiraKey.trim()) {
       return NextResponse.json({ error: "Thiếu mã Jira" }, { status: 400 });
     }
-    const res = await manualRelinkBranches(ids, rawJiraKey, session.user.id, session.user.email ?? undefined, reason);
+    const res = await manualRelinkBranches(ids, rawJiraKey, session.user.id, session.user.email ?? undefined, reason, {
+      replace: body.replace === true,
+    });
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
     return NextResponse.json({ ok: true, count: res.count, failed: res.failed });
   }
@@ -66,7 +68,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (!can(session, "branch.manage")) {
       return NextResponse.json({ error: "forbidden: requires branch.manage" }, { status: 403 });
     }
-    const res = await manualUnlinkBranch(id, session.user.id, session.user.email ?? undefined, reason);
+    const unlinkKey = typeof body.unlinkJiraKey === "string" ? body.unlinkJiraKey : undefined;
+    const res = await manualUnlinkBranch(id, session.user.id, session.user.email ?? undefined, reason, unlinkKey);
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
     return NextResponse.json({ ok: true, branch: res.branch });
   }
@@ -76,7 +79,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (!can(session, "branch.manage")) {
       return NextResponse.json({ error: "forbidden: requires branch.manage" }, { status: 403 });
     }
-    const res = await manualRelinkBranch(id, rawJiraKey, session.user.id, session.user.email ?? undefined, reason);
+    const res = await manualRelinkBranch(id, rawJiraKey, session.user.id, session.user.email ?? undefined, reason, {
+      replace: body.replace === true,
+    });
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
     return NextResponse.json({ ok: true, branch: res.branch });
   }

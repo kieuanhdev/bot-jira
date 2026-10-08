@@ -1,3 +1,4 @@
+import { upsertBranchLink } from "@/lib/bitbucket/branch-links";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   extractRepoSlugFromUrl,
@@ -12,10 +13,15 @@ vi.mock("@/lib/prisma", () => ({
       upsert: vi.fn().mockResolvedValue({}),
     },
     branchInfo: {
-      upsert: vi.fn().mockResolvedValue({}),
+      upsert: vi.fn().mockResolvedValue({ id: "branch-1" }),
       findUnique: vi.fn().mockResolvedValue(null),
     },
   },
+}));
+
+vi.mock("@/lib/bitbucket/branch-links", () => ({
+  upsertBranchLink: vi.fn().mockResolvedValue({ changed: true }),
+  recomputePrimaryLink: vi.fn().mockResolvedValue("CICM-712"),
 }));
 
 vi.mock("@/lib/bitbucket/client", () => ({
@@ -141,6 +147,10 @@ describe("syncJiraDevStatusForIssue", () => {
         }),
       })
     );
+    expect(upsertBranchLink).toHaveBeenCalledWith("branch-1", "CICM-712", {
+      source: "jira_dev_status",
+      confidence: 100,
+    });
   });
 
   it("links branches discovered from commits via Bitbucket", async () => {

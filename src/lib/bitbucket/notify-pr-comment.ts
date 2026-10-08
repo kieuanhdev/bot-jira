@@ -161,10 +161,11 @@ export async function notifyPrComment(args: NotifyPrCommentArgs): Promise<{
     if (branchOrConditions.length > 0 && prisma.branchInfo) {
       const branches = await prisma.branchInfo.findMany({
         where: { OR: branchOrConditions },
-        select: { jiraKey: true, branch: true },
+        select: { jiraKey: true, branch: true, issueLinks: { where: { linkState: "confirmed" }, select: { jiraKey: true } } },
       });
       for (const b of branches) {
         if (b.jiraKey) jiraKeys.add(b.jiraKey.toUpperCase());
+        for (const l of b.issueLinks ?? []) jiraKeys.add(l.jiraKey.toUpperCase());
         for (const k of extractJiraKeys(b.branch)) {
           jiraKeys.add(k);
         }

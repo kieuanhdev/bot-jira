@@ -23,6 +23,9 @@ const { prismaMock, sessionMock, canMock, userJiraAuthMock, jiraWithMock, create
     branchInfo: {
       findMany: vi.fn(),
     },
+    branchIssueLink: {
+      findMany: vi.fn(),
+    },
     issueCache: {
       findMany: vi.fn(),
     },
@@ -62,6 +65,7 @@ beforeEach(() => {
   userJiraAuthMock.mockReturnValue({ user: "mgr", token: "tok", authMode: "Bearer" });
   prismaMock.user.findUnique.mockResolvedValue(null);
   prismaMock.branchInfo.findMany.mockResolvedValue([]);
+  prismaMock.branchIssueLink.findMany.mockResolvedValue([]);
   prismaMock.issueCache.findMany.mockResolvedValue([]);
   prismaMock.integrationCursor.findUnique.mockResolvedValue(null);
   getMyPermissionsMock.mockResolvedValue({

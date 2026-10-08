@@ -2,13 +2,12 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import type { TaskDeliveryQueryResult } from "@/lib/bitbucket/task-delivery-query";
 
 type SyncResult = { queued?: boolean };
 type LinkBody =
   | { action: "confirm" | "reject" | "unlink" | "confirm_all" }
-  | { jiraKey: string | null; reason?: string }
-  | { action: "link_many"; ids: string[]; jiraKey: string; reason?: string };
+  | { jiraKey: string | null; reason?: string; replace?: boolean; unlinkJiraKey?: string }
+  | { action: "link_many"; ids: string[]; jiraKey: string; reason?: string; replace?: boolean };
 
 export function useBranchSync() {
   const qc = useQueryClient();
@@ -54,14 +53,25 @@ export function useIssueSearch(q: string) {
   });
 }
 
-/** Unlinked branches (no Jira task yet) for the "attach branch to task" picker. */
-export function useUnlinkedBranchPicker(q: string, enabled: boolean) {
+export type PickerBranch = {
+  id: string;
+  repo: string;
+  branch: string;
+  prTitle: string | null;
+  prState: string | null;
+  lastCommitAt: string | null;
+  /** Tasks this branch is already linked to (it may deliver several). */
+  linkedKeys: string[];
+};
+
+/** Branches that can still be attached to `jiraKey` (unlinked or linked to other tasks). */
+export function useBranchPicker(jiraKey: string, q: string, enabled: boolean) {
   const term = q.trim();
   return useQuery({
-    queryKey: ["branches-tasks", "picker", term],
+    queryKey: ["branches-tasks", "picker", jiraKey, term],
     queryFn: () =>
-      api<TaskDeliveryQueryResult>(
-        `/api/branches/tasks?view=unlinked&pageSize=15&q=${encodeURIComponent(term)}`
+      api<{ items: PickerBranch[] }>(
+        `/api/branches/picker?jiraKey=${encodeURIComponent(jiraKey)}&q=${encodeURIComponent(term)}`
       ),
     enabled,
     staleTime: 15_000,

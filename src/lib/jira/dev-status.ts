@@ -1,3 +1,4 @@
+import { recomputePrimaryLink, upsertBranchLink } from "@/lib/bitbucket/branch-links";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { getSystemJiraAuth, jiraWith, type JiraAuth, JiraRequestError } from "./client";
@@ -190,17 +191,13 @@ export type SyncedBranchResult = {
  * Fetch and synchronize Jira Dev Status branches/PRs into the BranchInfo table for a single Jira task.
  */
 /**
- * Dev Status must not override a user decision: unlinked/rejected branches stay
- * untouched, and a manual/explicit link to a different task is preserved.
+ * Dev Status never revives a branch the user fully unlinked or rejected.
+ * (Per-task decisions are enforced by upsertBranchLink.)
  */
 function shouldSkipDevStatusLink(
-  existing: { linkState: string | null; jiraKey: string | null; linkSource: string | null } | null,
-  jiraKey: string
+  existing: { linkState: string | null } | null
 ): boolean {
-  if (!existing) return false;
-  if (existing.linkState === "manual_unlinked" || existing.linkState === "rejected") return true;
-  const pinned = existing.linkSource === "manual" || existing.linkSource === "explicit";
-  return pinned && !!existing.jiraKey && existing.jiraKey !== jiraKey;
+  return existing?.linkState === "manual_unlinked" || existing?.linkState === "rejected";
 }
 
 export async function syncJiraDevStatusForIssue(
@@ -265,9 +262,9 @@ export async function syncJiraDevStatusForIssue(
       // Respect manual unlink / rejection decisions (BR-003, BR-202)
       const existing = await prisma.branchInfo.findUnique({
         where: { repo_branch: { repo, branch: branchName } },
-        select: { linkState: true, jiraKey: true, linkSource: true },
+        select: { linkState: true, jiraKey: true },
       });
-      if (shouldSkipDevStatusLink(existing, jiraKey)) {
+      if (shouldSkipDevStatusLink(existing)) {
         continue;
       }
 
@@ -278,22 +275,27 @@ export async function syncJiraDevStatusForIssue(
       const prTitle = pr.name ?? null;
       const prUrl = pr.url ?? null;
 
-      // Upsert into BranchInfo with confirmed status
-      await prisma.branchInfo.upsert({
+      // Upsert the branch; it only becomes this task's *primary* when it has none,
+      // and is linked to this task through BranchIssueLink either way.
+      const row = await prisma.branchInfo.upsert({
         where: { repo_branch: { repo, branch: branchName } },
         update: {
-          jiraKey,
           prId,
           prTitle,
           prUrl,
           prState,
           prDestinationBranch,
           merged,
-          linkSource: "jira_dev_status",
-          linkConfidence: 100,
-          linkState: "confirmed",
           deletedAt: null,
           checkedAt: now,
+          ...(existing?.jiraKey
+            ? {}
+            : {
+                jiraKey,
+                linkSource: "jira_dev_status",
+                linkConfidence: 100,
+                linkState: "confirmed",
+              }),
         },
         create: {
           repo,
@@ -311,6 +313,8 @@ export async function syncJiraDevStatusForIssue(
           checkedAt: now,
         },
       });
+      await upsertBranchLink(row.id, jiraKey, { source: "jira_dev_status", confidence: 100 });
+      await recomputePrimaryLink(row.id);
 
       syncedBranches.push({
         repo,
@@ -341,21 +345,25 @@ export async function syncJiraDevStatusForIssue(
       // Respect manual decisions
       const existing = await prisma.branchInfo.findUnique({
         where: { repo_branch: { repo, branch: branchName } },
-        select: { linkState: true, jiraKey: true, linkSource: true },
+        select: { linkState: true, jiraKey: true },
       });
-      if (shouldSkipDevStatusLink(existing, jiraKey)) {
+      if (shouldSkipDevStatusLink(existing)) {
         continue;
       }
 
-      await prisma.branchInfo.upsert({
+      const row = await prisma.branchInfo.upsert({
         where: { repo_branch: { repo, branch: branchName } },
         update: {
-          jiraKey,
-          linkSource: "jira_dev_status",
-          linkConfidence: 100,
-          linkState: "confirmed",
           deletedAt: null,
           checkedAt: now,
+          ...(existing?.jiraKey
+            ? {}
+            : {
+                jiraKey,
+                linkSource: "jira_dev_status",
+                linkConfidence: 100,
+                linkState: "confirmed",
+              }),
         },
         create: {
           repo,
@@ -367,6 +375,8 @@ export async function syncJiraDevStatusForIssue(
           checkedAt: now,
         },
       });
+      await upsertBranchLink(row.id, jiraKey, { source: "jira_dev_status", confidence: 100 });
+      await recomputePrimaryLink(row.id);
 
       syncedBranches.push({
         repo,
@@ -412,18 +422,22 @@ export async function syncJiraDevStatusForIssue(
               if (!syncedBranches.some((s) => s.repo === repo && s.branch === candidateBranch)) {
                 const existing = await prisma.branchInfo.findUnique({
                   where: { repo_branch: { repo, branch: candidateBranch } },
-                  select: { linkState: true },
+                  select: { linkState: true, jiraKey: true },
                 });
-                if (existing?.linkState !== "manual_unlinked" && existing?.linkState !== "rejected") {
-                  await prisma.branchInfo.upsert({
+                if (!shouldSkipDevStatusLink(existing)) {
+                  const row = await prisma.branchInfo.upsert({
                     where: { repo_branch: { repo, branch: candidateBranch } },
                     update: {
-                      jiraKey,
-                      linkSource: "commit_message",
-                      linkConfidence: 90,
-                      linkState: "confirmed",
                       deletedAt: null,
                       checkedAt: now,
+                      ...(existing?.jiraKey
+                        ? {}
+                        : {
+                            jiraKey,
+                            linkSource: "commit_message",
+                            linkConfidence: 90,
+                            linkState: "confirmed",
+                          }),
                     },
                     create: {
                       repo,
@@ -435,6 +449,8 @@ export async function syncJiraDevStatusForIssue(
                       checkedAt: now,
                     },
                   });
+                  await upsertBranchLink(row.id, jiraKey, { source: "commit_message", confidence: 90 });
+                  await recomputePrimaryLink(row.id);
                   syncedBranches.push({
                     repo,
                     branch: candidateBranch,

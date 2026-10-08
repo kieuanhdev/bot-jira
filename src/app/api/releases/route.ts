@@ -1,3 +1,4 @@
+import { loadConfirmedBranchRows } from "@/lib/bitbucket/branch-links";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -95,28 +96,7 @@ export async function GET(req: Request) {
     )
   );
 
-  const branches = allJiraKeys.length > 0
-    ? await prisma.branchInfo.findMany({
-        where: {
-          jiraKey: { in: allJiraKeys },
-          deletedAt: null,
-        },
-        select: {
-          jiraKey: true,
-          repo: true,
-          branch: true,
-          linkState: true,
-          prId: true,
-          prTitle: true,
-          prUrl: true,
-          prState: true,
-          prDestinationBranch: true,
-          merged: true,
-          checkedAt: true,
-          deletedAt: true,
-        },
-      })
-    : [];
+  const branches = await loadConfirmedBranchRows(allJiraKeys);
 
   const branchesByKey = new Map<string, BranchDeliveryInfo[]>();
   for (const b of branches) {

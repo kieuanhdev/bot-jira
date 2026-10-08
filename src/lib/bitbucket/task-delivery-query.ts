@@ -1,3 +1,4 @@
+import { confirmedBranchLinkFilter, confirmedBranchLinksInclude } from "./branch-links";
 import { prisma } from "@/lib/prisma";
 import { evaluateBranchAttention, type AttentionSignal } from "./branch-risk";
 import type { Prisma } from "@prisma/client";
@@ -126,12 +127,7 @@ export async function queryDeliveryTasks(
           where: {
             deletedAt: null,
             ...userAliasFilter,
-            branches: {
-              some: {
-                deletedAt: null,
-                linkState: { notIn: ["rejected", "manual_unlinked"] },
-              },
-            },
+            ...confirmedBranchLinkFilter(),
           },
         })
       : Promise.resolve(0),
@@ -301,12 +297,7 @@ export async function queryDeliveryTasks(
   const andIssueConditions: Prisma.IssueCacheWhereInput[] = [
     { deletedAt: null },
     {
-      branches: {
-        some: {
-          deletedAt: null,
-          linkState: { notIn: ["rejected", "manual_unlinked"] },
-        },
-      },
+      ...confirmedBranchLinkFilter(),
     },
   ];
 
@@ -355,41 +346,29 @@ export async function queryDeliveryTasks(
       OR: [
         { jiraKey: { contains: q, mode: "insensitive" } },
         { summary: { contains: q, mode: "insensitive" } },
-        {
-          branches: {
-            some: {
-              deletedAt: null,
-              OR: [
-                { branch: { contains: q, mode: "insensitive" } },
-                { repo: { contains: q, mode: "insensitive" } },
-                { prTitle: { contains: q, mode: "insensitive" } },
-              ],
-            },
-          },
-        },
+        confirmedBranchLinkFilter({
+          OR: [
+            { branch: { contains: q, mode: "insensitive" } },
+            { repo: { contains: q, mode: "insensitive" } },
+            { prTitle: { contains: q, mode: "insensitive" } },
+          ],
+        }),
       ],
     });
   }
 
   if (params.repo && params.repo !== "ALL") {
-    andIssueConditions.push({
-      branches: {
-        some: {
-          deletedAt: null,
-          repo: params.repo,
-        },
-      },
-    });
+    andIssueConditions.push(confirmedBranchLinkFilter({ repo: params.repo }));
   }
 
   if (params.pr && params.pr !== "ALL") {
     if (params.pr === "open") {
       andIssueConditions.push({
-        branches: { some: { deletedAt: null, prState: { in: ["OPEN", "open"] } } },
+        ...confirmedBranchLinkFilter({ prState: { in: ["OPEN", "open"] } }),
       });
     } else if (params.pr === "merged") {
       andIssueConditions.push({
-        branches: { some: { deletedAt: null, OR: [{ prState: { in: ["MERGED", "merged"] } }, { merged: true }] } },
+        ...confirmedBranchLinkFilter({ OR: [{ prState: { in: ["MERGED", "merged"] } }, { merged: true }] }),
       });
     }
   }
@@ -403,15 +382,15 @@ export async function queryDeliveryTasks(
       OR: [
         {
           statusCategory: "done",
-          branches: { some: { deletedAt: null, prState: { in: ["OPEN", "open"] } } },
+          ...confirmedBranchLinkFilter({ prState: { in: ["OPEN", "open"] } }),
         },
         {
           statusCategory: { not: "done" },
-          branches: { some: { deletedAt: null, OR: [{ prState: { in: ["MERGED", "merged"] } }, { merged: true }] } },
+          ...confirmedBranchLinkFilter({ OR: [{ prState: { in: ["MERGED", "merged"] } }, { merged: true }] }),
         },
         {
           statusCategory: "indeterminate",
-          branches: { some: { deletedAt: null, prState: null } },
+          ...confirmedBranchLinkFilter({ prState: null }),
         },
       ],
     });
@@ -426,13 +405,7 @@ export async function queryDeliveryTasks(
       skip: (pageIndex - 1) * pageSize,
       take: pageSize,
       include: {
-        branches: {
-          where: {
-            deletedAt: null,
-            linkState: { notIn: ["rejected", "manual_unlinked"] },
-          },
-          orderBy: { checkedAt: "desc" },
-        },
+        branchLinks: confirmedBranchLinksInclude,
       },
     }),
     prisma.issueCache.count({ where: whereIssue }),
@@ -442,15 +415,15 @@ export async function queryDeliveryTasks(
         OR: [
           {
             statusCategory: "done",
-            branches: { some: { deletedAt: null, prState: { in: ["OPEN", "open"] } } },
+            ...confirmedBranchLinkFilter({ prState: { in: ["OPEN", "open"] } }),
           },
           {
             statusCategory: { not: "done" },
-            branches: { some: { deletedAt: null, OR: [{ prState: { in: ["MERGED", "merged"] } }, { merged: true }] } },
+            ...confirmedBranchLinkFilter({ OR: [{ prState: { in: ["MERGED", "merged"] } }, { merged: true }] }),
           },
           {
             statusCategory: "indeterminate",
-            branches: { some: { deletedAt: null, prState: null } },
+            ...confirmedBranchLinkFilter({ prState: null }),
           },
         ],
       },
@@ -458,7 +431,8 @@ export async function queryDeliveryTasks(
   ]);
 
   const tasks: DeliveryTaskRow[] = issueRows.map((issue) => {
-    const branches: DeliveryBranchSummary[] = issue.branches.map((b) => ({
+    const linkedBranches = issue.branchLinks.map((l) => l.branch);
+    const branches: DeliveryBranchSummary[] = linkedBranches.map((b) => ({
       id: b.id,
       repo: b.repo,
       branch: b.branch,
@@ -472,7 +446,7 @@ export async function queryDeliveryTasks(
       merged: b.merged,
     }));
 
-    const repos = Array.from(new Set(issue.branches.map((b) => b.repo)));
+    const repos = Array.from(new Set(linkedBranches.map((b) => b.repo)));
 
     const prSummary = {
       open: 0,
@@ -485,7 +459,7 @@ export async function queryDeliveryTasks(
     const attentionSignals: AttentionSignal[] = [];
     const nextActionsSet = new Set<string>();
 
-    for (const b of issue.branches) {
+    for (const b of linkedBranches) {
       const state = (b.prState ?? "").toUpperCase();
       if (state === "OPEN") prSummary.open++;
       else if (state === "MERGED" || b.merged) prSummary.merged++;

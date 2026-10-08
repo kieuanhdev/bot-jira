@@ -100,6 +100,7 @@ model IssueCache {
   releaseTasks   ReleaseTask[]
   staleSnapshots StaleSnapshot[]
   branches       BranchInfo[]
+  branchLinks    BranchIssueLink[]
 
   @@index([status])
   @@index([statusId])
@@ -421,6 +422,7 @@ model BranchInfo {
   checkedAt           DateTime  @default(now())
 
   issue               IssueCache? @relation(fields: [jiraKey], references: [jiraKey], onDelete: SetNull)
+  issueLinks          BranchIssueLink[]
 
   @@unique([repo, branch])
   @@index([repo])
@@ -430,6 +432,30 @@ model BranchInfo {
   @@index([deletedAt, checkedAt])
   @@index([prState, merged])
   @@index([suggestedJiraKey])
+}
+
+/// Many-to-many link between a branch and the Jira tasks it delivers.
+/// `BranchInfo.jiraKey` stays as a denormalised "primary" task; this table is
+/// the source of truth for "which branches does task X have".
+model BranchIssueLink {
+  id               String   @id @default(cuid())
+  branchId         String
+  jiraKey          String
+  linkSource       String?  // manual, explicit, branch_name, pr_title, commit_message, jira_dev_status
+  linkConfidence   Int?
+  linkState        String   @default("confirmed") // confirmed, rejected, manual_unlinked
+  linkReason       String?
+  linkReviewedAt   DateTime?
+  linkReviewedById String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  branch BranchInfo @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  issue  IssueCache @relation(fields: [jiraKey], references: [jiraKey], onDelete: Cascade)
+
+  @@unique([branchId, jiraKey])
+  @@index([jiraKey, linkState])
+  @@index([branchId])
 }
 
 enum ImportState {

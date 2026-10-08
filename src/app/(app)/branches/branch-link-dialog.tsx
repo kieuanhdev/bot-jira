@@ -51,6 +51,7 @@ export function BranchLinkDialog({
 }: BranchLinkDialogProps) {
   const [jiraKeyInput, setJiraKeyInput] = useState(branch?.suggestedJiraKey ?? branch?.jiraKey ?? "");
   const [reasonInput, setReasonInput] = useState("");
+  const [replace, setReplace] = useState(false);
   const linkMutation = useBranchLink();
 
   const typed = jiraKeyInput.trim();
@@ -72,12 +73,13 @@ export function BranchLinkDialog({
   const handleSave = (unlink = false) => {
     const jiraKey = jiraKeyInput.trim().toUpperCase();
     const reason = reasonInput.trim() || undefined;
+    const replaceExisting = replace && Boolean(branch.jiraKey) ? true : undefined;
     linkMutation.mutate(
       isBulk
-        ? { branchId: "bulk", body: { action: "link_many", ids: bulkIds!, jiraKey, reason } }
+        ? { branchId: "bulk", body: { action: "link_many", ids: bulkIds!, jiraKey, reason, replace: replaceExisting } }
         : {
             branchId: branch.id,
-            body: unlink ? { jiraKey: null } : { jiraKey: jiraKey || null, reason },
+            body: unlink ? { jiraKey: null } : { jiraKey: jiraKey || null, reason, replace: replaceExisting },
           },
       {
         onSuccess: () => {
@@ -186,6 +188,22 @@ export function BranchLinkDialog({
               disabled={linkMutation.isPending}
             />
           </div>
+
+          {branch.jiraKey && !isBulk && (
+            <label className="flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={replace}
+                onChange={(e) => setReplace(e.target.checked)}
+                disabled={linkMutation.isPending}
+                className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-teal-600"
+              />
+              <span>
+                Thay thế liên kết hiện tại ({branch.jiraKey}). Bỏ chọn để gắn <strong>thêm</strong> task này và giữ{" "}
+                {branch.jiraKey}.
+              </span>
+            </label>
+          )}
         </div>
 
         <DialogFooter className="flex flex-row items-center justify-between sm:justify-between">

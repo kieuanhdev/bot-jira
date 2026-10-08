@@ -5,6 +5,7 @@ import {
   extractJiraKeys,
   isSystemOrReleaseBranch,
 } from "@/lib/bitbucket/branch-linker";
+import { recomputePrimaryLink, upsertBranchLink } from "@/lib/bitbucket/branch-links";
 import { guard } from "../guard";
 import type { WorkerLog } from "../guard";
 
@@ -101,7 +102,7 @@ export async function runCheckBranches(): Promise<WorkerLog> {
           });
         }
 
-        await prisma.branchInfo.upsert({
+        const row = await prisma.branchInfo.upsert({
           where: { repo_branch: { repo, branch: s.branch.name } },
           update: {
             latestCommitSha: s.branch.latestCommit ?? null,
@@ -148,6 +149,29 @@ export async function runCheckBranches(): Promise<WorkerLog> {
             checkedAt: new Date(),
           },
         });
+
+        // A branch may deliver several tasks: link every known key from the
+        // branch name / PR title, plus the resolved primary. Per-pair decisions
+        // (unlinked / rejected) and manual links are respected by upsertBranchLink.
+        if (row.linkState !== "manual_unlinked" && row.linkState !== "rejected") {
+          const wanted = new Map<string, { source: string; confidence: number }>();
+          for (const k of branchKeys) {
+            if (validKeys.has(k)) wanted.set(k, { source: "branch_name", confidence: 95 });
+          }
+          for (const k of prKeys) {
+            if (validKeys.has(k) && !wanted.has(k)) wanted.set(k, { source: "pr_title", confidence: 85 });
+          }
+          if (linkRes.jiraKey && linkRes.linkState === "confirmed" && !wanted.has(linkRes.jiraKey)) {
+            wanted.set(linkRes.jiraKey, {
+              source: linkRes.linkSource ?? "branch_name",
+              confidence: linkRes.linkConfidence ?? 85,
+            });
+          }
+          for (const [key, w] of Array.from(wanted).slice(0, 5)) {
+            await upsertBranchLink(row.id, key, w);
+          }
+          await recomputePrimaryLink(row.id);
+        }
         checked++;
       }
       repoSuccess = true;
