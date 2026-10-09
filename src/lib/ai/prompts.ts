@@ -128,68 +128,10 @@ Respond with ONLY a JSON object (no markdown, no code fences, no extra text) wit
 }
 
 // ---------------------------------------------------------------------------
-// Parsers
+// Parsers (re-exported from response-parser)
 // ---------------------------------------------------------------------------
 
-function extractJsonObject(raw: string): Record<string, unknown> | null {
-  const text = raw.trim().replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  try {
-    const parsed = JSON.parse(text.slice(start, end + 1));
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Parse a possibly-messy LLM reply into a clean AiScoreOutput. Throws when unusable. */
-export function parseAiScore(raw: string): AiScoreOutput {
-  const obj = extractJsonObject(raw);
-  if (!obj) throw new Error("AI did not return valid JSON");
-  const scale = pointScale as number[];
-
-  let points = Number(obj.suggestedPoints ?? obj.points);
-  if (!Number.isFinite(points)) throw new Error("AI returned no valid points");
-  if (!scale.includes(points)) {
-    points = scale.reduce((a, b) =>
-      Math.abs(b - points) < Math.abs(a - points) ? b : a
-    );
-  }
-
-  const rawConfidence = Number(obj.confidence);
-  const confidence = Number.isFinite(rawConfidence)
-    ? Math.min(1, Math.max(0, rawConfidence))
-    : 0.5;
-
-  return {
-    suggestedPoints: points,
-    confidence,
-    reasoning: String(obj.reasoning ?? ""),
-    missingInformation: Array.isArray(obj.missingInformation)
-      ? obj.missingInformation.map(String)
-      : [],
-    risks: Array.isArray(obj.risks) ? obj.risks.map(String) : [],
-    similarTasks: Array.isArray(obj.similarTasks)
-      ? obj.similarTasks.map(String).filter(Boolean)
-      : [],
-  };
-}
-
-export function parseReleaseCheck(raw: string, keys: string[]): AiReleaseCheckOutput {
-  const obj = extractJsonObject(raw);
-  if (!obj) return { ready: true, blockers: [] };
-  const rawBlockers = Array.isArray(obj.blockers) ? obj.blockers : [];
-  const keySet = new Set(keys);
-  const blockers = (rawBlockers as { jiraKey?: string; reason?: string }[])
-    .filter((b) => b && keySet.has(b.jiraKey ?? ""))
-    .map((b) => ({ jiraKey: b.jiraKey!, reason: String(b.reason ?? "") }));
-  return {
-    ready: obj.ready === false ? false : blockers.length === 0,
-    blockers,
-  };
-}
+export { extractJsonObject, parseAiScore, parseReleaseCheck } from "./response-parser";
 
 export function buildReleaseCheckPrompt(
   release: { version: string },

@@ -6,8 +6,11 @@ import {
   parseAiScore,
   parseReleaseCheck,
   withJsonRetry,
+  extractOllamaContent,
   AiUnavailableError,
+  AiProviderError,
   type AiScoreInput,
+  type AiReleaseCheckOutput,
 } from "./provider";
 
 /**
@@ -19,25 +22,59 @@ import {
 export class OllamaProvider implements LLMProvider {
   readonly name = `ollama:${env.ollamaModel}`;
 
-  private async generate(prompt: string): Promise<string> {
-    if (!hasOllamaConfig()) throw new Error("Ollama not configured");
-    const res = await fetch(`${env.ollamaBaseUrl.replace(/\/$/, "")}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: env.ollamaModel,
-        prompt,
-        stream: false,
-        options: { temperature: 0.2, num_predict: 512 },
-      }),
-    });
+  async generate(prompt: string, timeoutMs = 30_000): Promise<string> {
+    if (!hasOllamaConfig()) {
+      throw new AiProviderError("Ollama not configured", {
+        provider: this.name,
+        retryable: false,
+      });
+    }
+
+    const url = `${env.ollamaBaseUrl.replace(/\/$/, "")}/api/generate`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: env.ollamaModel,
+          prompt,
+          stream: false,
+          options: { temperature: 0.2, num_predict: 512 },
+        }),
+      });
+    } catch (err) {
+      const rawMsg = err instanceof Error ? err.message : String(err);
+      throw new AiProviderError(`Ollama request failed: ${rawMsg}`, {
+        provider: this.name,
+        retryable: true,
+        cause: err,
+      });
+    }
+
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new Error(`Ollama ${res.status}: ${text.slice(0, 200)}`);
+      const isRetryable = res.status === 429 || (res.status >= 500 && res.status < 600);
+      throw new AiProviderError(`Ollama ${res.status}: ${text.slice(0, 200)}`, {
+        provider: this.name,
+        status: res.status,
+        retryable: isRetryable,
+      });
     }
-    const data = (await res.json()) as { response?: string };
-    if (!data.response) throw new Error("Ollama returned empty response");
-    return data.response;
+
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch (err) {
+      throw new AiProviderError("Ollama returned invalid JSON", {
+        provider: this.name,
+        retryable: true,
+        cause: err,
+      });
+    }
+
+    return extractOllamaContent(data);
   }
 
   async estimate(input: AiScoreInput) {
@@ -48,9 +85,8 @@ export class OllamaProvider implements LLMProvider {
         3
       );
     } catch (e) {
-      throw new AiUnavailableError(
-        e instanceof Error ? e.message : "AI estimate failed"
-      );
+      const rawMsg = e instanceof Error ? e.message : "AI estimate failed";
+      throw new AiUnavailableError(rawMsg, { provider: this.name, cause: e });
     }
   }
 
@@ -63,7 +99,7 @@ export class OllamaProvider implements LLMProvider {
       priority?: string;
       status?: string;
     }[]
-  ) {
+  ): Promise<AiReleaseCheckOutput> {
     const keys = tasks.map((t) => t.jiraKey);
     return withJsonRetry(
       () => this.generate(buildReleaseCheckPrompt(release, tasks)),

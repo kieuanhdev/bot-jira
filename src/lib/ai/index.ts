@@ -23,4 +23,10 @@ export function createProvider(): LLMProvider {
 export const aiProvider: LLMProvider = createProvider();
 
 export type { LLMProvider } from "./provider";
-export { AI_PROMPT_VERSION } from "./prompts";
+export {
+  AI_PROMPT_VERSION,
+  AiUnavailableError,
+  AiProviderError,
+  isAiUnavailable,
+  sanitizeAiErrorMessage,
+} from "./provider";

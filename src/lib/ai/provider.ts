@@ -2,23 +2,43 @@ import { pointScale } from "@/lib/env";
 import {
   buildScorePrompt,
   buildReleaseCheckPrompt,
-  parseAiScore,
-  parseReleaseCheck,
   AI_PROMPT_VERSION,
   type AiScoreInput,
   type AiScoreOutput,
   type AiReleaseCheckOutput,
 } from "./prompts";
+import {
+  AiUnavailableError,
+  AiProviderError,
+  isAiUnavailable,
+} from "./errors";
+import { sanitizeAiErrorMessage } from "./sanitizer";
+import {
+  extractOpenAiContent,
+  extractOllamaContent,
+  extractJsonObject,
+  parseAiScore,
+  parseReleaseCheck,
+  withJsonRetry,
+} from "./response-parser";
 
 export type { AiScoreInput, AiScoreOutput, AiReleaseCheckOutput } from "./prompts";
-export { AI_PROMPT_VERSION };
-
-export class AiUnavailableError extends Error {
-  constructor(message = "AI estimate unavailable") {
-    super(message);
-    this.name = "AiUnavailableError";
-  }
-}
+export {
+  AI_PROMPT_VERSION,
+  AiUnavailableError,
+  AiProviderError,
+  isAiUnavailable,
+  sanitizeAiErrorMessage,
+  extractOpenAiContent,
+  extractOllamaContent,
+  extractJsonObject,
+  parseAiScore,
+  parseReleaseCheck,
+  withJsonRetry,
+  buildScorePrompt,
+  buildReleaseCheckPrompt,
+  pointScale,
+};
 
 export interface LLMProvider {
   readonly name: string;
@@ -45,23 +65,3 @@ export interface LLMProvider {
     }[]
   ): Promise<AiReleaseCheckOutput>;
 }
-
-/** Shared retry/parse helper used by concrete providers. */
-export async function withJsonRetry<T>(
-  fn: () => Promise<string>,
-  parse: (raw: string) => T,
-  attempts = 3
-): Promise<T> {
-  let lastErr: unknown = null;
-  for (let i = 0; i < attempts; i++) {
-    try {
-      const raw = await fn();
-      return parse(raw);
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw lastErr ?? new Error("AI call failed");
-}
-
-export { buildScorePrompt, buildReleaseCheckPrompt, parseAiScore, parseReleaseCheck, pointScale };

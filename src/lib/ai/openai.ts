@@ -6,8 +6,11 @@ import {
   parseAiScore,
   parseReleaseCheck,
   withJsonRetry,
+  extractOpenAiContent,
   AiUnavailableError,
+  AiProviderError,
   type AiScoreInput,
+  type AiReleaseCheckOutput,
 } from "./provider";
 
 /**
@@ -22,34 +25,63 @@ import {
 export class OpenAIProvider implements LLMProvider {
   readonly name = `openai:${env.openaiModel}`;
 
-  private async generate(prompt: string, timeoutMs = 25_000): Promise<string> {
-    if (!hasOpenAiConfig()) throw new Error("OpenAI not configured");
+  async generate(prompt: string, timeoutMs = 25_000): Promise<string> {
+    if (!hasOpenAiConfig()) {
+      throw new AiProviderError("OpenAI not configured", {
+        provider: this.name,
+        retryable: false,
+      });
+    }
+
     const url = `${env.openaiBaseUrl.replace(/\/$/, "")}/chat/completions`;
-    const res = await fetch(url, {
-      method: "POST",
-      signal: AbortSignal.timeout(timeoutMs),
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.openaiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: env.openaiModel,
-        stream: false,
-        temperature: 0.2,
-        max_tokens: 1536,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${env.openaiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: env.openaiModel,
+          stream: false,
+          temperature: 0.2,
+          max_tokens: 1536,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+    } catch (err) {
+      const rawMsg = err instanceof Error ? err.message : String(err);
+      throw new AiProviderError(`OpenAI request failed: ${rawMsg}`, {
+        provider: this.name,
+        retryable: true,
+        cause: err,
+      });
+    }
+
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new Error(`OpenAI ${res.status}: ${text.slice(0, 200)}`);
+      const isRetryable = res.status === 429 || (res.status >= 500 && res.status < 600);
+      throw new AiProviderError(`OpenAI ${res.status}: ${text.slice(0, 200)}`, {
+        provider: this.name,
+        status: res.status,
+        retryable: isRetryable,
+      });
     }
-    const data = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error("OpenAI returned empty response");
-    return content;
+
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch (err) {
+      throw new AiProviderError("OpenAI returned invalid JSON", {
+        provider: this.name,
+        retryable: true,
+        cause: err,
+      });
+    }
+
+    return extractOpenAiContent(data);
   }
 
   async estimate(input: AiScoreInput) {
@@ -61,9 +93,8 @@ export class OpenAIProvider implements LLMProvider {
         2
       );
     } catch (e) {
-      throw new AiUnavailableError(
-        e instanceof Error ? e.message : "AI estimate failed"
-      );
+      const rawMsg = e instanceof Error ? e.message : "AI estimate failed";
+      throw new AiUnavailableError(rawMsg, { provider: this.name, cause: e });
     }
   }
 
@@ -76,7 +107,7 @@ export class OpenAIProvider implements LLMProvider {
       priority?: string;
       status?: string;
     }[]
-  ) {
+  ): Promise<AiReleaseCheckOutput> {
     const keys = tasks.map((t) => t.jiraKey);
     return withJsonRetry(
       () => this.generate(buildReleaseCheckPrompt(release, tasks)),

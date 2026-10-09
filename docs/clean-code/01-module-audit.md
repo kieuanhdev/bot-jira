@@ -304,9 +304,9 @@ bulk/
 
 **Checklist**
 
-- [ ] Tách shared LLM response parsing nếu thực sự trùng semantics.
-- [ ] Giữ provider-specific transport riêng.
-- [ ] Test malformed/empty/unavailable AI response.
+- [x] Tách shared LLM response parsing nếu thực sự trùng semantics. (Batch 7.3)
+- [x] Giữ provider-specific transport riêng. (Batch 7.3)
+- [x] Test malformed/empty/unavailable AI response. (Batch 7.3)
 - [ ] Giữ Sentry external ID idempotency.
 - [ ] Không refactor Worklogs nếu không có pain point mới.
 
