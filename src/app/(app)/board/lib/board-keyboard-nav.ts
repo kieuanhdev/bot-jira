@@ -12,6 +12,29 @@ interface BoardKeyboardNavOptions {
   onOpenQuickPanel: (issue: IssueItem) => void;
 }
 
+export type BoardNavigationKey = "ArrowRight" | "ArrowLeft" | "ArrowDown" | "ArrowUp" | "Home" | "End";
+
+export function nextBoardFocusKey(
+  focusOrder: string[],
+  focusKey: string | null,
+  key: BoardNavigationKey
+): string | null {
+  if (focusOrder.length === 0) return null;
+  const index = focusKey ? focusOrder.indexOf(focusKey) : -1;
+  if (key === "Home") return focusOrder[0];
+  if (key === "End") return focusOrder[focusOrder.length - 1];
+  if (index === -1) {
+    return key === "ArrowLeft" || key === "ArrowUp"
+      ? focusOrder[focusOrder.length - 1]
+      : focusOrder[0];
+  }
+  const nextIndex =
+    key === "ArrowRight" || key === "ArrowDown"
+      ? Math.min(focusOrder.length - 1, index + 1)
+      : Math.max(0, index - 1);
+  return focusOrder[nextIndex];
+}
+
 /**
  * Handles arrow keys, Home/End, and Enter navigation across cards on the Kanban board.
  */
@@ -38,7 +61,6 @@ export function useBoardKeyboardNav({
       if (!keys.includes(e.key) && e.key !== "Enter" && e.key !== "Home" && e.key !== "End") return;
 
       const idx = focusKey ? focusOrder.indexOf(focusKey) : -1;
-      let next = idx;
       if (e.key === "Enter") {
         if (idx === -1) return;
         const issue = issues.find((i) => i.jiraKey === focusOrder[idx]);
@@ -49,17 +71,8 @@ export function useBoardKeyboardNav({
         return;
       }
       e.preventDefault();
-      if (idx === -1) {
-        next = e.key === "ArrowLeft" || e.key === "ArrowUp" ? focusOrder.length - 1 : 0;
-      } else {
-        next =
-          e.key === "ArrowRight" || e.key === "ArrowDown"
-            ? Math.min(focusOrder.length - 1, idx + 1)
-            : Math.max(0, idx - 1);
-        if (e.key === "Home") next = 0;
-        if (e.key === "End") next = focusOrder.length - 1;
-      }
-      const key = focusOrder[next];
+      const key = nextBoardFocusKey(focusOrder, focusKey, e.key as BoardNavigationKey);
+      if (!key) return;
       setFocusKey(key);
       const node = cardRefs.current.get(key);
       if (node) {

@@ -12,25 +12,16 @@ import {
 } from "@/hooks/use-issues";
 import { issuesKeys, boardKeys, meKeys } from "@/lib/query-keys";
 import {
-  type IssueFilters,
   DEFAULT_BOARD_FILTERS,
-  effectiveAssignees,
   countActiveIssueFilters,
-  parseIssueFilters,
-  serializeIssueFilters,
 } from "@/lib/issues/issue-filters";
 import { IssueFilterBar } from "@/components/issues/issue-filter-bar";
 import {
-  loadStoredFilters,
   loadStoredProject,
   loadStoredSortMode,
   loadStoredViewMode,
-  saveStoredFilters,
-  saveStoredProject,
   saveStoredSortMode,
   saveStoredViewMode,
-  loadStoredTeamMode,
-  saveStoredTeamMode,
 } from "./lib/board-storage";
 import { Search } from "lucide-react";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -73,16 +64,17 @@ import {
 import {
   useBoardWidth,
   useColumnPreferences,
-  useJiraSync,
   useTransitionCache,
 } from "./lib/board-hooks";
+import { useJiraSync } from "./lib/use-jira-sync";
+import { useBoardFilterController } from "./lib/board-filter-controller";
+import { applyOptimisticStatus, useBoardOptimisticStatus } from "./lib/use-board-optimistic";
 
 export function BoardClient() {
   const qc = useQueryClient();
   const router = useRouter();
   const boardScrollRef = useRef<HTMLDivElement | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [quickFilter, setQuickFilter] = useState<"" | "overdue" | "unassigned" | "unestimated" | "stale" | "missingApprover" | "missingTester">("");
 
   useEffect(() => {
     if (!toast) return;
@@ -121,10 +113,6 @@ export function BoardClient() {
 
   const searchParams = useSearchParams();
   const urlProject = searchParams?.get("project")?.trim().toUpperCase() || "";
-  const hasFilterParamsInUrl = Boolean(
-    searchParams &&
-      Array.from(searchParams.keys()).some((k) => k !== "project")
-  );
 
   const [project, setProject] = useState<string>(() => {
     if (urlProject) return urlProject;
@@ -192,24 +180,6 @@ export function BoardClient() {
     });
   }
 
-  function handleSelectProject(nextKey: string) {
-    if (nextKey === selectedProject) return;
-    if (selectedProject) {
-      saveStoredFilters(selectedProject, filters);
-    }
-    setProject(nextKey);
-    saveStoredProject(nextKey);
-    const saved = loadStoredFilters(nextKey, myName);
-    if (saved) {
-      setFilters(saved);
-    } else {
-      setFilters({
-        ...DEFAULT_BOARD_FILTERS,
-        project: nextKey,
-      });
-    }
-  }
-
   // Warm the per-project caches on hover so the switch doesn't wait on three cold requests.
   function handlePrefetchProject(key: string) {
     void qc.prefetchQuery({
@@ -267,119 +237,33 @@ export function BoardClient() {
   const [view, setView] = useState<ViewMode>(() => {
     return loadStoredViewMode() ?? "board";
   });
-  const [teamModeState, setTeamModeState] = useState<{ project: string; enabled: boolean }>({ project: "", enabled: false });
-  const [filters, setFilters] = useState<IssueFilters>(() => {
-    if (searchParams && hasFilterParamsInUrl) {
-      return parseIssueFilters(searchParams, DEFAULT_BOARD_FILTERS, myName);
-    }
-    const initialPrj = urlProject || loadStoredProject() || "";
-    if (initialPrj) {
-      const saved = loadStoredFilters(initialPrj, myName);
-      if (saved) return saved;
-    }
-    return DEFAULT_BOARD_FILTERS;
+  const replaceBoardUrl = useCallback(
+    (url: string) => router.replace(url, { scroll: false }),
+    [router]
+  );
+  const filterController = useBoardFilterController({
+    searchParams,
+    selectedProject,
+    myName,
+    canUseTeamMode,
+    replaceUrl: replaceBoardUrl,
   });
+  const {
+    filters,
+    setFilters,
+    quickFilter,
+    setQuickFilter,
+    boardFilters,
+    filterSignature: filterSig,
+    teamMode,
+    changeTeamMode,
+  } = filterController;
 
-  // When selectedProject changes, ensure it is saved in storage
-  useEffect(() => {
-    if (selectedProject) {
-      saveStoredProject(selectedProject);
-    }
-  }, [selectedProject]);
-
-  const teamMode = canUseTeamMode && (teamModeState.project === selectedProject
-    ? teamModeState.enabled
-    : loadStoredTeamMode(selectedProject));
-
-  function changeTeamMode(enabled: boolean) {
-    const next = canUseTeamMode && enabled;
-    setTeamModeState({ project: selectedProject, enabled: next });
-    saveStoredTeamMode(selectedProject, next);
-    setFilters((current) => ({
-      ...current,
-      assigneeScope: next
-        ? { mode: "all", roster: [], view: "all-selected" }
-        : { mode: "roster", roster: ["me"], view: "all-selected" },
-    }));
+  function handleSelectProject(nextKey: string) {
+    if (nextKey === selectedProject) return;
+    filterController.selectProject(nextKey, selectedProject);
+    setProject(nextKey);
   }
-
-  // Team mode restored from storage must also widen the assignee scope once per
-  // project, otherwise a stored "me" filter keeps showing only the leader's tasks.
-  const teamScopeAppliedRef = useRef("");
-  useEffect(() => {
-    if (!teamMode || !selectedProject || teamScopeAppliedRef.current === selectedProject) return;
-    teamScopeAppliedRef.current = selectedProject;
-    setFilters((current) => {
-      const { mode, roster } = current.assigneeScope;
-      const onlyMe = mode === "roster" && roster.length === 1 && roster[0] === "me";
-      return onlyMe
-        ? { ...current, assigneeScope: { mode: "all", roster: [], view: "all-selected" } }
-        : current;
-    });
-  }, [teamMode, selectedProject]);
-
-  // Initial sync when selectedProject resolves after async preferences load
-  const initialSyncDoneRef = useRef(false);
-  useEffect(() => {
-    if (!initialSyncDoneRef.current && selectedProject && !hasFilterParamsInUrl) {
-      initialSyncDoneRef.current = true;
-      const saved = loadStoredFilters(selectedProject, myName);
-      if (saved) {
-        setFilters(saved);
-      }
-    }
-  }, [selectedProject, myName, hasFilterParamsInUrl]);
-
-  // Re-sync with myName if loaded subsequently
-  const myNameSyncedRef = useRef(false);
-  useEffect(() => {
-    if (myName && !myNameSyncedRef.current) {
-      myNameSyncedRef.current = true;
-      setFilters((prev) => {
-        if (hasFilterParamsInUrl && searchParams) {
-          return parseIssueFilters(searchParams, prev, myName);
-        }
-        if (selectedProject) {
-          const saved = loadStoredFilters(selectedProject, myName);
-          if (saved) return saved;
-        }
-        return prev;
-      });
-    }
-  }, [myName, searchParams, hasFilterParamsInUrl, selectedProject]);
-
-  // Save filters to localStorage whenever filters or selectedProject change
-  useEffect(() => {
-    if (selectedProject) {
-      saveStoredFilters(selectedProject, filters);
-    }
-  }, [filters, selectedProject]);
-
-  // Sync URL when filters change (debounced for search text)
-  const isInitialMount = useRef(true);
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-    const timer = setTimeout(() => {
-      const filtersWithProject: IssueFilters = {
-        ...filters,
-        project: selectedProject,
-      };
-      const sp = serializeIssueFilters(filtersWithProject, DEFAULT_BOARD_FILTERS);
-      if (selectedProject) {
-        sp.set("project", selectedProject);
-      }
-      const qs = sp.toString();
-      const currentUrl = window.location.pathname + (window.location.search || "");
-      const targetUrl = window.location.pathname + (qs ? `?${qs}` : "");
-      if (currentUrl !== targetUrl) {
-        router.replace(targetUrl, { scroll: false });
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [filters, selectedProject, router]);
 
   const [sortMode, setSortMode] = useState<SortMode>(() => {
     return loadStoredSortMode() ?? "updated";
@@ -409,36 +293,6 @@ export function BoardClient() {
   const width = useBoardWidth();
   const effectiveView: ViewMode = width === "narrow" ? "list" : view;
 
-  // Debounce free-text search so each keystroke doesn't fire a 1000-row query.
-  const [debouncedQuery, setDebouncedQuery] = useState(filters.query);
-  useEffect(() => {
-    if (filters.query === debouncedQuery) return;
-    const t = setTimeout(() => setDebouncedQuery(filters.query), 300);
-    return () => clearTimeout(t);
-  }, [filters.query, debouncedQuery]);
-
-  const activeAssignees = effectiveAssignees(filters.assigneeScope);
-  const isAssigneeAll = activeAssignees === "ALL";
-  const boardFilters: import("@/hooks/use-issues").BoardFilters = {
-    ...(selectedProject ? { project: selectedProject } : {}),
-    q: debouncedQuery || undefined,
-    label: filters.labels.length > 0 ? filters.labels : undefined,
-    priority: filters.priorities.length > 0 ? filters.priorities : undefined,
-    status: filters.statuses.length > 0 ? filters.statuses : undefined,
-    epic: filters.epics.length > 0 ? filters.epics : undefined,
-    reporter: filters.reporters.length > 0 ? filters.reporters : undefined,
-    approver: quickFilter === "missingApprover" ? "unassigned" : filters.approvers.length > 0 ? filters.approvers : undefined,
-    tester: quickFilter === "missingTester" ? "unassigned" : filters.testers.length > 0 ? filters.testers : undefined,
-    role: filters.roles.length > 0 ? filters.roles : undefined,
-    type: filters.types.length > 0 ? filters.types : undefined,
-    fixVersion: filters.fixVersions.length > 0 ? filters.fixVersions : undefined,
-    overdue: filters.overdue || quickFilter === "overdue" || undefined,
-    unestimated: quickFilter === "unestimated" || undefined,
-    staleDays: quickFilter === "stale" ? 7 : undefined,
-    assignee: quickFilter === "unassigned" ? "unassigned" : isAssigneeAll || filters.roles.length > 0 ? "ALL" : activeAssignees,
-    includeDone: true,
-    limit: 1000,
-  };
   const { data, isLoading, isFetching } = useIssues(boardFilters, {
     enabled: boardQueriesEnabled,
   });
@@ -446,23 +300,6 @@ export function BoardClient() {
   const issueData: IssueSuccessResponse | null =
     data && "items" in data ? (data as IssueSuccessResponse) : null;
 
-  const filterSig = JSON.stringify({
-    p: selectedProject,
-    q: debouncedQuery,
-    label: [...filters.labels].sort(),
-    priority: [...filters.priorities].sort(),
-    status: [...filters.statuses].sort(),
-    epic: [...filters.epics].sort(),
-    reporter: [...filters.reporters].sort(),
-    approver: [...filters.approvers].sort(),
-    tester: [...filters.testers].sort(),
-    role: [...filters.roles].sort(),
-    type: [...filters.types].sort(),
-    fixVersion: [...filters.fixVersions].sort(),
-    overdue: filters.overdue,
-    quickFilter,
-    assignee: isAssigneeAll ? "ALL" : [...activeAssignees].sort(),
-  });
   const {
     items: extraIssues,
     hasMore,
@@ -569,24 +406,13 @@ export function BoardClient() {
     [statusesData, statusCategoryMap, issues]
   );
 
-  const [optimistic, setOptimistic] = useState<Map<string, string>>(new Map());
-
-  function setOptimisticStatus(key: string, status: string | null) {
-    setOptimistic((prev) => {
-      const next = new Map(prev);
-      if (status === null) next.delete(key);
-      else next.set(key, status);
-      return next;
-    });
-  }
+  const { optimistic, setOptimisticStatus } = useBoardOptimisticStatus();
 
   const columnKeyByStatusId = useMemo(() => indexColumnsByStatusId(columns), [columns]);
   const columnKeyByStatus = useMemo(() => indexColumnsByStatus(columns), [columns]);
 
   function findColumnForIssue(issue: IssueItem): string {
-    const effective = optimistic.has(issue.jiraKey)
-      ? ({ ...issue, status: optimistic.get(issue.jiraKey)! } as IssueItem)
-      : issue;
+    const effective = applyOptimisticStatus(issue, optimistic);
     return columnKeyForIssue(
       effective,
       columnKeyByStatus,

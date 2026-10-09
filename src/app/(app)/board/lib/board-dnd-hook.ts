@@ -15,6 +15,7 @@ import type { BoardColumn } from "./board-columns";
 import { allowedColumnKeys } from "./board-columns";
 import type { Transition } from "./board-types";
 import { useDragAutoScroll } from "./board-hooks";
+import { equalStringSets, issueKeyFromDragId, resolveBoardDrop } from "./board-dnd-model";
 
 interface BoardDnDOptions {
   boardScrollRef: React.RefObject<HTMLDivElement | null>;
@@ -69,7 +70,7 @@ export function useBoardDnD({
 
   function onDragOver(event: DragOverEvent) {
     const activeId = String(event.active.id);
-    const activeKey = activeId.replace(/^card:/, "");
+    const activeKey = issueKeyFromDragId(activeId);
     const source = issueByKey.get(activeKey);
     if (!source) {
       setAllowedCols(null);
@@ -79,24 +80,20 @@ export function useBoardDnD({
     if (!all) return; // still loading; onDragStart sets allowedCols when it resolves
     const currentCol = findColumnForIssue(source);
     const next = allowedColumnKeys(columns, statusCategoryMap, currentCol, all);
-    setAllowedCols((prev) =>
-      prev && prev.size === next.size && [...next].every((k) => prev.has(k)) ? prev : next
-    );
+    setAllowedCols((previous) => (equalStringSets(previous, next) ? previous : next));
   }
 
   function onDragEnd(event: DragEndEvent) {
     activeDragKeyRef.current = null;
     setAllowedCols(null);
     setActiveDrag(null);
-    const { active, over } = event;
-    if (!over) return;
-    const key = String(active.id);
-    const targetColumn = String(over.id);
-    const source = issueByKey.get(key);
-    if (!source) return;
-    const currentCol = findColumnForIssue(source);
-    if (currentCol === targetColumn) return;
-    onTransition(key, targetColumn);
+    const drop = resolveBoardDrop({
+      activeId: String(event.active.id),
+      overId: event.over ? String(event.over.id) : null,
+      issueByKey,
+      findColumnForIssue,
+    });
+    if (drop) onTransition(drop.key, drop.targetColumn);
   }
 
   function onDragCancel() {
@@ -107,7 +104,7 @@ export function useBoardDnD({
 
   function collisionDetection(args: Parameters<CollisionDetection>[0]): ReturnType<CollisionDetection> {
     const ranked = closestCorners(args);
-    const activeKey = String(args.active.id).replace(/^card:/, "");
+    const activeKey = issueKeyFromDragId(String(args.active.id));
     const source = issueByKey.get(activeKey);
     if (!source) return [];
     const currentCol = findColumnForIssue(source);

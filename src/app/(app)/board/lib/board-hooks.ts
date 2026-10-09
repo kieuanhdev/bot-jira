@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import type { IssueItem } from "@/hooks/use-issues";
-import { issuesTouchingProjects, boardKeys, freshnessKeys } from "@/lib/query-keys";
 import type { BoardWidth } from "@/lib/status-groups";
 import type { BoardColumn } from "./board-columns";
 import { loadStoredColumnPreferences, saveStoredColumnPreferences } from "./board-storage";
-import type { BoardSyncState, Transition } from "./board-types";
-import { useActiveSync } from "@/hooks/use-active-sync";
+import type { Transition } from "./board-types";
 
 /** Viewport bucket used to pick the default view (narrow screens fall back to the list). */
 export function useBoardWidth(): BoardWidth {
@@ -48,144 +45,6 @@ export function useDragAutoScroll(
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [boardScrollRef, activeDrag, dragOverCol]);
-}
-
-/** Queue a Jira sync for the selected project and poll its status until it settles. */
-export function useJiraSync(selectedProject: string, setToast: (message: string | null) => void) {
-  const qc = useQueryClient();
-  const { isTargetSyncing } = useActiveSync(selectedProject);
-  const [boardSync, setBoardSync] = useState<{
-    projectKey: string;
-    state: BoardSyncState;
-    acceptedAt?: string;
-    pollStartMs?: number;
-  }>({
-    projectKey: "",
-    state: "idle",
-  });
-
-  const effectiveBoardSync = useMemo(() => {
-    if (boardSync.state !== "idle") return boardSync;
-    if (isTargetSyncing && selectedProject) {
-      return {
-        projectKey: selectedProject,
-        state: "running" as BoardSyncState,
-      };
-    }
-    return boardSync;
-  }, [boardSync, isTargetSyncing, selectedProject]);
-
-  const isCurrentProjectSyncing =
-    (effectiveBoardSync.projectKey === selectedProject &&
-      (effectiveBoardSync.state === "enqueueing" ||
-        effectiveBoardSync.state === "queued" ||
-        effectiveBoardSync.state === "running")) ||
-    isTargetSyncing;
-
-  useEffect(() => {
-    if (boardSync.state !== "queued" && boardSync.state !== "running") return;
-    const { projectKey, acceptedAt, pollStartMs = Date.now() } = boardSync;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let cancelled = false;
-
-    async function checkStatus() {
-      const elapsed = Date.now() - pollStartMs;
-      if (elapsed > 60_000) {
-        if (!cancelled) {
-          setToast("Chưa nhận được trạng thái đồng bộ. Hãy kiểm tra worker hoặc thử lại.");
-          setBoardSync({ projectKey: "", state: "idle" });
-        }
-        return;
-      }
-
-      try {
-        const queryParams = new URLSearchParams({ projectKey });
-        if (acceptedAt) queryParams.set("since", acceptedAt);
-        const res = await api<{
-          projectKey: string;
-          state: "queued" | "running" | "succeeded" | "failed" | "unknown";
-          lastError: string | null;
-        }>(`/api/sync/jira/status?${queryParams.toString()}`);
-
-        if (cancelled) return;
-
-        if (res.state === "succeeded") {
-          void qc.invalidateQueries({ predicate: issuesTouchingProjects([projectKey]) });
-          void qc.invalidateQueries({ queryKey: boardKeys.projects });
-          void qc.invalidateQueries({ queryKey: freshnessKeys.all });
-          setToast(`Đã đồng bộ ${projectKey}.`);
-          setBoardSync({ projectKey, state: "succeeded" });
-          setTimeout(() => {
-            if (!cancelled) setBoardSync({ projectKey: "", state: "idle" });
-          }, 2000);
-          return;
-        }
-
-        if (res.state === "failed") {
-          const shortErr = res.lastError ? res.lastError.slice(0, 100) : "Lỗi đồng bộ";
-          setToast(`Không thể đồng bộ ${projectKey}: ${shortErr}`);
-          setBoardSync({ projectKey, state: "failed" });
-          setTimeout(() => {
-            if (!cancelled) setBoardSync({ projectKey: "", state: "idle" });
-          }, 3500);
-          return;
-        }
-
-        if (res.state === "running" && boardSync.state !== "running") {
-          setBoardSync((prev) => (prev.projectKey === projectKey ? { ...prev, state: "running" } : prev));
-        }
-
-        const nextDelay = elapsed < 15_000 ? 1000 : 2500;
-        timer = setTimeout(checkStatus, nextDelay);
-      } catch {
-        if (!cancelled) {
-          timer = setTimeout(checkStatus, 2500);
-        }
-      }
-    }
-
-    timer = setTimeout(checkStatus, 800);
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [boardSync, qc, setToast]);
-
-  const syncJira = async () => {
-    if (!selectedProject || isCurrentProjectSyncing) return;
-    const targetProject = selectedProject;
-    setBoardSync({ projectKey: targetProject, state: "enqueueing" });
-    setToast(`Đang gửi yêu cầu đồng bộ ${targetProject}…`);
-
-    try {
-      const res = await api<{
-        state: "queued" | "already_running";
-        acceptedAt: string;
-      }>("/api/sync/jira", {
-        method: "POST",
-        body: { projectKey: targetProject },
-      });
-
-      if (res.state === "already_running") {
-        setToast(`${targetProject} đang được đồng bộ. Dữ liệu sẽ tự cập nhật khi hoàn tất.`);
-      } else {
-        setToast(`${targetProject} đang chờ đồng bộ.`);
-      }
-
-      setBoardSync({
-        projectKey: targetProject,
-        state: "queued",
-        acceptedAt: res.acceptedAt || new Date().toISOString(),
-        pollStartMs: Date.now(),
-      });
-    } catch (error) {
-      setToast(`Không thể đồng bộ ${targetProject}: ${(error as Error).message.slice(0, 100)}`);
-      setBoardSync({ projectKey: "", state: "idle" });
-    }
-  };
-
-  return { boardSync: effectiveBoardSync, isCurrentProjectSyncing, syncJira };
 }
 
 /** Per-issue Jira transitions: cached and de-duplicated, fetched lazily (drag start / action), never in bulk. */
