@@ -3,6 +3,9 @@ import { env } from "@/lib/env";
 import type { NotifyType } from "./index";
 import { deliverToChat } from "./chat-delivery";
 
+export * from "./delivery-contract";
+export * from "./delivery-adapters";
+
 /**
  * Reliable notification delivery via web-first model and outbox for Web Push.
  *
@@ -151,7 +154,7 @@ export async function deliverNotification(
     link: data.link,
     eventId: eventKey,
     scheduledAt: data.scheduledAt,
-  });
+  }).catch(() => ({ delivered: false as const }));
 
   if (!pushOptedIn) {
     if (chatDelivery.delivered) await wakeDeliveryWorker(data.scheduledAt);

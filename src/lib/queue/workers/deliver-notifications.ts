@@ -2,7 +2,10 @@ import { prisma } from "@/lib/prisma";
 import { sendPush } from "@/lib/notify/push";
 import { backoffMs } from "@/lib/notify/outbox";
 import { sendChatOutbox } from "@/lib/notify/chat-delivery";
-import { DiscordDeliveryError } from "@/lib/chat/discord";
+import {
+  getDeliveryAdapter,
+  computeOutboxTransition,
+} from "@/lib/notify";
 import { env } from "../guard";
 import type { WorkerLog } from "../guard";
 
@@ -11,11 +14,10 @@ const BATCH_SIZE = 100;
 /**
  * M5-04 — Notification outbox delivery.
  *
- * Claims pending/scheduled outbox rows, attempts the push, and updates the
- * delivery state. Failed rows are retried with exponential backoff until
- * `NOTIFY_MAX_ATTEMPTS`, after which they are marked `failed`. Rows whose
- * user no longer has a push subscription are marked `sent` with no delivery
- * (the in-app Notification row is the source of truth and stays).
+ * Claims pending/scheduled outbox rows, attempts delivery via standardized channel
+ * adapters (push, discord), and updates delivery state via pure transition logic.
+ * Failed rows are retried with exponential backoff until `NOTIFY_MAX_ATTEMPTS`,
+ * after which they are marked `failed`.
  */
 export async function runDeliverNotifications(): Promise<WorkerLog> {
   const now = new Date();
@@ -34,11 +36,6 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
   let skipped = 0;
   const errors: string[] = [];
   let nextRetry: Date | undefined;
-  const retryAt = (attempts: number, delay?: number) => {
-    const at = new Date(Date.now() + (delay ?? backoffMs(attempts - 1)));
-    if (!nextRetry || at < nextRetry) nextRetry = at;
-    return at;
-  };
 
   for (const row of due) {
     // A short lease prevents concurrent workers sending the same row. If a
@@ -52,103 +49,57 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
       data: { scheduledAt: new Date(Date.now() + 120_000) },
     });
     if (claimed.count === 0) continue;
-    // Resolve Discord from this outbox row's user. "chat" remains supported
-    // only so rows queued before the migration are safely drained.
-    if (row.channel === "discord" || row.channel === "chat") {
-      try {
-        const delivered = await sendChatOutbox({
-          userId: row.userId,
-          title: row.title,
-          body: row.body,
-          link: row.link,
-        });
-        await prisma.notificationOutbox.update({
-          where: { id: row.id },
-          data: delivered
-            ? { state: "sent", deliveredAt: now, lastError: null }
-            : { state: "skipped", deliveredAt: now, lastError: "no Discord destination" },
-        });
-        if (delivered) sent++;
-        else skipped++;
-      } catch (chatError) {
-        const message = (chatError instanceof Error ? chatError.message : String(chatError)).slice(0, 500);
-        const attempts = row.attemptCount + 1;
-        const exhausted = attempts >= env.notifyMaxAttempts;
-        await prisma.notificationOutbox.update({
-          where: { id: row.id },
-          data: {
-            state: exhausted ? "failed" : "pending",
-            attemptCount: attempts,
-            lastError: message,
-            scheduledAt: exhausted ? null : retryAt(attempts,
-              chatError instanceof DiscordDeliveryError ? chatError.retryAfterMs : undefined),
-          },
-        });
-        if (exhausted) failed++;
-        errors.push(`${row.id}: ${message}`);
-      }
-      continue;
-    }
 
     try {
-      const user = await prisma.user.findUnique({
-        where: { id: row.userId },
-        select: { id: true, pushSubscription: true },
+      const adapter = getDeliveryAdapter(row.channel, {
+        push: { prisma, sendPush },
+        discord: { sendChatOutbox },
       });
-      if (!user) {
-        await prisma.notificationOutbox.update({
-          where: { id: row.id },
-          data: { state: "skipped", lastError: "user not found" },
-        });
-        skipped++;
-        continue;
-      }
-      if (!user.pushSubscription) {
-        // No push subscription: the in-app row was already created. Mark the
-        // push as skipped so we reflect true push delivery metrics.
-        await prisma.notificationOutbox.update({
-          where: { id: row.id },
-          data: { state: "skipped", deliveredAt: now, lastError: "no push subscription" },
-        });
-        skipped++;
-        continue;
+
+      const outcome = await adapter.deliver(row);
+      const transition = computeOutboxTransition({
+        item: row,
+        outcome,
+        maxAttempts: env.notifyMaxAttempts,
+        now,
+        computeBackoffMs: (attempts) => backoffMs(attempts),
+      });
+
+      if (transition.cleanupPushSubscription) {
+        await prisma.user.update({
+          where: { id: row.userId },
+          data: { pushSubscription: null as unknown as object },
+        }).catch(() => null);
       }
 
-      try {
-        await sendPush(row.userId, { title: row.title, body: row.body, url: row.link ?? "/" });
-        await prisma.notificationOutbox.update({
-          where: { id: row.id },
-          data: { state: "sent", deliveredAt: now, lastError: null },
-        });
+      await prisma.notificationOutbox.update({
+        where: { id: row.id },
+        data: {
+          state: transition.state,
+          deliveredAt: transition.deliveredAt,
+          lastError: transition.lastError,
+          ...(transition.attemptCount !== undefined ? { attemptCount: transition.attemptCount } : {}),
+          ...(transition.state === "pending" || transition.state === "failed"
+            ? { scheduledAt: transition.scheduledAt }
+            : {}),
+        },
+      });
+
+      if (transition.isTerminalSuccess) {
         sent++;
-      } catch (pushError) {
-        const message = (pushError instanceof Error ? pushError.message : String(pushError)).slice(0, 500);
-        // 404/410 from the push service means the subscription is gone —
-        // clear it so the user can re-subscribe, and stop retrying.
-        if (message.includes("404") || message.includes("410") || /Gone|expired|not.?found/i.test(message)) {
-          await prisma.user.update({
-            where: { id: row.userId },
-            data: { pushSubscription: null as unknown as object },
-          }).catch(() => null);
-          await prisma.notificationOutbox.update({
-            where: { id: row.id },
-            data: { state: "skipped", lastError: "subscription gone", deliveredAt: now },
-          });
-          skipped++;
-        } else {
-          const attempts = row.attemptCount + 1;
-          const exhausted = attempts >= env.notifyMaxAttempts;
-          await prisma.notificationOutbox.update({
-            where: { id: row.id },
-            data: {
-              state: exhausted ? "failed" : "pending",
-              attemptCount: attempts,
-              lastError: message,
-              scheduledAt: exhausted ? null : retryAt(attempts),
-            },
-          });
-          if (exhausted) failed++;
-          errors.push(`${row.id}: ${message}`);
+      } else if (transition.isTerminalSkipped) {
+        skipped++;
+      } else if (transition.isExhaustedFailure) {
+        failed++;
+        if (transition.lastError) {
+          errors.push(`${row.id}: ${transition.lastError}`);
+        }
+      } else if (transition.isRescheduled) {
+        if (transition.scheduledAt && (!nextRetry || transition.scheduledAt < nextRetry)) {
+          nextRetry = transition.scheduledAt;
+        }
+        if (transition.lastError) {
+          errors.push(`${row.id}: ${transition.lastError}`);
         }
       }
     } catch (e) {

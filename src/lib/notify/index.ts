@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { deliverNotification } from "./outbox";
 
+export * from "./delivery-contract";
+export * from "./delivery-adapters";
+export { deliverNotification, dedupeKeyFor, backoffMs, type DeliverResult } from "./outbox";
+
 export type NotifyType =
   | "comment"
   | "issue"

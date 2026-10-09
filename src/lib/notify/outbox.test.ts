@@ -212,4 +212,37 @@ describe("deliverNotification", () => {
     expect(prismaMock.notification.create).not.toHaveBeenCalled();
     expect(prismaMock.notificationOutbox.create).not.toHaveBeenCalled();
   });
+
+  it("ensures partial failure resilience: Discord queueing rejection does not prevent push delivery", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: "u1", pushSubscription: { endpoint: "https://push..." } });
+    prismaMock.notificationPreference.findUnique.mockResolvedValue({
+      userId: "u1",
+      disabledTypes: [],
+      pushEnabled: true,
+      pushDisabledTypes: [],
+    });
+    prismaMock.notification.findUnique.mockResolvedValue(null);
+    prismaMock.notification.create.mockResolvedValue({ id: "n-partial" });
+    // Discord check throws an unexpected error
+    prismaMock.discordIntegration.findUnique.mockRejectedValue(new Error("Discord DB error"));
+    prismaMock.notificationOutbox.create.mockResolvedValue({ id: "out-push-ok" });
+
+    const res = await deliverNotification("u1", {
+      type: "comment",
+      title: "Comment",
+      eventKey: "partial:1",
+    });
+
+    expect(res.delivered).toBe(true);
+    expect(res.notificationId).toBe("n-partial");
+    expect(res.outboxId).toBe("out-push-ok");
+    expect(prismaMock.notificationOutbox.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          channel: "push",
+          userId: "u1",
+        }),
+      })
+    );
+  });
 });
