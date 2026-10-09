@@ -79,6 +79,19 @@ describe("issueCacheData", () => {
     expect(data.testerJira).toBeNull();
   });
 
+  it("keeps default approver and tester fields when project overrides are null", () => {
+    const data = issueCacheData(
+      issue({
+        customfield_10300: { name: "default-approver" },
+        customfield_10501: { name: "default-tester" },
+      }),
+      { reporter: "reporter", approver: null, tester: null }
+    );
+
+    expect(data.approverJira).toBe("default-approver");
+    expect(data.testerJira).toBe("default-tester");
+  });
+
   it("defaults dueDate and timeSpent to null when absent", () => {
     const data = issueCacheData(issue({ project: { key: "EPM" } }));
     expect(data.dueDate).toBeNull();

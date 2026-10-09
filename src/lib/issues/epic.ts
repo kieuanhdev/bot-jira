@@ -24,11 +24,14 @@ export function isEpicLinkField(field: { name?: string; schema?: { custom?: stri
  * an explicit `epic` object, or a `parent` whose issue type is Epic (sub-task parents are
  * Tasks/Stories and must not be reported as epics).
  */
-export function extractEpicKey(raw: unknown): string | null {
+export function extractEpicKey(
+  raw: unknown,
+  fieldIds: readonly string[] = epicLinkFieldIds
+): string | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
 
-  for (const id of epicLinkFieldIds) {
+  for (const id of fieldIds) {
     const val = r[id];
     if (typeof val === "string" && KEY_PATTERN.test(val.trim())) return val.trim().toUpperCase();
   }

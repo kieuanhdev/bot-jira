@@ -1,6 +1,7 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
+import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
-import { jiraPointsFromFields, parseJiraDate } from "@/lib/jira/client";
+import { jiraPointsFromFields } from "@/lib/jira/client";
 import type { JiraComment, JiraIssue } from "@/lib/jira/types";
 import { notifyWatchersOfIssueChange } from "@/lib/issues/notify-watchers";
 import {
@@ -9,23 +10,12 @@ import {
   jiraIssueFieldsForProject,
   type ProjectPeopleFieldsMap,
 } from "@/lib/jira/people-fields";
-import { extractEpicKey } from "@/lib/issues/epic";
-
-function descriptionText(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (value == null) return "";
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function jiraUsername(value: unknown): string | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const user = value as { name?: unknown };
-  return typeof user.name === "string" && user.name.trim() ? user.name : null;
-}
+import { getEpicLinkFieldIds } from "@/lib/issues/epic";
+import {
+  mapJiraCommentToCacheData,
+  mapJiraIssueLinks,
+  mapJiraIssueToCacheData,
+} from "@/lib/issues/mapping";
 
 export function issueCacheData(
   issue: JiraIssue,
@@ -35,54 +25,16 @@ export function issueCacheData(
     tester: DEFAULT_PEOPLE_FIELDS.tester,
   }
 ) {
-  const f = issue.fields;
-  const { points, fieldId: storyField } = jiraPointsFromFields(f);
-  const fixVersions = f.fixVersions ?? [];
-
-  return {
-    projectKey: f.project?.key ?? issue.key.split("-")[0] ?? "",
-    summary: f.summary ?? "",
-    description: descriptionText(f.description),
-    status: f.status?.name ?? "",
-    statusId: f.status?.id ?? null,
-    statusCategory: f.status?.statusCategory?.key?.toLowerCase() ?? "unknown",
-    statusChangedAt:
-      parseJiraDate((f as Record<string, unknown>).customfield_10706 as string | undefined) ??
-      parseJiraDate((f as Record<string, unknown>).resolutiondate as string | undefined) ??
-      parseJiraDate(f.statuscategorychangedate) ??
-      null,
-    assigneeJira: f.assignee?.name ?? null,
-    reporterJira: jiraUsername(f[peopleFields.reporter]),
-    approverJira: jiraUsername(f[peopleFields.approver ?? DEFAULT_PEOPLE_FIELDS.approver]),
-    testerJira: jiraUsername(f[peopleFields.tester ?? DEFAULT_PEOPLE_FIELDS.tester]),
-    epicKey: extractEpicKey(f),
-    labels: f.labels ?? [],
-    fixVersionIds: fixVersions.flatMap((v) => (v.id ? [v.id] : [])),
-    fixVersionNames: fixVersions.flatMap((v) => (v.name ? [v.name] : [])),
-    priority: f.priority?.name ?? "",
-    points,
-    storyField,
-    type: f.issuetype?.name ?? "",
-    dueDate: parseJiraDate(f.duedate as string | undefined) ?? null,
-    timeSpent: typeof f.timespent === "number" ? f.timespent : null,
-    originalEstimateSeconds:
-      typeof f.timeoriginalestimate === "number" && Number.isFinite(f.timeoriginalestimate)
-        ? Math.round(f.timeoriginalestimate)
-        : f.timetracking &&
-          typeof (f.timetracking as Record<string, unknown>).originalEstimateSeconds === "number" &&
-          Number.isFinite((f.timetracking as Record<string, unknown>).originalEstimateSeconds)
-        ? Math.round((f.timetracking as Record<string, unknown>).originalEstimateSeconds as number)
-        : typeof f.timeoriginalestimate === "string" &&
-          f.timeoriginalestimate.trim() !== "" &&
-          !isNaN(Number(f.timeoriginalestimate))
-        ? Math.round(Number(f.timeoriginalestimate))
-        : null,
-    createdAt: parseJiraDate(f.created) ?? null,
-    updatedAt: parseJiraDate(f.updated) ?? null,
-    lastSyncedAt: new Date(),
-    deletedAt: null,
-    raw: JSON.parse(JSON.stringify(f)) as Prisma.InputJsonValue,
-  };
+  return mapJiraIssueToCacheData(issue, {
+    peopleFields: {
+      reporter: peopleFields.reporter,
+      approver: peopleFields.approver ?? DEFAULT_PEOPLE_FIELDS.approver,
+      tester: peopleFields.tester ?? DEFAULT_PEOPLE_FIELDS.tester,
+    },
+    points: jiraPointsFromFields(issue.fields),
+    epicLinkFieldIds: getEpicLinkFieldIds(),
+    syncedAt: new Date(),
+  });
 }
 
 /**
@@ -108,11 +60,11 @@ export async function syncIssueLinks(
   }
 
   const db = tx ?? prisma;
-  const { normalizeIssueLink } = await import("@/lib/jira/issue-links");
   const key = issueKey.trim().toUpperCase();
-  const normalizedLinks = rawLinks
-    .map((l) => normalizeIssueLink(key, l))
-    .filter((l): l is NonNullable<typeof l> => l !== null);
+  const normalizedLinks = mapJiraIssueLinks(key, rawLinks, {
+    linkTypeName: env.jiraDependencyLinkType,
+    inwardLabel: env.jiraDependencyInwardLabel,
+  });
 
   const activeLinkIds: string[] = [];
 
@@ -293,11 +245,15 @@ export async function refreshJiraIssueCache(
 export async function upsertJiraComments(jiraKey: string, comments: JiraComment[]): Promise<number> {
   let synced = 0;
   for (const comment of comments) {
-    const body = descriptionText(comment.body).trim();
-    if (!body || !comment.id) continue;
-    const author = comment.author?.displayName || comment.author?.name || "unknown";
-    const incomingCreatedAt = parseJiraDate(comment.created) ?? null;
-    const incomingUpdatedAt = parseJiraDate(comment.updated) ?? null;
+    const mapped = mapJiraCommentToCacheData(jiraKey, comment);
+    if (!mapped) continue;
+    const {
+      jiraCommentId,
+      author,
+      body,
+      createdAt: incomingCreatedAt,
+      updatedAt: incomingUpdatedAt,
+    } = mapped;
 
     const legacy = await prisma.commentCache.findFirst({
       where: {
@@ -312,7 +268,7 @@ export async function upsertJiraComments(jiraKey: string, comments: JiraComment[
       await prisma.commentCache.update({
         where: { id: legacy.id },
         data: {
-          jiraCommentId: comment.id,
+          jiraCommentId,
           createdAt: incomingCreatedAt,
           updatedAt: incomingUpdatedAt,
           syncedAt: new Date(),
@@ -325,7 +281,7 @@ export async function upsertJiraComments(jiraKey: string, comments: JiraComment[
     // Conditional update: only update if stored updatedAt is null or <= incoming.updatedAt
     const updateRes = await prisma.commentCache.updateMany({
       where: {
-        jiraCommentId: comment.id,
+        jiraCommentId,
         OR: [
           { updatedAt: null },
           ...(incomingUpdatedAt ? [{ updatedAt: { lte: incomingUpdatedAt } }] : []),
@@ -347,7 +303,7 @@ export async function upsertJiraComments(jiraKey: string, comments: JiraComment[
     }
 
     const existing = await prisma.commentCache.findUnique({
-      where: { jiraCommentId: comment.id },
+      where: { jiraCommentId },
       select: { id: true },
     });
 
@@ -359,7 +315,7 @@ export async function upsertJiraComments(jiraKey: string, comments: JiraComment[
     try {
       await prisma.commentCache.create({
         data: {
-          jiraCommentId: comment.id,
+          jiraCommentId,
           jiraKey,
           author,
           body,
@@ -377,7 +333,7 @@ export async function upsertJiraComments(jiraKey: string, comments: JiraComment[
       // P2002 create race: another worker created it concurrently.
       // Read back the row and retry conditional update if payload is newer.
       const raceRow = await prisma.commentCache.findUnique({
-        where: { jiraCommentId: comment.id },
+        where: { jiraCommentId },
         select: { id: true, updatedAt: true },
       });
       if (raceRow) {
@@ -389,7 +345,7 @@ export async function upsertJiraComments(jiraKey: string, comments: JiraComment[
           // Payload is newer or equal: retry conditional update
           const retryRes = await prisma.commentCache.updateMany({
             where: {
-              jiraCommentId: comment.id,
+              jiraCommentId,
               OR: [
                 { updatedAt: null },
                 ...(incomingUpdatedAt
@@ -434,17 +390,20 @@ export async function upsertJiraCommentsWithNew(
   let synced = 0;
   const newComments: NewComment[] = [];
   for (const comment of comments) {
-    const body = descriptionText(comment.body).trim();
-    if (!body || !comment.id) continue;
-
-    const author = comment.author?.displayName || comment.author?.name || "unknown";
-    const incomingCreatedAt = parseJiraDate(comment.created) ?? null;
-    const incomingUpdatedAt = parseJiraDate(comment.updated) ?? null;
+    const mapped = mapJiraCommentToCacheData(jiraKey, comment);
+    if (!mapped) continue;
+    const {
+      jiraCommentId,
+      author,
+      body,
+      createdAt: incomingCreatedAt,
+      updatedAt: incomingUpdatedAt,
+    } = mapped;
 
     // Conditional update: only update if stored updatedAt is null or <= incoming.updatedAt
     const updateRes = await prisma.commentCache.updateMany({
       where: {
-        jiraCommentId: comment.id,
+        jiraCommentId,
         OR: [
           { updatedAt: null },
           ...(incomingUpdatedAt ? [{ updatedAt: { lte: incomingUpdatedAt } }] : []),
@@ -466,7 +425,7 @@ export async function upsertJiraCommentsWithNew(
     }
 
     const existing = await prisma.commentCache.findUnique({
-      where: { jiraCommentId: comment.id },
+      where: { jiraCommentId },
       select: { id: true },
     });
 
@@ -478,7 +437,7 @@ export async function upsertJiraCommentsWithNew(
     try {
       await prisma.commentCache.create({
         data: {
-          jiraCommentId: comment.id,
+          jiraCommentId,
           jiraKey,
           author,
           body,
@@ -488,7 +447,7 @@ export async function upsertJiraCommentsWithNew(
         },
       });
       synced++;
-      newComments.push({ id: comment.id, jiraKey, author, body });
+      newComments.push({ id: jiraCommentId, jiraKey, author, body });
     } catch (createError) {
       if (!isPrismaUniqueConstraintError(createError)) {
         // Not a race — rethrow timeout, connection error, FK error, etc.
@@ -497,7 +456,7 @@ export async function upsertJiraCommentsWithNew(
       // P2002 create race: another worker created it concurrently.
       // Read back and retry if payload is newer.
       const raceRow = await prisma.commentCache.findUnique({
-        where: { jiraCommentId: comment.id },
+        where: { jiraCommentId },
         select: { id: true, updatedAt: true },
       });
       if (raceRow) {
@@ -508,7 +467,7 @@ export async function upsertJiraCommentsWithNew(
         ) {
           const retryRes = await prisma.commentCache.updateMany({
             where: {
-              jiraCommentId: comment.id,
+              jiraCommentId,
               OR: [
                 { updatedAt: null },
                 ...(incomingUpdatedAt

@@ -122,6 +122,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 | R-12 | Caller abort của Jira search bị trì hoãn khi cold-cache field metadata | P1 | Đã ghi F-007; giữ nguyên behavior trong batch 2.1 và tách bug batch có test riêng trước khi sửa | Open |
 | R-13 | Tách Jira resources làm mất method hoặc đổi auth/retry/error behavior | P0 | Snapshot đủ 42 method; resource không import facade; 138 Jira test, full suite và production build pass | Closed |
 | R-14 | Tách Board cache policy làm lệch TTL, stale window, request coalescing hoặc cache invalidation | P1 | Policy test khóa fresh/stale/expired boundary, concurrent request, failed refresh và clear; 29 test cache/Board, 142 Jira test, full suite và build pass; F-005 vẫn tách riêng | Closed |
+| R-15 | Tách Jira issue/comment/link mapper làm lệch null/default, people field, date hoặc epic/link semantics | P1 | Mapper nhận config/clock tường minh; 37/37 test mapping/cache liên quan và full suite 1.314/1.314 pass; persistence/transaction không đổi | Closed |
 
 ## 7. Quy tắc Dừng
 
