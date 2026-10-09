@@ -1,18 +1,11 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { env, bitbucketRepoList } from "@/lib/env";
-import { jiraWith, jiraIssueFields, JiraRequestError, type JiraAuth } from "@/lib/jira/client";
 import { bitbucket, type BbCreds } from "@/lib/bitbucket/client";
-import { refreshJiraIssueCache } from "@/lib/issues/cache";
 import { extractEpicKey } from "@/lib/issues/epic";
-import { notifyWatchersOfComment } from "@/lib/issues/notify-watchers";
-import type { JiraIssue } from "@/lib/jira/types";
 import { userJiraAuth, userBitbucketCreds } from "@/lib/user-creds";
 import { renderBranchName } from "./branch-name";
-import { recordExplicitBranchLink } from "@/lib/bitbucket/link-service";
 import { expandDependencies } from "@/lib/issues/dependencies";
-import { audit } from "@/lib/audit";
-import { formatJiraStartedAt } from "@/lib/worklogs/schema";
 
 /**
  * M4 — Bulk operations.
@@ -31,7 +24,6 @@ import { formatJiraStartedAt } from "@/lib/worklogs/schema";
 
 import {
   type BulkAction,
-  type BranchParams,
   type DependencyScope,
   type BulkSelector,
   type ActionParams,
@@ -64,12 +56,20 @@ import {
   finalizeBulkOperation,
   isTerminalOperationState,
 } from "./repository";
+import {
+  applyItem,
+  type OpAuth,
+  type OpRow,
+  type Ctx,
+  type ItemResult,
+} from "./executors";
 
 export * from "./contracts";
 export * from "./validation";
 export * from "./selection";
 export * from "./preview";
 export * from "./repository";
+export * from "./executors";
 
 export { extractEpicKey };
 
@@ -524,326 +524,6 @@ export async function cancelBulk(operationId: string, requestedBy: string): Prom
 // Execution (M4-03 / M4-04)
 // ---------------------------------------------------------------------------
 
-export type OpAuth = {
-  jira: JiraAuth | null;
-  bitbucket: BbCreds | null;
-};
-
-type OpRow = {
-  id: string;
-  type: string;
-  requestedBy: string;
-  payload: { action: BulkAction; params: ActionParams };
-  state: string;
-  startedAt: Date | null;
-};
-
-type Ctx = {
-  op: OpRow;
-  auth: OpAuth;
-  concurrency: number;
-};
-
-type ItemResult = {
-  status: "succeeded" | "failed" | "skipped";
-  error?: string;
-  retryable?: boolean;
-};
-
-async function getIssue(client: ReturnType<typeof jiraWith>, key: string): Promise<JiraIssue> {
-  return client.getIssue(key, jiraIssueFields());
-}
-
-async function applyItem(ctx: Ctx, key: string): Promise<ItemResult> {
-  const action = ctx.op.payload as { action: BulkAction };
-  const { action: a } = action;
-  if (!ctx.auth.jira) {
-    return { status: "failed", error: "Jira credentials required", retryable: false };
-  }
-  const jira = jiraWith(ctx.auth.jira);
-  const bb = ctx.auth.bitbucket;
-
-  try {
-    switch (a.kind) {
-      case "update-fields": {
-        const issue = await getIssue(jira, key);
-        const patch: {
-          assignee?: string | null; labels?: string[]; priority?: string; issueType?: string; points?: number | null;
-          fixVersions?: string[]; dueDate?: string | null; originalEstimate?: string; epic?: string | null;
-        } = {};
-        if (a.value.assignee !== undefined) patch.assignee = a.value.assignee;
-        if (a.value.labels !== undefined) patch.labels = a.value.labels;
-        if (a.value.priority !== undefined) patch.priority = a.value.priority;
-        if (a.value.issueType !== undefined) patch.issueType = a.value.issueType;
-        if (a.value.points !== undefined) patch.points = a.value.points;
-        if (a.value.dueDate !== undefined) patch.dueDate = a.value.dueDate;
-        if (a.value.estimate !== undefined) patch.originalEstimate = a.value.estimate;
-        if (a.value.epic !== undefined) patch.epic = a.value.epic;
-        if (a.value.fixVersions !== undefined) {
-          const projectKey = issue.fields.project?.key ?? key.split("-")[0] ?? "";
-          if (a.value.fixVersions.length === 0) {
-            patch.fixVersions = [];
-          } else {
-            const ids = await Promise.all(a.value.fixVersions.map((name) => jira.resolveVersionId(projectKey, name)));
-            if (ids.some((id) => id == null)) return { status: "failed", error: "One or more Fix Versions do not exist in this project", retryable: false };
-            patch.fixVersions = ids.filter((id): id is string => id != null);
-          }
-        }
-        await jira.updateIssue(key, patch);
-        break;
-      }
-      case "set-epic": {
-        await jira.updateIssue(key, { epic: a.value });
-        break;
-      }
-      case "assign": {
-        await jira.updateIssue(key, { assignee: a.value });
-        break;
-      }
-      case "add-labels": {
-        const issue = await getIssue(jira, key);
-        const merged = Array.from(new Set([...(issue.fields.labels ?? []), ...(a.value ?? [])]));
-        await jira.updateIssue(key, { labels: merged });
-        break;
-      }
-      case "remove-labels": {
-        const issue = await getIssue(jira, key);
-        const drop = new Set(a.value ?? []);
-        const kept = (issue.fields.labels ?? []).filter((l) => !drop.has(l));
-        await jira.updateIssue(key, { labels: kept });
-        break;
-      }
-      case "set-points": {
-        await jira.updateIssue(key, { points: a.value });
-        break;
-      }
-      case "set-estimate": {
-        const meta = await jira.getEditMeta(key);
-        if (!meta.fields?.timetracking) {
-          return {
-            status: "failed",
-            error: "Time Tracking is not editable for this Jira issue. Add it to the issue edit screen.",
-            retryable: false,
-          };
-        }
-        await jira.updateIssue(key, { originalEstimate: a.value });
-        break;
-      }
-      case "log-work": {
-        const started = a.value.started
-          ? formatJiraStartedAt(a.value.started)
-          : undefined;
-        await jira.addWorklog(
-          key,
-          { timeSpent: a.value.timeSpent, started, comment: a.value.comment },
-          "leave"
-        );
-        break;
-      }
-      case "set-due-date": {
-        const meta = await jira.getEditMeta(key);
-        if (!meta.fields?.duedate) {
-          return { status: "failed", error: "Due Date is not editable for this Jira issue", retryable: false };
-        }
-        await jira.updateIssue(key, { dueDate: a.value });
-        break;
-      }
-      case "set-priority": {
-        await jira.updateIssue(key, { priority: a.value });
-        break;
-      }
-      case "transition": {
-        const t = await jira.findTransition(key, a.value);
-        if (!t) {
-          return { status: "failed", error: `No transition to "${a.value}"`, retryable: false };
-        }
-        await jira.transition(key, t.id);
-        break;
-      }
-      case "add-fix-version": {
-        const issue = await getIssue(jira, key);
-        const projectKey = issue.fields.project?.key ?? key.split("-")[0] ?? "";
-        const id = await jira.resolveVersionId(projectKey, a.value);
-        if (!id) {
-          return { status: "failed", error: `Version "${a.value}" not found`, retryable: false };
-        }
-        const current = (issue.fields.fixVersions ?? []).map((v) => v.id ?? "").filter(Boolean);
-        if (!current.includes(id)) {
-          await jira.updateIssue(key, { fixVersions: [...current, id] });
-        }
-
-        // Provenance tracking & audit (DEP-07, DEP-12)
-        const itemRow = await prisma.bulkOperationItem.findUnique({
-          where: { operationId_jiraKey: { operationId: ctx.op.id, jiraKey: key } },
-          select: { requested: true },
-        });
-        const reqMeta = itemRow?.requested as Record<string, unknown> | null;
-        if (reqMeta?.relation === "dependency" && reqMeta.rootKey) {
-          const rootKey = String(reqMeta.rootKey);
-          await prisma.fixVersionPropagation.upsert({
-            where: {
-              rootKey_dependencyKey_jiraVersionId: {
-                rootKey,
-                dependencyKey: key,
-                jiraVersionId: id,
-              },
-            },
-            create: {
-              rootKey,
-              dependencyKey: key,
-              jiraVersionId: id,
-              projectKey,
-              operationId: ctx.op.id,
-              active: true,
-              appliedAt: new Date(),
-            },
-            update: {
-              active: true,
-              operationId: ctx.op.id,
-              appliedAt: new Date(),
-              removedAt: null,
-            },
-          });
-
-          await audit({
-            actorId: ctx.op.requestedBy,
-            action: "issue.fix_version.propagate",
-            target: key,
-            before: { fixVersions: current },
-            after: { fixVersions: [...current, id], rootKey, versionId: id },
-            source: "worker",
-            correlationId: ctx.op.id,
-          });
-        }
-        break;
-      }
-      case "remove-fix-version": {
-        const issue = await getIssue(jira, key);
-        const projectKey = issue.fields.project?.key ?? key.split("-")[0] ?? "";
-        const id = await jira.resolveVersionId(projectKey, a.value);
-        if (id) {
-          const current = (issue.fields.fixVersions ?? []).map((v) => v.id ?? "").filter((x) => x);
-          const kept = current.filter((x) => x !== id);
-          if (kept.length !== current.length) {
-            await jira.updateIssue(key, { fixVersions: kept });
-
-            // Provenance update & audit (DEP-08, DEP-12)
-            await prisma.fixVersionPropagation.updateMany({
-              where: {
-                dependencyKey: key,
-                jiraVersionId: id,
-              },
-              data: {
-                active: false,
-                removedAt: new Date(),
-              },
-            });
-
-            await audit({
-              actorId: ctx.op.requestedBy,
-              action: "issue.fix_version.propagate_remove",
-              target: key,
-              before: { fixVersions: current },
-              after: { fixVersions: kept, versionId: id },
-              source: "worker",
-              correlationId: ctx.op.id,
-            });
-          }
-        }
-        break;
-      }
-      case "add-comment": {
-        const comment = await jira.addComment(key, a.value);
-        await notifyWatchersOfComment(key, comment.author?.name ?? comment.author?.displayName ?? "User", a.value, comment.id)
-          .catch(() => null);
-        break;
-      }
-      case "create-branches": {
-        if (!bb) {
-          return { status: "failed", error: "Bitbucket credentials required", retryable: false };
-        }
-        const result = await createBranchForIssue(jira, key, a.value, bb);
-        if (result.error) {
-          return { status: "failed", error: result.error, retryable: result.retryable ?? true };
-        }
-        break;
-      }
-      default:
-        return { status: "failed", error: "unknown action", retryable: false };
-    }
-
-    // Update the local cache after a successful mutation so the board reflects
-    // the change immediately. Best-effort: a refresh failure is not fatal.
-    await refreshJiraIssueCache(jira, key);
-
-    return { status: "succeeded" };
-  } catch (e) {
-    if (a.kind === "log-work") {
-      const isTimeout =
-        e instanceof JiraRequestError && (e.status === null || e.status === 408 || e.status === 504);
-      if (isTimeout) {
-        return {
-          status: "failed",
-          error: "Jira timeout: outcome_unknown to prevent duplicate worklog",
-          retryable: false,
-        };
-      }
-    }
-    const retryable = e instanceof JiraRequestError ? e.retryable : false;
-    return { status: "failed", error: (e as Error).message.slice(0, 400), retryable };
-  }
-}
-
-export async function createBranchForIssue(
-  jira: ReturnType<typeof jiraWith>,
-  key: string,
-  params: BranchParams,
-  creds: BbCreds
-): Promise<{ error?: string; retryable?: boolean; branch?: string; repo?: string }> {
-  const repo = params.repo ?? bitbucketRepoList[0];
-  if (!repo) return { error: "No Bitbucket repository configured", retryable: false };
-  const base = params.base ?? env.bitbucketBaseBranch;
-  const template = params.nameTemplate ?? DEFAULT_BRANCH_TEMPLATE;
-
-  // We need the current status for the template — read from cache first.
-  const cached = await prisma.issueCache.findUnique({
-    where: { jiraKey: key },
-    select: { status: true },
-  });
-  const branchName = renderBranchName(template, key, cached?.status ?? "task");
-
-  // Idempotency: skip if the branch already exists.
-  const existing = await bitbucket.getBranch(repo, branchName, creds);
-  if (existing) {
-    await linkBranch(key, repo, branchName);
-    return { branch: branchName, repo };
-  }
-
-  await bitbucket.createBranch(repo, { name: branchName, base }, creds);
-  await linkBranch(key, repo, branchName);
-
-  // Optional: comment the branch link back onto the Jira issue.
-  if (params.comment === true) {
-    const repoUrl = `${env.bitbucketBaseUrl.replace(/\/$/, "")}/${repo}`;
-    const comment = `Branch created: [${branchName}](${repoUrl}/src/branch/${encodeURIComponent(branchName)}) (base: ${base})`;
-    const created = await jira.addComment(key, comment).catch(() => null);
-    if (created) {
-      await notifyWatchersOfComment(key, created.author?.name ?? created.author?.displayName ?? "User", comment, created.id)
-        .catch(() => null);
-    }
-  }
-
-  return { branch: branchName, repo };
-}
-
-/** Record the issue↔branch relationship (BranchInfo.jiraKey) explicitly. */
-async function linkBranch(
-  jiraKey: string,
-  repo: string,
-  branch: string
-): Promise<void> {
-  await recordExplicitBranchLink(repo, branch, jiraKey);
-}
 
 export function isTerminal(state: string): boolean {
   return isTerminalOperationState(state);

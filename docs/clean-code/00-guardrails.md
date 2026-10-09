@@ -130,6 +130,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 | R-20 | Tách webhook handler làm lệch source routing, event idempotency/status hoặc rò lỗi thô | P0 | Giữ facade và event lifecycle; characterization khóa 4 provider, already-processed, processed/failed transition và lỗi tối đa 300 ký tự; 38 test liên quan, full suite 1.337/1.337 và build pass | Closed |
 | R-21 | Tách bulk contract và validation làm thay đổi validation error message, key normalization hoặc làm lọt payload không hợp lệ | P0 | Tách `contracts.ts` và `validation.ts` thuần; giữ `ops.ts` làm facade; 25 unit test mới bao phủ 15 action kinds, key limit, selector mode và format; 83 bulk test liên quan, full suite 1.362/1.362 và build pass | Closed |
 | R-22 | Tách bulk selection và preview policy làm sai lệch filter query, 15 action classification, before/after snapshot hoặc stale detection | P0 | Tách `selection.ts` và `preview.ts` thuần; 40 unit test mới bao phủ 15 action kinds, stale window, transition errors, filter resolution (statuses/priorities/labels/assignees/epics/q); 118 bulk test, full suite 1.402/1.402 và build pass | Closed |
+| R-23 | Tách Bulk action executors làm đổi thứ tự Jira cache refresh, provenance propagation hoặc audit log | P0 | Tách `executors.ts` độc lập với typed context; 29 unit test mới kiểm tra 15 action kinds, cache refresh ordering, non-retryable duplicate-worklog timeout, dependency provenance upsert và audit sequence; 278 test bulk, full suite 1.458/1.458 và build pass | Closed |
 
 ## 7. Quy tắc Dừng
 
