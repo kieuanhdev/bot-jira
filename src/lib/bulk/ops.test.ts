@@ -1,8 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setEpicLinkFieldIds } from "@/lib/issues/epic";
-import { validateBulkRequest, previewBulk, extractEpicKey, resolveFilterKeys } from "./ops";
+import {
+  validateBulkRequest,
+  previewBulk,
+  extractEpicKey,
+  resolveFilterKeys,
+  executeBulkOperation,
+} from "./ops";
+import { processWithRetry } from "./retry";
 import { prisma } from "@/lib/prisma";
 import * as depModule from "@/lib/issues/dependencies";
+
+vi.mock("@/lib/notify", () => ({
+  notifyUser: vi.fn().mockResolvedValue({ id: "notif-1" }),
+}));
+
+vi.mock("./retry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./retry")>();
+  return {
+    ...actual,
+    processWithRetry: vi.fn(),
+  };
+});
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -12,9 +31,18 @@ vi.mock("@/lib/prisma", () => ({
     },
     bulkOperation: {
       create: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
     },
     bulkOperationItem: {
       createMany: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+      groupBy: vi.fn(),
+    },
+    user: {
+      findUnique: vi.fn(),
     },
     fixVersionPropagation: {
       findFirst: vi.fn(),
@@ -539,4 +567,130 @@ describe("Bulk operations dependency expansion & safe removal (DEP-06, DEP-07, D
       expect(resMultiple).toEqual(["EPM-1", "EPM-2"]);
     });
   });
+
+  describe("executeBulkOperation orchestration & completion notification", () => {
+    it("aborts execution early when operation cannot be claimed", async () => {
+      vi.mocked(prisma.bulkOperation.findUnique).mockResolvedValue(null);
+
+      await executeBulkOperation("op-missing");
+
+      expect(vi.mocked(processWithRetry)).not.toHaveBeenCalled();
+    });
+
+    it("runs pending items and delivers 'completed' notification on full success", async () => {
+      const { notifyUser } = await import("@/lib/notify");
+
+      // Claim phase
+      vi.mocked(prisma.bulkOperation.findUnique)
+        .mockResolvedValueOnce({
+          id: "op-1",
+          state: "queued",
+          type: "update-fields",
+          requestedBy: "user-1",
+          total: 2,
+          payload: { action: { kind: "update-fields", value: { points: 3 } }, params: {} },
+          startedAt: null,
+        } as never)
+        // Finalize phase lookup
+        .mockResolvedValueOnce({
+          id: "op-1",
+          state: "running",
+          type: "update-fields",
+          requestedBy: "user-1",
+          total: 2,
+          payload: {},
+          startedAt: new Date(),
+        } as never);
+
+      vi.mocked(prisma.bulkOperation.updateMany).mockResolvedValue({ count: 1 });
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        jiraUserEnc: null,
+        jiraTokenEnc: null,
+        jiraAuth: null,
+        bitbucketUserEnc: null,
+        bitbucketTokenEnc: null,
+      } as never);
+
+      vi.mocked(prisma.bulkOperationItem.findMany).mockResolvedValue([
+        { id: "item-1", jiraKey: "PROJ-1" },
+        { id: "item-2", jiraKey: "PROJ-2" },
+      ] as never);
+
+      vi.mocked(processWithRetry).mockResolvedValue({ status: "succeeded" });
+
+      vi.mocked(prisma.bulkOperationItem.groupBy).mockResolvedValue([
+        { status: "succeeded", _count: { _all: 2 } },
+      ] as never);
+      vi.mocked(prisma.bulkOperation.update).mockResolvedValue({ id: "op-1" } as never);
+
+      await executeBulkOperation("op-1");
+
+      expect(vi.mocked(processWithRetry)).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(notifyUser)).toHaveBeenCalledWith(
+        "user-1",
+        expect.objectContaining({
+          title: "Thao tác hàng loạt update-fields hoàn tất",
+          severity: "info",
+          eventKey: "bulk:op-1:completed",
+          body: "2 thành công, 0 thất bại, 0 bỏ qua.",
+        })
+      );
+    });
+
+    it("delivers 'partially_failed' notification when some items fail (partial success)", async () => {
+      const { notifyUser } = await import("@/lib/notify");
+
+      vi.mocked(prisma.bulkOperation.findUnique)
+        .mockResolvedValueOnce({
+          id: "op-2",
+          state: "queued",
+          type: "transition",
+          requestedBy: "user-2",
+          total: 2,
+          payload: { action: { kind: "transition", value: "Done" }, params: {} },
+          startedAt: null,
+        } as never)
+        .mockResolvedValueOnce({
+          id: "op-2",
+          state: "running",
+          type: "transition",
+          requestedBy: "user-2",
+          total: 2,
+          payload: {},
+          startedAt: new Date(),
+        } as never);
+
+      vi.mocked(prisma.bulkOperation.updateMany).mockResolvedValue({ count: 1 });
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
+
+      vi.mocked(prisma.bulkOperationItem.findMany).mockResolvedValue([
+        { id: "item-1", jiraKey: "PROJ-1" },
+        { id: "item-2", jiraKey: "PROJ-2" },
+      ] as never);
+
+      vi.mocked(processWithRetry)
+        .mockResolvedValueOnce({ status: "succeeded" })
+        .mockResolvedValueOnce({ status: "failed", error: "transition_unavailable", retryable: false });
+
+      vi.mocked(prisma.bulkOperationItem.groupBy).mockResolvedValue([
+        { status: "succeeded", _count: { _all: 1 } },
+        { status: "failed", _count: { _all: 1 } },
+      ] as never);
+      vi.mocked(prisma.bulkOperation.update).mockResolvedValue({ id: "op-2" } as never);
+
+      await executeBulkOperation("op-2");
+
+      expect(vi.mocked(processWithRetry)).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(notifyUser)).toHaveBeenCalledWith(
+        "user-2",
+        expect.objectContaining({
+          title: "Thao tác hàng loạt transition thất bại một phần",
+          severity: "warning",
+          eventKey: "bulk:op-2:partially_failed",
+          body: "1 thành công, 1 thất bại, 0 bỏ qua.",
+        })
+      );
+    });
+  });
 });
+

@@ -26,7 +26,6 @@ import {
   type BulkAction,
   type DependencyScope,
   type BulkSelector,
-  type ActionParams,
   actionParams,
   DEFAULT_BRANCH_TEMPLATE,
   MAX_KEYS,
@@ -45,24 +44,16 @@ import {
 } from "./preview";
 import {
   createPreviewBulkOperation,
-  findBulkOperationById,
   confirmBulkOperation,
   cancelBulkOperation,
   claimBulkOperation,
   findPendingBulkOperationItems,
-  findBulkOperationItemById,
-  markBulkOperationItemRunning,
-  recordBulkOperationItemResult,
   finalizeBulkOperation,
   isTerminalOperationState,
 } from "./repository";
-import {
-  applyItem,
-  type OpAuth,
-  type OpRow,
-  type Ctx,
-  type ItemResult,
-} from "./executors";
+import { type OpAuth } from "./executors";
+import { processWithRetry } from "./retry";
+import { notifyResult } from "./notification";
 
 export * from "./contracts";
 export * from "./validation";
@@ -70,6 +61,8 @@ export * from "./selection";
 export * from "./preview";
 export * from "./repository";
 export * from "./executors";
+export * from "./retry";
+export * from "./notification";
 
 export { extractEpicKey };
 
@@ -582,103 +575,5 @@ export async function executeBulkOperation(operationId: string): Promise<void> {
   const summary = await finalizeBulkOperation(operationId);
   if (summary?.terminal) {
     await notifyResult(op, summary.state, summary.succeeded, summary.failed, summary.skipped);
-  }
-}
-
-const MAX_ATTEMPTS = 3;
-
-async function processWithRetry(
-  operationId: string,
-  itemId: string,
-  key: string,
-  auth: OpAuth,
-  _concurrency: number
-): Promise<ItemResult> {
-  const opRow = await findBulkOperationById(operationId);
-  if (!opRow) return { status: "skipped" };
-
-  // Idempotency guard: never re-run an item that already succeeded.
-  const current = await findBulkOperationItemById(itemId);
-  if (current?.status === "succeeded") return { status: "succeeded" };
-
-  const op: OpRow = {
-    id: opRow.id,
-    type: opRow.type,
-    requestedBy: opRow.requestedBy,
-    payload: opRow.payload as { action: BulkAction; params: ActionParams },
-    state: opRow.state,
-    startedAt: opRow.startedAt,
-  };
-  const ctx: Ctx = { op, auth, concurrency: _concurrency };
-
-  await markBulkOperationItemRunning(itemId);
-
-  let result: ItemResult = { status: "failed", error: "not attempted", retryable: true };
-  let attempts = 0;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    // BULK-012 — count every real attempt, not just the final pass.
-    attempts++;
-    result = await applyItem(ctx, key);
-    if (result.status === "succeeded" || result.status === "skipped") break;
-    if (!result.retryable) break;
-    if (attempt < MAX_ATTEMPTS) {
-      // Short backoff between attempts.
-      await new Promise((r) => setTimeout(r, 1000 * attempt));
-    }
-  }
-
-  const finalStatus = result.status;
-  const after =
-    result.status === "succeeded"
-      ? await prisma.issueCache.findUnique({
-          where: { jiraKey: key },
-          select: {
-            status: true,
-            assigneeJira: true,
-            labels: true,
-            priority: true,
-            points: true,
-            fixVersionNames: true,
-          },
-        })
-      : null;
-
-  await recordBulkOperationItemResult(itemId, {
-    status: finalStatus,
-    error: result.error,
-    retryable: result.retryable,
-    attempts,
-    after: after as Record<string, unknown> | null,
-  });
-
-  return { status: finalStatus, error: result.error };
-}
-
-async function notifyResult(
-  op: { requestedBy: string; type: string; id: string },
-  state: string,
-  succeeded: number,
-  failed: number,
-  skipped: number
-): Promise<void> {
-  try {
-    const { notifyUser } = await import("@/lib/notify");
-    const statusText =
-      state === "completed"
-        ? "hoàn tất"
-        : state === "partially_failed"
-          ? "thất bại một phần"
-          : "thất bại";
-    const severity = state === "completed" ? "info" : state === "partially_failed" ? "warning" : "danger";
-    await notifyUser(op.requestedBy, {
-      type: "system",
-      title: `Thao tác hàng loạt ${op.type} ${statusText}`,
-      body: `${succeeded} thành công, ${failed} thất bại, ${skipped} bỏ qua.`,
-      link: `/bulk?operation=${op.id}`,
-      severity,
-      eventKey: `bulk:${op.id}:${state}`,
-    });
-  } catch {
-    /* ignore notification errors */
   }
 }

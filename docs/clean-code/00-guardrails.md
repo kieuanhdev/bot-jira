@@ -110,7 +110,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 |---|---|---:|---|---|
 | R-01 | Jira sync test đang đỏ do mock thiếu `findMany` | P0 | Đã bổ sung test double theo `where.jiraKey.in`; 22/22 race/integration test và full suite 1.289/1.289 test pass | Closed |
 | R-02 | Lease/fencing bị đổi thứ tự khi tách worker | P0 | Batch 3.4 khóa checkpoint renew; batch 3.6 xác nhận lease takeover/fencing trên PostgreSQL thật, cùng 32 race/integration test mock và 4 DB integration test | Closed |
-| R-03 | Bulk retry tạo mutation trùng | P0 | Khóa idempotency marker và retry tests | Open |
+| R-03 | Bulk retry tạo mutation trùng | P0 | `processWithRetry` khóa idempotency guard: item đã `succeeded` không bao giờ re-run; retry chỉ reset item `failed` với `retryable=true`; 21 unit test trong `retry.test.ts` khóa hành vi | Closed |
 | R-04 | Notification chạy trước commit | P1 | Test thứ tự commit/notify | Open |
 | R-05 | API error/status đổi khi làm mỏng route | P1 | Dùng inventory `07-api-contract-inventory.md` làm baseline và bổ sung characterization test trước khi refactor route; hiện 18/41 route file ưu tiên có colocated test | Open |
 | R-06 | UI state reset sau khi tách component | P1 | Browser test dialog/tab/filter | Open |
@@ -131,6 +131,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 | R-21 | Tách bulk contract và validation làm thay đổi validation error message, key normalization hoặc làm lọt payload không hợp lệ | P0 | Tách `contracts.ts` và `validation.ts` thuần; giữ `ops.ts` làm facade; 25 unit test mới bao phủ 15 action kinds, key limit, selector mode và format; 83 bulk test liên quan, full suite 1.362/1.362 và build pass | Closed |
 | R-22 | Tách bulk selection và preview policy làm sai lệch filter query, 15 action classification, before/after snapshot hoặc stale detection | P0 | Tách `selection.ts` và `preview.ts` thuần; 40 unit test mới bao phủ 15 action kinds, stale window, transition errors, filter resolution (statuses/priorities/labels/assignees/epics/q); 118 bulk test, full suite 1.402/1.402 và build pass | Closed |
 | R-23 | Tách Bulk action executors làm đổi thứ tự Jira cache refresh, provenance propagation hoặc audit log | P0 | Tách `executors.ts` độc lập với typed context; 29 unit test mới kiểm tra 15 action kinds, cache refresh ordering, non-retryable duplicate-worklog timeout, dependency provenance upsert và audit sequence; 278 test bulk, full suite 1.458/1.458 và build pass | Closed |
+| R-24 | Tách Bulk retry và notification làm mất idempotency guard, đổi retry attempt/backoff hoặc thất thoát notification | P0 | Tách `retry.ts` và `notification.ts`; test khóa idempotency guard (R-03), attempts count, backoff delays, retryable error classifier và completion notification (full/partial success); 35 unit test mới, 313 test bulk, full suite 1.493/1.493 và build pass | Closed |
 
 ## 7. Quy tắc Dừng
 
