@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
 import { normalizeProjectKey } from "@/lib/jira/project-catalog";
 import type {
   ProjectTasksResponse,
@@ -13,6 +12,11 @@ import { isBlockedStatus, slaForStatus, slaExceeded } from "@/lib/stale/sla";
 import { businessDaysBetween, overdueBusinessDays } from "@/lib/stale/business-days";
 import { resolveCompletionDate, isDateInPeriod } from "./completion-date";
 import { resolveProjectVersionFilter } from "./version";
+import {
+  buildProjectIssueWhere,
+  REPORT_TASK_EXPLORER_SELECT,
+  fetchAssigneeDisplayNameMap,
+} from "./query-primitives";
 
 export interface TaskQueryParams {
   projectKey: string;
@@ -41,52 +45,18 @@ export async function getProjectTasks(
   const resolvedVersion = await resolveProjectVersionFilter(normalizedKey, versionId);
 
   // Construct query where clause
-  const whereClause: Prisma.IssueCacheWhereInput = {
-    projectKey: normalizedKey,
-    deletedAt: null,
-    ...(resolvedVersion?.whereInput || {}),
-  };
+  const whereClause = buildProjectIssueWhere(normalizedKey, resolvedVersion?.whereInput);
 
   // Fetch candidate issues
   const rawIssues = await prisma.issueCache.findMany({
     where: whereClause,
-    select: {
-      jiraKey: true,
-      projectKey: true,
-      summary: true,
-      status: true,
-      statusCategory: true,
-      statusChangedAt: true,
-      assigneeJira: true,
-      priority: true,
-      points: true,
-      originalEstimateSeconds: true,
-      dueDate: true,
-      createdAt: true,
-      updatedAt: true,
-      raw: true,
-      fixVersionNames: true,
-    },
+    select: REPORT_TASK_EXPLORER_SELECT,
     orderBy: [{ priority: "asc" }, { jiraKey: "desc" }],
   });
 
   // Collect user display names for assignees
-  const assigneeKeys = [
-    ...new Set(
-      rawIssues
-        .map((i) => i.assigneeJira)
-        .filter((a): a is string => Boolean(a && a.trim() !== ""))
-    ),
-  ];
-
-  const users = await prisma.user.findMany({
-    where: { jiraUsername: { in: assigneeKeys } },
-    select: { jiraUsername: true, displayName: true },
-  });
-  const userMap = new Map(
-    users
-      .filter((u) => Boolean(u.jiraUsername))
-      .map((u) => [u.jiraUsername!, u.displayName])
+  const userMap = await fetchAssigneeDisplayNameMap(
+    rawIssues.map((i) => i.assigneeJira)
   );
 
   // Evaluate each task

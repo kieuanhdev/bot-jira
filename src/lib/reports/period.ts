@@ -326,3 +326,4 @@ export function getAdjacentPeriod(
     comparisonPeriod: computeComparisonPeriod(newPeriod),
   };
 }
+

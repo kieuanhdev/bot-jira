@@ -1,5 +1,3 @@
-import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
 import { normalizeProjectKey } from "@/lib/jira/project-catalog";
 import type {
   ProjectHistoryResponse,
@@ -11,6 +9,7 @@ import { resolveCompletionDate, isDateInPeriod } from "./completion-date";
 import { normalizeStatusToGroup, isDoneGroup } from "./status";
 import { addDays, countDays } from "./period";
 import { resolveProjectVersionFilter } from "./version";
+import { fetchProjectReportIssues } from "./query-primitives";
 
 export interface HistoryQueryParams {
   projectKey: string;
@@ -26,28 +25,10 @@ export async function getProjectHistory(
   const { period, versionId } = params;
 
   const resolvedVersion = await resolveProjectVersionFilter(normalizedKey, versionId);
-  const whereClause: Prisma.IssueCacheWhereInput = {
-    projectKey: normalizedKey,
-    deletedAt: null,
-    ...(resolvedVersion?.whereInput || {}),
-  };
-
-  const rawIssues = await prisma.issueCache.findMany({
-    where: whereClause,
-    select: {
-      jiraKey: true,
-      projectKey: true,
-      summary: true,
-      status: true,
-      statusCategory: true,
-      statusChangedAt: true,
-      points: true,
-      originalEstimateSeconds: true,
-      createdAt: true,
-      updatedAt: true,
-      raw: true,
-    },
-  });
+  const { rawIssues } = await fetchProjectReportIssues(
+    normalizedKey,
+    resolvedVersion?.whereInput
+  );
 
   const totalDays = countDays(period.from, period.to);
   const dataPoints: HistoryDataPoint[] = [];

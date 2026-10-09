@@ -1,5 +1,3 @@
-import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
 import { listActiveProjects, normalizeProjectKey } from "@/lib/jira/project-catalog";
 import type {
   ProjectDetailResponse,
@@ -16,7 +14,6 @@ import {
   calculateWorkload,
   calculateBottlenecks,
   calculateTimeElapsedAndGap,
-  type ReportIssueInput,
 } from "./metrics";
 import { calculateSnapshotMetrics } from "./current-metrics";
 import { calculateFlowMetrics, compareFlowMetrics } from "./flow-metrics";
@@ -26,8 +23,13 @@ import { evaluateRiskTask, sortRiskTasks } from "./risk-query";
 import { resolveReportPeriod, getPeriodDisplayLabel } from "./period";
 import { evaluateDataQuality } from "./data-quality";
 import { resolveProjectVersionFilter } from "./version";
-import { isDoneGroup, normalizeStatusToGroup } from "./status";
-import { resolveCompletionDate } from "./completion-date";
+import {
+  fetchProjectReportIssues,
+  fetchAvailableProjectVersions,
+  fetchIssueTransitionEvents,
+  getPeriodDateBounds,
+  filterIssuesForPeriod,
+} from "./query-primitives";
 
 export interface ProjectReportQueryParams {
   projectKey: string;
@@ -65,102 +67,24 @@ export async function getProjectReportDetail(
   const periodLabel = getPeriodDisplayLabel(period);
 
   // Retrieve available versions from Release table
-  const releases = await prisma.release.findMany({
-    where: { projectKey: normalizedKey },
-    orderBy: [{ releaseDate: "asc" }, { createdAt: "desc" }],
-    select: {
-      id: true,
-      jiraVersionId: true,
-      version: true,
-      releaseDate: true,
-      status: true,
-      createdAt: true,
-    },
-  });
-
-  const availableVersions = releases.map((r) => ({
-    id: r.jiraVersionId || r.id,
-    name: r.version,
-    released: r.status === "released",
-    releaseDate: r.releaseDate ? r.releaseDate.toISOString().split("T")[0] : null,
-    startDate: r.createdAt ? r.createdAt.toISOString().split("T")[0] : null,
-  }));
+  const availableVersions = await fetchAvailableProjectVersions(normalizedKey);
 
   // Resolve version filter using unified resolver
   const resolvedVersion = await resolveProjectVersionFilter(normalizedKey, params.versionId);
 
-  // Construct query where clause
-  const whereClause: Prisma.IssueCacheWhereInput = {
-    projectKey: normalizedKey,
-    deletedAt: null,
-    ...(resolvedVersion?.whereInput || {}),
-  };
-
-  // Fetch all issues in the scope (DO NOT filter out tasks by createdAt!)
-  const rawIssues = await prisma.issueCache.findMany({
-    where: whereClause,
-    select: {
-      jiraKey: true,
-      projectKey: true,
-      summary: true,
-      status: true,
-      statusCategory: true,
-      statusChangedAt: true,
-      assigneeJira: true,
-      priority: true,
-      points: true,
-      originalEstimateSeconds: true,
-      timeSpent: true,
-      dueDate: true,
-      createdAt: true,
-      updatedAt: true,
-      labels: true,
-      raw: true,
-      lastSyncedAt: true,
-    },
-  });
-
-  const mappedIssues: ReportIssueInput[] = rawIssues.map((i) => ({
-    jiraKey: i.jiraKey,
-    projectKey: i.projectKey,
-    summary: i.summary,
-    status: i.status,
-    statusCategory: i.statusCategory,
-    statusChangedAt: i.statusChangedAt,
-    assigneeJira: i.assigneeJira,
-    priority: i.priority,
-    points: i.points,
-    originalEstimateSeconds: i.originalEstimateSeconds,
-    timeSpent: i.timeSpent,
-    dueDate: i.dueDate,
-    createdAt: i.createdAt,
-    updatedAt: i.updatedAt,
-    labels: i.labels,
-    raw: i.raw,
-  }));
+  // Fetch all issues in the scope
+  const { mappedIssues } = await fetchProjectReportIssues(
+    normalizedKey,
+    resolvedVersion?.whereInput
+  );
 
   // Coverage and unit
   const coverage = calculateCoverage(mappedIssues);
   const effectiveUnit: EffectiveUnit = resolveEffectiveUnit(params.unit ?? "auto", coverage);
 
   // Fetch transition events if available for current period
-  const transitionEvents = prisma.issueTransitionEvent
-    ? await prisma.issueTransitionEvent.findMany({
-        where: {
-          projectKey: normalizedKey,
-          occurredAt: {
-            gte: new Date(`${period.from}T00:00:00.000Z`),
-            lte: new Date(`${period.to}T23:59:59.999Z`),
-          },
-        },
-        select: {
-          jiraKey: true,
-          occurredAt: true,
-          fromStatusGroup: true,
-          toStatusGroup: true,
-        },
-      })
-    : [];
+  const periodBounds = getPeriodDateBounds(period);
+  const transitionEvents = await fetchIssueTransitionEvents(normalizedKey, periodBounds);
 
   // Flow in period
   const { flow, lowConfidenceCompletionsCount, completedIssueKeys } = calculateFlowMetrics({
@@ -172,48 +96,13 @@ export async function getProjectReportDetail(
     transitionEvents,
   });
 
-  const periodEndDate = new Date(`${period.to}T23:59:59.999Z`);
-  const periodStartDate = new Date(`${period.from}T00:00:00.000Z`);
-
   // Tasks relevant to this reporting period (active, open, or completed within the period)
-  const periodIssues = mappedIssues.filter((issue) => {
-    if (issue.createdAt && issue.createdAt.getTime() > periodEndDate.getTime()) {
-      return false;
-    }
-
-    const group = normalizeStatusToGroup(issue.status, issue.statusCategory);
-    if (!isDoneGroup(group)) {
-      return true;
-    }
-
-    if (completedIssueKeys.has(issue.jiraKey)) {
-      return true;
-    }
-
-    const resolved = resolveCompletionDate({
-      status: issue.status,
-      statusCategory: issue.statusCategory,
-      statusChangedAt: issue.statusChangedAt,
-      raw: issue.raw,
-    });
-
-    const completionDate = resolved.date || issue.statusChangedAt;
-    if (completionDate) {
-      if (completionDate.getTime() > periodEndDate.getTime()) {
-        return true;
-      }
-      if (completionDate.getTime() < periodStartDate.getTime()) {
-        return false;
-      }
-      return true;
-    }
-
-    if (issue.updatedAt && issue.updatedAt.getTime() < periodStartDate.getTime()) {
-      return false;
-    }
-
-    return false;
-  });
+  const periodIssues = filterIssuesForPeriod(
+    mappedIssues,
+    periodBounds.startDate,
+    periodBounds.endDate,
+    completedIssueKeys
+  );
 
   // Snapshot at end of period
   const snapshotAtEnd = calculateSnapshotMetrics({
@@ -227,23 +116,11 @@ export async function getProjectReportDetail(
   // Comparison period metrics
   let comparison = null;
   if (params.comparePrevious !== false && comparisonPeriod) {
-    const prevTransitionEvents = prisma.issueTransitionEvent
-      ? await prisma.issueTransitionEvent.findMany({
-          where: {
-            projectKey: normalizedKey,
-            occurredAt: {
-              gte: new Date(`${comparisonPeriod.from}T00:00:00.000Z`),
-              lte: new Date(`${comparisonPeriod.to}T23:59:59.999Z`),
-            },
-          },
-          select: {
-            jiraKey: true,
-            occurredAt: true,
-            fromStatusGroup: true,
-            toStatusGroup: true,
-          },
-        })
-      : [];
+    const prevPeriodBounds = getPeriodDateBounds(comparisonPeriod);
+    const prevTransitionEvents = await fetchIssueTransitionEvents(
+      normalizedKey,
+      prevPeriodBounds
+    );
 
     const prevFlowRes = calculateFlowMetrics({
       issues: mappedIssues,
@@ -254,30 +131,12 @@ export async function getProjectReportDetail(
       transitionEvents: prevTransitionEvents,
     });
 
-    const prevPeriodEndDate = new Date(`${comparisonPeriod.to}T23:59:59.999Z`);
-    const prevPeriodStartDate = new Date(`${comparisonPeriod.from}T00:00:00.000Z`);
-    const prevPeriodIssues = mappedIssues.filter((issue) => {
-      if (issue.createdAt && issue.createdAt.getTime() > prevPeriodEndDate.getTime()) {
-        return false;
-      }
-      const group = normalizeStatusToGroup(issue.status, issue.statusCategory);
-      if (!isDoneGroup(group)) return true;
-      if (prevFlowRes.completedIssueKeys.has(issue.jiraKey)) return true;
-      const resolved = resolveCompletionDate({
-        status: issue.status,
-        statusCategory: issue.statusCategory,
-        statusChangedAt: issue.statusChangedAt,
-        raw: issue.raw,
-      });
-      const completionDate = resolved.date || issue.statusChangedAt;
-      if (completionDate) {
-        if (completionDate.getTime() > prevPeriodEndDate.getTime()) return true;
-        if (completionDate.getTime() < prevPeriodStartDate.getTime()) return false;
-        return true;
-      }
-      if (issue.updatedAt && issue.updatedAt.getTime() < prevPeriodStartDate.getTime()) return false;
-      return false;
-    });
+    const prevPeriodIssues = filterIssuesForPeriod(
+      mappedIssues,
+      prevPeriodBounds.startDate,
+      prevPeriodBounds.endDate,
+      prevFlowRes.completedIssueKeys
+    );
 
     const prevSnapshot = calculateSnapshotMetrics({
       issues: prevPeriodIssues,
@@ -408,35 +267,13 @@ export async function getProjectRiskTasks(params: ProjectRiskQueryParams) {
   const now = new Date();
 
   const resolvedVersion = await resolveProjectVersionFilter(normalizedKey, params.versionId);
-  const whereClause: Prisma.IssueCacheWhereInput = {
-    projectKey: normalizedKey,
-    deletedAt: null,
-    ...(resolvedVersion?.whereInput || {}),
-  };
-
-  const rawIssues = await prisma.issueCache.findMany({
-    where: whereClause,
-    select: {
-      jiraKey: true,
-      projectKey: true,
-      summary: true,
-      status: true,
-      statusCategory: true,
-      statusChangedAt: true,
-      assigneeJira: true,
-      priority: true,
-      points: true,
-      originalEstimateSeconds: true,
-      timeSpent: true,
-      dueDate: true,
-      createdAt: true,
-      updatedAt: true,
-      labels: true,
-    },
-  });
+  const { mappedIssues } = await fetchProjectReportIssues(
+    normalizedKey,
+    resolvedVersion?.whereInput
+  );
 
   const evaluated: RiskTaskItem[] = [];
-  for (const issue of rawIssues) {
+  for (const issue of mappedIssues) {
     const riskItem = evaluateRiskTask(issue, now);
     if (riskItem) {
       if (params.risk && !riskItem.risks.includes(params.risk as RiskReason)) continue;

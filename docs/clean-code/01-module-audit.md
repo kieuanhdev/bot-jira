@@ -254,9 +254,9 @@ bulk/
 
 **Checklist**
 
-- [ ] Tách filter/period parsing dùng chung.
-- [ ] Tách Prisma selection và domain mapping.
-- [ ] Gom project/member/task query primitives khi semantics giống nhau.
+- [x] Tách filter/period parsing dùng chung. (Batch 6.1)
+- [x] Tách Prisma selection và domain mapping. (Batch 6.1)
+- [x] Gom project/member/task query primitives khi semantics giống nhau. (Batch 6.1)
 - [ ] Tách stale route thành query service + mapper.
 - [ ] Chia leaderboard DTO theo request/response/view model.
 - [ ] Test timezone, period boundary và empty dataset.

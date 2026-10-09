@@ -1,6 +1,4 @@
-import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
-import { listActiveProjects, normalizeProjectKey } from "@/lib/jira/project-catalog";
+import { listActiveProjects } from "@/lib/jira/project-catalog";
 import type {
   ProjectReportSummary,
   ProjectPortfolioResponse,
@@ -12,13 +10,17 @@ import {
   calculateCoverage,
   resolveEffectiveUnit,
   calculateProgress,
-  type ReportIssueInput,
 } from "./metrics";
 import { calculateSnapshotMetrics } from "./current-metrics";
 import { calculateFlowMetrics } from "./flow-metrics";
 import { calculateProjectHealth } from "./health";
 import { getReportFreshness } from "./freshness";
 import { resolveReportPeriod, getPeriodDisplayLabel } from "./period";
+import {
+  resolveScopedProjectKeys,
+  fetchReferenceRelease,
+  fetchPortfolioProjectIssues,
+} from "./query-primitives";
 
 export interface PortfolioQueryParams {
   allowedProjects: string[];
@@ -39,11 +41,7 @@ export async function getProjectPortfolio(
   const catalogMap = new Map(activeCatalog.map((p) => [p.key, p.name]));
 
   // Intersect allowedProjects with requested filterProjects
-  let projectKeys = params.allowedProjects;
-  if (params.filterProjects && params.filterProjects.length > 0) {
-    const requested = new Set(params.filterProjects.map(normalizeProjectKey));
-    projectKeys = projectKeys.filter((k) => requested.has(k));
-  }
+  const projectKeys = resolveScopedProjectKeys(params.allowedProjects, params.filterProjects);
 
   // Resolve period
   const { period } = resolveReportPeriod({
@@ -63,68 +61,10 @@ export async function getProjectPortfolio(
     const projectName = catalogMap.get(projectKey) || projectKey;
 
     // Optional reference release (purely informational, not for scope filtering)
-    const referenceRelease = await prisma.release.findFirst({
-      where: {
-        projectKey,
-        archived: false,
-        status: { not: "released" },
-      },
-      orderBy: [{ releaseDate: "asc" }, { createdAt: "desc" }],
-      select: {
-        id: true,
-        jiraVersionId: true,
-        version: true,
-        releaseDate: true,
-      },
-    });
+    const referenceRelease = await fetchReferenceRelease(projectKey);
 
     // Query entire project scope (NOT filtered by active release!)
-    const whereClause: Prisma.IssueCacheWhereInput = {
-      projectKey,
-      deletedAt: null,
-    };
-
-    const issues = await prisma.issueCache.findMany({
-      where: whereClause,
-      select: {
-        jiraKey: true,
-        projectKey: true,
-        summary: true,
-        status: true,
-        statusCategory: true,
-        statusChangedAt: true,
-        assigneeJira: true,
-        priority: true,
-        points: true,
-        originalEstimateSeconds: true,
-        timeSpent: true,
-        dueDate: true,
-        createdAt: true,
-        updatedAt: true,
-        lastSyncedAt: true,
-        labels: true,
-        raw: true,
-      },
-    });
-
-    const mappedIssues: ReportIssueInput[] = issues.map((i) => ({
-      jiraKey: i.jiraKey,
-      projectKey: i.projectKey,
-      summary: i.summary,
-      status: i.status,
-      statusCategory: i.statusCategory,
-      statusChangedAt: i.statusChangedAt,
-      assigneeJira: i.assigneeJira,
-      priority: i.priority,
-      points: i.points,
-      originalEstimateSeconds: i.originalEstimateSeconds,
-      timeSpent: i.timeSpent,
-      dueDate: i.dueDate,
-      createdAt: i.createdAt,
-      updatedAt: i.updatedAt,
-      labels: i.labels,
-      raw: i.raw,
-    }));
+    const { mappedIssues, lastSyncedAt } = await fetchPortfolioProjectIssues(projectKey);
 
     const coverage = calculateCoverage(mappedIssues);
     const effectiveUnit: EffectiveUnit = resolveEffectiveUnit(params.unit ?? "auto", coverage);
@@ -155,13 +95,6 @@ export async function getProjectPortfolio(
       freshness,
       now,
     });
-
-    let maxSyncTime: Date | null = null;
-    for (const raw of issues) {
-      if (raw.lastSyncedAt && (!maxSyncTime || raw.lastSyncedAt > maxSyncTime)) {
-        maxSyncTime = raw.lastSyncedAt;
-      }
-    }
 
     const summary: ProjectReportSummary = {
       projectKey,
@@ -194,14 +127,12 @@ export async function getProjectPortfolio(
       completedInPeriod: flow.completedInPeriod,
       netBacklogChange: flow.netBacklogChange,
       throughput: flow.throughput,
-      lastSyncedAt: maxSyncTime ? maxSyncTime.toISOString() : null,
+      lastSyncedAt: lastSyncedAt ? lastSyncedAt.toISOString() : null,
       referenceRelease: referenceRelease
         ? {
-            id: referenceRelease.jiraVersionId || referenceRelease.id,
-            name: referenceRelease.version,
-            releaseDate: referenceRelease.releaseDate
-              ? referenceRelease.releaseDate.toISOString().split("T")[0]
-              : null,
+            id: referenceRelease.id,
+            name: referenceRelease.name,
+            releaseDate: referenceRelease.releaseDate,
           }
         : null,
     };

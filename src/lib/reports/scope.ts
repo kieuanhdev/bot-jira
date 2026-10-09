@@ -66,3 +66,5 @@ export async function assertProjectAccess(
 
   return true;
 }
+
+export { resolveScopedProjectKeys } from "./query-primitives";
