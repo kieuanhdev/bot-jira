@@ -279,12 +279,12 @@ bulk/
 
 **Checklist**
 
-- [ ] Chuẩn hóa delivery result và retry classification.
-- [ ] Giữ outbox idempotency và delivery state transitions.
-- [ ] Tách từng chat command handler.
-- [ ] Tách preview/confirmation khỏi mutation handler.
-- [ ] Test command authorization và expired confirmation.
-- [ ] Test push/chat partial failure không làm mất outbox item.
+- [x] Chuẩn hóa delivery result và retry classification.
+- [x] Giữ outbox idempotency và delivery state transitions.
+- [x] Tách từng chat command handler.
+- [x] Tách preview/confirmation khỏi mutation handler.
+- [x] Test command authorization và expired confirmation.
+- [x] Test push/chat partial failure không làm mất outbox item.
 
 ## 10. AI, Sentry Và Worklogs
 
