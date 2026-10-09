@@ -1,6 +1,6 @@
 import type { PgBoss } from "pg-boss";
 import { env } from "@/lib/env";
-import { captureProjectReportSnapshots } from "@/lib/reports/snapshot";
+import { captureProjectReportSnapshots } from "@/lib/reports/snapshot-service";
 import type { WorkerLog } from "./guard";
 import { scheduledJiraJobAgeMs, shouldSkipStaleJiraJob } from "./jira-job-policy";
 import { buildQueueDefinitions } from "./job-names";

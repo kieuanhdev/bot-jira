@@ -126,6 +126,19 @@ export async function fetchPortfolioProjectIssues(
 }
 
 /**
+ * Fetches issues for task explorer with ordering by priority asc and jiraKey desc.
+ */
+export async function fetchTaskExplorerIssues(
+  whereClause: Prisma.IssueCacheWhereInput
+): Promise<RawReportTaskRecord[]> {
+  return prisma.issueCache.findMany({
+    where: whereClause,
+    select: REPORT_TASK_EXPLORER_SELECT,
+    orderBy: [{ priority: "asc" }, { jiraKey: "desc" }],
+  });
+}
+
+/**
  * Fetches a map of Jira usernames to user display names.
  * Deduplicates input usernames and filters out empty or null entries.
  */

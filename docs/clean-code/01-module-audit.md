@@ -259,7 +259,7 @@ bulk/
 - [x] Gom project/member/task query primitives khi semantics giống nhau. (Batch 6.1)
 - [ ] Tách stale route thành query service + mapper.
 - [ ] Chia leaderboard DTO theo request/response/view model.
-- [ ] Test timezone, period boundary và empty dataset.
+- [x] Test timezone, period boundary và empty dataset. (Batch 6.2)
 - [ ] Browser test filters, charts và export.
 
 ## 9. Notification, Events Và Chat

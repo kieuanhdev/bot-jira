@@ -11,6 +11,7 @@ import {
   fetchAssigneeDisplayNameMap,
   fetchProjectReportIssues,
   fetchPortfolioProjectIssues,
+  fetchTaskExplorerIssues,
   fetchIssueTransitionEvents,
   fetchAvailableProjectVersions,
   fetchReferenceRelease,
@@ -363,6 +364,41 @@ describe("Reports Query Primitives", () => {
 
       const result = await fetchPortfolioProjectIssues("TEST");
       expect(result.lastSyncedAt).toEqual(d2);
+    });
+  });
+
+  describe("fetchTaskExplorerIssues", () => {
+    it("queries issueCache with explorer select and ordering", async () => {
+      const mockItem = {
+        jiraKey: "TEST-1",
+        projectKey: "TEST",
+        summary: "Task 1",
+        status: "Open",
+        statusCategory: "new",
+        statusChangedAt: null,
+        assigneeJira: "alice",
+        priority: "High",
+        points: 5,
+        originalEstimateSeconds: 3600,
+        timeSpent: 0,
+        dueDate: null,
+        createdAt: new Date("2026-10-01T00:00:00Z"),
+        updatedAt: null,
+        labels: [],
+        raw: null,
+        lastSyncedAt: new Date(),
+        fixVersionNames: ["v1.0"],
+      };
+      mocks.issueCacheFindMany.mockResolvedValue([mockItem]);
+
+      const result = await fetchTaskExplorerIssues({ projectKey: "TEST" });
+      expect(mocks.issueCacheFindMany).toHaveBeenCalledWith({
+        where: { projectKey: "TEST" },
+        select: expect.objectContaining({ fixVersionNames: true }),
+        orderBy: [{ priority: "asc" }, { jiraKey: "desc" }],
+      });
+      expect(result).toHaveLength(1);
+      expect(result[0].jiraKey).toBe("TEST-1");
     });
   });
 

@@ -2,34 +2,20 @@ import { listActiveProjects, normalizeProjectKey } from "@/lib/jira/project-cata
 import type {
   ProjectDetailResponse,
   ReportUnit,
-  EffectiveUnit,
   RiskTaskItem,
   RiskReason,
 } from "./types";
-import {
-  calculateCoverage,
-  resolveEffectiveUnit,
-  calculateProgress,
-  calculateStatusDistribution,
-  calculateWorkload,
-  calculateBottlenecks,
-  calculateTimeElapsedAndGap,
-} from "./metrics";
-import { calculateSnapshotMetrics } from "./current-metrics";
-import { calculateFlowMetrics, compareFlowMetrics } from "./flow-metrics";
-import { calculateProjectHealth } from "./health";
 import { getReportFreshness } from "./freshness";
 import { evaluateRiskTask, sortRiskTasks } from "./risk-query";
 import { resolveReportPeriod, getPeriodDisplayLabel } from "./period";
-import { evaluateDataQuality } from "./data-quality";
 import { resolveProjectVersionFilter } from "./version";
 import {
   fetchProjectReportIssues,
   fetchAvailableProjectVersions,
   fetchIssueTransitionEvents,
   getPeriodDateBounds,
-  filterIssuesForPeriod,
 } from "./query-primitives";
+import { calculateProjectReportMetrics } from "./project-metrics";
 
 export interface ProjectReportQueryParams {
   projectKey: string;
@@ -78,128 +64,33 @@ export async function getProjectReportDetail(
     resolvedVersion?.whereInput
   );
 
-  // Coverage and unit
-  const coverage = calculateCoverage(mappedIssues);
-  const effectiveUnit: EffectiveUnit = resolveEffectiveUnit(params.unit ?? "auto", coverage);
-
   // Fetch transition events if available for current period
   const periodBounds = getPeriodDateBounds(period);
   const transitionEvents = await fetchIssueTransitionEvents(normalizedKey, periodBounds);
 
-  // Flow in period
-  const { flow, lowConfidenceCompletionsCount, completedIssueKeys } = calculateFlowMetrics({
-    issues: mappedIssues,
-    from: period.from,
-    to: period.to,
-    timezone: period.timezone,
-    unit: effectiveUnit,
-    transitionEvents,
-  });
-
-  // Tasks relevant to this reporting period (active, open, or completed within the period)
-  const periodIssues = filterIssuesForPeriod(
-    mappedIssues,
-    periodBounds.startDate,
-    periodBounds.endDate,
-    completedIssueKeys
-  );
-
-  // Snapshot at end of period
-  const snapshotAtEnd = calculateSnapshotMetrics({
-    issues: periodIssues,
-    unit: effectiveUnit,
-    coverage,
-    periodEndStr: period.to,
-    now,
-  });
-
-  // Comparison period metrics
-  let comparison = null;
+  // Fetch previous transition events if comparison period is active
+  let prevTransitionEvents: typeof transitionEvents = [];
   if (params.comparePrevious !== false && comparisonPeriod) {
     const prevPeriodBounds = getPeriodDateBounds(comparisonPeriod);
-    const prevTransitionEvents = await fetchIssueTransitionEvents(
-      normalizedKey,
-      prevPeriodBounds
-    );
-
-    const prevFlowRes = calculateFlowMetrics({
-      issues: mappedIssues,
-      from: comparisonPeriod.from,
-      to: comparisonPeriod.to,
-      timezone: comparisonPeriod.timezone,
-      unit: effectiveUnit,
-      transitionEvents: prevTransitionEvents,
-    });
-
-    const prevPeriodIssues = filterIssuesForPeriod(
-      mappedIssues,
-      prevPeriodBounds.startDate,
-      prevPeriodBounds.endDate,
-      prevFlowRes.completedIssueKeys
-    );
-
-    const prevSnapshot = calculateSnapshotMetrics({
-      issues: prevPeriodIssues,
-      unit: effectiveUnit,
-      coverage,
-      periodEndStr: comparisonPeriod.to,
-      now,
-    });
-    comparison = compareFlowMetrics(flow, prevFlowRes.flow, snapshotAtEnd, prevSnapshot);
+    prevTransitionEvents = await fetchIssueTransitionEvents(normalizedKey, prevPeriodBounds);
   }
 
   // Freshness
   const freshness = await getReportFreshness();
 
-  // Progress & Health
-  const activeScopeIssues = resolvedVersion ? mappedIssues : periodIssues;
-  const progress = calculateProgress(activeScopeIssues, effectiveUnit);
-  const taskProgress = calculateProgress(activeScopeIssues, "tasks");
-  const pointProgress = calculateProgress(activeScopeIssues, "points");
-  const estimateProgress = calculateProgress(activeScopeIssues, "estimate");
-
-  const { timeElapsedPercentage, scheduleGapPercentage } = calculateTimeElapsedAndGap(
-    resolvedVersion?.startDate,
-    resolvedVersion?.releaseDate,
-    progress.percentage,
-    now
-  );
-
-  const healthEval = calculateProjectHealth({
-    issues: activeScopeIssues,
-    progress,
+  // Pure metric calculations
+  const metrics = calculateProjectReportMetrics({
+    mappedIssues,
+    period,
+    comparisonPeriod: params.comparePrevious !== false ? comparisonPeriod : null,
+    transitionEvents,
+    prevTransitionEvents,
+    resolvedVersion,
     freshness,
-    releaseDate: resolvedVersion?.releaseDate,
-    startDate: resolvedVersion?.startDate,
-    timeElapsedPercentage,
-    scheduleGapPercentage,
+    unit: params.unit ?? "auto",
+    comparePrevious: params.comparePrevious !== false,
     now,
   });
-
-  // Data quality evaluation
-  const dataQuality = evaluateDataQuality({
-    freshness,
-    lowConfidenceCompletionsCount,
-    totalCompletedCount: flow.completedInPeriod,
-    hasTransitionEvents: transitionEvents.length > 0,
-    missingEstimateCount: activeScopeIssues.filter((i) => !i.points && !i.originalEstimateSeconds).length,
-    totalCount: activeScopeIssues.length,
-  });
-
-  // Status distribution (at end of period), workload, bottlenecks
-  const statusDistribution = calculateStatusDistribution(periodIssues, period.to, period.from);
-  const workload = calculateWorkload(periodIssues);
-  const bottlenecks = calculateBottlenecks(periodIssues, now);
-
-  // Top risks
-  const evaluatedRisks: RiskTaskItem[] = [];
-  for (const issue of periodIssues) {
-    const riskItem = evaluateRiskTask(issue, now);
-    if (riskItem) {
-      evaluatedRisks.push(riskItem);
-    }
-  }
-  const topRisks = sortRiskTasks(evaluatedRisks).slice(0, 10);
 
   return {
     projectKey: normalizedKey,
@@ -219,35 +110,35 @@ export async function getProjectReportDetail(
       releaseDate: resolvedVersion?.releaseDate
         ? resolvedVersion.releaseDate.toISOString().split("T")[0]
         : null,
-      unit: effectiveUnit,
+      unit: metrics.effectiveUnit,
       requestedUnit: params.unit ?? "auto",
       includeSubtasks: params.includeSubtasks ?? true,
       totalScopeIssues: mappedIssues.length,
     },
     availableVersions,
-    snapshotAtEnd,
-    flow,
-    comparison,
-    health: healthEval,
-    statusDistribution,
-    workload,
-    bottlenecks,
-    topRisks,
-    dataQuality,
+    snapshotAtEnd: metrics.snapshotAtEnd,
+    flow: metrics.flow,
+    comparison: metrics.comparison,
+    health: metrics.health,
+    statusDistribution: metrics.statusDistribution,
+    workload: metrics.workload,
+    bottlenecks: metrics.bottlenecks,
+    topRisks: metrics.topRisks,
+    dataQuality: metrics.dataQuality,
     freshness,
     kpis: {
-      progress,
-      taskProgress,
-      pointProgress,
-      estimateProgress,
-      coverage,
-      wipCount: snapshotAtEnd.wipAtEnd,
-      blockedCount: snapshotAtEnd.blockedAtEnd,
-      overdueCount: snapshotAtEnd.overdueAtEnd,
-      overSlaCount: snapshotAtEnd.overSlaAtEnd,
-      unassignedCount: snapshotAtEnd.unassignedAtEnd,
-      scheduleGapPercentage,
-      timeElapsedPercentage,
+      progress: metrics.progress,
+      taskProgress: metrics.taskProgress,
+      pointProgress: metrics.pointProgress,
+      estimateProgress: metrics.estimateProgress,
+      coverage: metrics.coverage,
+      wipCount: metrics.snapshotAtEnd.wipAtEnd,
+      blockedCount: metrics.snapshotAtEnd.blockedAtEnd,
+      overdueCount: metrics.snapshotAtEnd.overdueAtEnd,
+      overSlaCount: metrics.snapshotAtEnd.overSlaAtEnd,
+      unassignedCount: metrics.snapshotAtEnd.unassignedAtEnd,
+      scheduleGapPercentage: metrics.scheduleGapPercentage,
+      timeElapsedPercentage: metrics.timeElapsedPercentage,
     },
   };
 }
@@ -301,4 +192,3 @@ export async function getProjectRiskTasks(params: ProjectRiskQueryParams) {
     offset,
   };
 }
-

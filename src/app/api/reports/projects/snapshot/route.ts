@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
-import { captureProjectReportSnapshots } from "@/lib/reports/snapshot";
+import { captureProjectReportSnapshots } from "@/lib/reports/snapshot-service";
 
 export const dynamic = "force-dynamic";
 
