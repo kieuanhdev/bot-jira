@@ -9,7 +9,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: { notificationOutbox: {
 } } }));
 vi.mock("@/lib/notify/chat-delivery", () => ({ sendChatOutbox: mocks.send }));
 vi.mock("@/lib/notify/outbox", () => ({ backoffMs: () => 1000 }));
-vi.mock("@/lib/queue/boss", () => ({ enqueueNotificationDelivery: mocks.enqueue }));
+vi.mock("@/lib/queue/enqueue", () => ({ enqueueNotificationDelivery: mocks.enqueue }));
 vi.mock("@/lib/notify/push", () => ({ sendPush: vi.fn() }));
 import { runDeliverNotifications } from "./deliver-notifications";
 

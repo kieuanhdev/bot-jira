@@ -4,16 +4,14 @@ import {
   isValidProjectKeyFormat,
 } from "@/lib/jira/project-catalog";
 import { registerAccessibleConfiguredProjects } from "@/lib/jira/project-access";
-import { enqueueJiraProjectSync } from "@/lib/queue/boss";
+import {
+  enqueueJiraProjectSync,
+  type PollJiraDispatchJobData,
+} from "@/lib/queue/enqueue";
 import type { WorkerLog } from "../guard";
 import type { JiraSyncSource } from "./poll-jira";
 
-export type PollJiraDispatchJobData = {
-  full?: boolean;
-  source?: "schedule" | "startup" | "admin";
-  requestedBy?: string;
-  projectKeys?: string[];
-};
+export type { PollJiraDispatchJobData } from "@/lib/queue/enqueue";
 
 export async function runPollJiraDispatch(data: PollJiraDispatchJobData = {}): Promise<WorkerLog> {
   // Pick up configured projects that a stored account can read but the catalog lacks.

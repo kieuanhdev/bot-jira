@@ -157,11 +157,11 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
   }
 
   if (due.length === BATCH_SIZE) {
-    const { enqueueNotificationDelivery } = await import("../boss");
+    const { enqueueNotificationDelivery } = await import("../enqueue");
     await enqueueNotificationDelivery();
   }
   if (nextRetry) {
-    const { enqueueNotificationDelivery } = await import("../boss");
+    const { enqueueNotificationDelivery } = await import("../enqueue");
     await enqueueNotificationDelivery(nextRetry);
   }
 

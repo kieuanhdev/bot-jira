@@ -26,7 +26,7 @@
 | 0 | Baseline xanh | DONE | Codex | 2026-10-08 | 2026-10-08 | Typecheck, lint zero-warning, 1.289 test và build đều pass; dừng trước Phase 1 |
 | 1 | Contracts và dependency direction | DONE | Codex | 2026-10-08 | 2026-10-08 | Shared contracts/helper đúng dependency direction; lint boundary, full test và build pass; dừng trước Phase 2 |
 | 2 | Jira và Issues | DONE | Codex | 2026-10-08 | 2026-10-09 | Batch 2.1–2.5 hoàn tất; full test/build pass; dừng trước Phase 3 |
-| 3 | Queue và Sync | IN_PROGRESS | Codex | 2026-10-09 | | Batch 3.1–3.2 hoàn tất; dừng trước batch 3.3 |
+| 3 | Queue và Sync | IN_PROGRESS | Codex | 2026-10-09 | | Batch 3.1–3.3 hoàn tất; dừng trước batch 3.4 |
 | 4 | Bulk | TODO | | | | |
 | 5 | Bitbucket và Releases | TODO | | | | |
 | 6 | Reports, Stale, Leaderboard | TODO | | | | |
@@ -51,7 +51,7 @@
 | 2.5 | Issue persistence | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 62/62 test persistence/sync liên quan và 1.316/1.316 full test pass (19,72 giây); build pass; manual QA N/A | Tách `repository.ts` + `cache-service.ts`; `cache.ts` giữ facade; khóa commit-before-notify và stale-no-notify; dừng trước 3.1 |
 | 3.1 | pg-boss lifecycle | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 16/16 test lifecycle/queue liên quan và 1.320/1.320 full test pass (22,40 giây); build pass; manual QA N/A | Tách `connection.ts`; khóa concurrent start, failed-start retry, graceful stop và restart; giữ public exports; dừng trước 3.2 |
 | 3.2 | Registry và schedules | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 99/99 queue/failure/race test và 1.324/1.324 full test pass (21,74 giây); build pass; manual QA N/A | Tách `job-names.ts`, `registry.ts`, `schedules.ts`; khóa 17 queue và 11 schedule options; giữ `boss.ts` facade; dừng trước 3.3 |
-| 3.3 | Enqueue API | TODO | | | | |
+| 3.3 | Enqueue API | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 105/105 queue/failure/race test và 1.330/1.330 full test pass (22,40 giây); build pass; manual QA N/A | Tách `enqueue.ts`; thêm 6 boundary test khóa coalesced/rejected/database failure và options; `boss.ts` giữ facade; dừng trước 3.4 |
 | 3.4 | Jira sync pipeline | TODO | | | | |
 | 3.5 | Webhook handlers | TODO | | | | |
 | 3.6 | DB integration suite | TODO | | | | |
@@ -100,6 +100,7 @@
 | 2026-10-09 | D-011 | Đặt Prisma writes, issue/link transaction và comment P2002 handling trong `issues/repository.ts`; orchestration mapping/refresh/notify trong `cache-service.ts`; giữ `cache.ts` làm re-export facade | Persistence không còn parse Jira transport; mọi caller cũ giữ import; notification chỉ chạy sau khi repository resolve transaction thành công, còn stale payload không notify | Codex |
 | 2026-10-09 | D-012 | Đặt pg-boss singleton và start/stop state machine tại `queue/connection.ts`; `boss.ts` re-export `getBoss`/`startBoss` và chỉ dọn timer trước khi gọi lifecycle stop | Cô lập connection khỏi registry/schedule dành cho batch 3.2, giữ mọi caller tương thích và cho phép test lifecycle không kết nối database thật | Codex |
 | 2026-10-09 | D-013 | Đặt typed job/queue catalog tại `queue/job-names.ts`, cron definitions tại `queue/schedules.ts`, consumer registration/timer tại `queue/registry.ts`; giữ `boss.ts` làm facade và orchestration entrypoint | Khóa tên/policy/options thành contract test được, tách schedule khỏi handler wiring mà không đổi caller, startup reconciliation, enqueue API hay queue semantics dành cho các batch sau | Codex |
+| 2026-10-09 | D-014 | Đặt toàn bộ producer functions và `JiraProjectSyncRequest` tại `queue/enqueue.ts`; worker queue import boundary trực tiếp, còn `boss.ts` re-export đầy đủ cho caller hiện hữu | Producer chỉ phụ thuộc connection/env/job DTO, loại dependency vòng qua facade; giữ nguyên payload/options và cho phép kiểm trực tiếp `null` coalescing cùng error propagation mà không kết nối database | Codex |
 
 ## Findings Ngoài Phạm Vi
 
@@ -131,6 +132,7 @@
 | 2026-10-09 | Worktree batch 2.5, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 10 file / 62 test persistence/sync liên quan; 170 file / 1.316 test full suite trong 19,72 giây | Pass, Next.js 16.3.5 | N/A; server persistence boundary, không đổi route/UI; stale/unique/rollback/notify ordering được automated test | Codex |
 | 2026-10-09 | Worktree batch 3.1, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 2 file / 16 test lifecycle/queue liên quan; 171 file / 1.320 test full suite trong 22,40 giây | Pass, Next.js 16.3.5 | N/A; lifecycle server-only được test bằng fake boss, không kết nối DB thật hoặc đổi queue/schedule | Codex |
 | 2026-10-09 | Worktree batch 3.2, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 16 file / 99 queue/failure/race test; 172 file / 1.324 test full suite trong 21,74 giây | Pass, Next.js 16.3.5 | N/A; refactor registry/schedule server-only, không đổi UI; queue/cron options và unschedule failure được automated test, không kết nối DB/Jira thật | Codex |
+| 2026-10-09 | Worktree batch 3.3, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 17 file / 105 queue/failure/race test; 173 file / 1.330 test full suite trong 22,40 giây | Pass, Next.js 16.3.5 | N/A; enqueue boundary server-only, không đổi UI; coalesced/rejected/database failure và route/facade compatibility được automated test, không kết nối DB/Jira thật | Codex |
 
 ## Completion Report
 

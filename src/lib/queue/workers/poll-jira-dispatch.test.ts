@@ -12,7 +12,7 @@ vi.mock("@/lib/jira/project-catalog", async (importOriginal) => {
   };
 });
 
-vi.mock("@/lib/queue/boss", () => ({
+vi.mock("@/lib/queue/enqueue", () => ({
   enqueueJiraProjectSync: mocks.enqueueJiraProjectSync,
 }));
 vi.mock("@/lib/jira/project-access", () => ({

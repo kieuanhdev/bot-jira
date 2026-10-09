@@ -11,7 +11,7 @@ import { runDeliverNotifications } from "./workers/deliver-notifications";
 import { runDetectPeopleFields } from "./workers/detect-people-fields";
 import { runHealthAlert } from "./workers/health-alert";
 import { runParseCommentBranches } from "./workers/parse-comment-branches";
-import type { PollJiraDispatchJobData } from "./workers/poll-jira-dispatch";
+import type { PollJiraDispatchJobData } from "./enqueue";
 import {
   runPollJiraProject,
   type JiraSyncSource,

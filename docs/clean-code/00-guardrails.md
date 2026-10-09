@@ -126,6 +126,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 | R-16 | Tách issue persistence làm lệch stale-write guard, issue/link transaction, comment unique race hoặc notification ordering | P0 | Repository giữ nguyên conditional update/P2002/transaction; test khóa rollback, stale rejection, unique comment và commit-before-notify; 62/62 test liên quan, full suite 1.316/1.316 và build pass | Closed |
 | R-17 | Tách pg-boss connection lifecycle làm tạo nhiều singleton, start trùng hoặc shutdown không graceful | P0 | Lifecycle dùng shared global state, cache start promise và reset khi start lỗi; test khóa concurrent start, retry, graceful stop/timeout và singleton mới sau stop; full suite/build pass | Closed |
 | R-18 | Tách queue registry/schedules làm lệch tên job, queue policy, cron, singleton, retry, expire hoặc heartbeat options | P0 | Catalog typed khóa 17 job/queue; contract test snapshot 11 schedule và failure path unschedule legacy; 99 queue test, full suite 1.324/1.324 và build pass | Closed |
+| R-19 | Tách enqueue API làm đổi payload/options, nuốt lỗi database hoặc biến job coalesced `null` thành success ID | P0 | `enqueue.ts` giữ nguyên facade exports; test trực tiếp khóa payload/options, `string | null`, send rejection và startup/database failure; 105 queue test, full suite 1.330/1.330 và build pass | Closed |
 
 ## 7. Quy tắc Dừng
 
