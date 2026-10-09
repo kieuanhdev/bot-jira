@@ -11,13 +11,13 @@
 | TypeScript errors | 0 | 0 | `npm run typecheck` (batch 0.1) |
 | ESLint errors | 0 | 0 | `npm run lint` (batch 0.1) |
 | ESLint warnings | 3 | 0 | `npm run lint`; `eslint --max-warnings=0` pass |
-| Failing tests | 4 | 0 | `npm test`: 1.587/1.587 pass |
+| Failing tests | 4 | 0 | `npm test`: 1.605/1.605 pass |
 | Failing test files | 2 | 0 | `jira-sync-race`, `jira-sync-integration`: 22/22 pass |
 | Build | Chưa đo lại | Pass | `npm run build`; Next.js 16.3.5 production build |
 | API routes | 101 | | `find src/app/api -name route.ts` |
 | Routes import Prisma | 73 | | `rg '@/lib/prisma' src/app/api` |
 | Routes >150 dòng | 15 | | `wc -l` |
-| File production lớn nhất | 1.919 dòng | 682 dòng | `src/lib/bitbucket/client.ts` (toàn bộ file trong `src/lib/bulk/` đều < 600 dòng; `create-ops.ts` giảm từ 873 còn 355 dòng; `create-validator.ts` 439 dòng; `ops.ts` 579 dòng) |
+| File production lớn nhất | 1.919 dòng | 682 dòng | `src/lib/bitbucket/client.ts` (toàn bộ file trong `src/lib/bulk/` và `src/app/(app)/bulk/` đều < 600 dòng; `create-ops.ts` 355 dòng; `bulk-client.tsx` giảm từ 752 còn 220 dòng) |
 
 ## Phase Status
 
@@ -27,7 +27,7 @@
 | 1 | Contracts và dependency direction | DONE | Codex | 2026-10-08 | 2026-10-08 | Shared contracts/helper đúng dependency direction; lint boundary, full test và build pass; dừng trước Phase 2 |
 | 2 | Jira và Issues | DONE | Codex | 2026-10-08 | 2026-10-09 | Batch 2.1–2.5 hoàn tất; full test/build pass; dừng trước Phase 3 |
 | 3 | Queue và Sync | DONE | Codex | 2026-10-09 | 2026-10-09 | Batch 3.1–3.6 hoàn tất; DB integration, full test và build pass; dừng trước Phase 4 |
-| 4 | Bulk | IN_PROGRESS | Codex | 2026-10-09 | | Batch 4.1–4.7 hoàn tất; dừng trước 4.8 |
+| 4 | Bulk | DONE | Codex | 2026-10-09 | 2026-10-09 | Batch 4.1–4.8 hoàn tất; full test và production build pass; hoàn tất Phase 4, dừng trước Phase 5 |
 | 5 | Bitbucket và Releases | TODO | | | | |
 | 6 | Reports, Stale, Leaderboard | TODO | | | | |
 | 7 | Notify, Chat, AI, Sentry | TODO | | | | |
@@ -62,7 +62,7 @@
 | 4.5 | Bulk retry và notification | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 35 unit test mới, 313 test bulk liên quan và 1.493/1.493 full test pass (23,64 giây); build pass; manual QA N/A | Tách `retry.ts` (retry eligibility, error classifier, execution runner với idempotency guard R-03, backoff calculation) và `notification.ts` (status label, severity, completion summary, notification payload, safe delivery dispatcher); `ops.ts` giữ facade re-export tương thích 100%; `ops.ts` giảm từ 684 còn 580 dòng (<600 dòng); R-03/R-24 Closed; dừng trước 4.6 |
 | 4.6 | Bulk create metadata/validation | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 64 unit test mới, 377 test bulk liên quan và 1.557/1.557 full test pass (25,72 giây); build pass; manual QA N/A | Tách `create-metadata.ts` (metadata loader, SHA-256 fingerprint, cache TTL/invalidation), `create-custom-fields.ts` (11 field shapes, scalar extractor, allowed values, validation) và `create-normalization.ts` (merge defaults, summary, description, labels, points, estimate, duedate, fixVersions, components, parent); `create-validator.ts` (giảm từ 816 còn 439 dòng) và `create-ops.ts` (giảm từ 1.140 còn 873 dòng) giữ facade re-export tương thích 100%; R-25 Closed; dừng trước 4.7 |
 | 4.7 | Bulk create execution | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 30 unit test mới, 403 test bulk liên quan và 1.587/1.587 full test pass (28,69 giây); build pass; manual QA N/A | Tách `create-parent-resolver.ts` (parent resolution, child unlock/block, orphan waiting cleanup), `create-item-executor.ts` (marker reconciliation, create issue with timetracking fallback, item processing & retry/restart idempotency guard) và `create-execution.ts` (worker orchestrator, multi-round dependency scheduling, concurrency pool, metrics, notification); `create-ops.ts` (giảm từ 873 còn 355 dòng) giữ facade re-export tương thích 100%; R-26 Closed; dừng trước 4.8 |
-| 4.8 | Bulk UI controller | TODO | | | | |
+| 4.8 | Bulk UI controller | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 18 unit test mới, 67 test bulk app liên quan và 1.605/1.605 full test pass (27,44 giây); build pass; manual QA N/A | Tách 4 controller hooks (`use-bulk-selection.ts`, `use-bulk-configure.ts`, `use-bulk-preview.ts`, `use-bulk-operations.ts`); `bulk-client.tsx` giảm từ 752 còn 220 dòng; giữ toàn bộ state ở component root, không di chuyển vào dialog/tab; R-06 Bulk UI closed; hoàn tất Phase 4 |
 | 5.1 | Bitbucket transport/resources | TODO | | | | |
 | 5.2 | Link reconciliation | TODO | | | | |
 | 5.3 | Branch notification policy | TODO | | | | |
@@ -111,6 +111,7 @@
 | 2026-10-09 | D-022 | Tách Retry policy/runner tại `src/lib/bulk/retry.ts` và Notification policy/dispatcher tại `src/lib/bulk/notification.ts`; `ops.ts` giữ facade re-export | Đảm bảo tính bất biến idempotency (R-03: item đã succeeded không bao giờ re-run), độc lập hóa error retryability classifier và completion summary/notification mà không làm crash worker khi notification lỗi, đồng thời giảm `ops.ts` từ 684 xuống 580 dòng | Codex |
 | 2026-10-09 | D-023 | Tách metadata loader/cache (`create-metadata.ts`), custom-field validation & normalization (`create-custom-fields.ts`), và row normalization (`create-normalization.ts`); `create-validator.ts` và `create-ops.ts` giữ facade re-export | Đảm bảo tính mô-đun hóa, cô lập caching/invalidation khỏi IO database và preview logic; kiểm thử độc lập 11 field shapes và các quy tắc sanitization; giảm `create-validator.ts` từ 816 xuống 439 dòng và `create-ops.ts` từ 1.140 xuống 873 dòng mà không phá vỡ bất kỳ consumer/route nào | Codex |
 | 2026-10-09 | D-024 | Tách Bulk create execution thành `create-parent-resolver.ts` (parent/child dependency lifecycle), `create-item-executor.ts` (single item execution & marker reconciliation) và `create-execution.ts` (worker orchestration & multi-round scheduler); `create-ops.ts` giữ facade re-export | Đảm bảo tính độc lập giữa dependency graph resolution và Jira mutation, duy trì idempotency qua retry/restart với marker search trước khi create, xử lý fallback khi Jira thiếu screen Time Tracking, và giảm `create-ops.ts` từ 873 xuống 355 dòng (<400 dòng) mà toàn bộ file bulk production đều <600 dòng | Codex |
+| 2026-10-09 | D-025 | Tách Bulk UI controller thành 4 hooks (`use-bulk-selection.ts`, `use-bulk-configure.ts`, `use-bulk-preview.ts`, `use-bulk-operations.ts`) tại `src/app/(app)/bulk/lib/`; giữ toàn bộ state ở root `BulkClient` | Tách biệt rành mạch 4 trách nhiệm (lựa chọn task/scope, cấu hình trường & action, tính preview & basis, xác nhận & lịch sử operations), không di chuyển state vào dialog/tab nhằm tránh unmount reset (R-06), đồng thời giảm `bulk-client.tsx` từ 752 xuống 220 dòng | Codex |
 
 ## Findings Ngoài Phạm Vi
 
@@ -153,6 +154,7 @@
 | 2026-10-09 | Worktree batch 4.5, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 2 test file mới / 35 test mới (21 retry, 11 notification, 3 ops runner); 20 file / 313 test bulk liên quan; 181 file / 1.493 test full suite trong 23,64 giây | Pass, Next.js 16.3.5 | N/A; server-only retry policy và notification dispatcher, không đổi route/UI; idempotency guard (R-03), attempts counter, linear backoff, retryable classification và full/partial success notifications được automated test | Codex |
 | 2026-10-09 | Worktree batch 4.6, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 3 test file mới / 64 test mới (13 metadata, 18 custom-fields, 33 normalization); 23 file / 377 test bulk liên quan; 184 file / 1.557 test full suite trong 25,72 giây | Pass, Next.js 16.3.5 | N/A; server-only metadata loader & row/custom-field validation, không đổi route/UI; 11 field shapes, allowed values, defaults inheritance và cache invalidation được automated test | Codex |
 | 2026-10-09 | Worktree batch 4.7, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 4 test file mới / 30 test mới (8 parent resolver, 11 item executor, 7 execution, 4 bulk-op worker); 26 file / 403 test bulk liên quan; 188 file / 1.587 test full suite trong 28,69 giây | Pass, Next.js 16.3.5 | N/A; server-only create execution & parent dependency lifecycle, không đổi route/UI; marker reconciliation, parent resolution, child unlock/block, timetracking rejection fallback và missing credentials được automated test | Codex |
+| 2026-10-09 | Worktree batch 4.8, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 1 test file mới / 18 test mới (67 test app bulk liên quan); 189 file / 1.605 test full suite trong 27,44 giây | Pass, Next.js 16.3.5 production build | N/A; UI controller refactor giữ nguyên markup/props, state ở root không bị reset; basis, pruning, initial resolution và operations được automated test | Codex |
 
 ## Completion Report
 

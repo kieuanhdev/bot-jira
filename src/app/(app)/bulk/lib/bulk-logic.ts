@@ -502,3 +502,85 @@ export function getConfirmLabel({
         : `Cập nhật ${preview.actionable} task`
     : "Xác nhận thay đổi";
 }
+
+export function computePreviewBasis({
+  action,
+  selectionMode,
+  filterProject,
+  taskFilters,
+  selected,
+}: {
+  action: BulkAction | null;
+  selectionMode: SelectionMode;
+  filterProject: string;
+  taskFilters: IssueFilters;
+  selected: Set<string>;
+}): string {
+  if (selectionMode === "filter") {
+    return JSON.stringify({
+      action,
+      mode: "filter",
+      project: filterProject,
+      filters: taskFilters,
+    });
+  }
+  return JSON.stringify({
+    action,
+    mode: "keys",
+    keys: Array.from(selected).sort(),
+  });
+}
+
+export function pruneUnavailableFields(
+  enabledFields: Set<string>,
+  fields: ProjectFieldOption[] | undefined
+): { prunedFields: Set<string>; hasPrunedEstimate: boolean; hasPrunedPoints: boolean } {
+  if (!fields) return { prunedFields: enabledFields, hasPrunedEstimate: false, hasPrunedPoints: false };
+  const unavailableIds = new Set(
+    fields.filter((f) => !f.available).map((f) => String(f.id))
+  );
+  if (unavailableIds.size === 0) {
+    return { prunedFields: enabledFields, hasPrunedEstimate: false, hasPrunedPoints: false };
+  }
+  let changed = false;
+  const next = new Set<string>();
+  for (const id of enabledFields) {
+    if (unavailableIds.has(id)) {
+      changed = true;
+    } else {
+      next.add(id);
+    }
+  }
+  return {
+    prunedFields: changed ? next : enabledFields,
+    hasPrunedEstimate: unavailableIds.has("estimate"),
+    hasPrunedPoints: unavailableIds.has("points"),
+  };
+}
+
+export function resolveInitialProject({
+  urlProject,
+  initialKeys = [],
+  preferredProjects = [],
+  availableProjects = [],
+  projectKeys = [],
+}: {
+  urlProject?: string | null;
+  initialKeys?: string[];
+  preferredProjects?: string[];
+  availableProjects?: string[];
+  projectKeys?: string[];
+}): string {
+  if (urlProject && urlProject.trim()) return urlProject.trim().toUpperCase();
+  if (initialKeys.length > 0) {
+    const fromKey = initialKeys[0].split("-")[0];
+    if (fromKey) return fromKey.toUpperCase();
+  }
+  const pick =
+    preferredProjects.find((k) => projectKeys.includes(k)) ??
+    availableProjects.find((k) => projectKeys.includes(k)) ??
+    projectKeys[0] ??
+    "";
+  return pick;
+}
+

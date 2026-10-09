@@ -113,7 +113,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 | R-03 | Bulk retry tạo mutation trùng | P0 | `processWithRetry` khóa idempotency guard: item đã `succeeded` không bao giờ re-run; retry chỉ reset item `failed` với `retryable=true`; 21 unit test trong `retry.test.ts` khóa hành vi | Closed |
 | R-04 | Notification chạy trước commit | P1 | Test thứ tự commit/notify | Open |
 | R-05 | API error/status đổi khi làm mỏng route | P1 | Dùng inventory `07-api-contract-inventory.md` làm baseline và bổ sung characterization test trước khi refactor route; hiện 18/41 route file ưu tiên có colocated test | Open |
-| R-06 | UI state reset sau khi tách component | P1 | Browser test dialog/tab/filter | Open |
+| R-06 | UI state reset sau khi tách component | P1 | Tách controller hooks giữ toàn bộ state ở component root, không di chuyển vào dialog/tab; closed cho Bulk UI | Closed cho Bulk UI (tiếp tục theo dõi các UI phase sau) |
 | R-07 | Import cycle khi tạo facade | P1 | Contract modules không có import; production scans sạch; ESLint chặn `components/hooks/lib` import từ `@/app`; full test và build pass cuối Phase 1 | Closed |
 | R-08 | Mock pass nhưng PostgreSQL thật sai | P1 | `npm run test:db` chỉ nhận `TEST_DATABASE_URL` tách biệt, deploy migration và khóa takeover, transaction rollback, cursor advance, soft delete bằng 4/4 test PostgreSQL | Closed |
 | R-09 | Tài liệu cũ và mới cùng được cập nhật | P2 | Chỉ tracker mới là nguồn tiến độ | Open |
@@ -134,6 +134,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 | R-24 | Tách Bulk retry và notification làm mất idempotency guard, đổi retry attempt/backoff hoặc thất thoát notification | P0 | Tách `retry.ts` và `notification.ts`; test khóa idempotency guard (R-03), attempts count, backoff delays, retryable error classifier và completion notification (full/partial success); 35 unit test mới, 313 test bulk, full suite 1.493/1.493 và build pass | Closed |
 | R-25 | Tách bulk create metadata/validation làm lệch field shape normalization, allowed values check hoặc cache invalidation | P0 | Tách `create-metadata.ts`, `create-custom-fields.ts` và `create-normalization.ts`; `create-validator.ts` và `create-ops.ts` giữ facade re-export; 64 unit test mới bao phủ 11 field shapes, scalar conversion, allowed values, parent rules, cache TTL và invalidation; 377 bulk test, full suite 1.557/1.557 và build pass | Closed |
 | R-26 | Tách bulk create execution làm lệch marker reconciliation, parent resolution, child unlock/block, hoặc retry/restart idempotency | P0 | Tách `create-parent-resolver.ts`, `create-item-executor.ts` và `create-execution.ts`; `create-ops.ts` giữ facade re-export; 30 unit test mới bao phủ parent resolution, child unlock/block, timetracking fallback, marker reconciliation, status aggregation và credential guard; 403 bulk test, full suite 1.587/1.587 và build pass | Closed |
+| R-27 | Tách Bulk UI controller làm đổi basis cache preview, mất selection khi đổi view hoặc unmount dialog | P1 | Tách `use-bulk-selection`, `use-bulk-configure`, `use-bulk-preview`, `use-bulk-operations` giữ nguyên state tại root; 18 unit test khóa computePreviewBasis, pruneUnavailableFields, resolveInitialProject, bucket counts và toggle; 1.605 test và build pass | Closed |
 
 ## 7. Quy tắc Dừng
 
