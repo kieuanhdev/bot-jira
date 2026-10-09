@@ -11,13 +11,13 @@
 | TypeScript errors | 0 | 0 | `npm run typecheck` (batch 0.1) |
 | ESLint errors | 0 | 0 | `npm run lint` (batch 0.1) |
 | ESLint warnings | 3 | 0 | `npm run lint`; `eslint --max-warnings=0` pass |
-| Failing tests | 4 | 0 | `npm test`: 1.493/1.493 pass |
+| Failing tests | 4 | 0 | `npm test`: 1.557/1.557 pass |
 | Failing test files | 2 | 0 | `jira-sync-race`, `jira-sync-integration`: 22/22 pass |
 | Build | Chưa đo lại | Pass | `npm run build`; Next.js 16.3.5 production build |
 | API routes | 101 | | `find src/app/api -name route.ts` |
 | Routes import Prisma | 73 | | `rg '@/lib/prisma' src/app/api` |
 | Routes >150 dòng | 15 | | `wc -l` |
-| File production lớn nhất | 1.919 dòng | 580 dòng | `src/lib/bulk/ops.ts` (giảm 1.339 dòng qua batch 4.1, 4.2, 4.3, 4.4 và 4.5, hiện đã < 600 dòng) |
+| File production lớn nhất | 1.919 dòng | 873 dòng | `src/lib/bulk/create-ops.ts` (giảm từ 1.140 còn 873 dòng; `create-validator.ts` giảm từ 816 còn 439 dòng; `ops.ts` giữ 580 dòng) |
 
 ## Phase Status
 
@@ -27,7 +27,7 @@
 | 1 | Contracts và dependency direction | DONE | Codex | 2026-10-08 | 2026-10-08 | Shared contracts/helper đúng dependency direction; lint boundary, full test và build pass; dừng trước Phase 2 |
 | 2 | Jira và Issues | DONE | Codex | 2026-10-08 | 2026-10-09 | Batch 2.1–2.5 hoàn tất; full test/build pass; dừng trước Phase 3 |
 | 3 | Queue và Sync | DONE | Codex | 2026-10-09 | 2026-10-09 | Batch 3.1–3.6 hoàn tất; DB integration, full test và build pass; dừng trước Phase 4 |
-| 4 | Bulk | IN_PROGRESS | Codex | 2026-10-09 | | Batch 4.1, 4.2, 4.3, 4.4 và 4.5 hoàn tất; dừng trước 4.6 |
+| 4 | Bulk | IN_PROGRESS | Codex | 2026-10-09 | | Batch 4.1, 4.2, 4.3, 4.4, 4.5 và 4.6 hoàn tất; dừng trước 4.7 |
 | 5 | Bitbucket và Releases | TODO | | | | |
 | 6 | Reports, Stale, Leaderboard | TODO | | | | |
 | 7 | Notify, Chat, AI, Sentry | TODO | | | | |
@@ -60,7 +60,7 @@
 | 4.3 | Bulk operation repository | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 27 unit test mới, 63 test bulk/route liên quan và 1.429/1.429 full test pass (22,86 giây); build pass; manual QA N/A | Tách `repository.ts` (state machine transition validation, create preview, confirm, cancel, atomic claim, item results, finalization, retry reset); `ops.ts` giữ facade re-export tương thích 100%; `ops.ts` giảm từ 1.062 còn 1.004 dòng; dừng trước 4.4 |
 | 4.4 | Bulk action executors | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 29 unit test mới, 278 test bulk liên quan và 1.458/1.458 full test pass (23,68 giây); build pass; manual QA N/A | Tách `executors.ts` (field updates 11 kinds, transition, comment, worklog, branch & issue link) với typed `BulkExecutionContext`; `ops.ts` giữ facade re-export tương thích 100%; `ops.ts` giảm từ 1.004 còn 684 dòng (<700 dòng); dừng trước 4.5 |
 | 4.5 | Bulk retry và notification | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 35 unit test mới, 313 test bulk liên quan và 1.493/1.493 full test pass (23,64 giây); build pass; manual QA N/A | Tách `retry.ts` (retry eligibility, error classifier, execution runner với idempotency guard R-03, backoff calculation) và `notification.ts` (status label, severity, completion summary, notification payload, safe delivery dispatcher); `ops.ts` giữ facade re-export tương thích 100%; `ops.ts` giảm từ 684 còn 580 dòng (<600 dòng); R-03/R-24 Closed; dừng trước 4.6 |
-| 4.6 | Bulk create metadata/validation | TODO | | | | |
+| 4.6 | Bulk create metadata/validation | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 64 unit test mới, 377 test bulk liên quan và 1.557/1.557 full test pass (25,72 giây); build pass; manual QA N/A | Tách `create-metadata.ts` (metadata loader, SHA-256 fingerprint, cache TTL/invalidation), `create-custom-fields.ts` (11 field shapes, scalar extractor, allowed values, validation) và `create-normalization.ts` (merge defaults, summary, description, labels, points, estimate, duedate, fixVersions, components, parent); `create-validator.ts` (giảm từ 816 còn 439 dòng) và `create-ops.ts` (giảm từ 1.140 còn 873 dòng) giữ facade re-export tương thích 100%; R-25 Closed; dừng trước 4.7 |
 | 4.7 | Bulk create execution | TODO | | | | |
 | 4.8 | Bulk UI controller | TODO | | | | |
 | 5.1 | Bitbucket transport/resources | TODO | | | | |
@@ -109,6 +109,7 @@
 | 2026-10-09 | D-020 | Tách Bulk operation repository tại `src/lib/bulk/repository.ts` với atomic claim, state machine transition validation, item result recording, cancel và finalization; `ops.ts` giữ facade re-export | Đảm bảo tính toàn vẹn trạng thái (preview -> queued -> running -> completed/partially_failed), chống race condition khi worker claim đồng thời, và giảm coupling giữa orchestration/execution và Prisma | Codex |
 | 2026-10-09 | D-021 | Tách Action executors tại `src/lib/bulk/executors.ts` với typed `BulkExecutionContext` cho 5 nhóm executors (field update 11 kinds, transition, comment, worklog, branch/link); `ops.ts` giữ facade re-export | Đảm bảo mỗi action kind có executor riêng, chuẩn hóa typed context và giữ nguyên thứ tự mutation -> provenance tracking -> audit -> Jira cache refresh, cô lập timeout không retryable cho worklog | Codex |
 | 2026-10-09 | D-022 | Tách Retry policy/runner tại `src/lib/bulk/retry.ts` và Notification policy/dispatcher tại `src/lib/bulk/notification.ts`; `ops.ts` giữ facade re-export | Đảm bảo tính bất biến idempotency (R-03: item đã succeeded không bao giờ re-run), độc lập hóa error retryability classifier và completion summary/notification mà không làm crash worker khi notification lỗi, đồng thời giảm `ops.ts` từ 684 xuống 580 dòng | Codex |
+| 2026-10-09 | D-023 | Tách metadata loader/cache (`create-metadata.ts`), custom-field validation & normalization (`create-custom-fields.ts`), và row normalization (`create-normalization.ts`); `create-validator.ts` và `create-ops.ts` giữ facade re-export | Đảm bảo tính mô-đun hóa, cô lập caching/invalidation khỏi IO database và preview logic; kiểm thử độc lập 11 field shapes và các quy tắc sanitization; giảm `create-validator.ts` từ 816 xuống 439 dòng và `create-ops.ts` từ 1.140 xuống 873 dòng mà không phá vỡ bất kỳ consumer/route nào | Codex |
 
 ## Findings Ngoài Phạm Vi
 
@@ -149,6 +150,7 @@
 | 2026-10-09 | Worktree batch 4.3, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 2 file / 27 test repository mới, 63 test bulk/route liên quan; 178 file / 1.429 test full suite trong 22,86 giây | Pass, Next.js 16.3.5 | N/A; server-only repository boundary, không đổi route/UI; atomic claim race, invalid transition, item result và cancel được automated test | Codex |
 | 2026-10-09 | Worktree batch 4.4, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 1 file / 29 test executors mới, 18 file / 278 test bulk liên quan; 179 file / 1.458 test full suite trong 23,68 giây | Pass, Next.js 16.3.5 | N/A; server-only action executors, không đổi route/UI; 15 action kinds, cache refresh ordering, non-retryable worklog timeout và branch linking được automated test | Codex |
 | 2026-10-09 | Worktree batch 4.5, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 2 test file mới / 35 test mới (21 retry, 11 notification, 3 ops runner); 20 file / 313 test bulk liên quan; 181 file / 1.493 test full suite trong 23,64 giây | Pass, Next.js 16.3.5 | N/A; server-only retry policy và notification dispatcher, không đổi route/UI; idempotency guard (R-03), attempts counter, linear backoff, retryable classification và full/partial success notifications được automated test | Codex |
+| 2026-10-09 | Worktree batch 4.6, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 3 test file mới / 64 test mới (13 metadata, 18 custom-fields, 33 normalization); 23 file / 377 test bulk liên quan; 184 file / 1.557 test full suite trong 25,72 giây | Pass, Next.js 16.3.5 | N/A; server-only metadata loader & row/custom-field validation, không đổi route/UI; 11 field shapes, allowed values, defaults inheritance và cache invalidation được automated test | Codex |
 
 ## Completion Report
 
