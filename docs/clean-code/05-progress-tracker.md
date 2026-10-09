@@ -11,13 +11,13 @@
 | TypeScript errors | 0 | 0 | `npm run typecheck` (batch 0.1) |
 | ESLint errors | 0 | 0 | `npm run lint` (batch 0.1) |
 | ESLint warnings | 3 | 0 | `npm run lint`; `eslint --max-warnings=0` pass |
-| Failing tests | 4 | 0 | `npm test`: 1.682/1.682 pass |
+| Failing tests | 4 | 0 | `npm test`: 1.716/1.716 pass |
 | Failing test files | 2 | 0 | `jira-sync-race`, `jira-sync-integration`: 22/22 pass |
 | Build | Chưa đo lại | Pass | `npm run build`; Next.js 16.3.5 production build |
 | API routes | 101 | | `find src/app/api -name route.ts` |
 | Routes import Prisma | 73 | | `rg '@/lib/prisma' src/app/api` |
 | Routes >150 dòng | 15 | | `wc -l` |
-| File production lớn nhất | 1.919 dòng | 603 dòng | `src/lib/jira/board-config.ts` 603 dòng (`src/lib/bitbucket/link-service.ts` giảm từ 509 còn 480 dòng; toàn bộ file link reconciliation/discovery <= 480 dòng) |
+| File production lớn nhất | 1.919 dòng | 603 dòng | `src/lib/jira/board-config.ts` 603 dòng (`notify-pr-comment.ts` giảm từ 292 còn 79 dòng; `notify-commit-comment.ts` giảm từ 249 còn 80 dòng; toàn bộ file notification <= 255 dòng) |
 
 ## Phase Status
 
@@ -28,7 +28,7 @@
 | 2 | Jira và Issues | DONE | Codex | 2026-10-08 | 2026-10-09 | Batch 2.1–2.5 hoàn tất; full test/build pass; dừng trước Phase 3 |
 | 3 | Queue và Sync | DONE | Codex | 2026-10-09 | 2026-10-09 | Batch 3.1–3.6 hoàn tất; DB integration, full test và build pass; dừng trước Phase 4 |
 | 4 | Bulk | DONE | Codex | 2026-10-09 | 2026-10-09 | Batch 4.1–4.8 hoàn tất; full test và production build pass; hoàn tất Phase 4, dừng trước Phase 5 |
-| 5 | Bitbucket và Releases | IN_PROGRESS | Codex | 2026-10-09 | | Batch 5.1 và 5.2 hoàn tất; full test/build pass; dừng trước 5.3 |
+| 5 | Bitbucket và Releases | IN_PROGRESS | Codex | 2026-10-09 | | Batch 5.1, 5.2 và 5.3 hoàn tất; full test/build pass; dừng trước 5.4 |
 | 6 | Reports, Stale, Leaderboard | TODO | | | | |
 | 7 | Notify, Chat, AI, Sentry | TODO | | | | |
 | 8 | API và Frontend | TODO | | | | |
@@ -65,7 +65,7 @@
 | 4.8 | Bulk UI controller | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 18 unit test mới, 67 test bulk app liên quan và 1.605/1.605 full test pass (27,44 giây); build pass; manual QA N/A | Tách 4 controller hooks (`use-bulk-selection.ts`, `use-bulk-configure.ts`, `use-bulk-preview.ts`, `use-bulk-operations.ts`); `bulk-client.tsx` giảm từ 752 còn 220 dòng; giữ toàn bộ state ở component root, không di chuyển vào dialog/tab; R-06 Bulk UI closed; hoàn tất Phase 4 |
 | 5.1 | Bitbucket transport/resources | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 47 test mới, 132/132 Bitbucket test liên quan và 1.652/1.652 full test pass (29,79 giây); build pass; manual QA N/A | Tách `types.ts`, `transport.ts` (request, fetchPaged, credential fallback, permission error classifier), `resources/repositories.ts` (listReposForCred, discover, verify, repos/allRepos), `resources/branches.ts` (listBranches, get/create, commits, defaultBranch, branchStatus) và `resources/pull-requests.ts` (normalize, list, get, create, update, activities); `client.ts` giữ facade re-export tương thích 100% (giảm từ 682 còn 115 dòng); R-28 Closed; dừng trước 5.2 |
 | 5.2 | Link reconciliation | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 30 unit test mới (21 discovery, 9 reconciliation), 162/162 Bitbucket test và 1.682/1.682 full test pass (25,02 giây); build pass; manual QA N/A | Tách pure discovery/policy (`link-discovery.ts`) và reconciliation service (`link-reconciliation.ts`); `branch-links.ts` (giữ re-exports) và `link-service.ts` (giữ facade re-export tương thích 100%); khóa priority tiers (manual/explicit > jira_dev_status > branch_name > commit_message > pr_title > comment), stability rule cho primary link và guard chống revive manual_unlinked/rejected; R-29 Closed; dừng trước 5.3 |
-| 5.3 | Branch notification policy | TODO | | | | |
+| 5.3 | Branch notification policy | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 3 test file mới / 34 test mới (18 policy, 13 resolver, 3 delivery); 21 file / 196 test Bitbucket liên quan; 198 file / 1.716 test full suite trong 23,84 giây; Next.js 16.3.5 production build pass; manual QA N/A | Tách pure policy & message models (`branch-notification-policy.ts`), recipient resolver (`branch-recipient-resolver.ts`), và delivery helper (`branch-notification-delivery.ts`); `notify-pr-comment.ts` (giảm từ 292 còn 79 dòng) và `notify-commit-comment.ts` (giảm từ 249 còn 80 dòng) giữ 100% facade methods và re-exports; gom candidate matching, Jira task expansion, author exclusion và message builders; provider delivery giữ ngoài policy; R-30 Closed; dừng trước 5.4 |
 | 5.4 | Release context/evaluator | TODO | | | | |
 | 5.5 | Release persistence/mutation | TODO | | | | |
 | 6.1 | Reports query primitives | TODO | | | | |
@@ -114,6 +114,7 @@
 | 2026-10-09 | D-025 | Tách Bulk UI controller thành 4 hooks (`use-bulk-selection.ts`, `use-bulk-configure.ts`, `use-bulk-preview.ts`, `use-bulk-operations.ts`) tại `src/app/(app)/bulk/lib/`; giữ toàn bộ state ở root `BulkClient` | Tách biệt rành mạch 4 trách nhiệm (lựa chọn task/scope, cấu hình trường & action, tính preview & basis, xác nhận & lịch sử operations), không di chuyển state vào dialog/tab nhằm tránh unmount reset (R-06), đồng thời giảm `bulk-client.tsx` từ 752 xuống 220 dòng | Codex |
 | 2026-10-09 | D-026 | Tách Bitbucket client thành transport (request, fetchPaged, credential fallback), types và 3 resources (repositories, branches, pull-requests); client.ts giữ 100% method facade và type/helper re-exports | Cô lập cơ chế credential fallback và error classifier khỏi domain logic của PR và branch; giảm client.ts từ 682 xuống 115 dòng, đưa toàn bộ file Bitbucket transport/resources về <200 dòng mà không phá vỡ bất kỳ consumer/worker/route nào; R-28 Closed | Codex |
 | 2026-10-09 | D-027 | Tách pure candidate discovery & primary link selection policy vào `src/lib/bitbucket/link-discovery.ts` (không phụ thuộc Prisma/env) và reconciliation service vào `src/lib/bitbucket/link-reconciliation.ts`; `branch-links.ts` và `link-service.ts` giữ 100% facade methods và re-exports | Chuẩn hóa và kiểm thử độc lập 7 tầng source priority cùng quy tắc stability (giữ primary hiện tại khi đồng hạng top rank) và guard không auto-revive các link đã bị unlinked/rejected; giảm thiểu lặp code discovery giữa worker và API | Codex |
+| 2026-10-09 | D-028 | Tách message models/identity matching (`branch-notification-policy.ts`), recipient resolution (`branch-recipient-resolver.ts`) và delivery runner (`branch-notification-delivery.ts`); giữ `notify-pr-comment.ts` và `notify-commit-comment.ts` làm 100% facade methods | Loại bỏ hoàn toàn duplicate code candidate matching/author exclusion/task expansion giữa PR và commit comments; giữ provider delivery ngoài policy rules và đảm bảo không bao giờ gửi thông báo nhầm cho comment author | Codex |
 
 ## Findings Ngoài Phạm Vi
 
@@ -159,6 +160,7 @@
 | 2026-10-09 | Worktree batch 4.8, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 1 test file mới / 18 test mới (67 test app bulk liên quan); 189 file / 1.605 test full suite trong 27,44 giây | Pass, Next.js 16.3.5 production build | N/A; UI controller refactor giữ nguyên markup/props, state ở root không bị reset; basis, pruning, initial resolution và operations được automated test | Codex |
 | 2026-10-09 | Worktree batch 5.1, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 4 test file mới / 47 test mới (19 transport, 10 branches, 9 pull-requests, 8 repositories, 1 facade); 16 file / 132 test Bitbucket liên quan; 193 file / 1.652 test full suite trong 29,79 giây | Pass, Next.js 16.3.5 production build | N/A; server-only Bitbucket transport & resources, không đổi route/UI; auth fallback, permission error classifier, pagination bounds, PR normalization và branch correlation được automated test | Codex |
 | 2026-10-09 | Worktree batch 5.2, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 2 test file mới / 30 test mới (21 discovery, 9 reconciliation); 18 file / 162 test Bitbucket liên quan; 195 file / 1.682 test full suite trong 25,02 giây | Pass, Next.js 16.3.5 production build | N/A; server-only link reconciliation & pure discovery policy, không đổi route/UI; priority tiers, stability rule, multi-link discovery và guard chống revive manual_unlinked/rejected được automated test | Codex |
+| 2026-10-09 | Worktree batch 5.3, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 3 test file mới / 34 test mới (18 policy, 13 resolver, 3 delivery); 21 file / 196 test Bitbucket liên quan; 198 file / 1.716 test full suite trong 23,84 giây | Pass, Next.js 16.3.5 production build | N/A; server-only branch notification policy, recipient resolution & delivery; không đổi route/UI; candidate matching, task assignee/watcher expansion, author exclusion và message models được automated test | Codex |
 
 ## Completion Report
 
