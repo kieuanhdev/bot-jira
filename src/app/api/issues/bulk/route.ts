@@ -8,6 +8,7 @@ import {
   confirmBulk,
   validateBulkRequest,
   resolveFilterKeys,
+  type BulkOperationRequest,
 } from "@/lib/bulk/ops";
 import { enqueueBulkOperation } from "@/lib/queue/boss";
 import { probeJiraAuth } from "@/lib/jira/client";
@@ -29,13 +30,7 @@ export async function POST(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const rawBody = (await req.json().catch(() => ({}))) as {
-    keys?: unknown;
-    selector?: unknown;
-    action?: unknown;
-    confirm?: boolean;
-    operationId?: string;
-  };
+  const rawBody = (await req.json().catch(() => ({}))) as BulkOperationRequest;
 
   if (rawBody.confirm && rawBody.operationId) {
     // Confirm path: the immutable preview is already stored; we only re-check
