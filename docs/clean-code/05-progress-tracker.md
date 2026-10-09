@@ -11,13 +11,13 @@
 | TypeScript errors | 0 | 0 | `npm run typecheck` (batch 0.1) |
 | ESLint errors | 0 | 0 | `npm run lint` (batch 0.1) |
 | ESLint warnings | 3 | 0 | `npm run lint`; `eslint --max-warnings=0` pass |
-| Failing tests | 4 | 0 | `npm test`: 1.362/1.362 pass |
+| Failing tests | 4 | 0 | `npm test`: 1.402/1.402 pass |
 | Failing test files | 2 | 0 | `jira-sync-race`, `jira-sync-integration`: 22/22 pass |
 | Build | Chưa đo lại | Pass | `npm run build`; Next.js 16.3.5 production build |
 | API routes | 101 | | `find src/app/api -name route.ts` |
 | Routes import Prisma | 73 | | `rg '@/lib/prisma' src/app/api` |
 | Routes >150 dòng | 15 | | `wc -l` |
-| File production lớn nhất | 1.919 dòng | 1.456 dòng | `src/lib/bulk/ops.ts` (giảm 463 dòng ở batch 4.1) |
+| File production lớn nhất | 1.919 dòng | 1.062 dòng | `src/lib/bulk/ops.ts` (giảm 857 dòng qua batch 4.1 và 4.2) |
 
 ## Phase Status
 
@@ -27,7 +27,7 @@
 | 1 | Contracts và dependency direction | DONE | Codex | 2026-10-08 | 2026-10-08 | Shared contracts/helper đúng dependency direction; lint boundary, full test và build pass; dừng trước Phase 2 |
 | 2 | Jira và Issues | DONE | Codex | 2026-10-08 | 2026-10-09 | Batch 2.1–2.5 hoàn tất; full test/build pass; dừng trước Phase 3 |
 | 3 | Queue và Sync | DONE | Codex | 2026-10-09 | 2026-10-09 | Batch 3.1–3.6 hoàn tất; DB integration, full test và build pass; dừng trước Phase 4 |
-| 4 | Bulk | IN_PROGRESS | Codex | 2026-10-09 | | Batch 4.1 hoàn tất; dừng trước 4.2 |
+| 4 | Bulk | IN_PROGRESS | Codex | 2026-10-09 | | Batch 4.1 và 4.2 hoàn tất; dừng trước 4.3 |
 | 5 | Bitbucket và Releases | TODO | | | | |
 | 6 | Reports, Stale, Leaderboard | TODO | | | | |
 | 7 | Notify, Chat, AI, Sentry | TODO | | | | |
@@ -56,7 +56,7 @@
 | 3.5 | Webhook handlers | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 38/38 webhook/event/queue test liên quan và 1.337/1.337 full test pass (21,27 giây); build pass; manual QA N/A | Tách Jira/Bitbucket/Sentry/CI handler và source dispatcher; `process-webhook.ts` giữ event lifecycle facade; khóa processed/failed/idempotency và safe error 300 ký tự; dừng trước 3.6 |
 | 3.6 | DB integration suite | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 4/4 PostgreSQL integration test, 32/32 race/fencing test và 1.337/1.337 full test pass (21,48 giây); build pass; manual QA N/A | `test:db` bắt buộc DB riêng có tên chứa `test`, không đọc DB dev làm target; khóa lease takeover, rollback, cursor advance và soft delete; R-02/R-08 Closed; dừng trước 4.1 |
 | 4.1 | Bulk contract và validation | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 25/25 unit test mới, 83/83 bulk test liên quan và 1.362/1.362 full test pass (22,08 giây); build pass; manual QA N/A | Tách `contracts.ts` (15 action kinds discriminated union, DTOs, ActionParams) và `validation.ts` (pure validator, regex, bounds); `ops.ts` giữ facade re-export tương thích 100%; `ops.ts` giảm từ 1.919 còn 1.456 dòng; dừng trước 4.2 |
-| 4.2 | Bulk selection và preview | TODO | | | | |
+| 4.2 | Bulk selection và preview | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 40 unit test mới, 118/118 bulk test liên quan và 1.402/1.402 full test pass (26,35 giây); build pass; manual QA N/A | Tách `selection.ts` (resolveFilterKeys, resolveSelectorKeys) và `preview.ts` (classifyAction 15 kinds, computePreview before/after, isStale, isTransitionError/retryable, determineSkipReason); `ops.ts` giữ facade re-export tương thích 100%; `ops.ts` giảm từ 1.456 còn 1.062 dòng; dừng trước 4.3 |
 | 4.3 | Bulk operation repository | TODO | | | | |
 | 4.4 | Bulk action executors | TODO | | | | |
 | 4.5 | Bulk retry và notification | TODO | | | | |
@@ -105,6 +105,7 @@
 | 2026-10-09 | D-016 | Đặt Jira/Bitbucket/Sentry/CI handler tại `workers/webhooks/`, dispatcher chỉ ánh xạ `Source` sang handler; giữ `process-webhook.ts` làm facade sở hữu lookup, already-processed guard và processed/failed transition | Mỗi provider có boundary độc lập nhưng queue/enqueue import không đổi; event chỉ được đánh dấu processed sau handler thành công, failure vẫn retryable và lỗi lưu/trả về được giới hạn 300 ký tự | Codex |
 | 2026-10-09 | D-017 | Tách DB integration khỏi unit suite bằng `*.db.test.ts` và `vitest.integration.config.ts`; `npm run test:db` chỉ nhận `TEST_DATABASE_URL`, từ chối database không có `test` hoặc trùng identity với `DATABASE_URL`/`.env`, rồi deploy migration trước khi test | Unit suite không thể vô tình mở PostgreSQL; CI/local phải chọn tường minh database test đã cô lập, còn test xác minh đúng transaction/fencing production thay vì Prisma mock | Codex |
 | 2026-10-09 | D-018 | Tách contracts (`contracts.ts`) và validator thuần (`validation.ts`) cho bulk update; `ops.ts` giữ facade re-export | Định kiểu tường minh 15 action kinds, request DTOs và validation result; giữ nguyên 100% error messages và semantics, không phá vỡ bất kỳ consumer nào | Codex |
+| 2026-10-09 | D-019 | Tách selection (`selection.ts`) và preview classification/snapshot (`preview.ts`); `ops.ts` giữ facade re-export | Cô lập query IssueCache theo filter và pure classification policy của 15 action kinds cùng before/after snapshot; `ops.ts` giữ nguyên public facade và 100% test compatibility, không đổi contract với UI/worker | Codex |
 
 ## Findings Ngoài Phạm Vi
 
@@ -141,6 +142,7 @@
 | 2026-10-09 | Worktree batch 3.5, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 7 file / 38 webhook/event/queue test; 174 file / 1.337 test full suite trong 21,27 giây | Pass, Next.js 16.3.5 | N/A; webhook worker server-only, không đổi route/job payload; 4 provider, dedupe, processed/failed transition và safe error được automated test, không kết nối provider/DB thật | Codex |
 | 2026-10-09 | Worktree batch 3.6, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 1 file / 4 PostgreSQL integration test; 4 file / 32 race/fencing test; 174 file / 1.337 test full suite trong 21,48 giây | Pass, Next.js 16.3.5 | N/A; test-only/server-only, chạy trên PostgreSQL 16 tạm với database `teamweb_clean_code_test`; không chạm DB dev, provider, route hoặc UI | Codex |
 | 2026-10-09 | Worktree batch 4.1, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 4 file / 83 bulk test liên quan (25 unit test mới); 175 file / 1.362 test full suite trong 22,08 giây | Pass, Next.js 16.3.5 | N/A; pure server contracts & validation, không đổi route/UI; 15 action kinds và error messages được automated test | Codex |
+| 2026-10-09 | Worktree batch 4.2, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 5 file / 118 bulk test liên quan (40 unit test mới); 177 file / 1.402 test full suite trong 26,35 giây | Pass, Next.js 16.3.5 | N/A; server-only selection & preview policy, không đổi route/UI; 15 action kinds, before/after snapshot, stale window và filter criteria được automated test | Codex |
 
 ## Completion Report
 

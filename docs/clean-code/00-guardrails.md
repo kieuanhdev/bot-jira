@@ -129,6 +129,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 | R-19 | Tách enqueue API làm đổi payload/options, nuốt lỗi database hoặc biến job coalesced `null` thành success ID | P0 | `enqueue.ts` giữ nguyên facade exports; test trực tiếp khóa payload/options, `string | null`, send rejection và startup/database failure; 105 queue test, full suite 1.330/1.330 và build pass | Closed |
 | R-20 | Tách webhook handler làm lệch source routing, event idempotency/status hoặc rò lỗi thô | P0 | Giữ facade và event lifecycle; characterization khóa 4 provider, already-processed, processed/failed transition và lỗi tối đa 300 ký tự; 38 test liên quan, full suite 1.337/1.337 và build pass | Closed |
 | R-21 | Tách bulk contract và validation làm thay đổi validation error message, key normalization hoặc làm lọt payload không hợp lệ | P0 | Tách `contracts.ts` và `validation.ts` thuần; giữ `ops.ts` làm facade; 25 unit test mới bao phủ 15 action kinds, key limit, selector mode và format; 83 bulk test liên quan, full suite 1.362/1.362 và build pass | Closed |
+| R-22 | Tách bulk selection và preview policy làm sai lệch filter query, 15 action classification, before/after snapshot hoặc stale detection | P0 | Tách `selection.ts` và `preview.ts` thuần; 40 unit test mới bao phủ 15 action kinds, stale window, transition errors, filter resolution (statuses/priorities/labels/assignees/epics/q); 118 bulk test, full suite 1.402/1.402 và build pass | Closed |
 
 ## 7. Quy tắc Dừng
 
