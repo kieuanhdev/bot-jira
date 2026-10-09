@@ -124,6 +124,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 | R-14 | Tách Board cache policy làm lệch TTL, stale window, request coalescing hoặc cache invalidation | P1 | Policy test khóa fresh/stale/expired boundary, concurrent request, failed refresh và clear; 29 test cache/Board, 142 Jira test, full suite và build pass; F-005 vẫn tách riêng | Closed |
 | R-15 | Tách Jira issue/comment/link mapper làm lệch null/default, people field, date hoặc epic/link semantics | P1 | Mapper nhận config/clock tường minh; 37/37 test mapping/cache liên quan và full suite 1.314/1.314 pass; persistence/transaction không đổi | Closed |
 | R-16 | Tách issue persistence làm lệch stale-write guard, issue/link transaction, comment unique race hoặc notification ordering | P0 | Repository giữ nguyên conditional update/P2002/transaction; test khóa rollback, stale rejection, unique comment và commit-before-notify; 62/62 test liên quan, full suite 1.316/1.316 và build pass | Closed |
+| R-17 | Tách pg-boss connection lifecycle làm tạo nhiều singleton, start trùng hoặc shutdown không graceful | P0 | Lifecycle dùng shared global state, cache start promise và reset khi start lỗi; test khóa concurrent start, retry, graceful stop/timeout và singleton mới sau stop; full suite/build pass | Closed |
 
 ## 7. Quy tắc Dừng
 

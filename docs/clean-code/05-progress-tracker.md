@@ -26,7 +26,7 @@
 | 0 | Baseline xanh | DONE | Codex | 2026-10-08 | 2026-10-08 | Typecheck, lint zero-warning, 1.289 test và build đều pass; dừng trước Phase 1 |
 | 1 | Contracts và dependency direction | DONE | Codex | 2026-10-08 | 2026-10-08 | Shared contracts/helper đúng dependency direction; lint boundary, full test và build pass; dừng trước Phase 2 |
 | 2 | Jira và Issues | DONE | Codex | 2026-10-08 | 2026-10-09 | Batch 2.1–2.5 hoàn tất; full test/build pass; dừng trước Phase 3 |
-| 3 | Queue và Sync | TODO | | | | |
+| 3 | Queue và Sync | IN_PROGRESS | Codex | 2026-10-09 | | Batch 3.1 hoàn tất; dừng trước batch 3.2 |
 | 4 | Bulk | TODO | | | | |
 | 5 | Bitbucket và Releases | TODO | | | | |
 | 6 | Reports, Stale, Leaderboard | TODO | | | | |
@@ -49,7 +49,7 @@
 | 2.3 | Board cache policy | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 29/29 test cache/Board liên quan, 142/142 Jira test và 1.306/1.306 full test pass (20,81 giây); build pass; manual QA N/A | Tách cache clock/TTL/stale classification/in-flight registry vào `board-cache-policy.ts`; khóa stale window, concurrent request, failed refresh và clear; giữ nguyên F-005 cho bug batch riêng |
 | 2.4 | Issue mapping | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 37/37 test mapping/cache liên quan và 1.314/1.314 full test pass (21,59 giây); build không chạy (giữa Phase 2); manual QA N/A | Tách pure mapper issue/comment/link; thêm 7 unit test và 1 compatibility characterization; giữ facade, transaction/write order; dừng trước batch 2.5 |
 | 2.5 | Issue persistence | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 62/62 test persistence/sync liên quan và 1.316/1.316 full test pass (19,72 giây); build pass; manual QA N/A | Tách `repository.ts` + `cache-service.ts`; `cache.ts` giữ facade; khóa commit-before-notify và stale-no-notify; dừng trước 3.1 |
-| 3.1 | pg-boss lifecycle | TODO | | | | |
+| 3.1 | pg-boss lifecycle | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 16/16 test lifecycle/queue liên quan và 1.320/1.320 full test pass (22,40 giây); build pass; manual QA N/A | Tách `connection.ts`; khóa concurrent start, failed-start retry, graceful stop và restart; giữ public exports; dừng trước 3.2 |
 | 3.2 | Registry và schedules | TODO | | | | |
 | 3.3 | Enqueue API | TODO | | | | |
 | 3.4 | Jira sync pipeline | TODO | | | | |
@@ -98,6 +98,7 @@
 | 2026-10-08 | D-009 | Dùng một generic Board cache policy sở hữu entry clock, TTL/stale classification và foreground/background in-flight registry; Jira fetch/error/fallback vẫn ở Board modules | Làm rõ boundary và kiểm thử policy độc lập mà không đổi Jira mapping, TTL hiện hành hoặc permission behavior; registry vẫn cho phép background `Promise<void>` để không trộn fix F-005 vào refactor | Codex |
 | 2026-10-09 | D-010 | Đặt issue/comment/link mapper thuần tại `src/lib/issues/mapping.ts`; persistence cung cấp people-field config, point metadata, epic field IDs, link config và clock; giữ `issueCacheData` là compatibility facade | Mapper test được mà không mock Prisma/Jira transport, trong khi default/null semantics và public caller không đổi; repository/transaction vẫn để nguyên cho batch 2.5 | Codex |
 | 2026-10-09 | D-011 | Đặt Prisma writes, issue/link transaction và comment P2002 handling trong `issues/repository.ts`; orchestration mapping/refresh/notify trong `cache-service.ts`; giữ `cache.ts` làm re-export facade | Persistence không còn parse Jira transport; mọi caller cũ giữ import; notification chỉ chạy sau khi repository resolve transaction thành công, còn stale payload không notify | Codex |
+| 2026-10-09 | D-012 | Đặt pg-boss singleton và start/stop state machine tại `queue/connection.ts`; `boss.ts` re-export `getBoss`/`startBoss` và chỉ dọn timer trước khi gọi lifecycle stop | Cô lập connection khỏi registry/schedule dành cho batch 3.2, giữ mọi caller tương thích và cho phép test lifecycle không kết nối database thật | Codex |
 
 ## Findings Ngoài Phạm Vi
 
@@ -127,6 +128,7 @@
 | 2026-10-08 | Worktree batch 2.3, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 3 file / 29 test cache/Board liên quan; 18 file / 142 Jira test; 168 file / 1.306 test full suite trong 20,81 giây | Pass, Next.js 16.3.5 | N/A; refactor policy in-memory, không đổi route/UI; stale/concurrency/failure/clear được automated test | Codex |
 | 2026-10-09 | Worktree batch 2.4, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 5 file / 37 test mapping/cache liên quan; 169 file / 1.314 test full suite trong 21,59 giây | Không chạy; gate cuối Phase 2 | N/A; pure server mapping, không chạm route/UI; null/people/date/epic/comment/link được unit test khóa | Codex |
 | 2026-10-09 | Worktree batch 2.5, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 10 file / 62 test persistence/sync liên quan; 170 file / 1.316 test full suite trong 19,72 giây | Pass, Next.js 16.3.5 | N/A; server persistence boundary, không đổi route/UI; stale/unique/rollback/notify ordering được automated test | Codex |
+| 2026-10-09 | Worktree batch 3.1, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 2 file / 16 test lifecycle/queue liên quan; 171 file / 1.320 test full suite trong 22,40 giây | Pass, Next.js 16.3.5 | N/A; lifecycle server-only được test bằng fake boss, không kết nối DB thật hoặc đổi queue/schedule | Codex |
 
 ## Completion Report
 

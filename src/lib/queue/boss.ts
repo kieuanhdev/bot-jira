@@ -1,4 +1,4 @@
-import { PgBoss } from "pg-boss";
+import type { PgBoss } from "pg-boss";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { listSyncEnabledProjectKeys } from "@/lib/jira/project-catalog";
@@ -22,8 +22,14 @@ import { scheduledJiraJobAgeMs, shouldSkipStaleJiraJob } from "./jira-job-policy
 import { runRefreshBoardMembership, type RefreshBoardMembershipJobData } from "./workers/refresh-board-membership";
 import { captureProjectReportSnapshots } from "@/lib/reports/snapshot";
 import { runDetectPeopleFields } from "./workers/detect-people-fields";
+import {
+  getBoss,
+  startBoss,
+  stopBoss as stopBossConnection,
+} from "./connection";
 
-const globalForBoss = globalThis as unknown as { boss?: PgBoss; bossStart?: Promise<PgBoss> };
+export { getBoss, startBoss } from "./connection";
+
 let watchTimer: ReturnType<typeof setInterval> | undefined;
 
 export const JOB_NAMES = [
@@ -45,25 +51,6 @@ export const JOB_NAMES = [
   "capture-project-report-snapshots",
   "detect-people-fields",
 ] as const;
-
-export function getBoss(): PgBoss {
-  if (!globalForBoss.boss) globalForBoss.boss = new PgBoss({
-    connectionString: env.databaseUrl,
-    useListenNotify: true,
-  });
-  return globalForBoss.boss;
-}
-
-export async function startBoss(): Promise<PgBoss> {
-  if (!globalForBoss.bossStart) {
-    const boss = getBoss();
-    globalForBoss.bossStart = boss.start().catch((error) => {
-      globalForBoss.bossStart = undefined;
-      throw error;
-    });
-  }
-  return globalForBoss.bossStart;
-}
 
 function pollCron(): string {
   const minutes = Math.max(1, Math.min(59, Math.round(env.pollIntervalMs / 60_000)));
@@ -570,8 +557,5 @@ export async function reconcileStartupJiraProjects(): Promise<{
 export async function stopBoss(): Promise<void> {
   if (watchTimer) clearInterval(watchTimer);
   watchTimer = undefined;
-  if (!globalForBoss.boss) return;
-  await globalForBoss.boss.stop({ graceful: true, timeout: 30_000 });
-  globalForBoss.boss = undefined;
-  globalForBoss.bossStart = undefined;
+  await stopBossConnection();
 }
