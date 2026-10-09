@@ -307,8 +307,8 @@ bulk/
 - [x] Tách shared LLM response parsing nếu thực sự trùng semantics. (Batch 7.3)
 - [x] Giữ provider-specific transport riêng. (Batch 7.3)
 - [x] Test malformed/empty/unavailable AI response. (Batch 7.3)
-- [ ] Giữ Sentry external ID idempotency.
-- [ ] Không refactor Worklogs nếu không có pain point mới.
+- [x] Giữ Sentry external ID idempotency. (Batch 7.4)
+- [x] Không refactor Worklogs nếu không có pain point mới. (Batch 7.4)
 
 ## 11. API Routes
 

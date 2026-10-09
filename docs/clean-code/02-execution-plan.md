@@ -301,9 +301,9 @@ Không chạy song song hai batch cùng sửa facade hoặc public contract gi�
 
 ### Exit criteria
 
-- [ ] Provider error không rò secret.
-- [ ] Chat mutation luôn đi qua permission và confirmation cần thiết.
-- [ ] Outbox không mất item khi delivery một kênh thất bại.
+- [x] Provider error không rò secret. (Hoàn thành batch 7.3 & 7.4)
+- [x] Chat mutation luôn đi qua permission và confirmation cần thiết. (Hoàn thành batch 7.2)
+- [x] Outbox không mất item khi delivery một kênh thất bại. (Hoàn thành batch 7.1)
 
 ## Phase 8 - API Và Frontend Consolidation
 

@@ -1,5 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { env, hasSentryConfig } from "../../guard";
+import {
+  sentryIdKey,
+  sentryProjectSlug,
+  buildSentryEventKey,
+} from "@/lib/sentry/idempotency";
 
 type SentryWebhookPayload = {
   action?: string;
@@ -23,8 +28,8 @@ export async function handleSentryWebhook(
   const issue = webhook.issue;
   if (!issue) return { skipped: true, reason: "no issue in payload" };
 
-  const issueId = String(issue.id ?? issue.shortId ?? "");
-  const sentryProject = issue.project?.slug ?? env.sentryProject;
+  const issueId = sentryIdKey(issue);
+  const sentryProject = sentryProjectSlug(issue, env.sentryProject);
   if (webhook.action === "created" && issueId) {
     await prisma.sentryIssueImported.upsert({
       where: {
@@ -46,7 +51,7 @@ export async function handleSentryWebhook(
       body: issue.permalinkUrl ?? undefined,
       link: issue.permalinkUrl ?? undefined,
       severity: "danger",
-      eventKey: `sentry:${sentryProject}:${issueId}:${webhook.action}`,
+      eventKey: buildSentryEventKey(sentryProject, issueId, webhook.action),
     });
     return { alerted: true, level: issue.level, seeded: true };
   }

@@ -7,9 +7,15 @@ import { jiraProjectList, env, parseSentryMappings, resolveJiraProject } from "@
 import type { WorkerLog } from "../guard";
 import type { JiraIssue } from "@/lib/jira/types";
 
+import {
+  sentryProjectSlug,
+  sentryIdKey,
+  sentryLabel,
+  sentryBackoffMs as backoffMs,
+} from "@/lib/sentry/idempotency";
+
 const IMPORT_BATCH = 10;
 const MAX_ATTEMPTS = 5;
-const BACKOFF_BASE_MS = 60_000;
 
 // Resolved once per run. `mappings` empty => single-project mode (file into
 // JIRA_PROJECT_KEYS[0]); non-empty => each issue is filed into its mapped
@@ -17,25 +23,13 @@ const BACKOFF_BASE_MS = 60_000;
 const mappings = parseSentryMappings(env.sentryProjectMappings);
 const fallbackProject = jiraProjectList[0] ?? null;
 
-function sentryProjectSlug(issue: SentryIssue): string {
-  return issue.project?.slug ?? env.sentryProject;
+function sProjectSlug(issue: SentryIssue): string {
+  return sentryProjectSlug(issue, env.sentryProject);
 }
 
 /** The Jira project an issue should be filed into, or null when unmapped. */
 function jiraProjectFor(issue: SentryIssue): string | null {
-  return resolveJiraProject(sentryProjectSlug(issue), mappings, fallbackProject);
-}
-
-function sentryIdKey(issue: SentryIssue): string {
-  return String(issue.id);
-}
-
-function sentryLabel(issue: SentryIssue): string {
-  return `sentry-id-${sentryIdKey(issue)}`;
-}
-
-function backoffMs(attemptCount: number): number {
-  return BACKOFF_BASE_MS * 2 ** Math.min(attemptCount, 10);
+  return resolveJiraProject(sProjectSlug(issue), mappings, fallbackProject);
 }
 
 async function findJiraIssueByLabel(label: string): Promise<JiraIssue | null> {
@@ -60,7 +54,7 @@ async function findJiraIssueByLabel(label: string): Promise<JiraIssue | null> {
 
 async function processIssue(issue: SentryIssue): Promise<{ ok: boolean; recovered: boolean; error?: string }> {
   const sId = sentryIdKey(issue);
-  const sProject = sentryProjectSlug(issue);
+  const sProject = sProjectSlug(issue);
   const label = sentryLabel(issue);
 
   const existing = await prisma.sentryIssueImported.findUnique({
@@ -179,7 +173,7 @@ export async function runSentryImport(): Promise<WorkerLog> {
     const issues = await sentry.listUnresolvedIssues(IMPORT_BATCH);
     for (const issue of issues) {
       const sId = sentryIdKey(issue);
-      const sProject = sentryProjectSlug(issue);
+      const sProject = sProjectSlug(issue);
 
       const existing = await prisma.sentryIssueImported.findUnique({
         where: { sentryProject_sentryIssueId: { sentryProject: sProject, sentryIssueId: sId } },
