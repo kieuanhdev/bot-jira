@@ -242,5 +242,46 @@ describe("GET /api/stale standardization integration", () => {
     expect(data.myWork.standardization.incomplete).toBe(0);
     expect(data.myWork.standardization.tasks).toHaveLength(0);
   });
+
+  it("returns full contract payload with all top-level keys", async () => {
+    mocks.issueCacheFindMany.mockResolvedValue([]);
+
+    const res = await GET(new Request("http://localhost/api/stale?project=EPM"));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+
+    expect(data).toHaveProperty("tasks");
+    expect(data).toHaveProperty("bottleneck");
+    expect(data).toHaveProperty("support");
+    expect(data).toHaveProperty("blocked");
+    expect(data).toHaveProperty("trend");
+    expect(data).toHaveProperty("wip");
+    expect(data).toHaveProperty("filters");
+    expect(data).toHaveProperty("myWork");
+    expect(data).toHaveProperty("summary");
+
+    expect(mocks.issueCacheFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          projectKey: { in: ["EPM"] },
+        }),
+      }),
+    );
+  });
+
+  it("applies projectList query parameter scoping when project is not specified", async () => {
+    mocks.issueCacheFindMany.mockResolvedValue([]);
+
+    const res = await GET(new Request("http://localhost/api/stale?projectList=MHRM"));
+    expect(res.status).toBe(200);
+
+    expect(mocks.issueCacheFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          projectKey: { in: ["MHRM"] },
+        }),
+      }),
+    );
+  });
 });
 
