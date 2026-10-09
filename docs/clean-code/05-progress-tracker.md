@@ -26,7 +26,7 @@
 | 0 | Baseline xanh | DONE | Codex | 2026-10-08 | 2026-10-08 | Typecheck, lint zero-warning, 1.289 test và build đều pass; dừng trước Phase 1 |
 | 1 | Contracts và dependency direction | DONE | Codex | 2026-10-08 | 2026-10-08 | Shared contracts/helper đúng dependency direction; lint boundary, full test và build pass; dừng trước Phase 2 |
 | 2 | Jira và Issues | DONE | Codex | 2026-10-08 | 2026-10-09 | Batch 2.1–2.5 hoàn tất; full test/build pass; dừng trước Phase 3 |
-| 3 | Queue và Sync | IN_PROGRESS | Codex | 2026-10-09 | | Batch 3.1–3.5 hoàn tất; dừng trước batch 3.6 |
+| 3 | Queue và Sync | DONE | Codex | 2026-10-09 | 2026-10-09 | Batch 3.1–3.6 hoàn tất; DB integration, full test và build pass; dừng trước Phase 4 |
 | 4 | Bulk | TODO | | | | |
 | 5 | Bitbucket và Releases | TODO | | | | |
 | 6 | Reports, Stale, Leaderboard | TODO | | | | |
@@ -54,7 +54,7 @@
 | 3.3 | Enqueue API | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 105/105 queue/failure/race test và 1.330/1.330 full test pass (22,40 giây); build pass; manual QA N/A | Tách `enqueue.ts`; thêm 6 boundary test khóa coalesced/rejected/database failure và options; `boss.ts` giữ facade; dừng trước 3.4 |
 | 3.4 | Jira sync pipeline | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 50/50 pipeline/sync/race test liên quan và 1.332/1.332 full test pass (22,41 giây); build pass; manual QA N/A | Tách `loadCursor`, `fetchPage`, `persistPage`, `finalizeSync` và runner với dependency context nhỏ; `poll-jira.ts` giữ facade/worker entrypoint; khóa thứ tự lease renew và loss-before-write; R-02 còn Open đến DB suite 3.6; dừng trước 3.5 |
 | 3.5 | Webhook handlers | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 38/38 webhook/event/queue test liên quan và 1.337/1.337 full test pass (21,27 giây); build pass; manual QA N/A | Tách Jira/Bitbucket/Sentry/CI handler và source dispatcher; `process-webhook.ts` giữ event lifecycle facade; khóa processed/failed/idempotency và safe error 300 ký tự; dừng trước 3.6 |
-| 3.6 | DB integration suite | TODO | | | | |
+| 3.6 | DB integration suite | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 4/4 PostgreSQL integration test, 32/32 race/fencing test và 1.337/1.337 full test pass (21,48 giây); build pass; manual QA N/A | `test:db` bắt buộc DB riêng có tên chứa `test`, không đọc DB dev làm target; khóa lease takeover, rollback, cursor advance và soft delete; R-02/R-08 Closed; dừng trước 4.1 |
 | 4.1 | Bulk contract và validation | TODO | | | | |
 | 4.2 | Bulk selection và preview | TODO | | | | |
 | 4.3 | Bulk operation repository | TODO | | | | |
@@ -103,6 +103,7 @@
 | 2026-10-09 | D-014 | Đặt toàn bộ producer functions và `JiraProjectSyncRequest` tại `queue/enqueue.ts`; worker queue import boundary trực tiếp, còn `boss.ts` re-export đầy đủ cho caller hiện hữu | Producer chỉ phụ thuộc connection/env/job DTO, loại dependency vòng qua facade; giữ nguyên payload/options và cho phép kiểm trực tiếp `null` coalescing cùng error propagation mà không kết nối database | Codex |
 | 2026-10-09 | D-015 | Đặt Jira sync pipeline tại `workers/jira-sync/` thành `loadCursor`, `fetchPage`, `persistPage`, `finalizeSync` và runner nhận `JiraSyncDependencies`; giữ `poll-jira.ts` làm facade/worker entrypoint và giữ persistence transaction trong production context | Cô lập orchestration để test checkpoint lease bằng dependency nhỏ, không mock rộng module; giữ nguyên client fallback, pagination, cursor/error, notification, soft-delete, fencing và public exports | Codex |
 | 2026-10-09 | D-016 | Đặt Jira/Bitbucket/Sentry/CI handler tại `workers/webhooks/`, dispatcher chỉ ánh xạ `Source` sang handler; giữ `process-webhook.ts` làm facade sở hữu lookup, already-processed guard và processed/failed transition | Mỗi provider có boundary độc lập nhưng queue/enqueue import không đổi; event chỉ được đánh dấu processed sau handler thành công, failure vẫn retryable và lỗi lưu/trả về được giới hạn 300 ký tự | Codex |
+| 2026-10-09 | D-017 | Tách DB integration khỏi unit suite bằng `*.db.test.ts` và `vitest.integration.config.ts`; `npm run test:db` chỉ nhận `TEST_DATABASE_URL`, từ chối database không có `test` hoặc trùng identity với `DATABASE_URL`/`.env`, rồi deploy migration trước khi test | Unit suite không thể vô tình mở PostgreSQL; CI/local phải chọn tường minh database test đã cô lập, còn test xác minh đúng transaction/fencing production thay vì Prisma mock | Codex |
 
 ## Findings Ngoài Phạm Vi
 
@@ -137,6 +138,7 @@
 | 2026-10-09 | Worktree batch 3.3, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 17 file / 105 queue/failure/race test; 173 file / 1.330 test full suite trong 22,40 giây | Pass, Next.js 16.3.5 | N/A; enqueue boundary server-only, không đổi UI; coalesced/rejected/database failure và route/facade compatibility được automated test, không kết nối DB/Jira thật | Codex |
 | 2026-10-09 | Worktree batch 3.4, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 6 file / 50 pipeline/sync/race test; 174 file / 1.332 test full suite trong 22,41 giây | Pass, Next.js 16.3.5 | N/A; pipeline server-only, không đổi UI/API/job payload; lease checkpoint, abort, fencing, cursor và soft-delete được automated test, không kết nối DB/Jira thật | Codex |
 | 2026-10-09 | Worktree batch 3.5, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 7 file / 38 webhook/event/queue test; 174 file / 1.337 test full suite trong 21,27 giây | Pass, Next.js 16.3.5 | N/A; webhook worker server-only, không đổi route/job payload; 4 provider, dedupe, processed/failed transition và safe error được automated test, không kết nối provider/DB thật | Codex |
+| 2026-10-09 | Worktree batch 3.6, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 1 file / 4 PostgreSQL integration test; 4 file / 32 race/fencing test; 174 file / 1.337 test full suite trong 21,48 giây | Pass, Next.js 16.3.5 | N/A; test-only/server-only, chạy trên PostgreSQL 16 tạm với database `teamweb_clean_code_test`; không chạm DB dev, provider, route hoặc UI | Codex |
 
 ## Completion Report
 

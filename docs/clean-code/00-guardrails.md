@@ -109,13 +109,13 @@ Các bất biến lấy từ `docs/architecture.md`:
 | ID | Rủi ro | Mức | Cách kiểm soát | Trạng thái |
 |---|---|---:|---|---|
 | R-01 | Jira sync test đang đỏ do mock thiếu `findMany` | P0 | Đã bổ sung test double theo `where.jiraKey.in`; 22/22 race/integration test và full suite 1.289/1.289 test pass | Closed |
-| R-02 | Lease/fencing bị đổi thứ tự khi tách worker | P0 | Batch 3.4 đã khóa checkpoint renew trước fetch, sau response/trước write và trước finalize bằng pipeline test + 48 race/integration test liên quan; giữ Open đến PostgreSQL integration suite batch 3.6 | Open |
+| R-02 | Lease/fencing bị đổi thứ tự khi tách worker | P0 | Batch 3.4 khóa checkpoint renew; batch 3.6 xác nhận lease takeover/fencing trên PostgreSQL thật, cùng 32 race/integration test mock và 4 DB integration test | Closed |
 | R-03 | Bulk retry tạo mutation trùng | P0 | Khóa idempotency marker và retry tests | Open |
 | R-04 | Notification chạy trước commit | P1 | Test thứ tự commit/notify | Open |
 | R-05 | API error/status đổi khi làm mỏng route | P1 | Dùng inventory `07-api-contract-inventory.md` làm baseline và bổ sung characterization test trước khi refactor route; hiện 18/41 route file ưu tiên có colocated test | Open |
 | R-06 | UI state reset sau khi tách component | P1 | Browser test dialog/tab/filter | Open |
 | R-07 | Import cycle khi tạo facade | P1 | Contract modules không có import; production scans sạch; ESLint chặn `components/hooks/lib` import từ `@/app`; full test và build pass cuối Phase 1 | Closed |
-| R-08 | Mock pass nhưng PostgreSQL thật sai | P1 | Integration suite dùng DB test riêng | Open |
+| R-08 | Mock pass nhưng PostgreSQL thật sai | P1 | `npm run test:db` chỉ nhận `TEST_DATABASE_URL` tách biệt, deploy migration và khóa takeover, transaction rollback, cursor advance, soft delete bằng 4/4 test PostgreSQL | Closed |
 | R-09 | Tài liệu cũ và mới cùng được cập nhật | P2 | Chỉ tracker mới là nguồn tiến độ | Open |
 | R-10 | Test double lệch Jira/Prisma contract tạo error log giả | P1 | Bổ sung Jira/project catalog/people-field mocks, assert log abort/lease chủ ý; 79/79 test liên quan và full suite pass | Closed |
 | R-11 | Warning lint mới lọt qua CI vì ESLint vẫn trả exit code 0 | P2 | `npm run lint` dùng `eslint --max-warnings=0`; xác nhận lint sạch ở cuối Phase 0 | Closed |

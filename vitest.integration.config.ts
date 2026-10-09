@@ -10,8 +10,7 @@ export default defineConfig({
   test: {
     cache: false,
     environment: "node",
-    include: ["src/**/*.test.ts", "prisma/**/*.test.ts"],
-    exclude: ["**/*.db.test.ts"],
-    setupFiles: ["./vitest.setup.ts"],
+    include: ["src/**/*.db.test.ts"],
+    fileParallelism: false,
   },
 });

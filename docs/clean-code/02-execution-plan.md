@@ -162,9 +162,9 @@ Không chạy song song hai batch cùng sửa facade hoặc public contract gi�
 
 ### Exit criteria
 
-- [ ] `boss.ts` không còn chứa mọi responsibility.
-- [ ] Sync race unit tests và DB integration tests đều pass.
-- [ ] Worker startup/shutdown có test.
+- [x] `boss.ts` không còn chứa mọi responsibility.
+- [x] Sync race unit tests và DB integration tests đều pass.
+- [x] Worker startup/shutdown có test.
 
 ## Phase 4 - Bulk
 
@@ -359,4 +359,3 @@ Mỗi route:
 | 9 | 2-3 ngày | Thấp |
 
 Tổng dự kiến: 5-7 tuần cho một người, chưa tính thời gian chờ review hoặc môi trường tích hợp.
-

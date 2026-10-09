@@ -15,6 +15,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "backfill:people": "tsx --env-file-if-exists=.env scripts/backfill-people-fields.ts",
     "test": "vitest run",
+    "test:db": "node scripts/run-db-integration-tests.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {

@@ -139,7 +139,7 @@ queue/
 - [x] Tách Jira fetch-page, persist-page và finalize-sync.
 - [x] Giữ renew lease trước fetch, sau fetch và trước finalize.
 - [x] Tách handler webhook theo Jira/Bitbucket/Sentry/CI.
-- [ ] Thêm PostgreSQL integration suite cho fencing/rollback.
+- [x] Thêm PostgreSQL integration suite cho fencing/rollback.
 - [ ] Test SIGTERM và graceful shutdown.
 
 ## 5. Bulk Update Và Bulk Create
@@ -357,4 +357,3 @@ route = parse request -> authenticate -> authorize -> validate -> call use case 
 - [ ] Test pure reducer/model trước khi tách JSX.
 - [ ] Kiểm keyboard, focus, DnD và dialog lifecycle.
 - [ ] Kiểm light/dark và mobile theo design system.
-
