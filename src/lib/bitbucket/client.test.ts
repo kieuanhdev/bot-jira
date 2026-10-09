@@ -209,4 +209,46 @@ describe("M2-03 Bitbucket pagination", () => {
     expect(status[0].prUpdatedAt).toEqual(new Date(2000));
     vi.unstubAllGlobals();
   });
+
+  it("exports all expected methods on the bitbucket facade", async () => {
+    const {
+      bitbucket,
+      getSystemBitbucketCreds,
+      getAllBitbucketCreds,
+      isBitbucketPermissionError,
+      discoverBitbucketRepos,
+      listReposForCred,
+    } = await import("./client");
+
+    expect(typeof getSystemBitbucketCreds).toBe("function");
+    expect(typeof getAllBitbucketCreds).toBe("function");
+    expect(typeof isBitbucketPermissionError).toBe("function");
+    expect(typeof discoverBitbucketRepos).toBe("function");
+    expect(typeof listReposForCred).toBe("function");
+
+    const expectedMethods = [
+      "verifyCreds",
+      "repos",
+      "allRepos",
+      "listBranches",
+      "getBranch",
+      "createBranch",
+      "getCommit",
+      "listCommits",
+      "getCommitBranches",
+      "getDefaultBranch",
+      "branchStatus",
+      "listPullRequests",
+      "listOpenPullRequests",
+      "getPullRequest",
+      "createPullRequest",
+      "updatePullRequest",
+      "listPullRequestActivities",
+    ];
+
+    for (const method of expectedMethods) {
+      expect(typeof (bitbucket as Record<string, unknown>)[method]).toBe("function");
+    }
+  });
 });
+
