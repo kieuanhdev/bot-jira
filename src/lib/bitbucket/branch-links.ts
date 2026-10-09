@@ -1,5 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
+import {
+  selectPrimaryLinkObject,
+  selectPrimaryLink,
+  MANUAL_LINK_SOURCES,
+} from "./link-discovery";
+
+export { selectPrimaryLinkObject, selectPrimaryLink };
 
 /**
  * Branch ↔ Jira task links (many-to-many).
@@ -9,7 +16,7 @@ import type { Prisma } from "@prisma/client";
  * branch-centric screens; `recomputePrimaryLink` keeps it in sync.
  */
 
-const MANUAL_SOURCES = new Set(["manual", "explicit"]);
+const MANUAL_SOURCES = MANUAL_LINK_SOURCES;
 
 export type LinkWrite = {
   source: string;
@@ -120,15 +127,7 @@ export async function recomputePrimaryLink(branchId: string): Promise<string | n
   ]);
   if (!branch) return null;
 
-  const ranked = [...links].sort((a, b) => {
-    const am = MANUAL_SOURCES.has(a.linkSource ?? "") ? 1 : 0;
-    const bm = MANUAL_SOURCES.has(b.linkSource ?? "") ? 1 : 0;
-    if (am !== bm) return bm - am;
-    return (b.linkConfidence ?? 0) - (a.linkConfidence ?? 0);
-  });
-  // Keep the current primary when it is still a top-ranked confirmed link (stability).
-  const current = ranked.find((l) => l.jiraKey === branch.jiraKey);
-  const primary = current ?? ranked[0];
+  const primary = selectPrimaryLinkObject(links, branch.jiraKey);
 
   if (!primary) {
     if (branch.jiraKey) {

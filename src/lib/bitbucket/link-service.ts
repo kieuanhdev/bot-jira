@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
 import { markBranchLinkRemoved, recomputePrimaryLink, upsertBranchLink } from "./branch-links";
+import { reconcileExplicitBranchLink } from "./link-reconciliation";
 
 export type LinkServiceResult = {
   ok: boolean;
@@ -389,36 +390,7 @@ export async function recordExplicitBranchLink(
   branch: string,
   jiraKey: string
 ): Promise<void> {
-  try {
-    const normalizedKey = jiraKey.trim().toUpperCase();
-    const row = await prisma.branchInfo.upsert({
-      where: { repo_branch: { repo, branch } },
-      create: {
-        repo,
-        branch,
-        jiraKey: normalizedKey,
-        linkSource: "explicit",
-        linkConfidence: 100,
-        linkState: "confirmed",
-        checkedAt: new Date(),
-      },
-      update: {
-        jiraKey: normalizedKey,
-        linkSource: "explicit",
-        linkConfidence: 100,
-        linkState: "confirmed",
-        suggestedJiraKey: null,
-      },
-    });
-    await upsertBranchLink(
-      row.id,
-      normalizedKey,
-      { source: "explicit", confidence: 100, reason: "Branch created from task" },
-      { force: true }
-    );
-  } catch {
-    // Best-effort non-blocking
-  }
+  return reconcileExplicitBranchLink(repo, branch, jiraKey);
 }
 
 /**

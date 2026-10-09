@@ -4,6 +4,7 @@ import {
   resolveBranchLink,
   extractJiraKeys,
   isSystemOrReleaseBranch,
+  discoverBranchLinks,
 } from "@/lib/bitbucket/branch-linker";
 import { recomputePrimaryLink, upsertBranchLink } from "@/lib/bitbucket/branch-links";
 import { guard } from "../guard";
@@ -154,21 +155,15 @@ export async function runCheckBranches(): Promise<WorkerLog> {
         // branch name / PR title, plus the resolved primary. Per-pair decisions
         // (unlinked / rejected) and manual links are respected by upsertBranchLink.
         if (row.linkState !== "manual_unlinked" && row.linkState !== "rejected") {
-          const wanted = new Map<string, { source: string; confidence: number }>();
-          for (const k of branchKeys) {
-            if (validKeys.has(k)) wanted.set(k, { source: "branch_name", confidence: 95 });
-          }
-          for (const k of prKeys) {
-            if (validKeys.has(k) && !wanted.has(k)) wanted.set(k, { source: "pr_title", confidence: 85 });
-          }
-          if (linkRes.jiraKey && linkRes.linkState === "confirmed" && !wanted.has(linkRes.jiraKey)) {
-            wanted.set(linkRes.jiraKey, {
-              source: linkRes.linkSource ?? "branch_name",
-              confidence: linkRes.linkConfidence ?? 85,
-            });
-          }
-          for (const [key, w] of Array.from(wanted).slice(0, 5)) {
-            await upsertBranchLink(row.id, key, w);
+          const candidates = discoverBranchLinks({
+            branch: s.branch.name,
+            prTitle: s.prTitle,
+            resolvedPrimary: linkRes,
+            validKeys,
+            maxLinks: 5,
+          });
+          for (const cand of candidates) {
+            await upsertBranchLink(row.id, cand.jiraKey, cand);
           }
           await recomputePrimaryLink(row.id);
         }

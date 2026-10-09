@@ -300,3 +300,20 @@ export function resolveBranchLink(input: ResolveBranchLinkInput): LinkResolution
     suggestedJiraKey: null,
   };
 }
+
+export {
+  discoverBranchLinks,
+  selectPrimaryLink,
+  selectPrimaryLinkObject,
+  rankConfirmedLinks,
+  isManualLinkSource,
+  isProtectedBranchLinkState,
+  getLinkSourcePriority,
+  MANUAL_LINK_SOURCES,
+  LINK_SOURCE_PRIORITY_ORDER,
+  type LinkCandidate,
+  type StandardLinkSource,
+  type DiscoverBranchLinksOptions,
+  type DiscoveredLink,
+} from "./link-discovery";
+

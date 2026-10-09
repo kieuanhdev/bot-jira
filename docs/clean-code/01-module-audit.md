@@ -202,10 +202,10 @@ bulk/
 
 **Checklist**
 
-- [ ] Tách transport, pagination và error normalization.
-- [ ] Tách branches, pull requests và repositories resources.
-- [ ] Chuẩn hóa branch link source/priority.
-- [ ] Giữ many-to-many linkage và primary link rules.
+- [x] Tách transport, pagination và error normalization.
+- [x] Tách branches, pull requests và repositories resources.
+- [x] Chuẩn hóa branch link source/priority.
+- [x] Giữ many-to-many linkage và primary link rules.
 - [ ] Gom recipient resolution commit/PR.
 - [ ] Test pagination, permission fallback và duplicate link.
 - [ ] Browser test link branch, sync PR và create PR.
