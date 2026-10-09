@@ -51,11 +51,25 @@ import {
   determineSkipReason,
   isTransitionError,
 } from "./preview";
+import {
+  createPreviewBulkOperation,
+  findBulkOperationById,
+  confirmBulkOperation,
+  cancelBulkOperation,
+  claimBulkOperation,
+  findPendingBulkOperationItems,
+  findBulkOperationItemById,
+  markBulkOperationItemRunning,
+  recordBulkOperationItemResult,
+  finalizeBulkOperation,
+  isTerminalOperationState,
+} from "./repository";
 
 export * from "./contracts";
 export * from "./validation";
 export * from "./selection";
 export * from "./preview";
+export * from "./repository";
 
 export { extractEpicKey };
 
@@ -437,28 +451,21 @@ export async function previewBulk(
     });
   }
 
-  const op = await prisma.bulkOperation.create({
-    data: {
-      type: action.kind,
-      requestedBy,
-      payload: {
-        action,
-        params: actionParams(action),
-        cycles,
-        truncated,
-        ...(options?.selector ? { selector: options.selector } : {}),
-      } as Prisma.InputJsonValue,
-      state: "preview",
-      total: targets.length,
-    },
-  });
-
-  await prisma.bulkOperationItem.createMany({
-    data: items.map((item) => ({
-      operationId: op.id,
+  const op = await createPreviewBulkOperation({
+    type: action.kind,
+    requestedBy,
+    payload: {
+      action,
+      params: actionParams(action),
+      cycles,
+      truncated,
+      ...(options?.selector ? { selector: options.selector } : {}),
+    } as Prisma.InputJsonValue,
+    total: targets.length,
+    items: items.map((item) => ({
       jiraKey: item.jiraKey,
-      before: item.before as Prisma.InputJsonValue,
-      after: item.after as Prisma.InputJsonValue,
+      before: item.before,
+      after: item.after,
       requested: {
         transitionName: item.transitionName,
         transitionError: item.transitionError,
@@ -473,7 +480,7 @@ export async function previewBulk(
         rootKey: item.rootKey,
         projectKey: item.projectKey,
         sameProject: item.sameProject,
-      } as Prisma.InputJsonValue,
+      },
       // BULK-002 — skipped items are persisted as `skipped` so the worker never
       // picks them up; only actionable items are created as `pending`.
       status: item.skipReason ? "skipped" : "pending",
@@ -505,36 +512,12 @@ export async function confirmBulk(
   operationId: string,
   requestedBy: string
 ): Promise<{ operationId: string; total: number; actionable: number; skipped: number }> {
-  const op = await prisma.bulkOperation.findUnique({
-    where: { id: operationId },
-    include: { items: true },
-  });
-  if (!op || op.requestedBy !== requestedBy) {
-    throw new Error("not_found");
-  }
-  if (op.state !== "preview") {
-    throw new Error("already_confirmed");
-  }
-
-  // BULK-002 — counts are derived from the persisted item statuses, not
-  // re-derived from warning strings, so preview and execution stay in sync.
-  const skipped = op.items.filter((i) => i.status === "skipped").length;
-  const actionable = op.total - skipped;
-
-  await prisma.bulkOperation.update({
-    where: { id: op.id },
-    data: { state: "queued", startedAt: new Date() },
-  });
-
-  return { operationId: op.id, total: op.total, actionable, skipped };
+  return confirmBulkOperation(operationId, requestedBy);
 }
 
 /** Mark a preview as cancelled without executing it. */
 export async function cancelBulk(operationId: string, requestedBy: string): Promise<void> {
-  await prisma.bulkOperation.updateMany({
-    where: { id: operationId, requestedBy, state: "preview" },
-    data: { state: "cancelled" },
-  });
+  await cancelBulkOperation(operationId, requestedBy);
 }
 
 // ---------------------------------------------------------------------------
@@ -862,8 +845,8 @@ async function linkBranch(
   await recordExplicitBranchLink(repo, branch, jiraKey);
 }
 
-function isTerminal(state: string): boolean {
-  return ["completed", "partially_failed", "failed", "cancelled"].includes(state);
+export function isTerminal(state: string): boolean {
+  return isTerminalOperationState(state);
 }
 
 /**
@@ -873,18 +856,9 @@ function isTerminal(state: string): boolean {
  * retries).
  */
 export async function executeBulkOperation(operationId: string): Promise<void> {
-  const op = await prisma.bulkOperation.findUnique({ where: { id: operationId } });
-  if (!op) return;
-  if (isTerminal(op.state)) return;
-
-  // Atomically claim the operation. Only the winner of a queued→running
-  // transition proceeds; concurrent invocations (double-enqueue, retry racing a
-  // still-running job) lose the race and exit without re-processing items.
-  const claim = await prisma.bulkOperation.updateMany({
-    where: { id: op.id, state: "queued" },
-    data: { state: "running", startedAt: op.startedAt ?? new Date() },
-  });
-  if (claim.count === 0) return;
+  const claimResult = await claimBulkOperation(operationId);
+  if (!claimResult.claimed || !claimResult.operation) return;
+  const op = claimResult.operation;
 
   const requested = await prisma.user.findUnique({
     where: { id: op.requestedBy },
@@ -906,10 +880,7 @@ export async function executeBulkOperation(operationId: string): Promise<void> {
 
   // BULK-002 — only `pending` (actionable) items are run. Items already marked
   // `skipped` at preview time are never touched here.
-  const pending = await prisma.bulkOperationItem.findMany({
-    where: { operationId, status: "pending" },
-    orderBy: { jiraKey: "asc" },
-  });
+  const pending = await findPendingBulkOperationItems(operationId);
 
   // Simple bounded pool: `concurrency` workers drain the pending list.
   const queue = [...pending];
@@ -928,32 +899,10 @@ export async function executeBulkOperation(operationId: string): Promise<void> {
   // BULK-003 — aggregate counters from the database, not from the in-process
   // results. This stays correct across retries (items that succeeded in an
   // earlier pass are counted) and matches what the DB actually holds.
-  const counts = await prisma.bulkOperationItem.groupBy({
-    by: ["status"],
-    where: { operationId },
-    _count: { _all: true },
-  });
-  const byStatus = Object.fromEntries(counts.map((c) => [c.status, c._count._all]));
-  const succeeded = byStatus.succeeded ?? 0;
-  const failed = byStatus.failed ?? 0;
-  const skipped = byStatus.skipped ?? 0;
-  const stillPending = (byStatus.pending ?? 0) + (byStatus.running ?? 0);
-  const terminal = stillPending === 0;
-
-  // Only flip to a terminal state once every item has a final status.
-  const state = !terminal ? op.state : failed === 0 ? "completed" : "partially_failed";
-
-  await prisma.bulkOperation.update({
-    where: { id: op.id },
-    data: {
-      state,
-      succeeded,
-      failed,
-      completedAt: terminal ? new Date() : undefined,
-    },
-  });
-
-  if (terminal) await notifyResult(op, state, succeeded, failed, skipped);
+  const summary = await finalizeBulkOperation(operationId);
+  if (summary?.terminal) {
+    await notifyResult(op, summary.state, summary.succeeded, summary.failed, summary.skipped);
+  }
 }
 
 const MAX_ATTEMPTS = 3;
@@ -965,11 +914,11 @@ async function processWithRetry(
   auth: OpAuth,
   _concurrency: number
 ): Promise<ItemResult> {
-  const opRow = await prisma.bulkOperation.findUnique({ where: { id: operationId } });
+  const opRow = await findBulkOperationById(operationId);
   if (!opRow) return { status: "skipped" };
 
   // Idempotency guard: never re-run an item that already succeeded.
-  const current = await prisma.bulkOperationItem.findUnique({ where: { id: itemId } });
+  const current = await findBulkOperationItemById(itemId);
   if (current?.status === "succeeded") return { status: "succeeded" };
 
   const op: OpRow = {
@@ -982,10 +931,7 @@ async function processWithRetry(
   };
   const ctx: Ctx = { op, auth, concurrency: _concurrency };
 
-  await prisma.bulkOperationItem.update({
-    where: { id: itemId },
-    data: { status: "running" },
-  });
+  await markBulkOperationItemRunning(itemId);
 
   let result: ItemResult = { status: "failed", error: "not attempted", retryable: true };
   let attempts = 0;
@@ -1017,15 +963,12 @@ async function processWithRetry(
         })
       : null;
 
-  await prisma.bulkOperationItem.update({
-    where: { id: itemId },
-    data: {
-      status: finalStatus,
-      error: result.error ?? null,
-      retryable: result.retryable ?? false,
-      attemptCount: { increment: attempts },
-      after: (after ?? undefined) as Prisma.InputJsonValue,
-    },
+  await recordBulkOperationItemResult(itemId, {
+    status: finalStatus,
+    error: result.error,
+    retryable: result.retryable,
+    attempts,
+    after: after as Record<string, unknown> | null,
   });
 
   return { status: finalStatus, error: result.error };
