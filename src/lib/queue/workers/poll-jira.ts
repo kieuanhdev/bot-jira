@@ -1,14 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { prisma } from "@/lib/prisma";
-import { jira as systemJira, jiraWith, parseJiraDate } from "@/lib/jira/client";
-import { getProjectPeopleFields } from "@/lib/jira/people-fields";
-import { buildProjectPollJql } from "@/lib/jira/jql";
-import { upsertJiraCommentsWithNew, upsertJiraIssue } from "@/lib/issues/cache";
-import {
-  notifyWatchersOfComment,
-  notifyWatchersOfIssueChange,
-} from "@/lib/issues/notify-watchers";
-import { guard, env } from "../guard";
+import { guard } from "../guard";
 import type { WorkerLog } from "../guard";
 import {
   claimJiraSyncLease,
@@ -20,6 +11,15 @@ import {
   SyncLeaseLostError,
   JiraSyncAbortedError,
 } from "../jira-sync-lease";
+import { jiraClientForProject, jiraSyncDependencies } from "./jira-sync/context";
+import { runJiraSyncPipeline } from "./jira-sync/runner";
+import { safeError } from "./jira-sync/types";
+import type {
+  JiraSyncSource,
+  PollJiraJobData,
+  PollJiraProjectJobData,
+  ProjectStats,
+} from "./jira-sync/types";
 
 export {
   claimJiraSyncLease,
@@ -32,68 +32,8 @@ export {
   JiraSyncAbortedError,
 };
 
-const MAX_PAGES = 150;
-const PAGE_SIZE = 50;
-
-export type JiraSyncSource = "schedule" | "manual" | "startup" | "admin" | "recovery";
-
-export type PollJiraProjectJobData = {
-  projectKey: string;
-  full: boolean;
-  source: JiraSyncSource;
-  requestedBy?: string;
-  requestedAt: string;
-};
-
-export type PollJiraJobData = {
-  projectKey?: string;
-  full?: boolean;
-  requestedBy?: string;
-  source?: JiraSyncSource;
-  requestedAt?: string;
-};
-
-export type ProjectStats = {
-  projectKey: string;
-  created: number;
-  updated: number;
-  comments: number;
-  deleted: number;
-  pages: number;
-  cursor: string | null;
-  errors: string[];
-  cursorAdvanced?: boolean;
-  lastSuccessAt?: string | null;
-  lastError?: string | null;
-  workflowStatusCount?: number;
-  workflowRefreshError?: string | null;
-};
-
-export function safeError(error: unknown): string {
-  return (error instanceof Error ? error.message : String(error)).slice(0, 300);
-}
-
-/**
- * Client to sync `projectKey` with: the first stored account that can read it.
- * Any failure while resolving falls back to the system client so discovery can
- * never block a sync that used to work.
- */
-async function jiraClientForProject(projectKey: string): Promise<typeof systemJira> {
-  try {
-    const { resolveJiraAuthForProject } = await import("@/lib/jira/project-access");
-    const { getSystemJiraAuth } = await import("@/lib/jira/client");
-    const [resolved, system] = await Promise.all([
-      resolveJiraAuthForProject(projectKey),
-      getSystemJiraAuth(),
-    ]);
-    if (resolved && (!system || resolved.token !== system.token || resolved.user !== system.user)) {
-      return jiraWith(resolved);
-    }
-  } catch {
-    // fall through to the system client
-  }
-  return systemJira;
-}
+export { safeError };
+export type { JiraSyncSource, PollJiraJobData, PollJiraProjectJobData, ProjectStats };
 
 export async function syncProject(
   projectKey: string,
@@ -102,278 +42,17 @@ export async function syncProject(
 ): Promise<ProjectStats> {
   const runToken = options?.runToken ?? randomUUID();
   const jira = await jiraClientForProject(projectKey);
-  const isFullScan_precomputed = full; // may adjust after cursor check
-  const leaseTtlSeconds = computeLeaseTtlSeconds(isFullScan_precomputed);
-  const expiresAt = new Date(Date.now() + leaseTtlSeconds * 1000);
-
-  /**
-   * Renew the lease and check abort signal in one call.
-   * Called before each Jira API request, after each response
-   * before cache writes, and before finalize.
-   */
-  async function renewAndAssert(): Promise<void> {
-    if (options?.signal?.aborted) {
-      throw new JiraSyncAbortedError(`Jira sync aborted for ${projectKey}`);
-    }
-    const newExpiry = new Date(Date.now() + leaseTtlSeconds * 1000);
-    await renewJiraSyncLease(projectKey, runToken, newExpiry);
-  }
-
-  // Giai đoạn 1: Atomically claim project lease before any operation
-  const current = await claimJiraSyncLease(projectKey, runToken, expiresAt);
-
-  const parsedCursor = current.cursor ? new Date(current.cursor) : null;
-  const validCursor = parsedCursor && !Number.isNaN(parsedCursor.getTime()) ? parsedCursor : null;
-  const since = !full && validCursor
-    ? new Date(validCursor.getTime() - env.jiraSyncOverlapSeconds * 1000)
-    : undefined;
-  const jql = buildProjectPollJql(projectKey, since);
-  const stats: ProjectStats = {
-    projectKey,
-    created: 0,
-    updated: 0,
-    comments: 0,
-    deleted: 0,
-    pages: 0,
-    cursor: current.cursor,
-    errors: [],
-    cursorAdvanced: false,
-  };
-  let newestUpdatedAt = validCursor;
-  let exhaustedAllPages = false;
-  const seenKeys = new Set<string>();
-  const isFullScan = full || !validCursor;
-
-  try {
-    const peopleFields = await getProjectPeopleFields(projectKey).catch(() => null);
-    const extraPeopleFields = peopleFields
-      ? Object.values(peopleFields).filter((value): value is string => Boolean(value))
-      : [];
-    for (let page = 0; page < MAX_PAGES; page++) {
-      // Renew lease + check abort before each page fetch
-      await renewAndAssert();
-
-      const result = extraPeopleFields.length > 0
-        ? await jira.search(jql, PAGE_SIZE, page * PAGE_SIZE, options?.signal, extraPeopleFields)
-        : await jira.search(jql, PAGE_SIZE, page * PAGE_SIZE, ...(options?.signal ? [options.signal] : []));
-      stats.pages++;
-
-      // Renew lease after Jira response, before writing cache
-      await renewAndAssert();
-
-      // One query for the whole page instead of one findUnique per issue.
-      const previousRows = await prisma.issueCache.findMany({
-        where: { jiraKey: { in: result.issues.map((i) => i.key) } },
-      });
-      const previousByKey = new Map(previousRows.map((row) => [row.jiraKey, row]));
-
-      for (const issue of result.issues) {
-
-        seenKeys.add(issue.key);
-        try {
-          const previous = previousByKey.get(issue.key) ?? null;
-
-          // Giai đoạn 2: Conditional upsert + link sync inside transaction.
-          // Notifications are deferred until after commit succeeds.
-          const { applied, data: currentIssue } = await upsertJiraIssue(issue);
-          if (applied) {
-            if (previous) stats.updated++;
-            else stats.created++;
-
-            // Notification fires AFTER transaction commit.
-            // Notification failure must not affect sync correctness.
-            await notifyWatchersOfIssueChange(previous, {
-              jiraKey: issue.key,
-              ...currentIssue,
-            }).catch(() => null);
-          }
-
-          const issueUpdatedAt = parseJiraDate(issue.fields.updated);
-          if (issueUpdatedAt && (!newestUpdatedAt || issueUpdatedAt > newestUpdatedAt)) {
-            newestUpdatedAt = issueUpdatedAt;
-          }
-
-          try {
-            const commentData = issue.fields.comment as { total?: number; comments?: import("@/lib/jira/types").JiraComment[] } | undefined;
-            const availableComments = commentData?.comments ?? [];
-            const totalComments = commentData?.total ?? availableComments.length;
-
-            let commentsToSync: import("@/lib/jira/types").JiraComment[] = [];
-            if (availableComments.length > 0 && totalComments <= availableComments.length) {
-              commentsToSync = availableComments;
-            } else if (totalComments > 0) {
-              commentsToSync = await jira.getComments(
-                issue.key,
-                ...(options?.signal ? [options.signal] : [])
-              );
-            }
-
-            if (commentsToSync.length > 0) {
-              const { synced, newComments } = await upsertJiraCommentsWithNew(
-                issue.key,
-                commentsToSync
-              );
-              stats.comments += synced;
-              // Notify only after comment cache write succeeds
-              for (const nc of newComments) {
-                await notifyWatchersOfComment(nc.jiraKey, nc.author, nc.body, nc.id).catch(() => null);
-              }
-            }
-          } catch (error) {
-            // Comment/link sync errors are tracked and prevent cursor advancement.
-            stats.errors.push(`${issue.key} comments: ${safeError(error)}`);
-          }
-        } catch (error) {
-          if (error instanceof SyncLeaseLostError || error instanceof JiraSyncAbortedError) {
-            throw error;
-          }
-          stats.errors.push(`${issue.key}: ${safeError(error)}`);
-        }
-      }
-
-      if (result.issues.length < PAGE_SIZE || (page + 1) * PAGE_SIZE >= result.total) {
-        exhaustedAllPages = true;
-        break;
-      }
-    }
-
-    if (options?.signal?.aborted) {
-      throw new JiraSyncAbortedError(`Jira sync aborted for ${projectKey}`);
-    }
-
-    if (!exhaustedAllPages) {
-      throw new Error(`Jira sync exceeded ${MAX_PAGES * PAGE_SIZE} issues for ${projectKey}; cursor was not advanced`);
-    }
-
-    // Ensure newestUpdatedAt does not regress before validCursor
-    if (validCursor && newestUpdatedAt && newestUpdatedAt < validCursor) {
-      newestUpdatedAt = validCursor;
-    }
-
-    // Advance cursor only if no item errors occurred and all pages were read and not aborted
-    const hasErrors = stats.errors.length > 0;
-    const cursor = !hasErrors && !options?.signal?.aborted
-      ? (newestUpdatedAt?.toISOString() ?? current.cursor)
-      : current.cursor;
-    const cursorAdvanced = !hasErrors && !options?.signal?.aborted && Boolean(cursor && cursor !== current.cursor);
-    stats.cursor = cursor;
-    stats.cursorAdvanced = cursorAdvanced;
-
-    // Refresh project workflow statuses from Jira before finalize cursor
-    try {
-      await renewAndAssert();
-      const statusesResp = await jira.getProjectStatuses(projectKey);
-      const flatStatuses: Array<{ id: string; name: string; category?: string }> = [];
-      const seenIds = new Set<string>();
-      for (const item of statusesResp || []) {
-        for (const st of item.statuses || []) {
-          if (st.id && !seenIds.has(st.id)) {
-            seenIds.add(st.id);
-            flatStatuses.push({
-              id: st.id,
-              name: st.name,
-              category: st.statusCategory?.key,
-            });
-          }
-        }
-      }
-      if (flatStatuses.length > 0) {
-        const { upsertProjectWorkflowSnapshot } = await import("@/lib/jira/project-workflow-store");
-        const res = await upsertProjectWorkflowSnapshot(projectKey, flatStatuses);
-        stats.workflowStatusCount = res.statusCount;
-      }
-    } catch (err: unknown) {
-      const errText = safeError(err);
-      stats.workflowRefreshError = errText;
-      console.warn(`[poll-jira] Failed to refresh workflow statuses for ${projectKey}:`, errText);
-    }
-
-    // Renew lease before finalize
-    await renewAndAssert();
-
-    // Giai đoạn 3: Finalize cursor and soft-delete inside short atomic transaction under active lease
-    await prisma.$transaction(async (tx) => {
-      const currentCursor = await tx.integrationCursor.findUnique({
-        where: { id: current.id },
-      });
-
-      if (!currentCursor || currentCursor.activeRunToken !== runToken) {
-        throw new SyncLeaseLostError(
-          `Jira sync lease lost for ${projectKey}: active token changed`
-        );
-      }
-
-      // Soft-delete unseen issues only on successful full scan with 0 errors
-      if (isFullScan && !hasErrors && exhaustedAllPages && !options?.signal?.aborted) {
-        const deleted = await tx.issueCache.updateMany({
-          where: {
-            projectKey,
-            deletedAt: null,
-            ...(seenKeys.size > 0 ? { jiraKey: { notIn: [...seenKeys] } } : {}),
-          },
-          data: { deletedAt: new Date() },
-        });
-        stats.deleted = deleted.count;
-      }
-
-      const lastSuccessAt = !hasErrors ? new Date() : currentCursor.lastSuccessAt;
-      const lastErrorText = hasErrors ? stats.errors.slice(0, 10).join("; ").slice(0, 2000) : null;
-      stats.lastSuccessAt = lastSuccessAt ? (lastSuccessAt instanceof Date ? lastSuccessAt.toISOString() : new Date(lastSuccessAt).toISOString()) : null;
-      stats.lastError = lastErrorText;
-
-      const updateRes = await tx.integrationCursor.updateMany({
-        where: {
-          id: current.id,
-          activeRunToken: runToken,
-        },
-        data: {
-          cursor,
-          lastSuccessAt,
-          lastErrorAt: hasErrors ? new Date() : null,
-          lastError: lastErrorText,
-          stats: {
-            ...stats,
-            cursorAdvanced,
-          },
-          activeRunToken: null,
-          activeRunStartedAt: null,
-          activeRunExpiresAt: null,
-        },
-      });
-
-      if (updateRes.count === 0) {
-        throw new SyncLeaseLostError(
-          `Jira sync lease lost for ${projectKey} during finalize commit`
-        );
-      }
-    });
-
-    return stats;
-  } catch (error) {
-    if (error instanceof SyncAlreadyRunningError || error instanceof SyncLeaseLostError) {
-      throw error;
-    }
-    const message = safeError(error);
-    stats.lastError = message;
-
-    // Only record error if activeRunToken is still owned by this run
-    await prisma.integrationCursor.updateMany({
-      where: {
-        id: current?.id,
-        activeRunToken: runToken,
-      },
-      data: {
-        lastErrorAt: new Date(),
-        lastError: message,
-        stats,
-      },
-    }).catch(() => null);
-
-    throw error;
-  } finally {
-    // Only release our own lease
-    await releaseJiraSyncLease(projectKey, runToken).catch(() => null);
-  }
+  return runJiraSyncPipeline(
+    {
+      projectKey,
+      full,
+      runToken,
+      leaseTtlSeconds: computeLeaseTtlSeconds(full),
+      jira,
+      signal: options?.signal,
+    },
+    jiraSyncDependencies
+  );
 }
 
 export async function runPollJiraProject(

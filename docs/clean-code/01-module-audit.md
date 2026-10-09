@@ -136,8 +136,8 @@ queue/
 - [ ] Loại log lỗi giả do mock thiếu method.
 - [ ] Tách connection lifecycle khỏi registration.
 - [ ] Tách enqueue APIs khỏi schedule definitions.
-- [ ] Tách Jira fetch-page, persist-page và finalize-sync.
-- [ ] Giữ renew lease trước fetch, sau fetch và trước finalize.
+- [x] Tách Jira fetch-page, persist-page và finalize-sync.
+- [x] Giữ renew lease trước fetch, sau fetch và trước finalize.
 - [ ] Tách handler webhook theo Jira/Bitbucket/Sentry/CI.
 - [ ] Thêm PostgreSQL integration suite cho fencing/rollback.
 - [ ] Test SIGTERM và graceful shutdown.

@@ -109,7 +109,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 | ID | Rủi ro | Mức | Cách kiểm soát | Trạng thái |
 |---|---|---:|---|---|
 | R-01 | Jira sync test đang đỏ do mock thiếu `findMany` | P0 | Đã bổ sung test double theo `where.jiraKey.in`; 22/22 race/integration test và full suite 1.289/1.289 test pass | Closed |
-| R-02 | Lease/fencing bị đổi thứ tự khi tách worker | P0 | Characterization + PostgreSQL integration test | Open |
+| R-02 | Lease/fencing bị đổi thứ tự khi tách worker | P0 | Batch 3.4 đã khóa checkpoint renew trước fetch, sau response/trước write và trước finalize bằng pipeline test + 48 race/integration test liên quan; giữ Open đến PostgreSQL integration suite batch 3.6 | Open |
 | R-03 | Bulk retry tạo mutation trùng | P0 | Khóa idempotency marker và retry tests | Open |
 | R-04 | Notification chạy trước commit | P1 | Test thứ tự commit/notify | Open |
 | R-05 | API error/status đổi khi làm mỏng route | P1 | Dùng inventory `07-api-contract-inventory.md` làm baseline và bổ sung characterization test trước khi refactor route; hiện 18/41 route file ưu tiên có colocated test | Open |
