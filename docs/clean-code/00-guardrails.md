@@ -127,6 +127,7 @@ Các bất biến lấy từ `docs/architecture.md`:
 | R-17 | Tách pg-boss connection lifecycle làm tạo nhiều singleton, start trùng hoặc shutdown không graceful | P0 | Lifecycle dùng shared global state, cache start promise và reset khi start lỗi; test khóa concurrent start, retry, graceful stop/timeout và singleton mới sau stop; full suite/build pass | Closed |
 | R-18 | Tách queue registry/schedules làm lệch tên job, queue policy, cron, singleton, retry, expire hoặc heartbeat options | P0 | Catalog typed khóa 17 job/queue; contract test snapshot 11 schedule và failure path unschedule legacy; 99 queue test, full suite 1.324/1.324 và build pass | Closed |
 | R-19 | Tách enqueue API làm đổi payload/options, nuốt lỗi database hoặc biến job coalesced `null` thành success ID | P0 | `enqueue.ts` giữ nguyên facade exports; test trực tiếp khóa payload/options, `string | null`, send rejection và startup/database failure; 105 queue test, full suite 1.330/1.330 và build pass | Closed |
+| R-20 | Tách webhook handler làm lệch source routing, event idempotency/status hoặc rò lỗi thô | P0 | Giữ facade và event lifecycle; characterization khóa 4 provider, already-processed, processed/failed transition và lỗi tối đa 300 ký tự; 38 test liên quan, full suite 1.337/1.337 và build pass | Closed |
 
 ## 7. Quy tắc Dừng
 

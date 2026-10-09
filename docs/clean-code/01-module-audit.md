@@ -138,7 +138,7 @@ queue/
 - [ ] Tách enqueue APIs khỏi schedule definitions.
 - [x] Tách Jira fetch-page, persist-page và finalize-sync.
 - [x] Giữ renew lease trước fetch, sau fetch và trước finalize.
-- [ ] Tách handler webhook theo Jira/Bitbucket/Sentry/CI.
+- [x] Tách handler webhook theo Jira/Bitbucket/Sentry/CI.
 - [ ] Thêm PostgreSQL integration suite cho fencing/rollback.
 - [ ] Test SIGTERM và graceful shutdown.
 
