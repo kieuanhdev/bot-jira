@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
+import {
+  findReleaseById,
+  createReleaseGateOverride,
+  revokeReleaseGateOverride,
+  NON_OVERRIDABLE_GATES,
+} from "@/lib/releases/repository";
 
 // REL-03 — gate overrides. POST adds an override (must name a gate + reason);
 // DELETE revokes by override id. `non_empty_release` and `ci` can never be
 // overridden (enforced by the gate engine's NON_OVERRIDABLE set, and re-checked
 // here for a clear 400).
-
-const NON_OVERRIDABLE = new Set(["non_empty_release", "ci"]);
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -30,21 +33,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!body.reason || !body.reason.trim()) {
     return NextResponse.json({ error: "reason required" }, { status: 400 });
   }
-  if (NON_OVERRIDABLE.has(body.gate)) {
+  if (NON_OVERRIDABLE_GATES.has(body.gate)) {
     return NextResponse.json({ error: `gate "${body.gate}" cannot be overridden` }, { status: 400 });
   }
 
-  const release = await prisma.release.findUnique({ where: { id }, select: { id: true } });
+  const release = await findReleaseById(id);
   if (!release) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const override = await prisma.releaseGateOverride.create({
-    data: {
-      releaseId: id,
-      gate: body.gate.trim(),
-      reason: body.reason.trim(),
-      createdById: session.user?.id ?? "",
-      expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
-    },
+  const override = await createReleaseGateOverride(id, {
+    gate: body.gate.trim(),
+    reason: body.reason.trim(),
+    createdById: session.user?.id ?? "",
+    expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
   });
 
   await audit({
@@ -71,12 +71,10 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string; 
   const overrideId = params.overrideId || url.searchParams.get("overrideId");
   if (!overrideId) return NextResponse.json({ error: "overrideId required" }, { status: 400 });
 
-  const override = await prisma.releaseGateOverride.findUnique({ where: { id: overrideId } });
-  if (!override || override.releaseId !== id) {
+  const updated = await revokeReleaseGateOverride(overrideId, id);
+  if (!updated) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
-
-  await prisma.releaseGateOverride.update({ where: { id: overrideId }, data: { revokedAt: new Date() } });
 
   await audit({
     actorId: session.user?.id ?? null,
@@ -84,7 +82,7 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string; 
     action: "release.override_revoke",
     source: "web",
     target: id,
-    after: { gate: override.gate, overrideId },
+    after: { gate: updated.gate, overrideId },
   });
 
   return NextResponse.json({ ok: true });

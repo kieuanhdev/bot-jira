@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 import type { JiraVersion } from "@/lib/jira/types";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
+import { findReleaseById } from "@/lib/releases/repository";
+import { fetchProjectJiraVersions } from "@/lib/releases/jira-mutation";
 
 /**
  * List the Jira Fix Versions for the release's project so the UI can show
@@ -26,10 +27,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
       return NextResponse.json({ items: [] as JiraVersion[] });
     }
   } else {
-    const release = await prisma.release.findUnique({
-      where: { id },
-      select: { projectKey: true },
-    });
+    const release = await findReleaseById(id);
     if (!release) {
       if (paramProjectKey) {
         targetProjectKey = paramProjectKey;
@@ -57,10 +55,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   if (!auth) {
     return jiraCredentialsRequired();
   }
-  const client = jiraWith(auth);
 
   try {
-    const versions = await client.getVersions(targetProjectKey);
+    const versions = await fetchProjectJiraVersions(targetProjectKey, auth);
     return NextResponse.json({ items: versions });
   } catch (e) {
     const msg = (e as Error).message;

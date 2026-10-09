@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
+import {
+  findReleaseById,
+  createReleaseApproval,
+  revokeReleaseApproval,
+} from "@/lib/releases/repository";
 
 // REL-03 — manual approvals. POST adds an approval (actor = session user);
 // the type is inferred from the actor's role (admin/release_manager =>
@@ -18,7 +22,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   const { id } = await ctx.params;
   const body = (await _req.json().catch(() => ({}))) as { type?: string; note?: string };
 
-  const release = await prisma.release.findUnique({ where: { id }, select: { id: true } });
+  const release = await findReleaseById(id);
   if (!release) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const role = session.user?.role ?? "member";
@@ -27,13 +31,10 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     return NextResponse.json({ error: "invalid approval type" }, { status: 400 });
   }
 
-  const approval = await prisma.releaseApproval.create({
-    data: {
-      releaseId: id,
-      type,
-      approvedById: session.user?.id ?? "",
-      note: body.note ?? "",
-    },
+  const approval = await createReleaseApproval(id, {
+    type: type as "qa" | "release_manager",
+    approvedById: session.user?.id ?? "",
+    note: body.note ?? "",
   });
 
   await audit({
@@ -60,17 +61,19 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string; 
   const approvalId = params.approvalId || url.searchParams.get("approvalId");
   if (!approvalId) return NextResponse.json({ error: "approvalId required" }, { status: 400 });
 
-  const approval = await prisma.releaseApproval.findUnique({ where: { id: approvalId } });
-  if (!approval || approval.releaseId !== id) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
-  }
+  const result = await revokeReleaseApproval(approvalId, id, {
+    id: session.user?.id ?? "",
+    role: session.user?.role ?? "",
+  });
 
-  // Only the approver or an admin can revoke.
-  if (approval.approvedById !== session.user?.id && session.user?.role !== "admin") {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if ("error" in result) {
+    if (result.error === "not_found") {
+      return NextResponse.json({ error: "not found" }, { status: 404 });
+    }
+    if (result.error === "forbidden") {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
   }
-
-  await prisma.releaseApproval.update({ where: { id: approvalId }, data: { revokedAt: new Date() } });
 
   await audit({
     actorId: session.user?.id ?? null,

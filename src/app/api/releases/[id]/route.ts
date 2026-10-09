@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
 import { getReleaseReadiness } from "@/lib/releases/release-readiness";
+import { findReleaseById, updateReleaseMetadata } from "@/lib/releases/repository";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
 
-  const release = await prisma.release.findUnique({
-    where: { id },
-  });
+  const release = await findReleaseById(id);
 
   if (!release) return NextResponse.json({ error: "not found" }, { status: 404 });
 
@@ -57,15 +55,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     description?: string;
   };
 
-  const release = await prisma.release.findUnique({ where: { id } });
+  const release = await findReleaseById(id);
   if (!release) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const updated = await prisma.release.update({
-    where: { id },
-    data: {
-      notes: typeof body.notes === "string" ? body.notes : undefined,
-      description: typeof body.description === "string" ? body.description : undefined,
-    },
+  const updated = await updateReleaseMetadata(id, {
+    notes: body.notes,
+    description: body.description,
   });
 
   await audit({

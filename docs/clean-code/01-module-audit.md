@@ -227,12 +227,12 @@ bulk/
 
 **Checklist**
 
-- [ ] Characterize tất cả mandatory/advisory gate states.
-- [ ] Tách context loading khỏi gate evaluation.
-- [ ] Tách result persistence khỏi summary calculation.
-- [ ] Giữ `unknown` fail-safe semantics.
-- [ ] Giữ non-empty gate không thể override.
-- [ ] Contract test approval, override và release responses.
+- [x] Characterize tất cả mandatory/advisory gate states. (Batch 5.4)
+- [x] Tách context loading khỏi gate evaluation. (Batch 5.4)
+- [x] Tách result persistence khỏi summary calculation. (Batch 5.5)
+- [x] Giữ `unknown` fail-safe semantics. (Batch 5.5)
+- [x] Giữ non-empty gate không thể override. (Batch 5.5)
+- [x] Contract test approval, override và release responses. (Batch 5.5)
 - [ ] Browser test create, ready check, override và publish.
 
 ## 8. Reports, Stale Và Leaderboard

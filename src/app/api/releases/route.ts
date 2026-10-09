@@ -2,9 +2,6 @@ import { loadConfirmedBranchRows } from "@/lib/bitbucket/branch-links";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { audit } from "@/lib/audit";
-import { jiraWith, canCreateProjectVersion, JiraRequestError } from "@/lib/jira/client";
-import { userJiraAuth } from "@/lib/user-creds";
 import {
   evaluateTaskReadiness,
   evaluateReleaseReadiness,
@@ -13,7 +10,7 @@ import {
 import { computeReleaseSummary } from "@/lib/releases/release-summary";
 import { env } from "@/lib/env";
 import { getUserScopedProjects } from "@/lib/project-scope";
-import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
+import { createReleaseWithJira, type CreateReleaseInput } from "@/lib/releases/jira-mutation";
 
 const RELEASE_SELECT = {
   id: true,
@@ -242,221 +239,12 @@ export async function POST(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const body = (await req.json()) as {
-    projectKey?: string;
-    jiraVersionId?: string;
-    version: string;
-    description?: string;
-    targetLabel?: string;
-    notes?: string;
-  };
-
-  if (!body.version || !body.version.trim()) {
-    return NextResponse.json({ error: "version required" }, { status: 400 });
-  }
-
-  const projectKey = body.projectKey?.trim() ?? "";
-  const targetLabel = body.targetLabel?.trim() ?? "";
-
-  if (!projectKey && !targetLabel) {
-    return NextResponse.json(
-      { error: "projectKey (with a Jira Fix Version) or a legacy targetLabel is required" },
-      { status: 400 }
-    );
-  }
-
-  const userId = session.user.id;
-
-  // Resolve the Jira Fix Version identity.
-  let jiraVersionId: string | null = null;
-  let releaseDate: Date | null = null;
-  let isReleased = false;
-  let isArchived = false;
-
-  if (projectKey) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true },
-    });
-    const auth = userJiraAuth(user);
-    if (!auth) {
-      return jiraCredentialsRequired();
-    }
-    const client = jiraWith(auth);
-
-    try {
-      if (body.jiraVersionId) {
-        // Verify the requested version exists in Jira before persisting.
-        const versions = await client.getVersions(projectKey);
-        const match = versions.find((v) => v.id === body.jiraVersionId);
-        if (!match) {
-          return NextResponse.json(
-            { error: `Jira Fix Version ${body.jiraVersionId} not found in project ${projectKey}` },
-            { status: 404 }
-          );
-        }
-        jiraVersionId = match.id;
-        releaseDate = match.releaseDate ? new Date(match.releaseDate) : null;
-        isReleased = Boolean(match.released);
-        isArchived = Boolean(match.archived);
-      } else {
-        // Pre-check Jira permissions for creating a Fix Version in the project
-        const permissions = await client.getMyPermissions(projectKey);
-        if (!canCreateProjectVersion(permissions)) {
-          return NextResponse.json(
-            {
-              error: "Bạn không có quyền tạo Fix Version trong dự án này.",
-              code: "jira_project_permission_required",
-            },
-            { status: 403 }
-          );
-        }
-
-        // No version given: create a new Fix Version in Jira.
-        const created = await client.createVersion(projectKey, body.version, body.description);
-        if (!created?.id) {
-          return NextResponse.json(
-            { error: "Jira did not return a version id while creating the Fix Version" },
-            { status: 502 }
-          );
-        }
-        jiraVersionId = created.id;
-        releaseDate = created.releaseDate ? new Date(created.releaseDate) : null;
-        isReleased = Boolean(created.released);
-        isArchived = Boolean(created.archived);
-      }
-    } catch (e) {
-      if (e instanceof JiraRequestError) {
-        if (e.status === 403) {
-          return NextResponse.json(
-            {
-              error: "Bạn không có quyền tạo Fix Version trong dự án này.",
-              code: "jira_project_permission_required",
-            },
-            { status: 403 }
-          );
-        }
-        if (e.status === 401) {
-          return NextResponse.json(
-            {
-              error: "Jira token không hợp lệ hoặc đã hết hạn.",
-              code: "jira_auth_failed",
-            },
-            { status: 502 }
-          );
-        }
-      }
-      const msg = e instanceof JiraRequestError ? e.message : (e as Error).message;
-      return NextResponse.json(
-        { error: `Jira version lookup failed: ${msg}`, code: "jira_unavailable" },
-        { status: 502 }
-      );
-    }
-  }
-
-  const now = new Date();
-  let release: Awaited<ReturnType<typeof prisma.release.findUniqueOrThrow>>;
-
-  if (jiraVersionId) {
-    const found = await prisma.release.findFirst({
-      where: { projectKey, jiraVersionId },
-    });
-    if (found) {
-      release = await prisma.release.update({
-        where: { id: found.id },
-        data: {
-          version: body.version,
-          archived: isArchived,
-          status: isReleased ? "released" : "draft",
-          lastSyncedAt: now,
-          ...(body.description !== undefined ? { description: body.description } : {}),
-          ...(releaseDate ? { releaseDate } : {}),
-        },
-      });
-    } else {
-      release = await prisma.release.create({
-        data: {
-          version: body.version,
-          projectKey,
-          jiraVersionId,
-          description: body.description ?? "",
-          releaseDate,
-          archived: isArchived,
-          status: isReleased ? "released" : "draft",
-          releasedAt: isReleased ? (releaseDate ?? now) : null,
-          createdById: userId,
-          lastSyncedAt: now,
-          notes: body.notes ?? "",
-        },
-      });
-    }
-
-    // Attach all cached issues carrying this Fix Version.
-    const issues = await prisma.issueCache.findMany({
-      where: {
-        projectKey,
-        deletedAt: null,
-        OR: [
-          { fixVersionIds: { has: jiraVersionId } },
-          { fixVersionNames: { has: body.version } },
-        ],
-      },
-      select: { jiraKey: true },
-    });
-    if (issues.length) {
-      await prisma.releaseTask.createMany({
-        data: issues.map((i) => ({ releaseId: release.id, jiraKey: i.jiraKey })),
-        skipDuplicates: true,
-      });
-    }
-  } else {
-    // Legacy label-based release
-    const found = await prisma.release.findFirst({
-      where: { targetLabel, jiraVersionId: null },
-    });
-    if (found) {
-      release = await prisma.release.update({
-        where: { id: found.id },
-        data: {
-          version: body.version,
-          projectKey,
-          ...(body.description !== undefined ? { description: body.description } : {}),
-          ...(body.notes !== undefined ? { notes: body.notes } : {}),
-        },
-      });
-    } else {
-      release = await prisma.release.create({
-        data: {
-          version: body.version,
-          projectKey,
-          targetLabel,
-          description: body.description ?? "",
-          createdById: userId,
-          notes: body.notes ?? "",
-        },
-      });
-    }
-
-    const issues = await prisma.issueCache.findMany({
-      where: { labels: { has: targetLabel } },
-      select: { jiraKey: true },
-    });
-    if (issues.length) {
-      await prisma.releaseTask.createMany({
-        data: issues.map((i) => ({ releaseId: release.id, jiraKey: i.jiraKey })),
-        skipDuplicates: true,
-      });
-    }
-  }
-
-  await audit({
-    actorId: userId,
-    actorEmail: session.user.email ?? null,
-    action: "release.create",
-    source: "web",
-    target: release.id,
-    after: { projectKey, version: body.version, jiraVersionId },
+  const body = (await req.json()) as CreateReleaseInput;
+  const result = await createReleaseWithJira(body, {
+    id: session.user.id,
+    email: session.user.email ?? null,
   });
 
-  return NextResponse.json({ release });
+  return NextResponse.json(result.body, { status: result.status });
 }
+
