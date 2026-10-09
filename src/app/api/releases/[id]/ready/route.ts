@@ -3,11 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { aiProvider } from "@/lib/ai";
 import { notifyAll } from "@/lib/notify";
+import { evaluateReleaseGates } from "@/lib/releases/gates";
 import {
-  runGates,
-  aggregateGates,
-  collectBlockers,
-} from "@/lib/releases/gates";
+  buildGateSourceTimes,
+  buildGatePersistencePayload,
+  buildReleaseCheckNotification,
+} from "@/lib/releases/release-summary";
 import { buildReleaseContext } from "@/lib/releases/release-context";
 import { can } from "@/lib/permissions";
 
@@ -48,18 +49,18 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     select: { gate: true, revokedAt: true, expiresAt: true, createdAt: true, reason: true, createdById: true },
   });
 
-  const gates = await runGates(releaseCtx, aiProvider.releaseCheck.bind(aiProvider), {
-    overrides,
-  });
-  const status = aggregateGates(gates);
-  const allBlockers = collectBlockers(gates);
+  const { status, ready, gates, blockers, summary } = await evaluateReleaseGates(
+    releaseCtx,
+    {
+      releaseCheck: aiProvider.releaseCheck.bind(aiProvider),
+      overrides,
+    }
+  );
 
   await prisma.release.update({
     where: { id },
     data: { status: status as "ready" | "blocked" | "unknown" },
   });
-
-  const summary = gates.map((g) => `${g.gate}=${g.state}`).join(", ");
 
   const check = await prisma.releaseCheck.create({
     data: {
@@ -67,54 +68,34 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
       triggeredBy: session.user?.email ?? null,
       status,
       summary,
-      blockers: JSON.parse(JSON.stringify(allBlockers)) as object,
-      sourceTimes: JSON.parse(JSON.stringify({
-        checkedAt: releaseCtx.checkedAt.toISOString(),
-        taskLastSynced: releaseCtx.tasks.map((t) => ({ key: t.jiraKey, at: t.lastSyncedAt.toISOString() })),
-        sentryCheckedAt: releaseCtx.sentryCheckedAt?.toISOString() ?? null,
-      })) as object,
+      blockers: JSON.parse(JSON.stringify(blockers)) as object,
+      sourceTimes: JSON.parse(JSON.stringify(buildGateSourceTimes(releaseCtx))) as object,
       gates: {
-        create: gates.map((g) => ({
-          gate: g.gate,
-          state: g.state,
-          summary: g.summary,
-          details: g.details
-            ? (JSON.parse(JSON.stringify(g.details)) as object)
-            : undefined,
-          sourceTime: g.sourceTime ?? null,
-        })),
+        create: buildGatePersistencePayload(gates),
       },
     },
     include: { gates: true },
   });
 
   if (release.status !== status) {
-    const reasons = allBlockers
-      .slice(0, 10)
-      .map((b) => (b.jiraKey ? `${b.jiraKey}: ${b.reason}` : b.reason));
-    const severity = status === "blocked" ? "danger" : status === "unknown" ? "warning" : "success";
-    const statusText = status === "blocked"
-      ? "bị chặn"
-      : status === "unknown"
-        ? "chưa sẵn sàng"
-        : "đã sẵn sàng";
-    await notifyAll({
-      type: "release",
-      title: `Bản phát hành ${release.version} ${statusText}`,
-      body: status === "ready" ? summary : (reasons.join("; ") || summary),
-      link: "/release",
-      severity,
-      eventKey: `release-check:${check.id}:${status}`,
-    }).catch(() => null);
+    const notification = buildReleaseCheckNotification(
+      release,
+      status,
+      blockers,
+      summary,
+      check.id
+    );
+    await notifyAll(notification).catch(() => null);
   }
 
   return NextResponse.json({
     status,
-    ready: status === "ready",
+    ready,
     gates,
-    blockers: allBlockers,
+    blockers,
     checkId: check.id,
     tasks: releaseCtx.tasks,
     dependencyGraph: releaseCtx.dependencyGraph,
   });
 }
+

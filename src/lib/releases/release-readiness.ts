@@ -384,13 +384,30 @@ export function evaluateReleaseReadiness(
   };
 }
 
+export type ReleaseDeliveryData = {
+  release: {
+    id: string;
+    status: string;
+    archived?: boolean;
+    lastSyncedAt?: Date | null;
+  };
+  activeTasks: Array<{
+    jiraKey: string;
+    summary: string;
+    status: string;
+    statusCategory?: string | null;
+    labels?: string[];
+    assigneeJira?: string | null;
+    priority?: string;
+    points?: number | null;
+  }>;
+  branchesByKey: Map<string, BranchDeliveryInfo[]>;
+};
+
 /**
- * Load release and compute full readiness using Prisma DB.
+ * Load release, active tasks, and confirmed branch rows from database.
  */
-export async function getReleaseReadiness(
-  releaseId: string,
-  options: ReleaseReadinessOptions = {}
-): Promise<ReleaseReadiness | null> {
+export async function loadReleaseDeliveryData(releaseId: string): Promise<ReleaseDeliveryData | null> {
   const release = await prisma.release.findUnique({
     where: { id: releaseId },
     include: {
@@ -447,8 +464,29 @@ export async function getReleaseReadiness(
     branchesByKey.set(b.jiraKey, list);
   }
 
+  return {
+    release,
+    activeTasks,
+    branchesByKey,
+  };
+}
+
+/**
+ * Load release and compute full readiness using Prisma DB.
+ */
+export async function getReleaseReadiness(
+  releaseId: string,
+  options: ReleaseReadinessOptions = {}
+): Promise<ReleaseReadiness | null> {
+  const data = await loadReleaseDeliveryData(releaseId);
+  if (!data) return null;
+
+  const { release, activeTasks, branchesByKey } = data;
+
   // Allowed merge destinations (e.g. from env.bitbucketBaseBranch or default)
-  const allowedDestinations = options.allowedDestinations || [env.bitbucketBaseBranch, "dev", "develop", "master", "main", "prod"].filter(Boolean);
+  const allowedDestinations =
+    options.allowedDestinations ||
+    [env.bitbucketBaseBranch, "dev", "develop", "master", "main", "prod"].filter(Boolean);
 
   const taskResults: TaskReadinessResult[] = activeTasks.map((issue) =>
     evaluateTaskReadiness(
@@ -481,3 +519,4 @@ export async function getReleaseReadiness(
     options
   );
 }
+
