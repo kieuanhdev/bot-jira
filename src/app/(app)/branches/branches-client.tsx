@@ -1,12 +1,6 @@
 "use client";
 
-import { useState, useTransition, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { api, getErrorMessage } from "@/lib/api-client";
-import { branchesKeys } from "@/lib/query-keys";
-import { useBranchSync, useBranchLink } from "@/hooks/use-branches";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
@@ -17,6 +11,12 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ListSkeleton } from "@/components/shared/skeleton";
 import { RefreshCw, AlertCircle, ChevronLeft, ChevronRight, Inbox, GitBranch } from "lucide-react";
 
+import { getErrorMessage } from "@/lib/api-client";
+import {
+  type ReviewSuggestionItem,
+  type UnlinkedBranchItem,
+  type BranchRowItem,
+} from "./branch-types";
 import { BranchToolbar } from "./branch-toolbar";
 import { TaskDeliveryList } from "./task-delivery-list";
 import { ReviewInboxView } from "./review-inbox-view";
@@ -28,261 +28,45 @@ import { BranchLinkDialog } from "./branch-link-dialog";
 import { TaskBranchLinkDialog } from "./task-branch-link-dialog";
 import { TaskPrCreateDialog } from "./task-pr-create-dialog";
 import { BranchEmptyState } from "./branch-empty-state";
-import {
-  type BranchFilterState,
-  type BranchesQueryResult,
-  type BranchRowItem,
-  type TaskDeliveryQueryResult,
-  type ReviewSuggestionItem,
-  type UnlinkedBranchItem,
-  DEFAULT_FILTERS,
-} from "./branch-types";
+import { useBranchesController } from "./lib/use-branches-controller";
 
 export function BranchesClient() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const [, startTransition] = useTransition();
-
-  const [toast, setToast] = useState<string | null>(null);
-  const [selectedBranchForDrawer, setSelectedBranchForDrawer] = useState<BranchRowItem | null>(null);
-  const [selectedBranchForLink, setSelectedBranchForLink] = useState<BranchRowItem | null>(null);
-  const [attachTask, setAttachTask] = useState<{ jiraKey: string; summary: string } | null>(null);
-  const [prTask, setPrTask] = useState<{ jiraKey: string; summary: string } | null>(null);
-  const [bulkLinkIds, setBulkLinkIds] = useState<string[] | undefined>(undefined);
-
-  const syncMutation = useBranchSync();
-  const linkMutation = useBranchLink();
-
-  const toBranchRow = useCallback((item: {
-    id: string;
-    repo: string;
-    branch: string;
-    suggestedJiraKey?: string | null;
-    jiraKey?: string | null;
-    prTitle?: string | null;
-    prUrl?: string | null;
-  }): BranchRowItem => ({
-    id: item.id,
-    repo: item.repo,
-    branch: item.branch,
-    jiraKey: item.jiraKey ?? null,
-    suggestedJiraKey: item.suggestedJiraKey ?? null,
-    latestCommitSha: null,
-    lastCommitAt: null,
-    prId: null,
-    prTitle: item.prTitle ?? null,
-    prUrl: item.prUrl ?? null,
-    prState: null,
-    prDestinationBranch: null,
-    prUpdatedAt: null,
-    merged: false,
-    linkSource: null,
-    linkConfidence: null,
-    checkedAt: new Date().toISOString(),
-    task: null,
-    attentionSignals: [],
-  }), []);
-
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3500);
-  }, []);
-
-  // Parse filters from URL search params
-  const filters: BranchFilterState = useMemo(() => {
-    return {
-      view: (searchParams.get("view") as BranchFilterState["view"]) ?? DEFAULT_FILTERS.view,
-      q: searchParams.get("q") ?? DEFAULT_FILTERS.q,
-      project: searchParams.get("project") ?? DEFAULT_FILTERS.project,
-      repo: searchParams.get("repo") ?? DEFAULT_FILTERS.repo,
-      link: (searchParams.get("link") as BranchFilterState["link"]) ?? DEFAULT_FILTERS.link,
-      pr: (searchParams.get("pr") as BranchFilterState["pr"]) ?? DEFAULT_FILTERS.pr,
-      taskStatus: searchParams.get("taskStatus") ?? DEFAULT_FILTERS.taskStatus,
-      assignee: searchParams.get("assignee") ?? DEFAULT_FILTERS.assignee,
-      attention: (searchParams.get("attention") as BranchFilterState["attention"]) ?? DEFAULT_FILTERS.attention,
-      sort: (searchParams.get("sort") as BranchFilterState["sort"]) ?? DEFAULT_FILTERS.sort,
-      order: (searchParams.get("order") as BranchFilterState["order"]) ?? DEFAULT_FILTERS.order,
-      page: searchParams.get("page") ? parseInt(searchParams.get("page")!, 10) : DEFAULT_FILTERS.page,
-      pageSize: searchParams.get("pageSize") ? parseInt(searchParams.get("pageSize")!, 10) : DEFAULT_FILTERS.pageSize,
-    };
-  }, [searchParams]);
-
-  // Update URL search parameters
-  const updateFilters = useCallback(
-    (patch: Partial<BranchFilterState>) => {
-      const next = { ...filters, ...patch };
-      const params = new URLSearchParams();
-
-      if (next.view && next.view !== DEFAULT_FILTERS.view) params.set("view", next.view);
-      if (next.q) params.set("q", next.q);
-      if (next.project && next.project !== "ALL") params.set("project", next.project);
-      if (next.repo && next.repo !== "ALL") params.set("repo", next.repo);
-      if (next.link && next.link !== "ALL") params.set("link", next.link);
-      if (next.pr && next.pr !== "ALL") params.set("pr", next.pr);
-      if (next.taskStatus && next.taskStatus !== "ALL") params.set("taskStatus", next.taskStatus);
-      if (next.assignee && next.assignee !== "ALL") params.set("assignee", next.assignee);
-      if (next.attention && next.attention !== "0") params.set("attention", next.attention);
-      if (next.sort && next.sort !== DEFAULT_FILTERS.sort) params.set("sort", next.sort);
-      if (next.order && next.order !== DEFAULT_FILTERS.order) params.set("order", next.order);
-      if (next.page && next.page > 1) params.set("page", String(next.page));
-      if (next.pageSize && next.pageSize !== DEFAULT_FILTERS.pageSize) params.set("pageSize", String(next.pageSize));
-
-      const queryStr = params.toString();
-      startTransition(() => {
-        router.replace(`${pathname}${queryStr ? `?${queryStr}` : ""}`, { scroll: false });
-      });
-    },
-    [filters, pathname, router]
-  );
-
-  const resetFilters = useCallback(() => {
-    startTransition(() => {
-      router.replace(pathname, { scroll: false });
-    });
-  }, [pathname, router]);
-
-  // URL for task-centric workspace query
-  const taskQueryUrl = useMemo(() => {
-    const p = new URLSearchParams();
-    p.set("view", filters.view);
-    if (filters.q) p.set("q", filters.q);
-    if (filters.project !== "ALL") p.set("project", filters.project);
-    if (filters.repo !== "ALL") p.set("repo", filters.repo);
-    if (filters.pr !== "ALL") p.set("pr", filters.pr);
-    if (filters.taskStatus !== "ALL") p.set("taskStatus", filters.taskStatus);
-    if (filters.assignee !== "ALL") p.set("assignee", filters.assignee);
-    p.set("page", String(filters.page));
-    p.set("pageSize", String(filters.pageSize));
-    return `/api/branches/tasks?${p.toString()}`;
-  }, [filters]);
-
-  // URL for technical all-branches query
-  const branchQueryUrl = useMemo(() => {
-    const p = new URLSearchParams();
-    if (filters.q) p.set("q", filters.q);
-    if (filters.project !== "ALL") p.set("project", filters.project);
-    if (filters.repo !== "ALL") p.set("repo", filters.repo);
-    if (filters.link !== "ALL") p.set("link", filters.link);
-    if (filters.pr !== "ALL") p.set("pr", filters.pr);
-    if (filters.taskStatus !== "ALL") p.set("taskStatus", filters.taskStatus);
-    if (filters.assignee !== "ALL") p.set("assignee", filters.assignee);
-    if (filters.attention !== "0") p.set("attention", filters.attention);
-    p.set("sort", filters.sort);
-    p.set("order", filters.order);
-    p.set("page", String(filters.page));
-    p.set("pageSize", String(filters.pageSize));
-    return `/api/branches?${p.toString()}`;
-  }, [filters]);
-
-  const isTechnicalView = filters.view === "all-branches";
-
-  // Query either task delivery workspace or technical branches
-  const taskQueryResult = useQuery<TaskDeliveryQueryResult>({
-    queryKey: branchesKeys.tasks(filters),
-    queryFn: () => api<TaskDeliveryQueryResult>(taskQueryUrl),
-    enabled: !isTechnicalView,
-    placeholderData: (prev) => prev,
-    refetchInterval: 60000,
-  });
-
-  const branchQueryResult = useQuery<BranchesQueryResult>({
-    queryKey: branchesKeys.list(filters),
-    queryFn: () => api<BranchesQueryResult>(branchQueryUrl),
-    enabled: isTechnicalView,
-    placeholderData: (prev) => prev,
-    refetchInterval: 60000,
-  });
-
-  // Facet query to get full projects and repos list even in task view
-  const facetQueryResult = useQuery<BranchesQueryResult>({
-    queryKey: branchesKeys.facets,
-    queryFn: () => api<BranchesQueryResult>("/api/branches?pageSize=1"),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const { data: meStatus } = useQuery({
-    queryKey: ["me-status"],
-    queryFn: () => api<{ jiraName: string | null; jiraBaseUrl?: string; bitbucketBaseUrl?: string }>("/api/me/status"),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const bitbucketBaseUrl =
-    branchQueryResult.data?.bitbucketBaseUrl ??
-    taskQueryResult.data?.bitbucketBaseUrl ??
-    meStatus?.bitbucketBaseUrl ??
-    null;
-
-  const jiraBaseUrl =
-    branchQueryResult.data?.jiraBaseUrl ??
-    taskQueryResult.data?.jiraBaseUrl ??
-    meStatus?.jiraBaseUrl ??
-    null;
-
-  const isLoading = isTechnicalView ? branchQueryResult.isLoading : taskQueryResult.isLoading;
-  const isError = isTechnicalView ? branchQueryResult.isError : taskQueryResult.isError;
-  const error = isTechnicalView ? branchQueryResult.error : taskQueryResult.error;
-  const refetch = isTechnicalView ? branchQueryResult.refetch : taskQueryResult.refetch;
-
-  const freshness = isTechnicalView
-    ? branchQueryResult.data?.freshness
-    : facetQueryResult.data?.freshness;
-
-  const projectOptions = facetQueryResult.data?.facets.projects ?? [];
-  const repoOptions = facetQueryResult.data?.facets.repositories ?? [];
-
-  // Handle manual "Sync now"
-  const handleSyncNow = () => {
-    syncMutation.mutate(undefined, {
-      onSuccess: (data) =>
-        showToast(data.queued ? "Đã đưa tác vụ đồng bộ vào hàng đợi nền" : "Đồng bộ nhánh thành công"),
-      onError: (err) => showToast(`Đồng bộ thất bại: ${getErrorMessage(err)}`),
-    });
-  };
-
-  // Confirm suggestion
-  const handleConfirmSuggestion = async (branchId: string) => {
-    try {
-      await linkMutation.mutateAsync({ branchId, body: { action: "confirm" } });
-      showToast("Đã xác nhận liên kết Jira task thành công");
-    } catch (err) {
-      showToast(getErrorMessage(err));
-    }
-  };
-
-  // Confirm all suggestions
-  const handleConfirmAll = async () => {
-    try {
-      await linkMutation.mutateAsync({ branchId: "all", body: { action: "confirm_all" } });
-      showToast("Đã gắn tất cả các nhánh gợi ý vào hệ thống thành công");
-    } catch (err) {
-      showToast(getErrorMessage(err));
-    }
-  };
-
-  // Reject suggestion
-  const handleRejectSuggestion = async (branchId: string) => {
-    try {
-      await linkMutation.mutateAsync({ branchId, body: { action: "reject" } });
-      showToast("Đã từ chối gợi ý liên kết");
-    } catch (err) {
-      showToast(getErrorMessage(err));
-    }
-  };
-
-  // Unlink branch
-  const handleUnlinkBranch = (branchId: string) => {
-    linkMutation.mutate(
-      { branchId, body: { action: "unlink" } },
-      {
-        onSuccess: () => {
-          showToast("Đã hủy liên kết Jira task");
-          setSelectedBranchForDrawer(null);
-        },
-        onError: (err) => showToast(getErrorMessage(err)),
-      }
-    );
-  };
+  const {
+    toast,
+    showToast,
+    filters,
+    updateFilters,
+    resetFilters,
+    isTechnicalView,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    freshness,
+    projectOptions,
+    repoOptions,
+    bitbucketBaseUrl,
+    jiraBaseUrl,
+    syncMutation,
+    branchQueryResult,
+    taskQueryResult,
+    selectedBranchForDrawer,
+    setSelectedBranchForDrawer,
+    selectedBranchForLink,
+    setSelectedBranchForLink,
+    attachTask,
+    setAttachTask,
+    prTask,
+    setPrTask,
+    bulkLinkIds,
+    setBulkLinkIds,
+    toBranchRow,
+    handleSyncNow,
+    handleConfirmSuggestion,
+    handleConfirmAll,
+    handleRejectSuggestion,
+    handleUnlinkBranch,
+  } = useBranchesController();
 
   const activePage = isTechnicalView
     ? branchQueryResult.data?.page

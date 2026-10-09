@@ -204,7 +204,7 @@ export function useBoardFilterController({
     if (!initialSyncDoneRef.current && selectedProject && !hasFilterParamsInUrl) {
       initialSyncDoneRef.current = true;
       const saved = loadStoredFilters(selectedProject, myName);
-      if (saved) setFilters(saved);
+      if (saved) queueMicrotask(() => setFilters(saved));
     }
   }, [selectedProject, myName, hasFilterParamsInUrl]);
 

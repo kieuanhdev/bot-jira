@@ -350,10 +350,10 @@ route = parse request -> authenticate -> authorize -> validate -> call use case 
 
 **Checklist**
 
-- [ ] Di chuyển avatar helpers khỏi Board feature.
-- [ ] Tách Board filters, selection, sync, DnD và optimistic update hooks.
-- [ ] Tách Bulk selection, configuration, preview và operation hooks.
-- [ ] Giữ state ownership ở component sống đủ lâu.
-- [ ] Test pure reducer/model trước khi tách JSX.
+- [x] Di chuyển avatar helpers khỏi Board feature. (Batch 1.3)
+- [x] Tách Board filters, selection, sync, DnD và optimistic update hooks. (Batch 8.2)
+- [x] Tách Bulk selection, configuration, preview và operation hooks. (Batch 4.8)
+- [x] Giữ state ownership ở component sống đủ lâu. (Batch 4.8, 8.2, 8.3)
+- [x] Test pure reducer/model trước khi tách JSX. (Batch 4.8, 8.2, 8.3)
 - [ ] Kiểm keyboard, focus, DnD và dialog lifecycle.
 - [ ] Kiểm light/dark và mobile theo design system.

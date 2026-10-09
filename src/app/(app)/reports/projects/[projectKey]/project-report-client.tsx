@@ -1,11 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
-import { reportsKeys } from "@/lib/query-keys";
 import { ReportPeriodFilter } from "../../report-period-filter";
 import { OverviewTab } from "./overview-tab";
 import { TasksTab } from "./tasks-tab";
@@ -34,249 +29,47 @@ import {
   TrendingUp,
 } from "lucide-react";
 import type {
-  ProjectDetailResponse,
   ReportUnit,
-  RiskTasksResponse,
   ReportStatusGroup,
-  ReportPeriod,
 } from "@/lib/reports/types";
-import { resolveReportPeriod } from "@/lib/reports/period";
+import { useProjectReportController } from "./lib/use-project-report-controller";
 
 interface ProjectReportClientProps {
   projectKey: string;
 }
 
 export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
-
-  const initialPeriod = useMemo(() => {
-    return resolveReportPeriod({
-      period: searchParams.get("period") || "this_week",
-      from: searchParams.get("from"),
-      to: searchParams.get("to"),
-      timezone: searchParams.get("timezone") || "Asia/Ho_Chi_Minh",
-    }).period;
-  }, [searchParams]);
-
-  const [period, setPeriod] = useState<ReportPeriod>(initialPeriod);
-  const [versionId, setVersionId] = useState<string>(searchParams.get("versionId") || "all");
-  const [unit, setUnit] = useState<ReportUnit>(
-    (searchParams.get("unit") as ReportUnit) || "auto"
-  );
-  const [activeTab, setActiveTab] = useState<string>(searchParams.get("tab") || "overview");
-
-  const [activeKpiFilter, setActiveKpiFilter] = useState<string | null>(null);
-  const [activeActivity, setActiveActivity] = useState<string>(
-    searchParams.get("activity") || "all"
-  );
-  const [activeStatusGroup, setActiveStatusGroup] = useState<ReportStatusGroup | null>(
-    (searchParams.get("statusGroup") as ReportStatusGroup) || null
-  );
-  const [activeAssignee, setActiveAssignee] = useState<string>(
-    searchParams.get("assignee") || "all"
-  );
-  const [riskOffset, setRiskOffset] = useState<number>(0);
-  const [isExporting, setIsExporting] = useState<boolean>(false);
-
-  // Listen to browser Back / Forward history navigation
-  const searchParamsString = searchParams.toString();
-  const [prevParamsString, setPrevParamsString] = useState(searchParamsString);
-  if (searchParamsString !== prevParamsString) {
-    setPrevParamsString(searchParamsString);
-    setActiveTab(searchParams.get("tab") || "overview");
-    setActiveStatusGroup((searchParams.get("statusGroup") as ReportStatusGroup) || null);
-    setActiveActivity(searchParams.get("activity") || "all");
-    setActiveAssignee(searchParams.get("assignee") || "all");
-    setVersionId(searchParams.get("versionId") || "all");
-    setUnit((searchParams.get("unit") as ReportUnit) || "auto");
-  }
-
-  // Sync state to URL
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (period.preset !== "this_week") params.set("period", period.preset);
-    if (period.preset === "custom") {
-      params.set("from", period.from);
-      params.set("to", period.to);
-    }
-    if (versionId !== "all") params.set("versionId", versionId);
-    if (unit !== "auto") params.set("unit", unit);
-    if (activeTab !== "overview") params.set("tab", activeTab);
-    if (activeTab === "tasks") {
-      if (activeActivity !== "all") params.set("activity", activeActivity);
-      if (activeStatusGroup) params.set("statusGroup", activeStatusGroup);
-      if (activeAssignee !== "all") params.set("assignee", activeAssignee);
-    }
-
-    const qs = params.toString();
-    const newUrl = qs ? `${pathname}?${qs}` : pathname;
-    const currentQs = searchParams.toString();
-    const currentUrl = currentQs ? `${pathname}?${currentQs}` : pathname;
-
-    if (newUrl !== currentUrl) {
-      router.replace(newUrl, { scroll: false });
-    }
-  }, [
-    period,
-    versionId,
-    unit,
-    activeTab,
-    activeActivity,
-    activeStatusGroup,
-    activeAssignee,
-    pathname,
-    router,
-    searchParams,
-  ]);
-
-  const handleDrillDownToTasks = (filter: {
-    activity?: string;
-    statusGroup?: string;
-    assignee?: string;
-  }) => {
-    const nextActivity = filter.activity !== undefined ? filter.activity : activeActivity;
-    const nextStatusGroup =
-      filter.statusGroup !== undefined
-        ? (filter.statusGroup as ReportStatusGroup)
-        : activeStatusGroup;
-    const nextAssignee = filter.assignee !== undefined ? filter.assignee : activeAssignee;
-
-    if (filter.activity !== undefined) setActiveActivity(filter.activity);
-    if (filter.statusGroup !== undefined)
-      setActiveStatusGroup(filter.statusGroup as ReportStatusGroup);
-    if (filter.assignee !== undefined) setActiveAssignee(filter.assignee);
-    setActiveTab("tasks");
-
-    // Push new history state so Browser Back returns to overview
-    const params = new URLSearchParams();
-    if (period.preset !== "this_week") params.set("period", period.preset);
-    if (period.preset === "custom") {
-      params.set("from", period.from);
-      params.set("to", period.to);
-    }
-    if (versionId !== "all") params.set("versionId", versionId);
-    if (unit !== "auto") params.set("unit", unit);
-    params.set("tab", "tasks");
-    if (nextActivity !== "all") params.set("activity", nextActivity);
-    if (nextStatusGroup) params.set("statusGroup", nextStatusGroup);
-    if (nextAssignee !== "all") params.set("assignee", nextAssignee);
-
-    const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  };
-
-  const handleNavigateToOverview = () => {
-    setActiveTab("overview");
-    setActiveStatusGroup(null);
-    setActiveActivity("all");
-    setActiveAssignee("all");
-
-    const params = new URLSearchParams();
-    if (period.preset !== "this_week") params.set("period", period.preset);
-    if (period.preset === "custom") {
-      params.set("from", period.from);
-      params.set("to", period.to);
-    }
-    if (versionId !== "all") params.set("versionId", versionId);
-    if (unit !== "auto") params.set("unit", unit);
-    const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  };
-
-  // Detail query
-  const queryParams = useMemo(() => {
-    const params: Record<string, string> = {
-      period: period.preset,
-      from: period.from,
-      to: period.to,
-      timezone: period.timezone,
-    };
-    if (versionId && versionId !== "all") {
-      params.versionId = versionId;
-    }
-    if (unit !== "auto") params.unit = unit;
-    return params;
-  }, [period, versionId, unit]);
-
   const {
-    data: report,
+    period,
+    setPeriod,
+    versionId,
+    setVersionId,
+    unit,
+    setUnit,
+    activeTab,
+    setActiveTab,
+    activeKpiFilter,
+    setActiveKpiFilter,
+    activeActivity,
+    setActiveActivity,
+    activeStatusGroup,
+    setActiveStatusGroup,
+    activeAssignee,
+    setActiveAssignee,
+    riskOffset,
+    setRiskOffset,
+    isExporting,
+    report,
     isLoading,
     isError,
     error,
     refetch,
     isFetching,
-  } = useQuery<ProjectDetailResponse>({
-    queryKey: reportsKeys.project(projectKey, queryParams),
-    queryFn: () => {
-      const sp = new URLSearchParams(queryParams);
-      const qs = sp.toString();
-      return api<ProjectDetailResponse>(
-        `/api/reports/projects/${projectKey}${qs ? `?${qs}` : ""}`
-      );
-    },
-    staleTime: 60_000,
-  });
-
-  // Risk tasks query with pagination for Overview tab
-  const riskQueryParams = useMemo(() => {
-    const params: Record<string, string> = {
-      limit: "20",
-      offset: String(riskOffset),
-    };
-    if (versionId && versionId !== "all") {
-      params.versionId = versionId;
-    }
-    if (activeKpiFilter && activeKpiFilter !== "done" && activeKpiFilter !== "wip") {
-      params.risk = activeKpiFilter;
-    }
-    return params;
-  }, [versionId, riskOffset, activeKpiFilter]);
-
-  const { data: riskData } = useQuery<RiskTasksResponse>({
-    queryKey: reportsKeys.risks(projectKey, riskQueryParams),
-    queryFn: () => {
-      const sp = new URLSearchParams(riskQueryParams);
-      const qs = sp.toString();
-      return api<RiskTasksResponse>(
-        `/api/reports/projects/${projectKey}/risks${qs ? `?${qs}` : ""}`
-      );
-    },
-    staleTime: 60_000,
-  });
-
-  const handleExportCsv = async () => {
-    try {
-      setIsExporting(true);
-      const sp = new URLSearchParams(queryParams);
-      const qs = sp.toString();
-      const exportUrl = `/api/reports/projects/${projectKey}/export${qs ? `?${qs}` : ""}`;
-
-      const res = await fetch(exportUrl);
-      if (!res.ok) throw new Error("Xuất dữ liệu thất bại");
-
-      const blob = await res.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = downloadUrl;
-      const disposition = res.headers.get("Content-Disposition");
-      let filename = `project-report-${projectKey.toLowerCase()}-${period.from}-to-${period.to}.csv`;
-      if (disposition && disposition.includes("filename=")) {
-        const match = disposition.match(/filename="?([^"]+)"?/);
-        if (match?.[1]) filename = match[1];
-      }
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Lỗi khi tải file báo cáo");
-    } finally {
-      setIsExporting(false);
-    }
-  };
+    riskData,
+    handleDrillDownToTasks,
+    handleNavigateToOverview,
+    handleExportCsv,
+  } = useProjectReportController(projectKey);
 
   const tabs = [
     { id: "overview", label: "Tổng quan", icon: Layers },

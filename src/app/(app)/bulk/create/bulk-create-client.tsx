@@ -1,17 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
-import {
-  type BulkCreateRowInput,
-  type BulkCreateFieldDefaults,
-  type BulkCreatePreviewResult,
-  type BulkCreateProjectMetadata,
-} from "@/lib/bulk/create-types";
+import { useBulkCreateController } from "./lib/use-bulk-create-controller";
 import { BulkCreateEditorShell } from "./bulk-create-editor-shell";
-import { getStoredEditorMode, setStoredEditorMode } from "./lib/editor-preferences";
 import { CreatePreview } from "./create-preview";
 import { CreateProgress } from "./create-progress";
 import { Card } from "@/components/ui/card";
@@ -47,252 +38,47 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Step = "input" | "preview" | "progress";
-
 export function BulkCreateClient() {
-  const [userSelectedProject, setUserSelectedProject] = useState<string>("");
-  const [step, setStep] = useState<Step>("input");
-  const [defaults, setDefaults] = useState<BulkCreateFieldDefaults>({});
-  const [items, setItems] = useState<BulkCreateRowInput[]>([
-    { clientRef: "row-1", summary: "" },
-    { clientRef: "row-2", summary: "" },
-    { clientRef: "row-3", summary: "" },
-  ]);
-  const [source, setSource] = useState<{ type: "grid" | "paste" | "csv" | "excel"; fileName?: string | null }>({
-    type: "grid",
-  });
-  const [previewData, setPreviewData] = useState<BulkCreatePreviewResult | null>(null);
-  const [activeOperationId, setActiveOperationId] = useState<string | null>(null);
-  const [focusRow, setFocusRow] = useState<number | null>(null);
-  const [focusField, setFocusField] = useState<string | null>(null);
-  const [draftAvailable, setDraftAvailable] = useState(false);
-  // Read from localStorage on first render; safe because the editor only renders after client-side metadata loads (no SSR/hydration).
-  const [isEditorFullscreen, setIsEditorFullscreen] = useState(() => getStoredEditorMode() === "fullscreen");
-  const [isSavingDraft, setIsSavingDraft] = useState(false);
-  const [draftSavedTime, setDraftSavedTime] = useState<number | null>(null);
-  const draftRestoredRef = useRef(false);
-  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function handleToggleFullscreen() {
-    const next = !isEditorFullscreen;
-    setIsEditorFullscreen(next);
-    setStoredEditorMode(next ? "fullscreen" : "standard");
-  }
-
-  // Project change confirmation state
-  const [pendingProjectKey, setPendingProjectKey] = useState<string | null>(null);
-  const [confirmProjectDialogOpen, setConfirmProjectDialogOpen] = useState(false);
-
-  // Query user available projects
-  const { data: projectsData } = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => api<{ items: Array<{ key: string; openCount?: number }> }>("/api/projects"),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const availableProjects = useMemo(() => {
-    const list = (projectsData?.items ?? []).map((p) => p.key);
-    return list.length > 0 ? list : ["EPM", "CICM", "MR", "EDM", "EMA", "ETM", "MHRM", "ECM"];
-  }, [projectsData?.items]);
-
-  // Derive projectKey: use userSelectedProject if explicitly set, else fall back to first available project
-  const projectKey = userSelectedProject || availableProjects[0] || "";
-
-  const draftKey = `bulk-create-draft:${projectKey}`;
-
-  const saveDraft = useCallback((itemsToSave: BulkCreateRowInput[], defaultsToSave: BulkCreateFieldDefaults) => {
-    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
-    setIsSavingDraft(true);
-    draftSaveTimer.current = setTimeout(() => {
-      try {
-        const hasContent = itemsToSave.some((i) => i.summary.trim()) || Object.keys(defaultsToSave).length > 0;
-        if (hasContent) {
-          const now = Date.now();
-          localStorage.setItem(draftKey, JSON.stringify({ items: itemsToSave, defaults: defaultsToSave, savedAt: now }));
-          setDraftSavedTime(now);
-        } else {
-          localStorage.removeItem(draftKey);
-          setDraftSavedTime(null);
-        }
-      } catch { /* quota exceeded or unavailable */ }
-      finally {
-        setIsSavingDraft(false);
-      }
-    }, 1000);
-  }, [draftKey]);
-
-  // Restore draft on project change
-  useEffect(() => {
-    if (!projectKey || draftRestoredRef.current) return;
-    draftRestoredRef.current = true;
-    try {
-      const raw = localStorage.getItem(draftKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed.items) && parsed.items.length > 0) {
-          const hasContent = parsed.items.some((i: { summary?: string }) => i.summary?.trim());
-          if (hasContent) {
-            queueMicrotask(() => setDraftAvailable(true));
-            return;
-          }
-        }
-      }
-    } catch { /* ignore */ }
-  }, [projectKey, draftKey]);
-
-  // Auto-save draft on items/defaults change
-  useEffect(() => {
-    if (step !== "input") return;
-    if (draftRestoredRef.current) {
-      saveDraft(items, defaults);
-    }
-  }, [items, defaults, step, saveDraft]);
-
-  function handleRestoreDraft() {
-    try {
-      const raw = localStorage.getItem(draftKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed.items) && parsed.items.length > 0) {
-          setItems(parsed.items);
-          if (parsed.defaults) setDefaults(parsed.defaults);
-        }
-      }
-    } catch { /* ignore */ }
-    setDraftAvailable(false);
-    draftRestoredRef.current = true;
-  }
-
-  function handleDiscardDraft() {
-    localStorage.removeItem(draftKey);
-    setDraftAvailable(false);
-    draftRestoredRef.current = true;
-  }
-
-  // Query metadata for selected project
   const {
-    data: metadata,
-    isLoading: metadataLoading,
-    error: metadataError,
-    refetch: refetchMetadata,
-  } = useQuery({
-    queryKey: ["bulk-create-metadata", projectKey],
-    queryFn: () => api<BulkCreateProjectMetadata>(`/api/bulk/create/metadata?project=${projectKey}`),
-    enabled: Boolean(projectKey),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // Preview mutation: pass object directly without double JSON.stringify
-  const previewMutation = useMutation({
-    mutationFn: (overrideItems?: BulkCreateRowInput[]) =>
-      api<BulkCreatePreviewResult>("/api/bulk/create", {
-        method: "POST",
-        body: {
-          projectKey,
-          defaults,
-          items: (overrideItems || items).filter((i) => i.summary.trim().length > 0),
-          metadataFingerprint: metadata?.fingerprint,
-          source,
-        },
-      }),
-    onSuccess: (data) => {
-      setPreviewData(data);
-      setStep("preview");
-    },
-  });
-
-  // Confirm mutation: pass object directly without double JSON.stringify
-  const confirmMutation = useMutation({
-    mutationFn: () =>
-      api<{ operationId: string; queued: boolean }>("/api/bulk/create", {
-        method: "POST",
-        body: {
-          confirm: true,
-          operationId: previewData?.operationId,
-        },
-      }),
-    onSuccess: (data) => {
-      setActiveOperationId(data.operationId);
-      setStep("progress");
-      localStorage.removeItem(draftKey);
-    },
-  });
-
-  const filledCount = items.filter((i) => i.summary.trim().length > 0).length;
-
-  function handleResetAll() {
-    setStep("input");
-    setPreviewData(null);
-    setActiveOperationId(null);
-    setItems([
-      { clientRef: "row-1", summary: "" },
-      { clientRef: "row-2", summary: "" },
-      { clientRef: "row-3", summary: "" },
-    ]);
-    setDefaults({});
-  }
-
-  function handleDiscardBlockedRows() {
-    if (!previewData) return;
-    const blockedIndices = new Set(
-      previewData.items.filter((i) => i.classification === "blocked").map((i) => i.rowIndex)
-    );
-    if (blockedIndices.size === 0) return;
-
-    const remaining = items.filter((_, idx) => !blockedIndices.has(idx));
-    if (remaining.length === 0) {
-      setItems([
-        { clientRef: "row-1", summary: "" },
-        { clientRef: "row-2", summary: "" },
-        { clientRef: "row-3", summary: "" },
-      ]);
-      setPreviewData(null);
-      setStep("input");
-      return;
-    }
-
-    setItems(remaining);
-    previewMutation.mutate(remaining);
-  }
-
-  function handleProjectSelect(newKey: string) {
-    if (newKey === projectKey) return;
-    const hasData =
-      items.some((i) => Boolean(i.summary.trim())) || Object.keys(defaults).length > 0;
-    if (hasData) {
-      setPendingProjectKey(newKey);
-      setConfirmProjectDialogOpen(true);
-    } else {
-      setUserSelectedProject(newKey);
-      draftRestoredRef.current = false;
-      setDraftAvailable(false);
-    }
-  }
-
-  function applyProjectChange(newKey: string) {
-    setUserSelectedProject(newKey);
-    setDefaults({});
-    setDraftAvailable(false);
-    draftRestoredRef.current = false;
-    // Preserve general text content, reset project-specific options
-    setItems((prev) =>
-      prev.map((item) => ({
-        clientRef: item.clientRef,
-        summary: item.summary,
-        description: item.description,
-        assignee: item.assignee,
-        originalEstimate: item.originalEstimate,
-        dueDate: item.dueDate,
-        points: item.points,
-        labels: item.labels,
-        issueTypeId: undefined,
-        priorityId: undefined,
-        fixVersionIds: undefined,
-      }))
-    );
-    setPreviewData(null);
-    setActiveOperationId(null);
-  }
+    projectKey,
+    availableProjects,
+    step,
+    setStep,
+    items,
+    setItems,
+    defaults,
+    setDefaults,
+    setSource,
+    previewData,
+    activeOperationId,
+    focusRow,
+    setFocusRow,
+    focusField,
+    setFocusField,
+    isEditorFullscreen,
+    setIsEditorFullscreen,
+    handleToggleFullscreen,
+    draftAvailable,
+    handleRestoreDraft,
+    handleDiscardDraft,
+    isSavingDraft,
+    draftSavedTime,
+    metadata,
+    metadataLoading,
+    metadataError,
+    refetchMetadata,
+    previewMutation,
+    confirmMutation,
+    filledCount,
+    handleResetAll,
+    handleDiscardBlockedRows,
+    handleProjectSelect,
+    confirmProjectDialogOpen,
+    setConfirmProjectDialogOpen,
+    pendingProjectKey,
+    setPendingProjectKey,
+    applyProjectChange,
+  } = useBulkCreateController();
 
   const stepsConfig = [
     {

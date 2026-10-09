@@ -1,8 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import { api } from "@/lib/api-client";
-import { useSetUserRole } from "@/hooks/use-settings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,43 +10,17 @@ import { NotificationPreferences } from "./notification-preferences";
 import { ChatLinking } from "./chat-linking";
 import type { Role } from "@/lib/permissions";
 import { ProjectPeopleFieldsSettings } from "./project-people-fields-settings";
-
-type User = {
-  id: string;
-  email: string;
-  displayName: string;
-  jiraUsername: string | null;
-  role: Role;
-  createdAt: string;
-};
-
-type Health = {
-  status: string;
-  env: {
-    jiraConfigured: boolean;
-    bitbucketConfigured: boolean;
-    sentryConfigured: boolean;
-    ollamaConfigured: boolean;
-  };
-  services: Record<string, { ok: boolean; ms: number; error?: string }>;
-};
+import { useSettingsController } from "./lib/use-settings-controller";
+import { getServiceHealthBadge, type User } from "./lib/settings-model";
 
 export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boolean }) {
-  const [health, setHealth] = useState<Health | null>(null);
-  const [checking, setChecking] = useState(false);
-  const setRoleMutation = useSetUserRole();
-
-  async function checkHealth() {
-    setChecking(true);
-    try {
-      const h = await api<Health>("/api/health");
-      setHealth(h);
-    } finally {
-      setChecking(false);
-    }
-  }
-
-  const serviceKeys = ["db", "jira", "bitbucket", "sentry", "openai", "ollama"] as const;
+  const {
+    health,
+    checking,
+    checkHealth,
+    serviceKeys,
+    handleSetRole,
+  } = useSettingsController();
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
@@ -76,12 +47,13 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {serviceKeys.map((k) => {
                   const s = health.services[k];
+                  const badge = getServiceHealthBadge(s.ok);
                   return (
                     <div key={k} className="rounded-md border p-3">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium capitalize">{k}</span>
-                        <Badge variant={s.ok ? "success" : "danger"}>
-                          {s.ok ? "hoạt động" : "mất kết nối"}
+                        <Badge variant={badge.variant}>
+                          {badge.label}
                         </Badge>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -127,7 +99,7 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
                     <td>
                       <Select
                         value={u.role}
-                        onValueChange={(v) => setRoleMutation.mutate({ id: u.id, role: v as Role })}
+                        onValueChange={(v) => handleSetRole(u.id, v as Role)}
                       >
                         <SelectTrigger className="h-8 w-32">
                           <SelectValue />
