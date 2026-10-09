@@ -213,9 +213,9 @@ Không chạy song song hai batch cùng sửa facade hoặc public contract gi�
 
 ### Exit criteria
 
-- [ ] Không còn file Bulk production trên khoảng 700 dòng nếu không có lý do.
-- [ ] Executors độc lập và có test.
-- [ ] Preview/confirm/retry contract không đổi.
+- [x] Không còn file Bulk production trên khoảng 700 dòng nếu không có lý do (tất cả các file đều < 600 dòng).
+- [x] Executors độc lập và có test.
+- [x] Preview/confirm/retry contract không đổi.
 - [ ] Browser QA Bulk hoàn tất.
 
 ## Phase 5 - Bitbucket Và Releases
