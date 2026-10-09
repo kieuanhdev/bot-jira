@@ -48,7 +48,7 @@ export {
 // Re-export repository helpers
 export { discoverBitbucketRepos, listReposForCred };
 
-const reposResource = createRepositoriesResource(defaultTransport);
+const reposResource = createRepositoriesResource();
 const prResource = createPullRequestsResource(defaultTransport);
 const branchesResource = createBranchesResource(defaultTransport, {
   listPullRequests: (repo, creds) => prResource.listPullRequests(repo, creds),

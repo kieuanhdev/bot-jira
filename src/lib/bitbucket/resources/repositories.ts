@@ -1,6 +1,6 @@
 import { env, bitbucketRepoList } from "@/lib/env";
 import type { BbCreds, BitbucketRepoResponse, Paged } from "../types";
-import { getAllBitbucketCreds, repoCredCache, type BitbucketTransport } from "../transport";
+import { getAllBitbucketCreds, repoCredCache } from "../transport";
 
 const DISCOVERY_TTL_MS = 30 * 60 * 1000;
 let discoveryCache: { at: number; repos: string[] } | null = null;
@@ -60,7 +60,7 @@ export async function discoverBitbucketRepos(force = false): Promise<string[]> {
   return repos;
 }
 
-export function createRepositoriesResource(_transport?: BitbucketTransport) {
+export function createRepositoriesResource() {
   return {
     /**
      * Check a credential against the server itself (not a specific repo), so a
