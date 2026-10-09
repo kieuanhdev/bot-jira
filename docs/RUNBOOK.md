@@ -6,16 +6,29 @@
 
 ## How the system is deployed
 
-Two services share one Postgres database (`teamweb` network):
+Two application processes share one Postgres database (`teamweb` network):
 
 | Service  | What it does | Restart policy |
 |----------|--------------|----------------|
 | `web`    | Next.js app (UI + API + webhooks) | `unless-stopped` |
 | `worker` | pg-boss background jobs (Jira/Bitbucket/Sentry/AI/stale/outbox/alerts) | `unless-stopped` |
+| `db`     | PostgreSQL read model and pg-boss storage | `unless-stopped` |
 
-The **worker** is the only process that mutates Jira via the sync jobs and that
-delivers push notifications. Stopping the worker does **not** lose the read
-model — it only stops refresh/delivery until it is started again.
+Scheduled Jira synchronization is read-only. User mutations enter through
+authenticated web routes and use personal credentials; queued bulk operations
+and restricted Sentry automation execute in the worker. The worker also owns
+notification delivery. Stopping it does **not** lose the read model, but pauses
+sync, queued execution, scheduled analysis and delivery until restart.
+
+### Runtime module map
+
+- `src/lib/queue/connection.ts`: pg-boss singleton lifecycle.
+- `src/lib/queue/job-names.ts`: 17 queue names and queue policy.
+- `src/lib/queue/registry.ts`: worker registration only.
+- `src/lib/queue/schedules.ts`: 11 cron definitions only.
+- `src/lib/queue/enqueue.ts`: typed enqueue boundary used by routes/services.
+- Provider `transport.ts` modules own HTTP/auth/retry; repositories own Prisma
+  transactions; route handlers should remain thin controllers.
 
 ## Everyday checks
 
@@ -169,3 +182,27 @@ If Jira token login encounters critical upstream downtime or identity lockouts:
 
 See `docs/BACKUP_RESTORE.md` for the backup schedule and the tested restore
 procedure.
+
+## Verification after deployment or refactor
+
+Run the standard gates from the repository root:
+
+```bash
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
+
+Database integration tests are separate from the unit suite. They require an
+explicit PostgreSQL URL whose database name contains `test`; the runner also
+refuses a URL matching the development database:
+
+```bash
+TEST_DATABASE_URL=postgresql://.../teamweb_test npm run test:db
+```
+
+Browser QA is not replaceable by HTTP smoke. Before production rollout, run
+[`clean-code/04-manual-qa.md`](clean-code/04-manual-qa.md) with an authenticated
+test session, isolated Jira project and Bitbucket repository at desktop/mobile
+and light/dark settings.

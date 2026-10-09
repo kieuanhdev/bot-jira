@@ -17,7 +17,7 @@
 | API routes | 101 | 101 | `find src/app/api -name route.ts` |
 | Routes import Prisma | 73 | 59 | `rg -l '@/lib/prisma' src/app/api --glob 'route.ts'` |
 | Routes >150 dòng | 15 | 6 | `find src/app/api -name route.ts -print0 \| xargs -0 wc -l` |
-| File production lớn nhất | 1.919 dòng | 603 dòng | `src/lib/jira/board-config.ts` 603 dòng (`types.ts` leaderboard giảm từ 485 còn 3 dòng; `service.ts` giảm từ 330 còn 88 dòng; toàn bộ file leaderboard < 300 dòng; 100% file AI < 170 dòng; toàn bộ file Sentry < 100 dòng) |
+| File production lớn nhất | 1.919 dòng | 795 dòng | `src/app/(app)/board/board-client.tsx` 795 dòng; số 603 trước đó chỉ phản ánh file lib lớn nhất (`src/lib/jira/board-config.ts`), không phải toàn bộ production tree |
 
 ## Phase Status
 
@@ -32,7 +32,7 @@
 | 6 | Reports, Stale, Leaderboard | DONE | Codex | 2026-10-09 | 2026-10-09 | Batch 6.1–6.4 hoàn tất; 100% metric modules không import Prisma; full test và production build pass; hoàn tất Phase 6, dừng trước Phase 7 |
 | 7 | Notify, Chat, AI, Sentry | DONE | Codex | 2026-10-09 | 2026-10-09 | Batch 7.1–7.4 hoàn tất; full test và production build pass; hoàn tất Phase 7, dừng trước Phase 8 |
 | 8 | API và Frontend | DONE | Codex | 2026-10-09 | 2026-10-09 | Batch 8.1 hoàn tất; batch 8.2 ở VERIFY (browser QA manual pending); batch 8.3 hoàn tất; hoàn tất Phase 8, dừng trước Phase 9 |
-| 9 | Verification và docs | TODO | | | | |
+| 9 | Verification và docs | IN_PROGRESS | Codex | 2026-10-09 | | Batch 9.1 và 9.3 hoàn tất; batch 9.2 BLOCKED nên chưa thể đóng Phase 9 |
 
 ## Batch Tracker
 
@@ -77,10 +77,11 @@
 | 7.3 | AI provider boundary | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint` pass (`--max-warnings=0`); 3 test file mới / 44 test mới (10 sanitizer, 17 response-parser, 17 provider); 5 test file / 66 test AI liên quan; 224 test file / 2.046 test full suite trong 32,80 giây; Next.js 16.3.5 production build pass; manual QA N/A | Tách `sanitizer.ts` (scrub `sk-...`, Bearer, basic auth, API keys, webhook tokens), `errors.ts` (`AiUnavailableError`, `AiProviderError`, `isAiUnavailable`), `response-parser.ts` (`extractOpenAiContent`, `extractOllamaContent`, `parseAiScore`, `parseReleaseCheck`, `withJsonRetry`), `openai.ts` và `ollama.ts` (thêm timeout 30s); `provider.ts`, `prompts.ts` và `index.ts` giữ 100% facade re-exports; exit criterion "Provider error không rò secret" hoàn thành; R-39 Closed; dừng trước 7.4 |
 | 7.4 | Sentry review | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint` pass (`--max-warnings=0`); 2 test file mới / 23 test mới (11 client/sanitization, 6 idempotency, 6 worker); 5 test file / 53 test Sentry liên quan; 226 test file / 2.069 test full suite trong 27,47 giây; Next.js 16.3.5 production build pass; manual QA N/A | Tách pure Sentry identity, backoff & idempotency (`src/lib/sentry/idempotency.ts`: `sentryIdKey`, `sentryProjectSlug`, `sentryLabel`, `sentryBackoffMs`, `isBackoffElapsed`, `shouldSkipSentryImport`, `buildSentryEventKey`), bổ sung Sentry client request timeout (15s) và secret sanitization (`sanitizeSentryErrorMessage`), tạo module facade `src/lib/sentry/index.ts`, đồng bộ `sentry-import.ts` worker và `webhooks/sentry.ts` webhook handler; khóa external ID idempotency; R-40 Closed; hoàn tất Phase 7, dừng trước Phase 8 |
 | 8.1 | Làm mỏng route lớn | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 7 file / 50 test route liên quan (10 test mới); 229 file / 2.079 test full suite trong 35,97 giây; Next.js 16.3.5 production build pass; manual QA N/A | Stale đã mỏng ở 6.3; tách orchestration của Releases, Jira avatar, Issues list/detail, Credentials, Bulk templates và Worklogs vào 7 domain route-service; 7 route còn 5–14 dòng, giữ type re-export và handler signature; route import Prisma giảm 73→59, route >150 dòng giảm 15→6; R-05/R-41 Closed; dừng trước 8.2 |
+| 8.2 | Board controller | VERIFY | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 5 test file mới / 20 test mới; 9 file / 52 test Board frontend; 234 test file / 2.099 test full suite trong 36,31 giây; production build pass | Browser QA cần authenticated test session ở desktop/mobile và light/dark; R-42 Open. Khôi phục dòng tracker bị thiếu dựa trên Verification Log hiện có; không chạy batch 8.2 trong batch 9.1 |
 | 8.3 | Frontend controllers còn lại | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 6 test file mới / 24 test mới (5 bulk-create, 4 issue-detail, 5 branches, 3 release, 5 report-url-state, 2 settings); 240 test file / 2.123 test full suite pass (34,10 giây); Next.js 16.3.5 production build pass (70/70 routes); manual QA: JSX/DOM/ref/data attributes và query keys giữ nguyên 100% | Tách controller hook và pure models cho 6 views (Bulk create, Issue detail, Branches, Release, Reports, Settings); bảo toàn URL sync, query keys, dialog/sheet state. R-43 Closed; hoàn tất Phase 8, dừng trước Phase 9 |
-| 9.1 | Full automated verification | TODO | | | | |
-| 9.2 | Full manual QA | TODO | | | | |
-| 9.3 | Architecture/docs/report | TODO | | | | |
+| 9.1 | Full automated verification | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; 240 test file / 2.123 test pass (31,44 giây); DB integration 4/4 pass; Next.js 16.3.5 build pass (70/70 routes); boundary/metric scans sạch; manual QA N/A | Madge 8.0.0 phát hiện 29 đường cycle; Knip 6.41.0 phát hiện 23 file, 181 export, 145 exported type và 1 duplicate export cần phân loại. Ghi F-008/F-009, R-44/R-45; không sửa ngoài batch; dừng trước 9.2 |
+| 9.2 | Full manual QA | BLOCKED | Codex | N/A (không commit theo yêu cầu) | Partial: local `/login` 200; 14 protected pages trả 307 `/login`; 8 protected API trả 401; browser QA chưa chạy | Computer Use không có browser (`browsers: []`; `iab`/`chrome` unavailable), không có authenticated test session/Jira test project/Bitbucket test repo. Checklist và blocker ghi tại `04-manual-qa.md`; R-42/R-46 Open; dừng trước 9.3 |
+| 9.3 | Architecture/docs/report | DONE | Codex | N/A (không commit theo yêu cầu) | `typecheck` pass; `lint --max-warnings=0` pass; local Markdown link scan 6/6 file pass; manual QA N/A (docs-only) | Cập nhật README, architecture, runbook, báo cáo trước–sau; gắn kế hoạch cũ `Superseded`; R-04/R-09 Closed. Phase 9 vẫn mở do 9.2 BLOCKED |
 
 ## Decision Log
 
@@ -127,6 +128,9 @@
 | 2026-10-09 | D-039 | Giữ nguyên public Route Handler signatures và compatibility type export, đồng thời chuyển nguyên khối orchestration đã được characterization sang 7 domain route-service cho Releases, Jira avatar, Issues list/detail, Credentials, Bulk templates và Worklogs; route chỉ ủy quyền sang service | Bảo toàn tuyệt đối thứ tự auth/validation/side effect, status/header/JSON và các cache/idempotency state hiện hành trong một batch refactor; tránh tạo generic route framework hoặc trộn behavior fix, đồng thời loại Prisma/business query khỏi các route lớn và cho phép tiếp tục tách nhỏ service theo domain mà không đổi HTTP boundary | Codex |
 | 2026-10-09 | D-040 | Giữ `BoardClient` làm state owner sống suốt vòng đời trang, tách filter/URL/team scope vào `board-filter-controller.ts`, Jira sync vào `use-jira-sync.ts`, optimistic status vào hook riêng và đưa quyết định DnD/keyboard/sync thành pure model có unit test; không đổi JSX/view props/DOM | Cô lập năm workflow đúng batch để kiểm thử độc lập mà không làm state reset khi view/panel unmount; bảo toàn query key/invalidation, local-storage semantics, transition rollback, card ref và board scroll ref; browser gate vẫn được giữ mở thay vì suy diễn pass khi môi trường không có browser/auth session | Codex |
 | 2026-10-09 | D-041 | Tách 6 frontend controllers còn lại (Bulk create, Issue detail, Branches, Release, Reports, Settings) vào các controller hooks chuyên biệt và pure models có unit tests độc lập; `BulkClient`, `IssueDetailClient`, `BranchesClient`, `ReleaseClient`, `ProjectReportClient`, `SettingsClient` chỉ giữ vai trò presentation; giữ nguyên 100% JSX/DOM/ref/data-attributes/query keys | Phân tách rành mạch presentation layer khỏi state workflow, URL query sync và side-effects; cô lập state machines (bulk draft/selection/operation, issue mutation/comment/worklog, branches filter/link/sync, release filter/create/sync, report params/risks/export, settings form) để kiểm thử độc lập mà không làm mất state hay gây re-render loop; giảm mạnh số dòng code client mà 100% markup và style không đổi | Codex |
+| 2026-10-09 | D-042 | Batch 9.1 chỉ chụp và lưu bằng chứng automated verification; các cycle/dead-export candidate mới phát hiện được ghi thành baseline/risk riêng, không sửa production code trong cùng batch | Madge có thể liệt kê nhiều đường đi qua cùng một vòng; Knip chưa có config cho Next.js entry point, script, service worker và compatibility facade nên cần triage trước khi xóa. Giữ verification tách khỏi cleanup và không lấn sang batch 9.2/9.3 | Codex |
+| 2026-10-09 | D-043 | Không đánh dấu pass bất kỳ mục browser/manual nào khi Computer Use không có browser; chỉ ghi HTTP smoke read-only là bằng chứng phụ và để batch 9.2 ở BLOCKED | HTTP status không chứng minh được interaction, focus, DnD, optimistic rollback, responsive layout, light/dark, reduced motion hoặc tích hợp provider; mọi mutation ngoài local cũng cần test data được xác nhận | Codex |
+| 2026-10-09 | D-044 | Giữ Phase 9 ở `IN_PROGRESS` dù batch 9.3 hoàn tất; công bố báo cáo trước–sau ở trạng thái tạm thời và chỉ đóng chương trình sau khi 8.2/9.2 browser QA hoàn tất | Documentation có thể phản ánh đúng boundary/runtime và automated evidence ngay, nhưng Definition of Done toàn chương trình yêu cầu full browser QA; không dùng docs completion để che blocker R-42/R-46 | Codex |
 
 ## Findings Ngoài Phạm Vi
 
@@ -139,6 +143,9 @@
 | 2026-10-08 | F-005 | Board membership SWR inflight promise có nguy cơ trả `undefined` | P1 | Bug batch riêng | |
 | 2026-10-08 | F-006 | 23/41 route file ưu tiên chưa có colocated route test | P1 | Bổ sung characterization test trước khi refactor từng route ở Phase 2–8 | |
 | 2026-10-08 | F-007 | `jiraWith().search()` cold-cache fetch field metadata không nhận caller `AbortSignal`, có thể trì hoãn cancellation | P1 | Tách bug batch riêng; không trộn behavior fix vào characterization/refactor | |
+| 2026-10-09 | F-008 | Madge 8.0.0 phát hiện 29 đường circular dependency trong 895 file, gồm Board list, Jira auth/user-creds, AI parser/prompts và cụm notify/queue/worker/domain | P1 | Tạo batch kiến trúc riêng để gom theo strongly-connected component, ưu tiên phá dependency ngược qua facade `index.ts`/`boss.ts`; không sửa trong verification batch | |
+| 2026-10-09 | F-009 | Knip 6.41.0 chưa cấu hình dự án báo 23 unused file, 181 unused export, 145 unused exported type và 1 duplicate export; danh sách gồm cả Next/script/service-worker/facade entry có thể là false positive | P2 | Thêm cấu hình entry/project cho Knip, triage từng nhóm rồi mới xóa trong batch riêng có full gates | |
+| 2026-10-09 | F-010 | Môi trường Computer Use không cung cấp browser và không có authenticated test session/test project/test repo để chạy full manual QA | P1 | Chạy lại batch 9.2 trên Chrome/in-app browser với desktop/mobile, light/dark và dữ liệu Jira/Bitbucket cô lập; không dùng production mutation | |
 
 ## Verification Log
 
@@ -186,16 +193,20 @@
 | 2026-10-09 | Worktree batch 8.1, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 3 test file mới / 10 test mới; 7 file / 50 route test liên quan; 229 test file / 2.079 test full suite trong 35,97 giây | Pass, Next.js 16.3.5 production build | N/A; server-only route boundary refactor, không đổi UI; contract tests khóa auth/validation/status, JSON, image headers/cache, credential non-persistence, Jira-before-cache ordering và worklog idempotency; diff check sạch | Codex |
 | 2026-10-09 | Worktree batch 8.2, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 5 test file mới / 20 test mới; 9 file / 52 test Board frontend; 234 test file / 2.099 test full suite trong 36,31 giây | Pass, Next.js 16.3.5 production build | Blocked: Computer Use báo không có browser; `/board` HTTP smoke trả 307 `/login` và không có authenticated test session, nên chưa thể xác nhận DnD/keyboard/rollback cùng desktop/mobile/light/dark. JSX/DOM/ref/data attributes không đổi; R-42 Open | Codex |
 | 2026-10-09 | Worktree batch 8.3, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 6 test file mới / 24 test mới; 240 test file / 2.123 test full suite trong 34,10 giây | Pass, Next.js 16.3.5 production build (70/70 routes) | N/A; refactor controller hooks và pure models cho 6 views (Bulk create, Issue detail, Branches, Release, Reports, Settings); JSX/DOM/ref/data attributes và query keys giữ nguyên 100%, không layout shift hay markup mutation; R-43 Closed | Codex |
+| 2026-10-09 | Worktree batch 9.1, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Pass, 240 test file / 2.123 test full suite trong 31,44 giây; PostgreSQL integration 1 file / 4 test pass trên DB tạm `teamweb_clean_code_9_1_test` đã xóa sau chạy | Pass, Next.js 16.3.5 production build (70/70 routes) | N/A; automated-verification batch, không đổi runtime/UI. Boundary scans: 0 production import từ API route, 0 shared import từ app, 0 Prisma import trong metric calculators; Madge/Knip findings được ghi F-008/F-009 và R-44/R-45 | Codex |
+| 2026-10-09 | Worktree batch 9.2, không commit | Kế thừa 9.1 pass | Kế thừa 9.1 pass, 0 warning | HTTP smoke read-only: `/login` 200; 14 protected pages 307 `/login`; 8 protected API 401 | Kế thừa 9.1 pass | BLOCKED: Computer Use `browsers: []`, `iab` và `chrome` unavailable; desktop/mobile/light/dark, interaction và external integration QA chưa chạy. Không mutation Jira/Bitbucket/release production | Codex |
+| 2026-10-09 | Worktree batch 9.3, không commit | Pass | Pass, 0 warning (`--max-warnings=0`) | Docs-only: local Markdown link scan pass cho 6/6 tài liệu trọng yếu; full suite kế thừa batch 9.1 (2.123/2.123) | Kế thừa batch 9.1 production build pass | N/A; cập nhật architecture/README/runbook/report, không đổi runtime/API/schema/dependency; `git diff --check` pass | Codex |
 
 ## Completion Report
 
-Điền khi Phase 9 hoàn tất:
+> Báo cáo tạm thời sau batch 9.3; chưa phải xác nhận đóng chương trình vì 9.2 còn BLOCKED.
 
-- Tổng phase hoàn thành:
-- Batch hoàn thành/skipped:
-- Test trước/sau:
-- Warning trước/sau:
-- File lớn nhất trước/sau:
-- Route import Prisma trước/sau:
-- Risk còn mở:
-- Migration/dependency thay đổi: phải là `Không`, trừ khi có phê duyệt riêng.
+- Tổng phase hoàn thành: 9/10 (Phase 0–8 DONE; Phase 9 IN_PROGRESS).
+- Batch hoàn thành/skipped: 42 DONE, 1 VERIFY (8.2), 1 BLOCKED (9.2), 0 SKIPPED.
+- Test trước/sau: 4 test fail trong 2 file → 240 file / 2.123 test pass; PostgreSQL integration 4/4 pass.
+- Warning trước/sau: 3 → 0 (`eslint --max-warnings=0`).
+- File production lớn nhất trước/sau: 1.919 → 795 dòng (`board-client.tsx`).
+- Route import Prisma trước/sau: 73 → 59; route >150 dòng: 15 → 6.
+- Risk còn mở: 5 (`R-12`, `R-42`, `R-44`, `R-45`, `R-46`).
+- Migration/dependency thay đổi: Không.
+- Điều kiện còn thiếu để đóng: chạy browser QA 8.2/9.2 với authenticated test session, desktop/mobile, light/dark và Jira/Bitbucket test data cô lập.

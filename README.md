@@ -6,8 +6,10 @@ web cung cấp board, automation, release gate và notification.
 > **Trạng thái:** MVP — M0–M8 đã hoàn thành (2026-09-22). Board, release gate,
 > bulk operation, event/notification, chat (Discord), AI estimation và stale
 > analytics đều đã implement. Kiến trúc và các quyết định đã chốt nằm tại
-> [`docs/architecture.md`](docs/architecture.md); kế hoạch chi tiết nằm tại
-> [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md). Workflow và
+> [`docs/architecture.md`](docs/architecture.md); chương trình Clean Code hiện hành
+> nằm tại [`docs/clean-code/README.md`](docs/clean-code/README.md) và tracker tại
+> [`docs/clean-code/05-progress-tracker.md`](docs/clean-code/05-progress-tracker.md).
+> Workflow và
 > release policy nằm tại [`docs/release-policy.md`](docs/release-policy.md).
 
 ## Chức năng (đáp ứng yêu cầu)
@@ -31,11 +33,12 @@ web cung cấp board, automation, release gate và notification.
 - **Next.js 16** (App Router, TypeScript) — frontend + API routes; worker dùng
   cùng codebase nhưng chạy bằng process/container riêng.
 - **PostgreSQL** + **Prisma** (cache Jira + metadata team).
-- **pg-boss** — cron/queue chạy trên Postgres: Jira sync, check branch, AI
-  score, Sentry import và stale detect.
+- **pg-boss** — 17 queue và 11 schedule chạy trên Postgres; connection lifecycle,
+  registry, schedules và enqueue API được tách riêng.
 - **LLM qua API công ty cấp** (OpenAI-compatible) — qua interface `LLMProvider`, đổi provider/model bằng env.
   Mặc định `openai` (OpenAI/Azure/vLLM/litellm); chọn `ollama` nếu muốn self-host.
-- **NextAuth** (credentials) + bcrypt, session JWT.
+- **NextAuth** với Jira PAT là luồng chính; email/password + bcrypt chỉ là
+  break-glass khi `LEGACY_PASSWORD_LOGIN=1`; session dùng JWT `HttpOnly`.
 - **Web Push** (service worker + VAPID) + in-app notification center.
 - **Tailwind CSS** + **shadcn/ui**-style components.
 - Deploy: **Podman Compose** (`web`, `worker`, `db`). AI dùng API cty cấp — **không** self-host Ollama.
@@ -47,14 +50,18 @@ web cung cấp board, automation, release gate và notification.
   ├─ API Routes (/api/*)     → PostgreSQL read model + user mutations
   └─ Board / Release / Bulk / Watch / Stale / Branches / Inbox / Settings
 [worker — pg-boss]
-  ├─ poll-jira              (1 phút)    incremental issue/comment sync
+  ├─ poll-jira-dispatch     (1 phút)    fan-out theo project
+  ├─ poll-jira-project      (on-demand) incremental issue/comment sync
   ├─ check-branches         (5 phút)    nhánh chưa merge (Bitbucket API, cần token)
   ├─ parse-comment-branches (5 phút)    parse Jira comment để trích PR/branch state (không cần token BB)
+  ├─ poll-pr-comments       (15 phút)   đồng bộ bình luận PR
   ├─ ai-score               (10 phút)   chấm task mới (tuỳ chọn)
   ├─ sentry-import          (5 phút)    tạo Jira issue từ Sentry
   ├─ stale-detect           (30 phút)   phát hiện task ngâm
-  ├─ process-webhook        (one-off)  xử lý webhook Jira/Sentry/Bitbucket/CI
-  └─ deliver-notifications  (1 phút)   gửi push + chat qua outbox
+  ├─ deliver-notifications  (1 phút)    gửi push + chat qua outbox
+  ├─ health-alert           (1 phút)    watchdog + recovery
+  ├─ report/people scans    (hằng ngày)
+  └─ process-webhook, bulk-op, refresh-board-membership (on-demand)
 [PostgreSQL]   [Jira DC]  [Bitbucket DC]  [Sentry]  [LLM API cty]  [Discord]
 ```
 
@@ -101,10 +108,11 @@ npm run db:migrate     # tạo + apply migration
 npm run db:seed        # tạo user admin (admin@team.local / admin123)
 
 # 4) Dev server
-npm run dev            # http://localhost:3000
+npm run dev            # http://localhost:3100
 ```
 
-Đăng nhập: `admin@team.local` / `admin123` (hoặc giá trị trong `ADMIN_*`).
+Đăng nhập bình thường bằng Jira PAT tại `/login`. Tài khoản seed
+`admin@team.local` chỉ dùng cho break-glass khi bật `LEGACY_PASSWORD_LOGIN=1`.
 
 Chạy tests / lint / typecheck:
 
@@ -112,6 +120,9 @@ Chạy tests / lint / typecheck:
 npm test        # vitest (parser inbox, JQL, AI JSON parsing)
 npm run lint
 npm run typecheck
+npm run build
+# DB integration chỉ chạy với TEST_DATABASE_URL riêng, tên database chứa "test"
+npm run test:db
 ```
 
 ## Deploy (Podman Compose)
@@ -122,7 +133,7 @@ podman compose up -d --build
 ```
 
 - `db` (postgres:16) — port 5433.
-- `web` — build từ `Dockerfile`, port 3000. Boot chạy migration, seed và Next.js.
+- `web` — build từ `Dockerfile`, publish port 3100. Boot chạy migration, seed và Next.js.
 - `worker` — target riêng từ cùng `Dockerfile`, đăng ký schedule và consume pg-boss jobs.
 - Mạng nội bộ: web gọi Jira/Bitbucket/Sentry bằng URL thật trong env; `DATABASE_URL` trỏ tới service `db`.
 - **AI**: web gọi **API LLM do công ty cấp** (OpenAI-compatible) bằng `OPENAI_BASE_URL` + `OPENAI_API_KEY` + `OPENAI_MODEL`. Không cần container Ollama.

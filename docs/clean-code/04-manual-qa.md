@@ -4,15 +4,15 @@
 
 | Trường | Giá trị |
 |---|---|
-| Ngày | |
-| Người kiểm tra | |
-| Branch/commit | |
-| Base URL | |
-| Browser | |
-| Viewport | |
-| Theme | Light / Dark |
-| Jira test project | |
-| Bitbucket test repo | |
+| Ngày | 2026-10-09 |
+| Người kiểm tra | Codex |
+| Branch/commit | Worktree, không commit (`cc1f8a2`) |
+| Base URL | `http://localhost:3100` |
+| Browser | BLOCKED — Computer Use không cung cấp in-app browser hoặc Chrome |
+| Viewport | Chưa chạy — desktop 1440x900 và mobile 390x844 bị chặn |
+| Theme | Chưa chạy — Light / Dark bị chặn |
+| Jira test project | Không có test project được xác nhận; không mutation Jira |
+| Bitbucket test repo | Không có test repo được xác nhận; không mutation Bitbucket |
 
 Không dùng issue/release production cho thao tác mutation. Ghi key/id test vào phần Notes.
 
@@ -224,12 +224,11 @@ Chạy ít nhất ở desktop 1440x900 và mobile 390x844:
 
 | Scenario lỗi | Route/Module | Bằng chứng | Severity | Issue/Commit |
 |---|---|---|---|---|
-| | | | | |
+| Không thể chạy browser QA bắt buộc | Toàn bộ UI; đặc biệt Board DnD/keyboard/rollback và cross-cutting visual QA | `cua.getState()` trả `browsers: []`; mở `iab` và `chrome` đều trả `Browser is not available` | P1 | R-42, R-46 |
 
 ### Notes
 
-- Test data:
-- Console warnings:
-- Network errors:
-- Các mục cố ý chưa chạy:
-
+- Test data: Không dùng dữ liệu mutation. HTTP smoke read-only trên local dev server và database dev local.
+- Console warnings: Không thu thập được browser console. Next dev server không báo runtime error trong HTTP smoke.
+- Network errors: Không có trong HTTP smoke. `/login` trả 200; các page bảo vệ trả 307 về `/login`; các API bảo vệ đã kiểm (`issues`, `releases`, `branches`, `reports/projects`, `stale`, `leaderboard`, `notify`, `me/status`) trả 401.
+- Các mục cố ý chưa chạy: Toàn bộ interaction/visual checklist cần browser hoặc authenticated test session; mọi mutation Jira, Bitbucket, release, bulk, notification/push và role/permission trên hệ thống ngoài local.

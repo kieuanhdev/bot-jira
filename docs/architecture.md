@@ -4,11 +4,13 @@
 >
 > Decision date: 2026-09-19
 >
+> Last implementation review: 2026-10-09 (Clean Code batch 9.3)
+>
 > Scope: M0-01
 >
 > Owner role: Team Task Web administrator (`ADMIN_EMAIL`)
 >
-> Next review: Before starting Milestone 3
+> Next review: Before production rollout, after browser/manual QA is available
 
 Release workflow, gate, severity, role và stale SLA được quy định tại
 [`release-policy.md`](release-policy.md).
@@ -218,18 +220,29 @@ infrastructure state.
 - Report last start, last success, last failure and item counts.
 - Use singleton/locking rules to prevent overlapping project syncs.
 
-### Worker jobs (current)
+### Worker queues and schedules (current)
 
-| Job | Schedule | Purpose |
+The registry defines 17 queues. Eleven have cron schedules; the rest are
+on-demand or timer-driven.
+
+| Scheduled job | Schedule | Purpose |
 |---|---|---|
-| `poll-jira` | 1 min | Incremental issue/comment sync |
-| `check-branches` | 5 min | Branch/PR status from Bitbucket API (requires token) |
-| `parse-comment-branches` | 5 min | Parse Jira comments for PR/branch state (no Bitbucket token needed) |
-| `ai-score` | 10 min | Auto-score new unscored issues (optional, `AI_AUTO_SCORE`) |
-| `sentry-import` | 5 min | Create Jira issues from unresolved Sentry issues (idempotent) |
+| `poll-jira-dispatch` | `POLL_INTERVAL_MS` (minimum 1 min) | Fan out isolated per-project sync jobs |
+| `check-branches` | 5 min | Branch/PR status from Bitbucket API |
+| `parse-comment-branches` | 5 min | Parse Jira comments for PR/branch state |
+| `poll-pr-comments` | 15 min | Reconcile PR comments across repositories |
+| `ai-score` | 10 min | Auto-score new unscored issues when enabled |
+| `sentry-import` | 5 min | Import unresolved Sentry issues idempotently |
 | `stale-detect` | 30 min | Detect tasks exceeding per-status SLA |
-| `process-webhook` | one-off | Process inbound webhook events (Jira/Sentry/Bitbucket/CI) |
-| `deliver-notifications` | 1 min | Deliver outbox notifications (push + chat) with retry/backoff |
+| `deliver-notifications` | 1 min | Deliver outbox notifications with retry/backoff |
+| `health-alert` | 1 min | Watchdog, alerting and Jira recovery enqueue |
+| `capture-project-report-snapshots` | Daily 00:15 | Persist report snapshots |
+| `detect-people-fields` | Daily 01:30 | Refresh Jira people-field metadata |
+
+On-demand/timer-driven queues are `poll-jira-project`, legacy-compatible
+`poll-jira`, `poll-watched-issues`, `refresh-board-membership`, `bulk-op` and
+`process-webhook`. Queue names, payloads and retry/expiry policy are public
+operational contracts.
 
 ## 8. ADR-005 — Discord as the first chat integration
 
@@ -255,8 +268,8 @@ command and notification logic.
 - Ambiguous natural language never executes directly.
 - Every command has a correlation ID and audit record.
 
-Discord integration is planned after the event, notification and bulk-command
-foundations. It is not part of the first data-foundation milestone.
+Discord integration and the command confirmation/audit path are implemented.
+Slack or Teams remains a future adapter, not a second domain implementation.
 
 ## 9. ADR-006 — Branch naming convention
 
@@ -362,7 +375,7 @@ This decision record describes the accepted target. M0–M8 are implemented
 |---|---|---|---|
 | Board reads | Shared PostgreSQL read model | Shared PostgreSQL read model | ✅ M1-04 |
 | Jira sync | Incremental cursor sync + webhook + polling reconciliation | Webhook-first + polling reconciliation | ✅ M1-03 + M5 |
-| Worker lifecycle | Separate pg-boss process/container, 8 jobs | Separate worker process | ✅ M1-05 |
+| Worker lifecycle | Separate pg-boss process/container, 17 queues and 11 schedules | Separate worker process | ✅ M1-05 + Clean Code 3.1–3.3 |
 | Release identity | Jira Fix Version | Jira Fix Version | ✅ M3-01 |
 | Release gates | 8-gate engine (non_empty, task_status, critical_bugs, sentry, branches, pull_requests, data_freshness, ai_advisory) | Fail-safe gate engine | ✅ M3-03 |
 | Bulk operations | 10 actions, preview → confirm → worker, max 500 | Bulk with preview/confirm/audit | ✅ M4 |
@@ -371,15 +384,46 @@ This decision record describes the accepted target. M0–M8 are implemented
 | AI estimation | Estimate + human review + metrics | AI advisory with human approval | ✅ M7 |
 | Stale analytics | Per-status SLA, 8 reasons, bottleneck dashboard | Bottleneck view, not leaderboard | ✅ M8 |
 | Branch/PR tracking | `check-branches` (Bitbucket API) + `parse-comment-branches` (Jira comment) | Branch/PR evidence for release gates | ✅ (comment-based fallback when no Bitbucket token) |
-| RBAC | `member` / `admin`; chat enforces role | `member` / `release_manager` / `admin` | M9-01 (release_manager role pending) |
-| Audit log | Chat + bulk have audit; release override pending | Full audit for all mutations | M9-02 |
+| RBAC | `member` / `lead` / `release_manager` / `admin`; API and chat share permission helpers | Server-side permission enforcement | ✅ Implemented; browser matrix QA pending |
+| Audit log | Chat, bulk and release mutation/approval/override paths write audit records | Full audit for mutations | Implemented for priority paths; continue coverage review |
 | Observability | Worker cursor stats, error logging | Structured JSON log, metrics, alerts | M9-03 |
 
-Milestone 9 (hardening/pilot) is the remaining work before production use.
-Until M9 is complete, release checks are advisory and must not be the sole
-production release authorization.
+Hardening still requires browser/manual QA and resolution or acceptance of the
+open Clean Code risks. Until that verification is complete, release checks
+must not be the sole production release authorization.
 
-## 12. Architectural invariants
+## 12. Implementation module boundaries
+
+The 2026-10 Clean Code program keeps runtime contracts stable while making the
+dependency direction explicit:
+
+```text
+Route handler → route service/query loader → domain policy/use case
+                                         ↘ repository / provider adapter
+
+Worker entry → registry → worker handler → domain service
+             schedules   enqueue API      repository / provider adapter
+
+Client page (state owner) → controller hook → pure model + API client
+```
+
+- Route handlers own HTTP auth, validation and response mapping; domain route
+  services own orchestration. Compatibility type exports remain where callers
+  still depend on them.
+- Jira and Bitbucket clients keep facade exports, while transport and resource
+  modules own external HTTP concerns. AI providers share normalized errors and
+  response parsers without putting business rules in adapters.
+- Repositories own Prisma transactions and idempotency. Pure calculators,
+  policies and mappers do not import Prisma.
+- Queue connection lifecycle, queue catalog, schedules and enqueue functions
+  are separate modules; worker handlers keep job payload and fencing contracts.
+- UI page clients remain long-lived state owners. Controller hooks isolate
+  effects and pure models without moving state into short-lived dialogs/tabs.
+
+The progress source of truth and open structural risks are in
+[`clean-code/05-progress-tracker.md`](clean-code/05-progress-tracker.md).
+
+## 13. Architectural invariants
 
 Future changes must preserve these rules:
 
@@ -393,7 +437,7 @@ Future changes must preserve these rules:
 8. A health check has no side effects.
 9. Secrets never appear in source control, logs or API responses.
 
-## 13. Review triggers
+## 14. Review triggers
 
 Review this architecture decision when:
 
