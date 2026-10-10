@@ -1,59 +1,68 @@
-# AUTOIMPROVE REPORT
+# BÁO CÁO AUTOIMPROVE
 
-**Objective:**
+**Mục tiêu:**
 
-**Selected issue:**
+**Vấn đề được chọn:**
 
-**Evidence and value threshold:**
+**Bằng chứng và ngưỡng giá trị:**
 
-**Files changed:**
+**File đã thay đổi:**
 
-**Changes made:**
+**Thay đổi đã thực hiện:**
 
-**Expected improvement:**
+**Lợi ích kỳ vọng:**
 
-**Developer approval:** `APPROVED | DECLINED | NOT OBTAINED`
+**Xác nhận của developer:** `APPROVED | DECLINED | NOT OBTAINED`
 
-**Approved scope:**
+**Phạm vi đã được duyệt:**
 
-**Risk:** `LOW | MEDIUM | HIGH`
+**Rủi ro:** `LOW | MEDIUM | HIGH`
 
-## Baseline
+**Phân loại:** `GENERAL | SECURITY | AUTH | DATABASE | QUEUE | CONFIG`
 
-- Status:
-- Profile: `FAST | FULL`
-- Cache: `EXECUTED | REUSED`
+**Các nhóm input của root cause và test matrix:**
+
+## Đường cơ sở (baseline)
+
+- Trạng thái:
+- Hồ sơ kiểm chứng: `FAST | FULL`
+- Bộ nhớ đệm: `EXECUTED | REUSED`
 - HEAD:
-- Evidence:
-- Pre-existing failures or changes:
+- Bằng chứng:
+- Lỗi hoặc thay đổi có sẵn từ trước:
 
-## Validation results
+## Kết quả kiểm chứng
 
-**Validation profile:** `FAST | FULL`
+**Hồ sơ kiểm chứng:** `FAST | FULL`
 
-| Check | Required | Result | Evidence |
+| Bước kiểm tra | Bắt buộc | Kết quả | Bằng chứng |
 |---|---:|---|---|
 
-**Retry count:**
+**Số lần retry:**
 
-## Timing
+## Thời gian
 
-- Baseline validation:
-- Final validation:
-- Other workflow phases: `not measured` unless exact evidence exists
+- Audit:
+- Chờ developer xác nhận:
+- Kiểm chứng đường cơ sở:
+- Thực hiện thay đổi:
+- Review độc lập:
+- Kiểm chứng cuối:
+- Tạo báo cáo:
+- Giai đoạn không đo được phải ghi `không đo được`; không ước lượng hoặc bịa số liệu.
 
-## Review findings
+## Kết quả review
 
-- Verdict:
-- Findings:
+- Kết luận:
+- Phát hiện:
 
-## Status
+## Trạng thái cuối
 
 `SUCCESS | FAILED | BLOCKED`
 
-## Known limitations
+## Giới hạn đã biết
 
-- State explicitly whether full lint, full tests, production build, and database
-  integration did or did not run.
+- Ghi rõ full lint, full tests, production build và database integration đã chạy
+  hay chưa chạy.
 
-## Recommended next actions
+## Hành động tiếp theo được đề xuất

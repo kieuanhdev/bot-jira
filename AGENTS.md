@@ -44,3 +44,7 @@ review is not sufficient: every mandatory check configured in
 execute and pass after a matching baseline. The workflow must obtain explicit
 developer approval for the selected issue, file scope, and `fast`/`full` profile
 before making source changes.
+
+AutoImprove uses concise English for all internal agent work and delegation. Its
+approval proposal/questions, final report, and direct developer response must be
+Vietnamese; code, paths, commands, identifiers, and fixed status values stay unchanged.

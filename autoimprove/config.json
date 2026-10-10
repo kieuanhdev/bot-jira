@@ -1,6 +1,8 @@
 {
-  "version": 2,
+  "version": 3,
   "defaultProfile": "fast",
+  "validationCategories": ["general", "security", "auth", "database", "queue", "config"],
+  "fullProfileCategories": ["security", "auth", "database", "queue", "config"],
   "retryLimit": 3,
   "timeoutMs": 900000,
   "baselineCacheMaxAgeMinutes": 60,

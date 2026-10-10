@@ -40,6 +40,19 @@ lưu credential trong kho cấu hình người dùng, không commit vào reposit
 5. Xem diff, report mới trong `autoimprove/reports/`, và log JSON/text trong
    `autoimprove/logs/`.
 
+## Quy tắc ngôn ngữ
+
+Để giảm token và thời gian xử lý, coordinator, auditor và reviewer dùng tiếng Anh
+ngắn gọn cho reasoning, tool call, prompt delegation, review evidence và mọi trao
+đổi nội bộ. Code, identifier, path, command và status literal không bị dịch.
+
+Chỉ hai đầu ra dùng tiếng Việt:
+
+- Đề xuất và câu hỏi xin developer xác nhận trước khi sửa source.
+- Report cuối cùng và phản hồi trực tiếp cho developer.
+
+Các report cũ không được tự viết lại; quy tắc này áp dụng từ lần chạy tiếp theo.
+
 Không tự bật chế độ approve-all: quyền agent cố ý chặn push, merge,
 deploy, migration và lệnh Git phá hủy. Thay đổi package/config/docs nằm ngoài
 phạm vi tự động sẽ cần approval hoặc bị chặn.
@@ -71,17 +84,23 @@ mới, thay đổi nhiều module, security hoặc khi chưa chắc rủi ro. Pr
 typecheck, full lint, toàn bộ unit tests và production build. DB integration vẫn
 là optional cho tới khi có môi trường test riêng.
 
+Mỗi run phải khai báo `--category`. Các category `security`, `auth`, `database`,
+`queue` và `config` bị validator ép dùng `full`; chỉ `general` có thể dùng `fast`.
+Đây là kiểm soát thực thi, không chỉ là hướng dẫn trong prompt.
+
 Có thể chạy engine thủ công:
 
 ```bash
 ./autoimprove/validate.sh baseline \
   --profile=fast \
+  --category=general \
   --file=src/lib/utils.ts \
   --file=src/lib/utils.test.ts \
   --test=src/lib/utils.test.ts
 
 ./autoimprove/validate.sh validate \
   --profile=fast \
+  --category=general \
   --file=src/lib/utils.ts \
   --file=src/lib/utils.test.ts \
   --test=src/lib/utils.test.ts \

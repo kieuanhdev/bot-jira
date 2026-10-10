@@ -22,7 +22,7 @@ const rawArgs = process.argv.slice(3);
 if (!new Set(["baseline", "validate"]).has(mode)) {
   console.error(
     "Usage: ./autoimprove/validate.sh <baseline|validate> --profile=<fast|full> " +
-      "--file=<path> [--file=<path> ...] [--test=<path> ...] [--attempt=N]",
+      "--category=<category> --file=<path> [--file=<path> ...] [--test=<path> ...] [--attempt=N]",
   );
   process.exit(2);
 }
@@ -67,10 +67,26 @@ if (!Number.isInteger(config.baselineCacheMaxAgeMinutes) || config.baselineCache
 if (!Array.isArray(config.checks) || config.checks.length === 0) {
   failConfig("checks must be a non-empty array");
 }
+if (!Array.isArray(config.validationCategories) || config.validationCategories.length === 0) {
+  failConfig("validationCategories must be a non-empty array");
+}
+if (
+  !Array.isArray(config.fullProfileCategories) ||
+  config.fullProfileCategories.some((item) => !config.validationCategories.includes(item))
+) {
+  failConfig("fullProfileCategories must contain only configured validation categories");
+}
 
 const profiles = new Set(["fast", "full"]);
 const profile = readOption("profile") || config.defaultProfile;
 if (!profiles.has(profile)) failConfig(`unknown profile: ${profile}`);
+const category = readOption("category");
+if (!category || !config.validationCategories.includes(category)) {
+  failConfig(`--category must be one of: ${config.validationCategories.join(", ")}`);
+}
+if (profile === "fast" && config.fullProfileCategories.includes(category)) {
+  failConfig(`category ${category} requires the full profile`);
+}
 
 const attemptText = readOption("attempt");
 const attempt = attemptText === undefined ? 0 : Number(attemptText);
@@ -126,7 +142,7 @@ for (const check of config.checks) {
 }
 
 const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-const runName = `${timestamp}-${mode}-${profile}-attempt-${attempt}`;
+const runName = `${timestamp}-${mode}-${profile}-${category}-attempt-${attempt}`;
 const runDir = resolve(logsDir, runName);
 mkdirSync(runDir, { recursive: true });
 
@@ -295,6 +311,7 @@ function readBaseline() {
 function sameTargets(document) {
   return (
     document.profile === profile &&
+    document.category === category &&
     JSON.stringify(document.scope?.files || []) === JSON.stringify(targetFiles) &&
     JSON.stringify(document.scope?.tests || []) === JSON.stringify(targetTests)
   );
@@ -339,8 +356,9 @@ if (mode === "baseline") {
         resultFile: previous.resultFile,
         head: previous.project?.head ?? null,
         profile: previous.profile,
+        category: previous.category,
       }
-    : { status: "MISSING", startedAt: null, resultFile: null, head: null, profile: null };
+    : { status: "MISSING", startedAt: null, resultFile: null, head: null, profile: null, category: null };
 
   if (!previous || previous.status !== "PASS") {
     status = "BLOCKED";
@@ -350,7 +368,7 @@ if (mode === "baseline") {
     reason = "Validation config changed after baseline; run baseline again.";
   } else if (!sameTargets(previous)) {
     status = "BLOCKED";
-    reason = "Validation profile or approved file/test scope differs from baseline.";
+    reason = "Validation category, profile, or approved file/test scope differs from baseline.";
   } else if (previous.project?.head !== currentSnapshot.head) {
     status = "BLOCKED";
     reason = `HEAD changed after baseline (${previous.project?.head} -> ${currentSnapshot.head}).`;
@@ -373,9 +391,10 @@ if (mode === "baseline") {
 const resultPath = resolve(runDir, "result.json");
 const finishedAt = new Date().toISOString();
 const document = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   mode,
   profile,
+  category,
   attempt,
   retryLimit: config.retryLimit,
   startedAt,
@@ -402,7 +421,9 @@ writeFileSync(resultPath, `${JSON.stringify(document, null, 2)}\n`, { mode: 0o60
 const latestPath = resolve(logsDir, mode === "baseline" ? "latest-baseline.json" : "latest-validation.json");
 copyFileSync(resultPath, latestPath);
 
-console.log(`AUTOIMPROVE ${mode.toUpperCase()} [${profile.toUpperCase()}]: ${status}`);
+console.log(
+  `AUTOIMPROVE ${mode.toUpperCase()} [${category.toUpperCase()}/${profile.toUpperCase()}]: ${status}`,
+);
 if (cache.reused) console.log(`- baseline cache: REUSED (${cache.sourceResult})`);
 if (reason) console.log(`- reason: ${reason}`);
 for (const result of results) {
