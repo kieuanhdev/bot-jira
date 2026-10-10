@@ -40,4 +40,7 @@ approves that exact change. Generated evidence is the only exception:
 AutoImprove must never push, merge, deploy, install dependencies, apply database
 migrations, weaken tests, or discard pre-existing working-tree changes. A passing
 review is not sufficient: every mandatory check configured in
-`autoimprove/config.json` must execute and pass after a passing baseline.
+`autoimprove/config.json` for the developer-approved validation profile must
+execute and pass after a matching baseline. The workflow must obtain explicit
+developer approval for the selected issue, file scope, and `fast`/`full` profile
+before making source changes.

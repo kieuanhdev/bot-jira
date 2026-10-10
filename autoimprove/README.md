@@ -1,9 +1,9 @@
 # AutoImprove MVP cho Kilo Code
 
-AutoImprove là workflow cục bộ, mỗi lần chạy chỉ xử lý một cải tiến nhỏ.
-Luồng chính: baseline → audit độc lập → sửa code → review độc lập →
-validation → sửa lỗi có giới hạn → report. Không có dashboard, backend hoặc
-database riêng.
+AutoImprove là workflow cục bộ, mỗi lần chạy chỉ xử lý một cải tiến có bằng
+chứng. Luồng chính: audit chỉ đọc → chọn issue đủ giá trị → developer duyệt →
+baseline theo mức rủi ro → sửa code → review độc lập → validation cùng phạm vi
+→ sửa lỗi có giới hạn → report. Không có dashboard, backend hoặc database riêng.
 
 ## Thành phần
 
@@ -12,7 +12,7 @@ database riêng.
 - `.kilo/agents/code-reviewer.md`: subagent chỉ đọc, trả `PASS` hoặc `FAIL`.
 - `.kilo/commands/auto-improve.md`: slash command `/auto-improve`.
 - `goal.md`: mục tiêu có thể tùy chỉnh.
-- `config.json`: retry, timeout và danh sách check.
+- `config.json`: profile validation, cache baseline, retry, timeout và danh sách check.
 - `validate.sh` + `validate.mjs`: validation engine không cần dependency mới.
 - `logs/` và `reports/`: bằng chứng cục bộ, đã gitignore.
 
@@ -33,8 +33,11 @@ lưu credential trong kho cấu hình người dùng, không commit vào reposit
 
 1. Sửa `autoimprove/goal.md` nếu muốn thu hẹp mục tiêu.
 2. Mở Kilo chat, chạy `/reload` nếu file mới chưa xuất hiện.
-3. Gõ `/auto-improve` và theo dõi các approval nếu Kilo yêu cầu.
-4. Xem diff, report mới trong `autoimprove/reports/`, và log JSON/text trong
+3. Gõ `/auto-improve`. Agent audit nhưng chưa sửa code, sau đó trình bày một đề
+   xuất gồm issue, bằng chứng, file dự kiến đổi, rủi ro và profile validation.
+4. Chỉ khi bạn xác nhận đề xuất, agent mới chạy baseline và sửa source. Việc đã
+   gọi slash command hoặc bật auto-approve không được xem là duyệt đề xuất.
+5. Xem diff, report mới trong `autoimprove/reports/`, và log JSON/text trong
    `autoimprove/logs/`.
 
 Không tự bật chế độ approve-all: quyền agent cố ý chặn push, merge,
@@ -47,24 +50,58 @@ phạm vi tự động sẽ cần approval hoặc bị chặn.
 - Số lần sửa lỗi: đổi `retryLimit` trong `config.json` (mặc định 3).
   Đây là số repair sau lần validation đầu, không phải vòng lặp cải tiến.
 - Timeout: `timeoutMs` áp dụng cho từng check.
+- Cache: `baselineCacheMaxAgeMinutes` là tuổi tối đa của baseline có thể tái sử
+  dụng. Cache chỉ hợp lệ khi HEAD, toàn bộ fingerprint workspace, config, profile,
+  danh sách file và test đều giống hệt.
 - Check tùy chọn: chỉ bật `database-integration` khi có database test riêng
   và `TEST_DATABASE_URL` an toàn. Check `mandatory` bị tắt/skip sẽ làm run thất bại.
+
+### Profile `fast`
+
+Chỉ dùng cho thay đổi cục bộ, rủi ro thấp, tối đa ba file hiện có và có focused
+test chạy được cả trước lẫn sau thay đổi. Profile chạy typecheck, ESLint đúng các
+file được duyệt và focused tests. Nó không chứng minh full test/build đã pass.
+Trên repository hiện tại, lần kiểm thử mẫu cho `src/lib/utils.ts` hoàn tất khoảng
+11 giây; đây chỉ là số đo tham khảo, không phải cam kết thời gian cho lần sau.
+
+### Profile `full`
+
+Dùng cho API, auth/permission, database, queue/worker, shared config, file test
+mới, thay đổi nhiều module, security hoặc khi chưa chắc rủi ro. Profile chạy
+typecheck, full lint, toàn bộ unit tests và production build. DB integration vẫn
+là optional cho tới khi có môi trường test riêng.
 
 Có thể chạy engine thủ công:
 
 ```bash
-./autoimprove/validate.sh baseline
-./autoimprove/validate.sh validate --attempt=0
+./autoimprove/validate.sh baseline \
+  --profile=fast \
+  --file=src/lib/utils.ts \
+  --file=src/lib/utils.test.ts \
+  --test=src/lib/utils.test.ts
+
+./autoimprove/validate.sh validate \
+  --profile=fast \
+  --file=src/lib/utils.ts \
+  --file=src/lib/utils.test.ts \
+  --test=src/lib/utils.test.ts \
+  --attempt=0
 ```
 
 Mỗi check dùng mảng argument, không nối chuỗi shell. Engine kiểm tra npm script,
 lưu exit code, timeout, stdout/stderr và phân biệt `PASS`, `FAIL`, `SKIPPED`,
-`UNAVAILABLE`. Một run chỉ `PASS` khi tất cả check bắt buộc đã chạy và pass.
+`UNAVAILABLE`, `BLOCKED`. Một run chỉ `PASS` khi tất cả check bắt buộc của profile
+đã chạy và pass. Validation bị `BLOCKED` nếu HEAD/config/profile/scope khác
+baseline, không có source change, hoặc có file đổi ngoài phạm vi developer duyệt.
 
 ## Khôi phục khi lỗi
 
 - Baseline fail: agent không sửa source. Mở `latest-baseline.json`, xem đường
   dẫn log, sửa lỗi nền thủ công rồi chạy lại.
+- Approval bị từ chối hoặc không hỏi được: agent không sửa source và report
+  `BLOCKED`; slash command không tự cấp approval nghiệp vụ.
+- HEAD hoặc scope đổi sau baseline: validation dừng `BLOCKED`. Không commit giữa
+  baseline và validation; chạy lại workflow/baseline với scope đúng.
 - Validation fail: agent chỉ repair theo bằng chứng và dừng sau `retryLimit`.
   Mọi log cũ vẫn được giữ; source không bị tự revert.
 - Permission fail: report sẽ là `BLOCKED`. Developer xem diff và quyết định
@@ -82,8 +119,9 @@ riêng tư trên hệ hỗ trợ.
 
 MVP không tự tạo branch/worktree, commit, push, merge, deploy, cài dependency,
 chạy migration, điều phối nhiều improvement hay khởi động Kilo CLI session.
-Report chỉ chứng minh các check cấu hình đã pass, không chứng minh một
-mức tăng hiệu năng/bảo trì định lượng.
+Report chỉ chứng minh các check của profile đã pass, không chứng minh một mức tăng
+hiệu năng/bảo trì định lượng. Report phải ghi rõ `fast`/`full`, cache, HEAD, scope,
+thời gian validator và các check không chạy.
 
 ## Tương thích CLI trong tương lai
 
