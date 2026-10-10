@@ -21,6 +21,7 @@ export function formatDateTime(d: Date | string | null | undefined): string {
 export function timeAgo(d: Date | string | null | undefined): string {
   if (!d) return "—";
   const date = typeof d === "string" ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return "—";
   const diff = Date.now() - date.getTime();
   const s = Math.floor(diff / 1000);
   if (s < 60) return "just now";

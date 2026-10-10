@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getJiraIssueUrl, getBitbucketBranchUrl } from "./utils";
+import { getJiraIssueUrl, getBitbucketBranchUrl, timeAgo, formatDateTime } from "./utils";
 
 describe("getJiraIssueUrl", () => {
   it("returns null if baseUrl or key is missing", () => {
@@ -58,5 +58,52 @@ describe("safeRandomUUID", () => {
     const u1 = safeRandomUUID();
     const u2 = safeRandomUUID();
     expect(u1).not.toBe(u2);
+  });
+});
+
+describe("timeAgo", () => {
+  it("returns em-dash for null/undefined input", () => {
+    expect(timeAgo(null)).toBe("—");
+    expect(timeAgo(undefined)).toBe("—");
+  });
+
+  it("returns em-dash for an unparseable date string", () => {
+    expect(timeAgo("not-a-date")).toBe("—");
+    expect(timeAgo("")).toBe("—");
+  });
+
+  it("returns em-dash for an invalid Date object", () => {
+    expect(timeAgo(new Date("invalid"))).toBe("—");
+  });
+
+  it("returns 'just now' for a recent timestamp", () => {
+    const now = new Date(Date.now() - 5_000);
+    expect(timeAgo(now)).toBe("just now");
+  });
+
+  it("returns minute/hour/day/month/year labels for progressively older timestamps", () => {
+    const base = Date.now();
+    expect(timeAgo(new Date(base - 5 * 60_000))).toBe("5m ago");
+    expect(timeAgo(new Date(base - 3 * 3_600_000))).toBe("3h ago");
+    expect(timeAgo(new Date(base - 5 * 86_400_000))).toBe("5d ago");
+    expect(timeAgo(new Date(base - 60 * 86_400_000))).toBe("2mo ago");
+    expect(timeAgo(new Date(base - 400 * 86_400_000))).toBe("1y ago");
+  });
+});
+
+describe("formatDateTime", () => {
+  it("returns em-dash for null/undefined input", () => {
+    expect(formatDateTime(null)).toBe("—");
+    expect(formatDateTime(undefined)).toBe("—");
+  });
+
+  it("returns em-dash for an unparseable date string", () => {
+    expect(formatDateTime("not-a-date")).toBe("—");
+  });
+
+  it("returns a localized string for a valid date", () => {
+    const result = formatDateTime("2025-01-15T10:30:00Z");
+    expect(result).not.toBe("—");
+    expect(result).toMatch(/\d{4}/);
   });
 });
