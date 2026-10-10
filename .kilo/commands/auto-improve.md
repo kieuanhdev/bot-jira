@@ -5,9 +5,11 @@ agent: auto-improve
 
 Execute the AutoImprove protocol defined by the `auto-improve` agent.
 
-Use `autoimprove/goal.md` as the objective. Process one improvement only. Audit
-without editing, reject low-value findings, then show the selected issue, scope,
-risk, and `fast` or `full` validation plan. Use concise English for all internal
+Use `autoimprove/goal.md` as the objective. Process one complete causal unit only.
+Run a bounded audit for the single best finding, reject low-value micro-patches,
+and cover all evidence-backed same-root-cause manifestations that fit the approved
+scope without bundling unrelated cleanup. Then show the selected issue, value-gate
+reason, scope, risk, and `fast` or `full` validation plan. Use concise English for all internal
 work and subagent communication. Show the proposal and ask the developer for
 explicit approval in Vietnamese before baseline or source edits. After approval,
 capture or safely reuse a matching

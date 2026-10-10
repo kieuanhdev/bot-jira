@@ -5,6 +5,13 @@ chứng. Luồng chính: audit chỉ đọc → chọn issue đủ giá trị �
 baseline theo mức rủi ro → sửa code → review độc lập → validation cùng phạm vi
 → sửa lỗi có giới hạn → report. Không có dashboard, backend hoặc database riêng.
 
+“Một cải tiến” được tính theo một root cause hoàn chỉnh, không phải một dòng code
+hay một ví dụ lỗi. Agent phải kiểm tra abstraction và focused tests lân cận, gom
+các biểu hiện có bằng chứng của cùng root cause vào một test matrix, rồi sửa chúng
+trong cùng phạm vi đã duyệt. Agent không được gom cleanup không liên quan để làm
+diff trông lớn hơn, và phải trả `NO_SUITABLE_FINDING` thay vì chạy một micro-fix
+không đủ giá trị.
+
 ## Thành phần
 
 - `.kilo/agents/auto-improve.md`: agent điều phối và giới hạn quyền.
@@ -34,7 +41,8 @@ lưu credential trong kho cấu hình người dùng, không commit vào reposit
 1. Sửa `autoimprove/goal.md` nếu muốn thu hẹp mục tiêu.
 2. Mở Kilo chat, chạy `/reload` nếu file mới chưa xuất hiện.
 3. Gõ `/auto-improve`. Agent audit nhưng chưa sửa code, sau đó trình bày một đề
-   xuất gồm issue, bằng chứng, file dự kiến đổi, rủi ro và profile validation.
+   xuất gồm issue, lý do đủ giá trị, causal unit, test matrix, file dự kiến đổi,
+   rủi ro và profile validation.
 4. Chỉ khi bạn xác nhận đề xuất, agent mới chạy baseline và sửa source. Việc đã
    gọi slash command hoặc bật auto-approve không được xem là duyệt đề xuất.
 5. Xem diff, report mới trong `autoimprove/reports/`, và log JSON/text trong
@@ -76,6 +84,11 @@ test chạy được cả trước lẫn sau thay đổi. Profile chạy typeche
 file được duyệt và focused tests. Nó không chứng minh full test/build đã pass.
 Trên repository hiện tại, lần kiểm thử mẫu cho `src/lib/utils.ts` hoàn tất khoảng
 11 giây; đây chỉ là số đo tham khảo, không phải cam kết thời gian cho lần sau.
+Profile chỉ quyết định validation; thời gian model còn phụ thuộc audit và review.
+Để giảm phần này, auditor và reviewer có step budget 6, auditor chỉ khảo sát tối đa
+tám file liên quan và dừng ngay khi có một finding đạt value gate. Report tách thời
+gian validator khỏi thời gian audit, chờ duyệt, triển khai, review và tổng workflow
+khi có timestamp; giai đoạn không có số đo phải ghi `không đo được`.
 
 ### Profile `full`
 

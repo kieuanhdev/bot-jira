@@ -6,6 +6,10 @@
 
 **Bằng chứng và ngưỡng giá trị:**
 
+**Đơn vị nguyên nhân hoàn chỉnh:**
+
+**Tại sao cải tiến này đáng một lần chạy:**
+
 **File đã thay đổi:**
 
 **Thay đổi đã thực hiện:**
@@ -49,6 +53,7 @@
 - Review độc lập:
 - Kiểm chứng cuối:
 - Tạo báo cáo:
+- Tổng thời gian workflow:
 - Giai đoạn không đo được phải ghi `không đo được`; không ước lượng hoặc bịa số liệu.
 
 ## Kết quả review

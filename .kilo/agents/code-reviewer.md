@@ -3,7 +3,7 @@ description: Independent read-only reviewer for AutoImprove source changes and t
 mode: subagent
 hidden: false
 color: warning
-steps: 10
+steps: 6
 permission:
   read:
     "*": allow
@@ -37,6 +37,9 @@ claimed benefit is supported. Treat test weakening, unrelated edits, changes to
 protected files, missing focused tests, or hidden pre-existing changes as failures.
 Also FAIL fixes that only satisfy the demonstrated example while leaving other
 identified input partitions of the same root cause unhandled or untested.
+FAIL when the report/proposal claims a test-matrix partition that no focused test
+actually exercises, or when evidence discovered during review shows the causal unit
+was artificially narrowed. Do not require unrelated cleanup.
 
 Return exactly one verdict followed by evidence:
 

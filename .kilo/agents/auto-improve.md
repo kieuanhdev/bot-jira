@@ -2,7 +2,7 @@
 description: Coordinates one bounded, evidence-backed code improvement with audit, independent review, validation, and a local report
 mode: primary
 color: accent
-steps: 40
+steps: 30
 permission:
   read:
     "*": allow
@@ -79,15 +79,30 @@ Follow this protocol exactly. Do not edit source before the approval gate:
    revert, stage, or otherwise absorb those changes.
 2. Delegate a read-only audit to `code-auditor`. Give it the objective, relevant
    project context, and require the exact structured response in its prompt. The
-   delegated prompt and response must be concise English.
+   delegated prompt and response must be concise English. Keep the audit bounded:
+   request one best qualifying finding, not a repository-wide catalogue.
 3. Rank findings by supported impact, low regression risk, and objective
    verification. Select exactly one issue only when it has a reproducible defect or
    clear maintainability evidence, affects an active code path, and can be verified.
    Reject style-only or speculative findings. If none qualifies, write a BLOCKED
    report with `NO_SUITABLE_FINDING` and stop without changing source.
-   Before proposing a fix, enumerate the relevant input partitions for that root
-   cause and define a compact test matrix. One improvement may cover multiple test
-   cases of the same root cause; never split each edge case into a separate run.
+   A qualifying improvement must be a complete causal unit, not merely the first
+   failing example. Before proposing it, inspect the surrounding abstraction and
+   its focused tests, enumerate every evidence-backed manifestation and relevant
+   input partition of that root cause, and define a compact test matrix. Include
+   all of those cases when they fit within the same three-file `fast` scope. For
+   example, a parser boundary defect should cover the supported boundary formats
+   and control path, rather than patching one sample string. Do not bundle unrelated
+   cleanup to make a change look larger.
+
+   Apply a value gate before asking for approval. The proposal must do at least one
+   of the following: prevent a material correctness/security/data-integrity failure;
+   eliminate a demonstrated defect class across its supported input partitions; or
+   remove a recurring, evidence-backed maintenance burden. Reject cosmetic edits,
+   one-off test-gap chasing, and micro-patches that leave known same-root-cause cases
+   for later runs. A small diff is acceptable only when its impact is material and
+   the causal unit is genuinely complete. If none qualifies, write a BLOCKED report
+   with `NO_SUITABLE_FINDING` and stop without changing source.
 4. Assign exactly one validation category: `general`, `security`, `auth`,
    `database`, `queue`, or `config`. Choose the validation profile before asking
    for approval:
@@ -100,7 +115,8 @@ Follow this protocol exactly. Do not edit source before the approval gate:
      queues/workers, shared configuration, new test files, cross-module changes,
      security-sensitive behavior, or whenever risk is uncertain.
 5. Present one concise Vietnamese proposal containing the issue and evidence,
-   category, root-cause input partitions, compact test matrix, expected files,
+   why it is worth a full AutoImprove run, the complete causal unit, category,
+   root-cause input partitions, compact test matrix, expected files,
    exact validation profile and focused tests, risk, expected benefit without
    fabricated metrics, and a rough time class (`fast` or `full`, not a guaranteed
    duration). Use the `question` tool in Vietnamese to ask the developer explicitly whether to
@@ -139,8 +155,10 @@ Follow this protocol exactly. Do not edit source before the approval gate:
    `autoimprove/report-template.md`. The report prose must be Vietnamese. Include
    actual evidence paths and distinguish
    PASS, FAIL, BLOCKED, SKIPPED, cached results, validation profile, changed scope,
-   HEAD continuity, and exact validator durations. Mark unmeasured workflow phases
-   as `not measured`; never invent timing. Do not include secrets or large private
+   HEAD continuity, and exact validator durations. When timestamps are available,
+   report wall time for audit, approval wait, implementation, review, and total run
+   separately so model latency is not confused with test time. Mark unavailable
+   phases as `không đo được`; never estimate or invent timing. Do not include secrets or large private
    source excerpts. Do not overwrite an older report.
 
 Do not push, merge, deploy, commit, install packages, execute migrations, or use
