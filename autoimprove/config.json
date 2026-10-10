@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "retryLimit": 3,
+  "timeoutMs": 900000,
+  "checks": [
+    {
+      "id": "typecheck",
+      "command": ["npm", "run", "typecheck"],
+      "mandatory": true,
+      "enabled": true
+    },
+    {
+      "id": "lint",
+      "command": ["npm", "run", "lint"],
+      "mandatory": true,
+      "enabled": true
+    },
+    {
+      "id": "unit-tests",
+      "command": ["npm", "test"],
+      "mandatory": true,
+      "enabled": true
+    },
+    {
+      "id": "production-build",
+      "command": ["npm", "run", "build"],
+      "mandatory": true,
+      "enabled": true
+    },
+    {
+      "id": "database-integration",
+      "command": ["npm", "run", "test:db"],
+      "mandatory": false,
+      "enabled": false,
+      "skipReason": "Cần TEST_DATABASE_URL riêng và dịch vụ PostgreSQL test; bật thủ công khi môi trường đã sẵn sàng."
+    }
+  ]
+}

@@ -27,3 +27,17 @@ Conventions to follow when adding UI:
 - Icons: lucide-react only, consistent stroke, `aria-hidden` for decorative ones.
 - Clickable elements get `cursor-pointer`; transitions are 150–200ms; respect `prefers-reduced-motion`.
 - Light + dark mode: verify both, keep text contrast ≥4.5:1.
+
+# AutoImprove safety boundary
+
+The `/auto-improve` workflow may change one focused issue per invocation. During
+an AutoImprove run, treat `.kilo/`, `autoimprove/`, `AGENTS.md`, dependency
+manifests, environment files, deployment configuration, and Prisma migrations as
+control or protected files. Do not modify them unless the developer explicitly
+approves that exact change. Generated evidence is the only exception:
+`autoimprove/logs/` and `autoimprove/reports/` are local, gitignored outputs.
+
+AutoImprove must never push, merge, deploy, install dependencies, apply database
+migrations, weaken tests, or discard pre-existing working-tree changes. A passing
+review is not sufficient: every mandatory check configured in
+`autoimprove/config.json` must execute and pass after a passing baseline.

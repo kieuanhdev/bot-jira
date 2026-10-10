@@ -32,6 +32,10 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# AutoImprove local evidence (may contain source excerpts from validation output)
+/autoimprove/logs/
+/autoimprove/reports/
+
 # env files (can opt-in for committing if needed)
 .env
 .env.local
