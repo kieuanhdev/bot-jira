@@ -17,7 +17,7 @@ const {
   createVersionMock,
   getReleaseReadinessMock,
   auditMock,
-  notifyAllMock,
+  notifyEveryoneMock,
 } = vi.hoisted(() => {
   const releaseVersionMock = vi.fn();
   const getVersionMock = vi.fn();
@@ -36,7 +36,7 @@ const {
   const userJiraAuthMock = vi.fn();
   const getReleaseReadinessMock = vi.fn();
   const auditMock = vi.fn().mockResolvedValue("audit-1");
-  const notifyAllMock = vi.fn().mockResolvedValue(undefined);
+  const notifyEveryoneMock = vi.fn().mockResolvedValue(undefined);
 
   const prismaMock = {
     release: {
@@ -67,14 +67,14 @@ const {
     createVersionMock,
     getReleaseReadinessMock,
     auditMock,
-    notifyAllMock,
+    notifyEveryoneMock,
   };
 });
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/user-creds", () => ({ userJiraAuth: userJiraAuthMock }));
 vi.mock("@/lib/audit", () => ({ audit: auditMock }));
-vi.mock("@/lib/notify", () => ({ notifyAll: notifyAllMock }));
+vi.mock("@/lib/notify", () => ({ notifyEveryone: notifyEveryoneMock }));
 vi.mock("@/lib/releases/release-readiness", () => ({
   getReleaseReadiness: getReleaseReadinessMock,
 }));
@@ -312,7 +312,7 @@ describe("Jira Mutation Service", () => {
       expect(auditMock).toHaveBeenCalledWith(
         expect.objectContaining({ action: "release.publish" })
       );
-      expect(notifyAllMock).toHaveBeenCalledTimes(1);
+      expect(notifyEveryoneMock).toHaveBeenCalledTimes(1);
     });
   });
 

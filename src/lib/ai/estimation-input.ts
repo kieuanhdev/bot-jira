@@ -26,9 +26,11 @@ export function extractAcceptanceCriteria(description: string): string[] {
     }
     if (inBlock) {
       if (!trimmed) continue;
-      // A new bold/heading section ends the AC block.
+      // A new bold/heading section ends the AC block; the heading itself is
+      // never treated as an acceptance-criteria item.
       if (/^[\w\s/ ]+:$/.test(trimmed) && !/acceptance/i.test(trimmed)) {
-        inBlock = out.length > 0 ? false : inBlock;
+        inBlock = false;
+        continue;
       }
       out.push(trimmed);
       if (out.length >= 10) break;

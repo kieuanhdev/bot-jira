@@ -89,6 +89,50 @@ describe("deliverNotification", () => {
     expect(prismaMock.notification.create).not.toHaveBeenCalled();
   });
 
+  it.each(["ai", "system"] as const)(
+    "keeps %s notifications off until a user explicitly enables them",
+    async (type) => {
+      prismaMock.user.findUnique.mockResolvedValue({ id: "u1", pushSubscription: null });
+      prismaMock.notificationPreference.findUnique.mockResolvedValue(null);
+
+      const res = await deliverNotification("u1", {
+        type,
+        title: "Opt-in notification",
+        eventId: `${type}:1`,
+      });
+
+      expect(res).toEqual({ delivered: false, skippedReason: "disabled" });
+      expect(prismaMock.notification.create).not.toHaveBeenCalled();
+      expect(prismaMock.notificationOutbox.create).not.toHaveBeenCalled();
+    }
+  );
+
+  it("always delivers every notification type to anhnk_mb", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: "u-anhnk",
+      jiraUsername: "anhnk_mb",
+      pushSubscription: null,
+    });
+    prismaMock.notificationPreference.findUnique.mockResolvedValue({
+      userId: "u-anhnk",
+      disabledTypes: ["ai", "system"],
+      pushEnabled: false,
+      pushDisabledTypes: [],
+    });
+    prismaMock.notification.findUnique.mockResolvedValue(null);
+    prismaMock.notification.create.mockResolvedValue({ id: "n-anhnk" });
+
+    const res = await deliverNotification("u-anhnk", {
+      type: "ai",
+      title: "AI estimate ready",
+      eventId: "ai:anhnk:1",
+    });
+
+    expect(res.delivered).toBe(true);
+    expect(res.notificationId).toBe("n-anhnk");
+    expect(prismaMock.notification.create).toHaveBeenCalledTimes(1);
+  });
+
   it("creates in-app notification when not disabled and does not push when pushEnabled is false", async () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: "u1", pushSubscription: { endpoint: "https://push..." } });
     prismaMock.notificationPreference.findUnique.mockResolvedValue({
@@ -165,7 +209,12 @@ describe("deliverNotification", () => {
 
   it("enqueues a private Discord delivery for a configured user", async () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: "u1", pushSubscription: null });
-    prismaMock.notificationPreference.findUnique.mockResolvedValue(null);
+    prismaMock.notificationPreference.findUnique.mockResolvedValue({
+      userId: "u1",
+      disabledTypes: [],
+      pushEnabled: false,
+      pushDisabledTypes: [],
+    });
     prismaMock.notification.findUnique.mockResolvedValue(null);
     prismaMock.notification.create.mockResolvedValue({ id: "n3" });
     prismaMock.discordIntegration.findUnique.mockResolvedValue({ id: "discord-1" });

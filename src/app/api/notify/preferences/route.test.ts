@@ -56,6 +56,7 @@ describe("Notification Preferences API", () => {
       prismaMock.notificationPreference.findUnique.mockResolvedValue({
         userId: "user-123",
         disabledTypes: ["comment"],
+        broadcastEnabled: true,
         pushEnabled: true,
         pushDisabledTypes: ["system"],
         deliveryMode: "digest",
@@ -63,6 +64,8 @@ describe("Notification Preferences API", () => {
       });
       prismaMock.user.findUnique.mockResolvedValue({
         pushSubscription: { endpoint: "https://example.com" },
+        role: "member",
+        jiraUsername: "alice",
       });
 
       const res = await GET();
@@ -70,6 +73,9 @@ describe("Notification Preferences API", () => {
       const data = await res.json();
       expect(data).toEqual({
         disabledTypes: ["comment"],
+        broadcastEnabled: true,
+        broadcastRequired: false,
+        allNotificationsRequired: false,
         pushEnabled: true,
         pushDisabledTypes: ["system"],
         deliveryMode: "digest",
@@ -82,12 +88,15 @@ describe("Notification Preferences API", () => {
     it("returns default values when preference row does not exist", async () => {
       sessionMock.mockResolvedValue({ user: { id: "user-123" } });
       prismaMock.notificationPreference.findUnique.mockResolvedValue(null);
-      prismaMock.user.findUnique.mockResolvedValue({ pushSubscription: null });
+      prismaMock.user.findUnique.mockResolvedValue({ pushSubscription: null, role: "member", jiraUsername: "alice" });
 
       const res = await GET();
       expect(res.status).toBe(200);
       const data = await res.json();
-      expect(data.disabledTypes).toEqual([]);
+      expect(data.disabledTypes).toEqual(["ai", "system"]);
+      expect(data.broadcastEnabled).toBe(false);
+      expect(data.broadcastRequired).toBe(false);
+      expect(data.allNotificationsRequired).toBe(false);
       expect(data.pushEnabled).toBe(false);
       expect(data.pushDisabledTypes).toEqual([]);
       expect(data.deliveryMode).toBe("instant");
@@ -148,17 +157,19 @@ describe("Notification Preferences API", () => {
       prismaMock.notificationPreference.upsert.mockResolvedValue({
         userId: "user-123",
         disabledTypes: ["comment", "issue"],
+        broadcastEnabled: true,
         pushEnabled: true,
         pushDisabledTypes: ["stale"],
         deliveryMode: "digest",
         digestHour: 10,
       });
-      prismaMock.user.findUnique.mockResolvedValue({ pushSubscription: null });
+      prismaMock.user.findUnique.mockResolvedValue({ pushSubscription: null, role: "member", jiraUsername: "alice" });
 
       const req = new Request("http://localhost/api/notify/preferences", {
         method: "PATCH",
         body: JSON.stringify({
           disabledTypes: ["comment", "issue"],
+          broadcastEnabled: true,
           pushEnabled: true,
           pushDisabledTypes: ["stale"],
           deliveryMode: "digest",
@@ -170,6 +181,9 @@ describe("Notification Preferences API", () => {
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.disabledTypes).toEqual(["comment", "issue"]);
+      expect(json.broadcastEnabled).toBe(true);
+      expect(json.broadcastRequired).toBe(false);
+      expect(json.allNotificationsRequired).toBe(false);
       expect(json.pushEnabled).toBe(true);
       expect(json.pushDisabledTypes).toEqual(["stale"]);
       expect(json.deliveryMode).toBe("digest");

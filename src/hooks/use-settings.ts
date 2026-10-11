@@ -58,6 +58,9 @@ export function useDisconnectCredential() {
 
 export type NotificationPreferences = {
   disabledTypes: string[];
+  broadcastEnabled: boolean;
+  broadcastRequired: boolean;
+  allNotificationsRequired: boolean;
   pushEnabled: boolean;
   pushDisabledTypes: string[];
   knownTypes: string[];

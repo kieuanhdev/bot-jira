@@ -246,4 +246,48 @@ describe("Jira HTTP transport", () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("escapes a trailing backslash in the parent-search JQL", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ issues: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await jiraWith(bearerAuth).searchParentIssues("CICM", "login\\", 10);
+
+    const jql = new URL((fetchMock.mock.calls[0] as [string])[0]).searchParams.get("jql") as string;
+    expect(jql).toBe(
+      'project = "CICM" AND (key ~ "login\\\\" OR summary ~ "login\\\\") AND "issuetype" != "Sub-task"'
+    );
+  });
+
+  it("escapes an embedded quote and backslash together in the parent-search JQL", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ issues: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await jiraWith(bearerAuth).searchParentIssues("CICM", 'a"b\\', 10);
+
+    const jql = new URL((fetchMock.mock.calls[0] as [string])[0]).searchParams.get("jql") as string;
+    expect(jql).toContain('"a\\"b\\\\"');
+  });
+
+  it("leaves a plain parent-search query unchanged", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ issues: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await jiraWith(bearerAuth).searchParentIssues("CICM", "login", 10);
+
+    const jql = new URL((fetchMock.mock.calls[0] as [string])[0]).searchParams.get("jql") as string;
+    expect(jql).toContain('key ~ "login"');
+    expect(jql).not.toContain("\\");
+  });
+
+  it("routes a KEY-pattern parent search without the free-text escape path", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ issues: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await jiraWith(bearerAuth).searchParentIssues("CICM", "CICM-123", 10);
+
+    const jql = new URL((fetchMock.mock.calls[0] as [string])[0]).searchParams.get("jql") as string;
+    expect(jql).toContain('key = "CICM-123"');
+    expect(jql).not.toContain("~");
+  });
 });

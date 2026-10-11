@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { deliverNotification } from "./outbox";
+import { ALWAYS_NOTIFY_JIRA_USERNAMES, DEFAULT_BROADCAST_ROLES } from "./policy";
 
 export * from "./delivery-contract";
 export * from "./delivery-adapters";
@@ -68,6 +69,26 @@ export async function usersByJiraUsernames(names: string[]) {
  * Fans out to notifyUser with the same eventKey.
  */
 export async function notifyAll(data: NotifyInput) {
+  const users = await prisma.user.findMany({
+    where: {
+      OR: [
+        { role: { in: DEFAULT_BROADCAST_ROLES } },
+        { preferences: { is: { broadcastEnabled: true } } },
+        { jiraUsername: { in: [...ALWAYS_NOTIFY_JIRA_USERNAMES], mode: "insensitive" } },
+      ],
+    },
+    select: { id: true },
+  });
+  return Promise.all(
+    users.map((u) => notifyUser(u.id, data).catch(() => null))
+  );
+}
+
+/**
+ * Notify every account about a rare team-wide event. Each user's disabledTypes
+ * preference is still honored by notifyUser.
+ */
+export async function notifyEveryone(data: NotifyInput) {
   const users = await prisma.user.findMany({ select: { id: true } });
   return Promise.all(
     users.map((u) => notifyUser(u.id, data).catch(() => null))

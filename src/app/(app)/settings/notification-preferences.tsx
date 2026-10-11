@@ -36,6 +36,9 @@ import { useWebPush } from "@/hooks/use-web-push";
 
 type Preferences = {
   disabledTypes: string[];
+  broadcastEnabled: boolean;
+  broadcastRequired: boolean;
+  allNotificationsRequired: boolean;
   pushEnabled: boolean;
   pushDisabledTypes: string[];
   knownTypes: string[];
@@ -205,7 +208,10 @@ export function NotificationPreferences() {
   }
 
   const values: Preferences = data ?? {
-    disabledTypes: [],
+    disabledTypes: ["ai", "system"],
+    broadcastEnabled: false,
+    broadcastRequired: false,
+    allNotificationsRequired: false,
     pushEnabled: false,
     pushDisabledTypes: [],
     knownTypes: Object.keys(TYPE_DETAILS),
@@ -223,13 +229,16 @@ export function NotificationPreferences() {
   }, [knownTypes, activeCategoryFilter]);
 
   // Counts for In-App
-  const inAppEnabledCount = knownTypes.filter((t) => !values.disabledTypes.includes(t)).length;
+  const inAppEnabledCount = values.allNotificationsRequired
+    ? knownTypes.length
+    : knownTypes.filter((t) => !values.disabledTypes.includes(t)).length;
 
   // Counts for Push
   const pushEnabledCount = knownTypes.filter((t) => !values.pushDisabledTypes.includes(t)).length;
 
   // Toggle in-app type
   const toggleInAppType = (typeKey: string) => {
+    if (values.allNotificationsRequired) return;
     const disabledTypes = values.disabledTypes.includes(typeKey)
       ? values.disabledTypes.filter((t) => t !== typeKey)
       : [...values.disabledTypes, typeKey];
@@ -238,10 +247,12 @@ export function NotificationPreferences() {
 
   // Bulk toggle in-app
   const enableAllInApp = () => {
+    if (values.allNotificationsRequired) return;
     mutatePrefs({ disabledTypes: [] });
   };
 
   const disableAllInApp = () => {
+    if (values.allNotificationsRequired) return;
     mutatePrefs({ disabledTypes: [...knownTypes] });
   };
 
@@ -389,7 +400,7 @@ export function NotificationPreferences() {
                     variant="ghost"
                     size="sm"
                     onClick={enableAllInApp}
-                    disabled={mutation.isPending || inAppEnabledCount === knownTypes.length}
+                    disabled={mutation.isPending || values.allNotificationsRequired || inAppEnabledCount === knownTypes.length}
                     className="h-8 text-xs cursor-pointer text-primary hover:text-primary gap-1"
                   >
                     <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
@@ -401,7 +412,7 @@ export function NotificationPreferences() {
                     variant="ghost"
                     size="sm"
                     onClick={disableAllInApp}
-                    disabled={mutation.isPending || inAppEnabledCount === 0}
+                    disabled={mutation.isPending || values.allNotificationsRequired || inAppEnabledCount === 0}
                     className="h-8 text-xs cursor-pointer text-muted-foreground hover:text-destructive gap-1"
                   >
                     <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
@@ -424,7 +435,7 @@ export function NotificationPreferences() {
                     bgClass: "bg-muted/30 border-border",
                   };
                   const Icon = info.icon;
-                  const isChecked = !values.disabledTypes.includes(t);
+                  const isChecked = values.allNotificationsRequired || !values.disabledTypes.includes(t);
                   return (
                     <label
                       key={t}
@@ -437,7 +448,7 @@ export function NotificationPreferences() {
                       <Checkbox
                         checked={isChecked}
                         onCheckedChange={() => toggleInAppType(t)}
-                        disabled={mutation.isPending}
+                        disabled={mutation.isPending || values.allNotificationsRequired}
                         className="mt-1 shrink-0"
                       />
                       <div className="space-y-1.5 min-w-0 flex-1">
@@ -473,6 +484,42 @@ export function NotificationPreferences() {
               Lưu thay đổi thất bại. Vui lòng kiểm tra lại kết nối.
             </FeedbackBanner>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Team-wide broadcasts are opt-in for regular members. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ShieldAlert className="h-4 w-4 text-primary" aria-hidden="true" />
+            Thông báo chung toàn đội
+          </CardTitle>
+          <CardDescription>
+            Nhận các thông báo phát cho toàn hệ thống như release, CI, Sentry và tình trạng dịch vụ.
+            Thông báo liên quan trực tiếp đến bạn vẫn được giữ ngay cả khi mục này tắt.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <label className="flex items-start justify-between gap-4 rounded-xl border border-border bg-muted/20 p-4 cursor-pointer transition-colors duration-150 hover:bg-muted/30">
+            <div className="space-y-1">
+              <span className="text-sm font-semibold text-foreground block">
+                Cho phép thông báo broadcast
+              </span>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Mặc định tắt cho thành viên thường để tránh nhận quá nhiều thông báo không liên quan.
+                {values.broadcastRequired
+                  ? " Vai trò của bạn cần nhận broadcast; bạn có thể tắt từng loại thông báo ở danh sách phía trên."
+                  : " Bạn có thể bật khi muốn theo dõi hoạt động chung của toàn đội."}
+              </p>
+            </div>
+            <Checkbox
+              checked={values.broadcastRequired || values.broadcastEnabled}
+              onCheckedChange={(checked) => mutatePrefs({ broadcastEnabled: Boolean(checked) })}
+              disabled={mutation.isPending || values.broadcastRequired}
+              className="h-5 w-5 shrink-0 cursor-pointer"
+              aria-label="Cho phép thông báo chung toàn đội"
+            />
+          </label>
         </CardContent>
       </Card>
 

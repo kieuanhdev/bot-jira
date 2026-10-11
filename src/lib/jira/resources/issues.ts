@@ -388,7 +388,7 @@ export function createIssueResource({
         if (/^[A-Z][A-Z0-9_]+-\d+$/.test(query)) {
           jql = `project = "${projectKey}" AND key = "${query}" AND "issuetype" != "Sub-task"`;
         } else {
-          const escaped = query.replace(/"/g, '\\"');
+          const escaped = query.replace(/["\\]/g, "\\$&");
           jql = `project = "${projectKey}" AND (key ~ "${escaped}" OR summary ~ "${escaped}") AND "issuetype" != "Sub-task"`;
         }
       } else {

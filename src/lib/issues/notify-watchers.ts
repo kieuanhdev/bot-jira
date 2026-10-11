@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notifyUser } from "@/lib/notify";
+import { jiraUsernameAliases } from "@/lib/user-creds";
 
 export type WatchedIssueSnapshot = {
   jiraKey: string;
@@ -110,10 +111,10 @@ export async function notifyWatchersOfIssueChange(
 }
 
 /**
- * Notify watchers of a Jira issue that a new comment arrived, excluding the
- * comment author when their identity maps to a local user. Uses a dedupe key
- * so the same comment is never notified twice (e.g. from both the web POST and
- * the poll worker).
+ * Notify watchers and the current assignee of a Jira issue that a new comment
+ * arrived, excluding the comment author when their identity maps to a local
+ * user. Uses a dedupe key so the same comment is never notified twice (e.g.
+ * from both the web POST and the poll worker).
  */
 export async function notifyWatchersOfComment(
   jiraKey: string,
@@ -132,18 +133,35 @@ export async function notifyWatchersOfComment(
     /* identity mapping is best-effort */
   }
 
-  const watchers = await prisma.watch.findMany({
-    where: { jiraKey },
-    select: { userId: true },
-  });
+  const [watchers, issue] = await Promise.all([
+    prisma.watch.findMany({
+      where: { jiraKey },
+      select: { userId: true },
+    }),
+    prisma.issueCache.findUnique({
+      where: { jiraKey },
+      select: { assigneeJira: true },
+    }),
+  ]);
+
+  const assigneeUsers = issue?.assigneeJira
+    ? await prisma.user.findMany({
+        where: { jiraUsername: { in: jiraUsernameAliases(issue.assigneeJira) } },
+        select: { id: true },
+      })
+    : [];
+  const recipientIds = new Set([
+    ...watchers.map((watcher) => watcher.userId),
+    ...assigneeUsers.map((user) => user.id),
+  ]);
 
   const eventKey = `jira-comment:${commentId ?? `${jiraKey}:${authorName}:${body.slice(0, 64)}`}`;
 
   let notified = 0;
-  for (const w of watchers) {
-    if (w.userId === authorUserId) continue;
+  for (const userId of recipientIds) {
+    if (userId === authorUserId) continue;
     try {
-      const res = await notifyUser(w.userId, {
+      const res = await notifyUser(userId, {
         type: "comment",
         title: `Bình luận mới trên ${jiraKey}`,
         body: `${authorName}: ${body.slice(0, 160)}`,

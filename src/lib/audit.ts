@@ -48,15 +48,17 @@ function redactValue(key: string, value: unknown): unknown {
 }
 
 function redact(input: unknown, keyHint = ""): unknown {
+  if (input === null || input === undefined) return input;
+  if (SECRET_KEY_RE.test(keyHint) && !LONG_TEXT_KEY_RE.test(keyHint)) return "[redacted]";
   if (Array.isArray(input)) return input.map((v) => redact(v, keyHint));
-  if (input && typeof input === "object") {
+  if (typeof input === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
-      out[k] = redactValue(k, v);
+      out[k] = redact(v, k);
     }
     return out;
   }
-  return input;
+  return redactValue(keyHint, input);
 }
 
 export type AuditInput = {

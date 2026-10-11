@@ -59,4 +59,36 @@ describe("audit redaction", () => {
     const id = await audit({ action: "y" });
     expect(id).toBeNull();
   });
+
+  it("redacts secrets inside nested objects", async () => {
+    await audit({ action: "x", after: { user: { password: "secret123", name: "ok" } } });
+    expect(unwrap(lastCall().data.after)).toEqual({ user: { password: "[redacted]", name: "ok" } });
+  });
+
+  it("redacts secret values inside nested arrays", async () => {
+    await audit({ action: "x", after: { users: [{ apiKey: "abc", name: "ok" }] } });
+    expect(unwrap(lastCall().data.after)).toEqual({ users: [{ apiKey: "[redacted]", name: "ok" }] });
+  });
+
+  it("redacts secret-keyed arrays and objects as complete values", async () => {
+    await audit({
+      action: "x",
+      after: {
+        tokens: ["short-a", "short-b"],
+        credentials: { value: "short-secret" },
+      },
+    });
+    expect(unwrap(lastCall().data.after)).toEqual({
+      tokens: "[redacted]",
+      credentials: "[redacted]",
+    });
+  });
+
+  it("applies long-text handling inside nested objects", async () => {
+    const body = "nested ".repeat(40);
+    await audit({ action: "x", after: { issue: { comment: body } } });
+    const after = unwrap(lastCall().data.after) as { issue: { comment: { text: string; hash: string } } };
+    expect(after.issue.comment.text).toBe(body.slice(0, 160));
+    expect(after.issue.comment.hash).toMatch(/^[0-9a-f]{16}$/);
+  });
 });

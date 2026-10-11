@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
-import { notifyAll } from "@/lib/notify";
+import { notifyEveryone } from "@/lib/notify";
 import { jiraWith, canCreateProjectVersion, JiraRequestError, type JiraAuth } from "@/lib/jira/client";
 import type { JiraVersion } from "@/lib/jira/types";
 import { userJiraAuth } from "@/lib/user-creds";
@@ -229,7 +229,7 @@ export async function publishRelease(
     after: { status: "released", version: release.version },
   });
 
-  await notifyAll({
+  await notifyEveryone({
     type: "release",
     title: `Bản phát hành ${release.version} đã được công bố`,
     body: `Fix Version ${release.projectKey} được phát hành bởi ${actorEmail ?? "release manager"}.`,

@@ -581,14 +581,17 @@ model DiscordIntegration {
   @@index([discordUserId])
 }
 
-  // M5 — Notification preferences. One row per user; defaults allow everything.
+  // M5 — Notification preferences. One row per user.
   // `disabledTypes` is a list of event types that should not be delivered.
+  // Team-wide broadcasts are opt-in for regular members; operational roles
+  // receive them by default so release and health alerts still reach owners.
   // `deliveryMode` is "instant" or "digest" (digest delivered at most once a day).
   model NotificationPreference {
   id                String   @id @default(cuid())
   userId            String   @unique
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  disabledTypes     String[] @default([])
+  disabledTypes     String[] @default(["ai", "system"])
+  broadcastEnabled  Boolean  @default(false)
   pushEnabled       Boolean  @default(false)
   pushDisabledTypes String[] @default([])
   deliveryMode      String   @default("instant") // "instant" | "digest"

@@ -19,6 +19,23 @@ more text`;
     expect(ac).not.toContain("Do the thing.");
   });
 
+  it("excludes a following section heading from the AC items", () => {
+    const d = `* Acceptance criteria
+- User can log in
+- User sees the board
+Some other section:
+more text`;
+    const ac = extractAcceptanceCriteria(d);
+    expect(ac).toEqual(["User can log in", "User sees the board"]);
+  });
+
+  it("stops the AC block at a heading when no items were collected yet", () => {
+    const d = `* Acceptance criteria
+Notes:
+this note is not an acceptance criterion`;
+    expect(extractAcceptanceCriteria(d)).toEqual([]);
+  });
+
   it("returns empty when there is no header", () => {
     expect(extractAcceptanceCriteria("just a description with - bullets")).toEqual([]);
   });

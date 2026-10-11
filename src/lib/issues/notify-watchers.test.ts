@@ -1,11 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ watchers: vi.fn(), author: vi.fn(), notify: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  watchers: vi.fn(),
+  author: vi.fn(),
+  users: vi.fn(),
+  issue: vi.fn(),
+  notify: vi.fn(),
+}));
 vi.mock("@/lib/prisma", () => ({ prisma: {
-  watch: { findMany: mocks.watchers }, user: { findFirst: mocks.author },
+  watch: { findMany: mocks.watchers },
+  user: { findFirst: mocks.author, findMany: mocks.users },
+  issueCache: { findUnique: mocks.issue },
 } }));
 vi.mock("@/lib/notify", () => ({ notifyUser: mocks.notify }));
 import {
   watchedIssueChangedFields,
+  notifyWatchersOfComment,
   notifyWatchersOfIssueChange,
   type WatchedIssueSnapshot,
 } from "./notify-watchers";
@@ -40,6 +49,43 @@ describe("watchedIssueChangedFields", () => {
       issue(),
       issue({ labels: ["urgent", "mobile"], updatedAt: new Date("2026-09-27T02:00:00.000Z") })
     )).toEqual([]);
+  });
+});
+
+describe("Jira comment notifications", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.author.mockResolvedValue({ id: "comment-author" });
+    mocks.watchers.mockResolvedValue([{ userId: "watcher" }]);
+    mocks.issue.mockResolvedValue({ assigneeJira: "alice_mb" });
+    mocks.users.mockResolvedValue([{ id: "assignee" }]);
+    mocks.notify.mockResolvedValue({ id: "notification" });
+  });
+
+  it("notifies the current assignee even when they do not watch the task", async () => {
+    const count = await notifyWatchersOfComment("EPM-42", "bob", "Please check this", "1001");
+
+    expect(count).toBe(2);
+    expect(mocks.notify).toHaveBeenCalledWith("watcher", expect.objectContaining({ type: "comment" }));
+    expect(mocks.notify).toHaveBeenCalledWith("assignee", expect.objectContaining({
+      type: "comment",
+      link: "/issue/EPM-42",
+    }));
+  });
+
+  it("does not send twice when the assignee also watches the task", async () => {
+    mocks.watchers.mockResolvedValue([{ userId: "assignee" }]);
+
+    expect(await notifyWatchersOfComment("EPM-42", "bob", "Please check this", "1002")).toBe(1);
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not notify the assignee when they wrote the comment", async () => {
+    mocks.author.mockResolvedValue({ id: "assignee" });
+
+    expect(await notifyWatchersOfComment("EPM-42", "alice_mb", "My own update", "1003")).toBe(1);
+    expect(mocks.notify).not.toHaveBeenCalledWith("assignee", expect.anything());
+    expect(mocks.notify).toHaveBeenCalledWith("watcher", expect.anything());
   });
 });
 
