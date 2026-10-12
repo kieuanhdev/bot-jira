@@ -103,7 +103,7 @@ export async function runNotifyUnmergedPrs(now: Date = new Date()): Promise<Work
         type: "issue",
         title: message.title,
         body: message.body,
-        link: "/branches",
+        link: "/branches?view=needs-attention",
         eventId: `unmerged-pr-reminder:${day}`,
       });
       if (result.delivered) notified++;

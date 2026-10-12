@@ -40,6 +40,26 @@ export interface CalculateLeaderboardInput {
   selectedProject: string | null;
 }
 
+/**
+ * Accounts excluded from the mobile team leaderboard / ranking.
+ */
+export const EXCLUDED_LEADERBOARD_ACCOUNTS: ReadonlySet<string> = new Set([
+  "quangtn",
+  "hoangld",
+  "tinhvt",
+  "ducpm2",
+  "binhht",
+  "hungkd_cic",
+  "hungkd",
+]);
+
+export function isExcludedLeaderboardUser(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const raw = value.trim().toLowerCase();
+  const username = raw.includes("@") ? raw.slice(0, raw.indexOf("@")) : raw;
+  return EXCLUDED_LEADERBOARD_ACCOUNTS.has(username.replace(/_mb$/i, ""));
+}
+
 export function generateCheerMessage(
   rank: number,
   points: number,
@@ -101,7 +121,13 @@ interface MemberAccumulator {
 }
 
 export function calculateLeaderboard(input: CalculateLeaderboardInput): LeaderboardResponse {
-  const { period, issues, dbUsers, myAliases, activeProjects, selectedProject } = input;
+  const { period, myAliases, activeProjects, selectedProject } = input;
+
+  // Lọc bỏ các tài khoản bị loại trừ ngay từ đầu vào
+  const issues = input.issues.filter((i) => !isExcludedLeaderboardUser(i.assigneeJira));
+  const dbUsers = input.dbUsers.filter(
+    (u) => !isExcludedLeaderboardUser(u.jiraUsername) && !isExcludedLeaderboardUser(u.email)
+  );
 
   // Build alias lookup map: lowercase alias -> dbUser
   const userMap = new Map<string, LeaderboardDbUser>();

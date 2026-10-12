@@ -3,6 +3,8 @@ import {
   generateCheerMessage,
   resolveCompletionDate,
   calculateLeaderboard,
+  isExcludedLeaderboardUser,
+  EXCLUDED_LEADERBOARD_ACCOUNTS,
   type RawLeaderboardIssue,
   type LeaderboardDbUser,
 } from "./calculator";
@@ -93,6 +95,65 @@ describe("Leaderboard Calculator", () => {
         statusChangedAt: null,
       };
       expect(resolveCompletionDate(issue)?.toISOString()).toBe("2026-10-04T00:00:00.000Z");
+    });
+  });
+
+  describe("isExcludedLeaderboardUser", () => {
+    it("returns true for quangtn_mb and its variants", () => {
+      expect(isExcludedLeaderboardUser("quangtn_mb")).toBe(true);
+      expect(isExcludedLeaderboardUser("quangtn")).toBe(true);
+      expect(isExcludedLeaderboardUser("QUANGTN_MB")).toBe(true);
+      expect(isExcludedLeaderboardUser("quangtn_mb@vnpay.vn")).toBe(true);
+      expect(isExcludedLeaderboardUser("quangtn@company.com")).toBe(true);
+    });
+
+    it("returns true for hoangld and its variants", () => {
+      expect(isExcludedLeaderboardUser("hoangld")).toBe(true);
+      expect(isExcludedLeaderboardUser("hoangld_mb")).toBe(true);
+      expect(isExcludedLeaderboardUser("HOANGLD")).toBe(true);
+      expect(isExcludedLeaderboardUser("hoangld@vnpay.vn")).toBe(true);
+    });
+
+    it("returns true for tinhvt and its variants", () => {
+      expect(isExcludedLeaderboardUser("tinhvt")).toBe(true);
+      expect(isExcludedLeaderboardUser("tinhvt_mb")).toBe(true);
+      expect(isExcludedLeaderboardUser("TINHVT")).toBe(true);
+      expect(isExcludedLeaderboardUser("tinhvt@vnpay.vn")).toBe(true);
+    });
+
+    it("returns true for ducpm2 and its variants", () => {
+      expect(isExcludedLeaderboardUser("ducpm2")).toBe(true);
+      expect(isExcludedLeaderboardUser("ducpm2_mb")).toBe(true);
+      expect(isExcludedLeaderboardUser("DUCPM2")).toBe(true);
+      expect(isExcludedLeaderboardUser("ducpm2@vnpay.vn")).toBe(true);
+    });
+
+    it("returns true for binhht and its variants", () => {
+      expect(isExcludedLeaderboardUser("binhht")).toBe(true);
+      expect(isExcludedLeaderboardUser("binhht_mb")).toBe(true);
+      expect(isExcludedLeaderboardUser("BINHHT")).toBe(true);
+      expect(isExcludedLeaderboardUser("binhht@vnpay.vn")).toBe(true);
+    });
+
+    it("returns true for HungKD_CIC and its variants", () => {
+      expect(isExcludedLeaderboardUser("HungKD_CIC")).toBe(true);
+      expect(isExcludedLeaderboardUser("hungkd_cic")).toBe(true);
+      expect(isExcludedLeaderboardUser("hungkd_cic_mb")).toBe(true);
+      expect(isExcludedLeaderboardUser("hungkd")).toBe(true);
+      expect(isExcludedLeaderboardUser("hungkd@vnpay.vn")).toBe(true);
+    });
+
+    it("returns false for regular users", () => {
+      expect(isExcludedLeaderboardUser("alice")).toBe(false);
+      expect(isExcludedLeaderboardUser("bob")).toBe(false);
+      expect(isExcludedLeaderboardUser("charlie_mb")).toBe(false);
+    });
+
+    it("returns false for empty, null, or undefined values", () => {
+      expect(isExcludedLeaderboardUser(null)).toBe(false);
+      expect(isExcludedLeaderboardUser(undefined)).toBe(false);
+      expect(isExcludedLeaderboardUser("")).toBe(false);
+      expect(isExcludedLeaderboardUser("   ")).toBe(false);
     });
   });
 
@@ -287,6 +348,195 @@ describe("Leaderboard Calculator", () => {
       const alice = result.members.find((m) => m.jiraUsername === "alice");
       expect(alice?.inProgressPoints).toBe(0);
       expect(alice?.inProgressTasks).toBe(0);
+    });
+
+    it("completely excludes quangtn_mb, hoangld, and tinhvt from rankings and team metrics", () => {
+      const extendedDbUsers: LeaderboardDbUser[] = [
+        ...dbUsers,
+        {
+          id: "u-quang",
+          displayName: "Quang TN",
+          jiraUsername: "quangtn_mb",
+          email: "quangtn@example.com",
+          role: "developer",
+        },
+        {
+          id: "u-hoang",
+          displayName: "Hoang LD",
+          jiraUsername: "hoangld",
+          email: "hoangld@example.com",
+          role: "developer",
+        },
+        {
+          id: "u-tinh",
+          displayName: "Tinh VT",
+          jiraUsername: "tinhvt",
+          email: "tinhvt@example.com",
+          role: "developer",
+        },
+        {
+          id: "u-duc",
+          displayName: "Duc PM",
+          jiraUsername: "ducpm2",
+          email: "ducpm2@example.com",
+          role: "developer",
+        },
+        {
+          id: "u-binh",
+          displayName: "Binh HT",
+          jiraUsername: "binhht",
+          email: "binhht@example.com",
+          role: "developer",
+        },
+        {
+          id: "u-hung",
+          displayName: "Hung KD",
+          jiraUsername: "HungKD_CIC",
+          email: "hungkd@example.com",
+          role: "developer",
+        },
+      ];
+
+      const issuesWithExcludedUsers: RawLeaderboardIssue[] = [
+        {
+          jiraKey: "P-101",
+          summary: "Alice task",
+          status: "Done",
+          statusCategory: "done",
+          statusChangedAt: new Date("2026-10-10T10:00:00Z"),
+          updatedAt: new Date("2026-10-10T10:00:00Z"),
+          createdAt: new Date("2026-10-01T10:00:00Z"),
+          assigneeJira: "alice",
+          points: 5,
+          priority: "High",
+          projectKey: "PROJ",
+        },
+        {
+          jiraKey: "P-102",
+          summary: "Quang task",
+          status: "Done",
+          statusCategory: "done",
+          statusChangedAt: new Date("2026-10-10T10:00:00Z"),
+          updatedAt: new Date("2026-10-10T10:00:00Z"),
+          createdAt: new Date("2026-10-01T10:00:00Z"),
+          assigneeJira: "quangtn_mb",
+          points: 20,
+          priority: "High",
+          projectKey: "PROJ",
+        },
+        {
+          jiraKey: "P-103",
+          summary: "Hoang task",
+          status: "Done",
+          statusCategory: "done",
+          statusChangedAt: new Date("2026-10-10T10:00:00Z"),
+          updatedAt: new Date("2026-10-10T10:00:00Z"),
+          createdAt: new Date("2026-10-01T10:00:00Z"),
+          assigneeJira: "hoangld",
+          points: 30,
+          priority: "High",
+          projectKey: "PROJ",
+        },
+        {
+          jiraKey: "P-104",
+          summary: "Tinh task",
+          status: "Done",
+          statusCategory: "done",
+          statusChangedAt: new Date("2026-10-10T10:00:00Z"),
+          updatedAt: new Date("2026-10-10T10:00:00Z"),
+          createdAt: new Date("2026-10-01T10:00:00Z"),
+          assigneeJira: "tinhvt_mb",
+          points: 40,
+          priority: "High",
+          projectKey: "PROJ",
+        },
+        {
+          jiraKey: "P-105",
+          summary: "Duc task",
+          status: "Done",
+          statusCategory: "done",
+          statusChangedAt: new Date("2026-10-10T10:00:00Z"),
+          updatedAt: new Date("2026-10-10T10:00:00Z"),
+          createdAt: new Date("2026-10-01T10:00:00Z"),
+          assigneeJira: "ducpm2",
+          points: 50,
+          priority: "High",
+          projectKey: "PROJ",
+        },
+        {
+          jiraKey: "P-106",
+          summary: "Binh task",
+          status: "Done",
+          statusCategory: "done",
+          statusChangedAt: new Date("2026-10-10T10:00:00Z"),
+          updatedAt: new Date("2026-10-10T10:00:00Z"),
+          createdAt: new Date("2026-10-01T10:00:00Z"),
+          assigneeJira: "binhht_mb",
+          points: 60,
+          priority: "High",
+          projectKey: "PROJ",
+        },
+        {
+          jiraKey: "P-107",
+          summary: "Hung task",
+          status: "Done",
+          statusCategory: "done",
+          statusChangedAt: new Date("2026-10-10T10:00:00Z"),
+          updatedAt: new Date("2026-10-10T10:00:00Z"),
+          createdAt: new Date("2026-10-01T10:00:00Z"),
+          assigneeJira: "HungKD_CIC",
+          points: 70,
+          priority: "High",
+          projectKey: "PROJ",
+        },
+      ];
+
+      const result = calculateLeaderboard({
+        period,
+        issues: issuesWithExcludedUsers,
+        dbUsers: extendedDbUsers,
+        myAliases: ["alice"],
+        activeProjects: ["PROJ"],
+        selectedProject: "PROJ",
+      });
+
+      // None of the 6 excluded users appear in members
+      const memberUsernames = result.members.map((m) => m.jiraUsername.toLowerCase());
+      expect(memberUsernames).not.toContain("quangtn_mb");
+      expect(memberUsernames).not.toContain("quangtn");
+      expect(memberUsernames).not.toContain("hoangld");
+      expect(memberUsernames).not.toContain("hoangld_mb");
+      expect(memberUsernames).not.toContain("tinhvt");
+      expect(memberUsernames).not.toContain("tinhvt_mb");
+      expect(memberUsernames).not.toContain("ducpm2");
+      expect(memberUsernames).not.toContain("ducpm2_mb");
+      expect(memberUsernames).not.toContain("binhht");
+      expect(memberUsernames).not.toContain("binhht_mb");
+      expect(memberUsernames).not.toContain("hungkd_cic");
+      expect(memberUsernames).not.toContain("hungkd_cic_mb");
+      expect(memberUsernames).not.toContain("hungkd");
+
+      // Total points and top performer only reflect valid members (Alice)
+      expect(result.summary.totalTeamPoints).toBe(5);
+      expect(result.summary.totalTeamTasks).toBe(1);
+      expect(result.summary.activeMembersCount).toBe(1);
+      expect(result.summary.topPerformer?.jiraUsername).toBe("alice");
+      expect(result.summary.topPerformer?.points).toBe(5);
+
+      // Top 1 is Alice, not any of the excluded users
+      expect(result.members[0].jiraUsername).toBe("alice");
+      expect(result.members[0].rank).toBe(1);
+
+      // If currentUser is one of the excluded accounts, myPerformance is null
+      const excludedSelfResult = calculateLeaderboard({
+        period,
+        issues: issuesWithExcludedUsers,
+        dbUsers: extendedDbUsers,
+        myAliases: ["ducpm2"],
+        activeProjects: ["PROJ"],
+        selectedProject: "PROJ",
+      });
+      expect(excludedSelfResult.myPerformance).toBeNull();
     });
   });
 });
