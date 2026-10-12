@@ -403,6 +403,10 @@ export function createIssueResource({
       }
     },
 
+    /** Permanently deletes the issue. Jira refuses (400) while it still has subtasks. */
+    deleteIssue: (key: string) =>
+      request<void>(`/rest/api/2/issue/${encodeURIComponent(key)}`, { method: "DELETE" }),
+
     addComment: (key: string, body: string) =>
       request<JiraComment>(`/rest/api/2/issue/${encodeURIComponent(key)}/comment`, {
         method: "POST",

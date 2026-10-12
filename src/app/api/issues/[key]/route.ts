@@ -1,4 +1,5 @@
 import {
+  handleIssueDeleteRequest,
   handleIssueDetailRequest,
   handleIssueUpdateRequest,
 } from "@/lib/issues/detail-route-service";
@@ -11,4 +12,8 @@ export async function GET(req: Request, ctx: IssueRouteContext) {
 
 export async function PATCH(req: Request, ctx: IssueRouteContext) {
   return handleIssueUpdateRequest(req, ctx);
+}
+
+export async function DELETE(req: Request, ctx: IssueRouteContext) {
+  return handleIssueDeleteRequest(req, ctx);
 }

@@ -6,6 +6,8 @@ import { userJiraAuth } from "@/lib/user-creds";
 import { getCachedIssueView, getIssueView } from "@/lib/issues/live";
 import { refreshJiraIssueCache } from "@/lib/issues/cache";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
+import { audit } from "@/lib/audit";
+import { markIssuesDeleted } from "@/lib/issues/deleted";
 import { getProjectPeopleFields } from "@/lib/jira/people-fields";
 
 export async function handleIssueDetailRequest(req: Request, ctx: { params: Promise<{ key: string }> }) {
@@ -238,4 +240,60 @@ async function syncLocalFixVersion(key: string, add?: string, remove?: string) {
       where: { jiraKey: key, release: { projectKey, version: remove } },
     });
   }
+}
+
+/** Delete the issue in Jira as the signed-in user, then hide it locally. */
+export async function handleIssueDeleteRequest(
+  _req: Request,
+  ctx: { params: Promise<{ key: string }> }
+) {
+  const session = await getSession();
+  if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const { key: rawKey } = await ctx.params;
+  const key = rawKey?.trim().toUpperCase() ?? "";
+  if (!/^[A-Z][A-Z0-9_]*-\d+$/.test(key)) {
+    return NextResponse.json({ error: "Mã task không hợp lệ." }, { status: 400 });
+  }
+
+  // Deleting is destructive, so it only ever runs with the user's own Jira token.
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true },
+  });
+  const auth = userJiraAuth(user);
+  if (!auth) return jiraCredentialsRequired();
+
+  try {
+    await jiraWith(auth).deleteIssue(key);
+  } catch (e) {
+    const status = (e as { status?: number })?.status;
+    // Already gone in Jira: fall through and sync the local cache.
+    if (status !== 404) {
+      if (status === 401 || status === 403) {
+        return NextResponse.json(
+          { error: "Bạn không có quyền xóa task này trên Jira." },
+          { status: 403 }
+        );
+      }
+      if (status === 400) {
+        return NextResponse.json(
+          { error: "Jira không cho xóa task này (ví dụ còn subtask). Hãy xóa subtask trước." },
+          { status: 400 }
+        );
+      }
+      return NextResponse.json(
+        { error: `Không xóa được task trên Jira: ${(e as Error).message}` },
+        { status: 502 }
+      );
+    }
+  }
+
+  await markIssuesDeleted([key]);
+  await audit({
+    actorId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    action: "issue.delete",
+    target: key,
+  });
+  return NextResponse.json({ ok: true, key });
 }

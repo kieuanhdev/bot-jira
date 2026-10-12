@@ -20,6 +20,7 @@ import { CATEGORY_DOT_MAP } from "./lib/board-types";
 import { FLAG_LABEL } from "./lib/quick-panel-utils";
 import { QuickPanelHeader } from "./quick-panel/quick-panel-header";
 import { QuickPanelActions, type QuickPanelActionMessage } from "./quick-panel/quick-panel-actions";
+import { QuickPanelDeleteDialog } from "./quick-panel/quick-panel-delete-dialog";
 import { QuickPanelCloneDialog } from "./quick-panel/quick-panel-clone-dialog";
 import { QuickPanelLinkDialog } from "./quick-panel/quick-panel-link-dialog";
 import { LogWorkDialog } from "@/components/issues/log-work-dialog";
@@ -49,6 +50,9 @@ export function QuickPanel({
   const [creatingBranch, setCreatingBranch] = useState(false);
   const [branchMsg, setBranchMsg] = useState<QuickPanelActionMessage | null>(null);
   const [cloneOpen, setCloneOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [cloning, setCloning] = useState(false);
   const [cloneError, setCloneError] = useState<string | null>(null);
   const [cloneMsg, setCloneMsg] = useState<QuickPanelActionMessage | null>(null);
@@ -252,6 +256,21 @@ export function QuickPanel({
       setTimeout(() => setBranchMsg(null), 4000);
     } finally {
       setCreatingBranch(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api(`/api/issues/${issue.jiraKey}`, { method: "DELETE" });
+      setDeleteOpen(false);
+      await invalidate();
+      onClose();
+    } catch (e) {
+      setDeleteError(getErrorMessage(e, "Không xóa được task."));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -461,6 +480,18 @@ export function QuickPanel({
           />
         )}
 
+        {deleteOpen && (
+          <QuickPanelDeleteDialog
+            jiraKey={issue.jiraKey}
+            summary={summary}
+            open={deleteOpen}
+            deleting={deleting}
+            error={deleteError}
+            onOpenChange={setDeleteOpen}
+            onConfirm={() => void handleDelete()}
+          />
+        )}
+
         {linkOpen && (
           <QuickPanelLinkDialog
             jiraKey={issue.jiraKey}
@@ -558,6 +589,10 @@ export function QuickPanel({
             setLinkError(null);
             setActionMsg(null);
             setLinkOpen(true);
+          }}
+          onDelete={() => {
+            setDeleteError(null);
+            setDeleteOpen(true);
           }}
           onCopyLink={() => void copyToClipboard(jiraUrl ?? "", "Đã sao chép liên kết Jira.")}
           onOpenFull={() => router.push(`/issue/${issue.jiraKey}`)}

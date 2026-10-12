@@ -63,6 +63,7 @@ describe("Jira HTTP transport", () => {
         "createIssue",
         "createIssueLink",
         "createVersion",
+        "deleteIssue",
         "findIssueByBulkMarker",
         "findTransition",
         "getBoard",

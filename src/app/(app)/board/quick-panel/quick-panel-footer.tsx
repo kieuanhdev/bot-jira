@@ -11,6 +11,7 @@ import {
   Link2,
   MoreHorizontal,
   Timer,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +38,7 @@ interface QuickPanelFooterProps {
   onToggleFlag: () => void;
   onLogWork: () => void;
   onLinkIssue: () => void;
+  onDelete: () => void;
   onCopyLink: () => void;
   onOpenFull: () => void;
 }
@@ -60,6 +62,7 @@ export function QuickPanelFooter({
   onToggleFlag,
   onLogWork,
   onLinkIssue,
+  onDelete,
   onCopyLink,
   onOpenFull,
 }: QuickPanelFooterProps) {
@@ -180,6 +183,15 @@ export function QuickPanelFooter({
               </DropdownMenuItem>
             </>
           )}
+
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={onDelete}
+            className="cursor-pointer gap-2 text-xs text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+            Xóa task…
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
