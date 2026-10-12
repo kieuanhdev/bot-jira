@@ -4,6 +4,7 @@ import {
   buildReportQueryParams,
   buildRiskQueryParams,
   extractExportFilename,
+  shouldReplaceReportUrl,
 } from "./report-url-state";
 import type { ReportPeriod } from "@/lib/reports/types";
 
@@ -14,6 +15,18 @@ describe("report-url-state", () => {
     to: "2026-10-31",
     timezone: "Asia/Ho_Chi_Minh",
   };
+
+  it("does not replace a URL that is already pending via push navigation", () => {
+    const memberListUrl = "/reports/projects/CICM?tab=members";
+    const memberDetailUrl = "/reports/projects/CICM?tab=members&member=ngocdv";
+
+    expect(
+      shouldReplaceReportUrl(memberDetailUrl, memberListUrl, memberDetailUrl)
+    ).toBe(false);
+    expect(
+      shouldReplaceReportUrl(memberDetailUrl, memberListUrl, null)
+    ).toBe(true);
+  });
 
   it("builds URL search params for overview tab", () => {
     const params = buildReportUrlSearchParams({

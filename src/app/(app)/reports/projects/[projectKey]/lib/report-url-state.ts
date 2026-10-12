@@ -11,6 +11,14 @@ export interface ReportStateParams {
   activeAssignee: string;
 }
 
+export function shouldReplaceReportUrl(
+  nextUrl: string,
+  currentUrl: string,
+  pendingNavigationUrl: string | null
+): boolean {
+  return nextUrl !== currentUrl && nextUrl !== pendingNavigationUrl;
+}
+
 export function buildReportUrlSearchParams(state: ReportStateParams): URLSearchParams {
   const params = new URLSearchParams();
   const isVersionScope = state.versionId !== "all";

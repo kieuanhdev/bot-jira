@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
@@ -18,12 +18,14 @@ import {
   buildReportQueryParams,
   buildRiskQueryParams,
   extractExportFilename,
+  shouldReplaceReportUrl,
 } from "./report-url-state";
 
 export function useProjectReportController(projectKey: string) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const pendingNavigationUrlRef = useRef<string | null>(null);
 
   const initialPeriod = useMemo(() => {
     return resolveReportPeriod({
@@ -97,7 +99,11 @@ export function useProjectReportController(projectKey: string) {
     const currentQs = searchParams.toString();
     const currentUrl = currentQs ? `${pathname}?${currentQs}` : pathname;
 
-    if (newUrl !== currentUrl) {
+    if (pendingNavigationUrlRef.current === currentUrl) {
+      pendingNavigationUrlRef.current = null;
+    }
+
+    if (shouldReplaceReportUrl(newUrl, currentUrl, pendingNavigationUrlRef.current)) {
       router.replace(newUrl, { scroll: false });
     }
   }, [
@@ -132,7 +138,9 @@ export function useProjectReportController(projectKey: string) {
       activeAssignee,
     });
     const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    const nextUrl = qs ? `${pathname}?${qs}` : pathname;
+    pendingNavigationUrlRef.current = nextUrl;
+    router.push(nextUrl, { scroll: false });
   };
 
   const handleSelectMember = (assignee: string | null) => {
@@ -148,13 +156,15 @@ export function useProjectReportController(projectKey: string) {
       activeAssignee,
     });
     const qs = params.toString();
+    const nextUrl = qs ? `${pathname}?${qs}` : pathname;
+    pendingNavigationUrlRef.current = nextUrl;
     if (assignee) {
-      router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      router.push(nextUrl, { scroll: false });
     } else {
       if (typeof window !== "undefined" && window.history.length > 1) {
         router.back();
       } else {
-        router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+        router.push(nextUrl, { scroll: false });
       }
     }
   };
@@ -195,7 +205,9 @@ export function useProjectReportController(projectKey: string) {
     });
 
     const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    const nextUrl = qs ? `${pathname}?${qs}` : pathname;
+    pendingNavigationUrlRef.current = nextUrl;
+    router.push(nextUrl, { scroll: false });
   };
 
   const handleNavigateToOverview = () => {
@@ -216,7 +228,9 @@ export function useProjectReportController(projectKey: string) {
       activeAssignee: "all",
     });
     const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    const nextUrl = qs ? `${pathname}?${qs}` : pathname;
+    pendingNavigationUrlRef.current = nextUrl;
+    router.push(nextUrl, { scroll: false });
   };
 
   const handleNavigateBack = () => {
