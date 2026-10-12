@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   bulkCreateItemUpdate: vi.fn(),
   bulkCreateItemGroupBy: vi.fn(),
   userFindUnique: vi.fn(),
+  userFindMany: vi.fn(),
   userJiraAuth: vi.fn(),
   notifyUser: vi.fn(),
   audit: vi.fn(),
@@ -36,12 +37,14 @@ vi.mock("@/lib/prisma", () => ({
     },
     user: {
       findUnique: mocks.userFindUnique,
+      findMany: mocks.userFindMany,
     },
   },
 }));
 
 vi.mock("@/lib/user-creds", () => ({
   userJiraAuth: mocks.userJiraAuth,
+  jiraUsernameAliases: (u: string) => [u],
 }));
 
 vi.mock("@/lib/notify", () => ({
@@ -74,6 +77,7 @@ vi.mock("./create-item-executor", () => ({
 import {
   executeBulkCreateOperation,
   notifyCreateResult,
+  notifyBulkCreateAssignees,
 } from "./create-execution";
 
 describe("create-execution", () => {
@@ -322,4 +326,63 @@ describe("create-execution", () => {
       ).resolves.not.toThrow();
     });
   });
+
+  describe("notifyBulkCreateAssignees", () => {
+    it("aggregates multiple tasks assigned to the same user into a single notification", async () => {
+      mocks.bulkCreateItemFindMany.mockResolvedValue([
+        { jiraKey: "EPM-1", requested: { summary: "Task 1", assignee: "bob" } },
+        { jiraKey: "EPM-2", requested: { summary: "Task 2", assignee: "bob" } },
+        { jiraKey: "EPM-3", requested: { summary: "Task 3", assignee: "bob" } },
+      ]);
+      mocks.userFindUnique.mockResolvedValue({ displayName: "Admin User", jiraUsername: "admin" });
+      mocks.userFindMany.mockResolvedValue([{ id: "bob-user-id" }]);
+
+      await notifyBulkCreateAssignees({ requestedBy: "admin-user-id", id: "op-1" }, "EPM");
+
+      expect(mocks.notifyUser).toHaveBeenCalledTimes(1);
+      expect(mocks.notifyUser).toHaveBeenCalledWith(
+        "bob-user-id",
+        expect.objectContaining({
+          type: "issue",
+          title: "Bạn được gán 3 task mới (EPM)",
+          body: expect.stringContaining("Admin User đã tạo và gán 3 task cho bạn: EPM-1, EPM-2, EPM-3."),
+          link: "/bulk?operation=op-1",
+        })
+      );
+    });
+
+    it("sends single-task format when only 1 task is assigned to a user", async () => {
+      mocks.bulkCreateItemFindMany.mockResolvedValue([
+        { jiraKey: "EPM-10", requested: { summary: "Single Task", assignee: "charlie" } },
+      ]);
+      mocks.userFindUnique.mockResolvedValue({ displayName: "Admin User" });
+      mocks.userFindMany.mockResolvedValue([{ id: "charlie-user-id" }]);
+
+      await notifyBulkCreateAssignees({ requestedBy: "admin-user-id", id: "op-2" }, "EPM");
+
+      expect(mocks.notifyUser).toHaveBeenCalledTimes(1);
+      expect(mocks.notifyUser).toHaveBeenCalledWith(
+        "charlie-user-id",
+        expect.objectContaining({
+          type: "issue",
+          title: "Bạn được gán task EPM-10",
+          body: expect.stringContaining('Admin User đã tạo và gán task "Single Task" cho bạn.'),
+          link: "/issue/EPM-10",
+        })
+      );
+    });
+
+    it("skips notification when task is assigned to the creator themselves", async () => {
+      mocks.bulkCreateItemFindMany.mockResolvedValue([
+        { jiraKey: "EPM-20", requested: { summary: "Self Task", assignee: "admin" } },
+      ]);
+      mocks.userFindUnique.mockResolvedValue({ displayName: "Admin", jiraUsername: "admin" });
+      mocks.userFindMany.mockResolvedValue([{ id: "admin-user-id" }]);
+
+      await notifyBulkCreateAssignees({ requestedBy: "admin-user-id", id: "op-3" }, "EPM");
+
+      expect(mocks.notifyUser).not.toHaveBeenCalled();
+    });
+  });
 });
+

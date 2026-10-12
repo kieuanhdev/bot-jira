@@ -454,8 +454,13 @@ export async function executeBulkAction(
     }
 
     // Update the local cache after a successful mutation so the board reflects
-    // the change immediately. Best-effort: a refresh failure is not fatal.
-    await refreshJiraIssueCache(ctx.jira, key);
+    // the change immediately. When the action is "assign", individual assignment
+    // notifications are skipped so they can be aggregated into a single summary.
+    if (action.kind === "assign") {
+      await refreshJiraIssueCache(ctx.jira, key, { skipAssigneeNotify: true });
+    } else {
+      await refreshJiraIssueCache(ctx.jira, key);
+    }
 
     return { status: "succeeded" };
   } catch (e) {

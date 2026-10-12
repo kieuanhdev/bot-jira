@@ -88,7 +88,7 @@ export function createIssueCacheRefreshService(deps: RefreshIssueCacheDependenci
   return async function refreshIssueCache(
     client: { getIssue: (key: string, fields?: string) => Promise<JiraIssue> },
     key: string,
-    options: { authorName?: string | null; excludeUserId?: string | null } = {}
+    options: { authorName?: string | null; excludeUserId?: string | null; skipAssigneeNotify?: boolean } = {}
   ): Promise<boolean> {
     try {
       const previous = await deps.findIssueByKey(key);

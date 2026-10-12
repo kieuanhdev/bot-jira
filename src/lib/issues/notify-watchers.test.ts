@@ -118,3 +118,61 @@ describe("watched status notifications", () => {
     expect(mocks.notify).not.toHaveBeenCalled();
   });
 });
+
+describe("task assignment notifications", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.watchers.mockResolvedValue([{ userId: "watcher" }]);
+    mocks.author.mockResolvedValue({ id: "actor" });
+    mocks.users.mockResolvedValue([{ id: "new-assignee" }]);
+    mocks.notify.mockResolvedValue({ id: "notification" });
+  });
+
+  it("notifies the new assignee when a task is assigned to them", async () => {
+    const prev = issue({ assigneeJira: "alice" });
+    const curr = issue({ assigneeJira: "bob" });
+
+    const count = await notifyWatchersOfIssueChange(prev, curr, { authorName: "alice" });
+
+    expect(count).toBe(2);
+    expect(mocks.notify).toHaveBeenCalledWith("new-assignee", expect.objectContaining({
+      type: "issue",
+      title: "Bạn được gán task EPM-42",
+      body: expect.stringContaining('alice đã gán task "A task" cho bạn.'),
+      link: "/issue/EPM-42",
+    }));
+    expect(mocks.notify).toHaveBeenCalledWith("watcher", expect.objectContaining({
+      type: "issue",
+      title: "Task EPM-42 vừa được cập nhật",
+    }));
+  });
+
+  it("does not send duplicate notification if new assignee is also a watcher", async () => {
+    mocks.watchers.mockResolvedValue([{ userId: "new-assignee" }, { userId: "watcher" }]);
+    const prev = issue({ assigneeJira: "alice" });
+    const curr = issue({ assigneeJira: "bob" });
+
+    const count = await notifyWatchersOfIssueChange(prev, curr, { authorName: "alice" });
+
+    expect(count).toBe(2);
+    expect(mocks.notify).toHaveBeenCalledWith("new-assignee", expect.objectContaining({
+      title: "Bạn được gán task EPM-42",
+    }));
+    expect(mocks.notify).not.toHaveBeenCalledWith("new-assignee", expect.objectContaining({
+      title: "Task EPM-42 vừa được cập nhật",
+    }));
+  });
+
+  it("does not notify assignee when they assigned the task to themselves", async () => {
+    mocks.author.mockResolvedValue({ id: "new-assignee" });
+    const prev = issue({ assigneeJira: "alice" });
+    const curr = issue({ assigneeJira: "bob" });
+
+    const count = await notifyWatchersOfIssueChange(prev, curr, { excludeUserId: "new-assignee" });
+
+    expect(count).toBe(1);
+    expect(mocks.notify).not.toHaveBeenCalledWith("new-assignee", expect.anything());
+    expect(mocks.notify).toHaveBeenCalledWith("watcher", expect.anything());
+  });
+});
+

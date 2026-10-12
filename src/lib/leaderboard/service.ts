@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { resolveUserProjectScope } from "@/lib/reports/scope";
+import { listActiveProjects } from "@/lib/jira/project-catalog";
 import { jiraUsernameAliases, userJiraUsername } from "@/lib/user-creds";
 import type { GetLeaderboardOptions, LeaderboardResponse } from "./contracts";
 import { computePeriodBounds } from "./period";
@@ -7,12 +7,14 @@ import { calculateLeaderboard } from "./calculator";
 
 export type { GetLeaderboardOptions };
 
+const EXCLUDED_MOBILE_PROJECTS = new Set(["EPB"]);
+
 export async function getLeaderboardData(
   options: GetLeaderboardOptions
 ): Promise<LeaderboardResponse> {
   const { currentUserId, timeframe = "month", year, month, quarter, project } = options;
 
-  // 1. Resolve user & mobile project scope
+  // 1. Resolve user identity and the shared mobile-team project scope
   const currentUser = await prisma.user.findUnique({
     where: { id: currentUserId },
     select: { id: true, jiraUsername: true, jiraUserEnc: true },
@@ -21,8 +23,11 @@ export async function getLeaderboardData(
   const myUsername = currentUser ? userJiraUsername(currentUser) : null;
   const myAliases = jiraUsernameAliases(myUsername).map((a) => a.toLowerCase());
 
-  // Restricted to the projects the user picked on the Board (all active ones if none picked)
-  const activeProjects = (await resolveUserProjectScope(currentUserId)).allowedProjects;
+  // The leaderboard represents the whole mobile team, so it must not inherit
+  // each user's personal Board project preferences. EPB is not a mobile project.
+  const activeProjects = (await listActiveProjects())
+    .map(({ key }) => key.trim().toUpperCase())
+    .filter((key) => !EXCLUDED_MOBILE_PROJECTS.has(key));
   const cleanProject = project ? project.trim().toUpperCase() : null;
   const projectsInScope =
     cleanProject && activeProjects.includes(cleanProject) ? [cleanProject] : activeProjects;

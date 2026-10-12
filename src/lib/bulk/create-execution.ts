@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { jiraWith } from "@/lib/jira/client";
 import { audit } from "@/lib/audit";
-import { userJiraAuth } from "@/lib/user-creds";
+import { userJiraAuth, jiraUsernameAliases } from "@/lib/user-creds";
 import { type BulkCreateProjectMetadata } from "./create-types";
 import {
   recordExecutionMetrics,
@@ -48,6 +48,94 @@ export async function notifyCreateResult(
     });
   } catch {
     // Ignore notification errors
+  }
+}
+
+/**
+ * Notify assignees about newly created tasks assigned to them.
+ * When multiple tasks are assigned to the same user in a bulk operation,
+ * they are aggregated into a single notification to avoid spamming the user.
+ */
+export async function notifyBulkCreateAssignees(
+  op: { requestedBy: string; id: string },
+  projectKey: string
+): Promise<void> {
+  try {
+    const succeededItems = await prisma.bulkCreateItem.findMany({
+      where: { operationId: op.id, status: "succeeded", jiraKey: { not: null } },
+      select: { jiraKey: true, requested: true },
+      orderBy: { rowIndex: "asc" },
+    });
+
+    if (succeededItems.length === 0) return;
+
+    // Group created tasks by assignee username
+    type TaskSummary = { jiraKey: string; summary: string };
+    const tasksByAssignee = new Map<string, TaskSummary[]>();
+
+    for (const item of succeededItems) {
+      if (!item.jiraKey) continue;
+      const req = item.requested as { summary?: string; assignee?: string | null } | null;
+      const rawAssignee = req?.assignee?.trim();
+      if (!rawAssignee) continue;
+      const list = tasksByAssignee.get(rawAssignee) ?? [];
+      list.push({
+        jiraKey: item.jiraKey,
+        summary: req?.summary?.trim() || item.jiraKey,
+      });
+      tasksByAssignee.set(rawAssignee, list);
+    }
+
+    if (tasksByAssignee.size === 0) return;
+
+    // Lookup creator's display name or username
+    const creator = await prisma.user.findUnique({
+      where: { id: op.requestedBy },
+      select: { displayName: true, jiraUsername: true },
+    });
+    const creatorName = creator?.displayName || creator?.jiraUsername || "Hệ thống";
+
+    const { notifyUser } = await import("@/lib/notify");
+
+    for (const [assigneeJira, tasks] of tasksByAssignee.entries()) {
+      const users = await prisma.user.findMany({
+        where: { jiraUsername: { in: jiraUsernameAliases(assigneeJira) } },
+        select: { id: true },
+      });
+
+      for (const u of users) {
+        if (u.id === op.requestedBy) continue; // Skip self-assignment in bulk create
+
+        if (tasks.length === 1) {
+          await notifyUser(u.id, {
+            type: "issue",
+            title: `Bạn được gán task ${tasks[0].jiraKey}`,
+            body: `${creatorName} đã tạo và gán task "${tasks[0].summary}" cho bạn.`,
+            link: `/issue/${tasks[0].jiraKey}`,
+            severity: "info",
+            eventKey: `bulk-create-assign:${op.id}:${assigneeJira}:${tasks[0].jiraKey}`,
+          }).catch(() => null);
+        } else {
+          const keysStr = tasks.map((t) => t.jiraKey).join(", ");
+          const preview = tasks
+            .slice(0, 3)
+            .map((t) => `${t.jiraKey} ("${t.summary}")`)
+            .join("; ");
+          const moreStr = tasks.length > 3 ? ` và ${tasks.length - 3} task khác.` : ".";
+
+          await notifyUser(u.id, {
+            type: "issue",
+            title: `Bạn được gán ${tasks.length} task mới (${projectKey})`,
+            body: `${creatorName} đã tạo và gán ${tasks.length} task cho bạn: ${keysStr}.\nCác task gồm: ${preview}${moreStr}`,
+            link: `/bulk?operation=${op.id}`,
+            severity: "info",
+            eventKey: `bulk-create-assign:${op.id}:${assigneeJira}:batch`,
+          }).catch(() => null);
+        }
+      }
+    }
+  } catch {
+    // Ignore notification errors so bulk operation completion is never failed
   }
 }
 
@@ -259,6 +347,9 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
 
   if (terminal) {
     await notifyCreateResult(op, finalState, succeeded, failed + blockedByParent);
+    if (succeeded > 0) {
+      await notifyBulkCreateAssignees(op, projectKey);
+    }
     await audit({
       actorId: op.requestedBy,
       action: `bulk.create.${finalState}`,

@@ -59,7 +59,11 @@ export function watchedIssueChangedFields(
 export async function notifyWatchersOfIssueChange(
   previous: WatchedIssueSnapshot | null,
   current: WatchedIssueSnapshot,
-  options: { authorName?: string | null; excludeUserId?: string | null } = {}
+  options: {
+    authorName?: string | null;
+    excludeUserId?: string | null;
+    skipAssigneeNotify?: boolean;
+  } = {}
 ): Promise<number> {
   if (!previous) return 0; // Initial cache population is a baseline, not an event.
 
@@ -87,9 +91,48 @@ export async function notifyWatchersOfIssueChange(
     : `Đã thay đổi: ${changedFields.join(", ")}.`;
 
   let notified = 0;
+  const notifiedAssigneeUserIds = new Set<string>();
+
+  const assigneeChanged = Boolean(
+    current.assigneeJira && current.assigneeJira !== previous.assigneeJira
+  );
+
+  if (assigneeChanged && current.assigneeJira && !options.skipAssigneeNotify) {
+    const assigneeUsers = await prisma.user.findMany({
+      where: { jiraUsername: { in: jiraUsernameAliases(current.assigneeJira) } },
+      select: { id: true },
+    }).catch(() => []);
+
+    const assignEventKey = `jira-assign:${current.jiraKey}:${current.assigneeJira}:${timestamp}`;
+    const assignBody = options.authorName
+      ? `${options.authorName} đã gán task "${current.summary}" cho bạn.${statusChanged ? ` Trạng thái: ${previous.status || "—"} → ${current.status || "—"}.` : ""}`
+      : `Bạn vừa được phân công phụ trách task "${current.summary}".${statusChanged ? ` Trạng thái: ${previous.status || "—"} → ${current.status || "—"}.` : ""}`;
+
+    for (const assigneeUser of assigneeUsers) {
+      if (assigneeUser.id === authorUserId) continue;
+      try {
+        const result = await notifyUser(assigneeUser.id, {
+          type: "issue",
+          title: `Bạn được gán task ${current.jiraKey}`,
+          body: assignBody,
+          link: `/issue/${current.jiraKey}`,
+          severity: "info",
+          eventKey: assignEventKey,
+        });
+        if (result) {
+          notified++;
+          notifiedAssigneeUserIds.add(assigneeUser.id);
+        }
+      } catch {
+        /* one user's delivery failure must not block others */
+      }
+    }
+  }
+
   await Promise.all(
     watchers.map(async (watcher) => {
       if (watcher.userId === authorUserId) return;
+      if (notifiedAssigneeUserIds.has(watcher.userId)) return;
       try {
         const result = await notifyUser(watcher.userId, {
           type: statusChanged ? "transition" : "issue",

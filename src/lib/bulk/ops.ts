@@ -575,5 +575,74 @@ export async function executeBulkOperation(operationId: string): Promise<void> {
   const summary = await finalizeBulkOperation(operationId);
   if (summary?.terminal) {
     await notifyResult(op, summary.state, summary.succeeded, summary.failed, summary.skipped);
+    if (summary.succeeded > 0) {
+      await notifyBulkAssigneeIfApplicable(op);
+    }
   }
 }
+
+/**
+ * Notify target assignee when a bulk assign operation completes.
+ * Aggregates all assigned tasks into a single notification.
+ */
+export async function notifyBulkAssigneeIfApplicable(op: {
+  id: string;
+  requestedBy: string;
+  payload: unknown;
+}): Promise<void> {
+  try {
+    const payload = op.payload as { action?: { kind?: string; value?: string } } | null;
+    if (payload?.action?.kind !== "assign" || !payload.action.value) return;
+    const targetAssignee = payload.action.value.trim();
+
+    const succeededItems = await prisma.bulkOperationItem.findMany({
+      where: { operationId: op.id, status: "succeeded" },
+      select: { jiraKey: true },
+      orderBy: { jiraKey: "asc" },
+    });
+
+    if (succeededItems.length === 0) return;
+
+    const { jiraUsernameAliases } = await import("@/lib/user-creds");
+    const { notifyUser } = await import("@/lib/notify");
+
+    const users = await prisma.user.findMany({
+      where: { jiraUsername: { in: jiraUsernameAliases(targetAssignee) } },
+      select: { id: true },
+    });
+
+    const creator = await prisma.user.findUnique({
+      where: { id: op.requestedBy },
+      select: { displayName: true, jiraUsername: true },
+    });
+    const creatorName = creator?.displayName || creator?.jiraUsername || "Hệ thống";
+
+    for (const u of users) {
+      if (u.id === op.requestedBy) continue; // Skip self-assignment
+
+      if (succeededItems.length === 1) {
+        await notifyUser(u.id, {
+          type: "issue",
+          title: `Bạn được gán task ${succeededItems[0].jiraKey}`,
+          body: `${creatorName} đã gán task ${succeededItems[0].jiraKey} cho bạn qua thao tác hàng loạt.`,
+          link: `/issue/${succeededItems[0].jiraKey}`,
+          severity: "info",
+          eventKey: `bulk-assign:${op.id}:${targetAssignee}:${succeededItems[0].jiraKey}`,
+        }).catch(() => null);
+      } else {
+        const keysStr = succeededItems.map((item) => item.jiraKey).join(", ");
+        await notifyUser(u.id, {
+          type: "issue",
+          title: `Bạn được gán ${succeededItems.length} task qua thao tác hàng loạt`,
+          body: `${creatorName} đã gán ${succeededItems.length} task cho bạn: ${keysStr}.`,
+          link: `/bulk?operation=${op.id}`,
+          severity: "info",
+          eventKey: `bulk-assign:${op.id}:${targetAssignee}:batch`,
+        }).catch(() => null);
+      }
+    }
+  } catch {
+    /* ignore notification errors */
+  }
+}
+
