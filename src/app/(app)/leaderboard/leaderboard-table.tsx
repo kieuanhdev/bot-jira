@@ -17,12 +17,14 @@ import type { LeaderboardMember } from "@/lib/leaderboard/types";
 import { RankBadge, TierIcon } from "./leaderboard-tier-icon";
 import { JiraAvatar } from "@/components/jira-avatar";
 
+type LeaderboardSortBy = "completed" | "total" | "tasks";
+
 interface LeaderboardTableProps {
   filteredMembers: LeaderboardMember[];
   searchMember: string;
   onSearchMemberChange: (value: string) => void;
-  sortBy: "completed" | "total" | "tasks";
-  onSortByChange: (sortBy: "completed" | "total" | "tasks") => void;
+  sortBy: LeaderboardSortBy;
+  onSortByChange: (sortBy: LeaderboardSortBy) => void;
   isLoading: boolean;
   onSelectMember: (member: LeaderboardMember) => void;
 }
@@ -62,7 +64,7 @@ export function LeaderboardTable({
 
           {/* Sort Dropdown */}
           <div className="w-48">
-            <Select value={sortBy} onValueChange={(val: "completed" | "total" | "tasks") => onSortByChange(val)}>
+            <Select value={sortBy} onValueChange={(val) => onSortByChange(val as LeaderboardSortBy)}>
               <SelectTrigger className="h-9 text-xs">
                 <SelectValue placeholder="Sắp xếp theo" />
               </SelectTrigger>
