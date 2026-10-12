@@ -7,6 +7,7 @@ import { buildQueueDefinitions } from "./job-names";
 import { runAiScore } from "./workers/ai-score";
 import { runBulkOperation } from "./workers/bulk-op";
 import { runCheckBranches } from "./workers/check-branches";
+import { runSyncDevStatus } from "./workers/sync-dev-status";
 import { runDeliverNotifications } from "./workers/deliver-notifications";
 import { runDetectPeopleFields } from "./workers/detect-people-fields";
 import { runHealthAlert } from "./workers/health-alert";
@@ -131,6 +132,7 @@ export async function registerWorkers(
   await boss.work("poll-watched-issues", { pollingIntervalSeconds: 2 },
     async () => recordRun("poll-watched-issues", runPollWatchedIssues));
   await boss.work("check-branches", async () => recordRun("check-branches", runCheckBranches));
+  await boss.work("sync-dev-status", async () => recordRun("sync-dev-status", runSyncDevStatus));
   await boss.work("parse-comment-branches", async () => recordRun("parse-comment-branches", runParseCommentBranches));
   await boss.work("poll-pr-comments", async (jobs) => {
     const job = jobs[0];

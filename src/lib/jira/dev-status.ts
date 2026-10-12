@@ -109,9 +109,20 @@ export async function fetchJiraDevStatusDetail(
         headers,
         signal: controller.signal,
       });
-      if (!res.ok) return null;
-      return await res.json();
-    } catch {
+      if (!res.ok) {
+        logDevStatus("detail request failed", { path: path.replace(/^.*issueId=/, ""), status: res.status });
+        return null;
+      }
+      const json = await res.json();
+      if (json && Array.isArray(json.errors) && json.errors.length > 0) {
+        logDevStatus("detail response has errors", {
+          path: path.replace(/^.*issueId=/, ""),
+          errors: JSON.stringify(json.errors).slice(0, 500),
+        });
+      }
+      return json;
+    } catch (err) {
+      logDevStatus("detail request threw", { path: path.replace(/^.*issueId=/, ""), error: (err as Error).message });
       return null;
     } finally {
       clearTimeout(timer);
@@ -176,6 +187,57 @@ export async function fetchJiraDevStatusDetail(
   return { branches, pullRequests, repositories };
 }
 
+function logDevStatus(message: string, extra: Record<string, unknown>): void {
+  console.warn(JSON.stringify({ level: "warn", job: "sync-dev-status", message, ...extra }));
+}
+
+/**
+ * Cheap pre-check: how many branches / PRs / repositories Jira links to the issue.
+ * Returns null when the summary cannot be read (caller should fall back to a full sync).
+ */
+export async function fetchJiraDevStatusSummary(
+  issueId: string,
+  auth: JiraAuth,
+  timeoutMs: number = 10000
+): Promise<{ branches: number; pullRequests: number; repositories: number } | null> {
+  const base = env.jiraBaseUrl.replace(/\/$/, "");
+  const authHeader =
+    auth.authMode === "basic"
+      ? `Basic ${Buffer.from(`${auth.user}:${auth.token}`).toString("base64")}`
+      : `Bearer ${auth.token}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(
+      `${base}/rest/dev-status/1.0/issue/summary?issueId=${encodeURIComponent(issueId)}`,
+      { headers: { Accept: "application/json", Authorization: authHeader }, signal: controller.signal }
+    );
+    if (!res.ok) {
+      logDevStatus("summary request failed", { issueId, status: res.status });
+      return null;
+    }
+    const body = (await res.json()) as {
+      summary?: Record<string, { overall?: { count?: number } } | undefined>;
+    };
+    if (!body?.summary) {
+      logDevStatus("summary has no 'summary' field", { issueId, keys: Object.keys(body ?? {}) });
+      return null;
+    }
+    logDevStatus("summary", { issueId, raw: JSON.stringify(body.summary).slice(0, 600) });
+    const count = (k: string) => Number(body.summary?.[k]?.overall?.count ?? 0) || 0;
+    return {
+      branches: count("branch"),
+      pullRequests: count("pullrequest"),
+      repositories: count("repository"),
+    };
+  } catch (err) {
+    logDevStatus("summary request threw", { issueId, error: (err as Error).message });
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export type SyncedBranchResult = {
   repo: string;
   branch: string;
@@ -202,8 +264,9 @@ function shouldSkipDevStatusLink(
 
 export async function syncJiraDevStatusForIssue(
   jiraKey: string,
-  auth?: JiraAuth
-): Promise<{ ok: boolean; syncedBranches: SyncedBranchResult[]; error?: string }> {
+  auth?: JiraAuth,
+  options: { skipIfEmpty?: boolean } = {}
+): Promise<{ ok: boolean; syncedBranches: SyncedBranchResult[]; skipped?: boolean; error?: string }> {
   try {
     const effectiveAuth = auth || (await getSystemJiraAuth());
     if (!effectiveAuth) {
@@ -225,6 +288,14 @@ export async function syncJiraDevStatusForIssue(
       return { ok: false, syncedBranches: [], error: `Không tìm thấy ID của task ${jiraKey}` };
     }
 
+    // Background sync: skip the three detail calls when Jira links nothing to this issue.
+    if (options.skipIfEmpty) {
+      const summary = await fetchJiraDevStatusSummary(issueId, effectiveAuth);
+      if (summary && summary.branches + summary.pullRequests + summary.repositories === 0) {
+        return { ok: true, syncedBranches: [], skipped: true };
+      }
+    }
+
     // Ensure issue exists in IssueCache so foreign key is satisfied
     await prisma.issueCache.upsert({
       where: { jiraKey },
@@ -244,6 +315,15 @@ export async function syncJiraDevStatusForIssue(
     });
 
     const devStatus = await fetchJiraDevStatusDetail(issueId, effectiveAuth);
+    if (options.skipIfEmpty) {
+      logDevStatus("detail fetched", {
+        jiraKey,
+        issueId,
+        pullRequests: devStatus.pullRequests.length,
+        branches: devStatus.branches.length,
+        repositories: devStatus.repositories?.length ?? 0,
+      });
+    }
     const syncedBranches: SyncedBranchResult[] = [];
     const now = new Date();
 

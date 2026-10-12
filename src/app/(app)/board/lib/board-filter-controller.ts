@@ -130,6 +130,8 @@ interface BoardFilterControllerOptions {
   selectedProject: string;
   myName: string | null;
   canUseTeamMode: boolean;
+  /** False while `selectedProject` is a fallback rather than the user's pick. */
+  persistProject?: boolean;
   replaceUrl: (url: string) => void;
 }
 
@@ -138,6 +140,7 @@ export function useBoardFilterController({
   selectedProject,
   myName,
   canUseTeamMode,
+  persistProject = true,
   replaceUrl,
 }: BoardFilterControllerOptions) {
   const urlProject = searchParams?.get("project")?.trim().toUpperCase() || "";
@@ -183,8 +186,8 @@ export function useBoardFilterController({
   }
 
   useEffect(() => {
-    if (selectedProject) saveStoredProject(selectedProject);
-  }, [selectedProject]);
+    if (selectedProject && persistProject) saveStoredProject(selectedProject);
+  }, [selectedProject, persistProject]);
 
   const teamScopeAppliedRef = useRef("");
   useEffect(() => {

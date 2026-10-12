@@ -23,7 +23,8 @@ import {
   saveStoredSortMode,
   saveStoredViewMode,
 } from "./lib/board-storage";
-import { Search } from "lucide-react";
+import { AlertCircle, RefreshCw, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { BoardStatsLine } from "./board-summary-cards";
 import { BoardSkeleton } from "./board-column";
@@ -101,10 +102,15 @@ export function BoardClient() {
   const jiraBaseUrl = meStatus?.jiraBaseUrl ?? "";
   const canUseTeamMode = Boolean(meStatus?.canBoardTeam);
 
-  const { data: prefs } = useQuery({
+  // Keep the default retry: a single failed request here used to leave the board on the
+  // "no project selected" screen until the page was remounted.
+  const {
+    data: prefs,
+    isError: prefsError,
+    refetch: refetchPrefs,
+  } = useQuery({
     queryKey: meKeys.prefs,
     queryFn: () => api<{ projects: string[]; available: string[] }>("/api/me/preferences"),
-    retry: 0,
   });
   const [showPicker, setShowPicker] = useState(false);
   const [pickerSelection, setPickerSelection] = useState<string[] | null>(null);
@@ -247,6 +253,8 @@ export function BoardClient() {
     selectedProject,
     myName,
     canUseTeamMode,
+    // Only remember the user's own pick, not the first-project fallback used while it's invalid.
+    persistProject: selectedProject === project,
     replaceUrl: replaceBoardUrl,
   });
   const {
@@ -295,7 +303,7 @@ export function BoardClient() {
   const width = useBoardWidth();
   const effectiveView: ViewMode = width === "narrow" ? "list" : view;
 
-  const { data, isLoading, isFetching } = useIssues(boardFilters, {
+  const { data, isLoading, isFetching, isError: issuesError, refetch: refetchIssues } = useIssues(boardFilters, {
     enabled: boardQueriesEnabled,
   });
 
@@ -575,6 +583,29 @@ export function BoardClient() {
     onOpenQuickPanel: (issue) => setQuickPanel(issue),
   });
 
+  if (!prefs) {
+    return prefsError ? (
+      <EmptyState
+        icon={AlertCircle}
+        title="Không tải được danh sách dự án"
+        hint="Kết nối tới máy chủ bị gián đoạn. Hãy thử tải lại."
+        action={
+          <Button size="sm" variant="outline" onClick={() => void refetchPrefs()}>
+            <RefreshCw className="size-3.5" aria-hidden="true" />
+            Thử lại
+          </Button>
+        }
+        className="m-4"
+      />
+    ) : (
+      <div className="flex h-full flex-col gap-3" aria-busy="true" aria-label="Đang tải">
+        <Skeleton className="h-9 w-full max-w-xl" />
+        <Skeleton className="h-9 w-full" />
+        <BoardSkeleton columnCount={5} />
+      </div>
+    );
+  }
+
   if (effectivePreferred.length === 0) {
     return (
       <BoardNoProjectsState
@@ -723,6 +754,19 @@ export function BoardClient() {
 
       {isLoading || isLoadingStatuses ? (
         <BoardSkeleton columnCount={columns.length || 5} />
+      ) : issuesError && !issueData ? (
+        <EmptyState
+          icon={AlertCircle}
+          title={`Không tải được task của ${selectedProject}`}
+          hint="Yêu cầu tới máy chủ bị lỗi. Hãy thử tải lại."
+          action={
+            <Button size="sm" variant="outline" onClick={() => void refetchIssues()}>
+              <RefreshCw className="size-3.5" aria-hidden="true" />
+              Thử lại
+            </Button>
+          }
+          className="flex-1"
+        />
       ) : issues.length === 0 ? (
         <EmptyState
           icon={Search}

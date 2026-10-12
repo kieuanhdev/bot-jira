@@ -16,6 +16,7 @@ export function buildScheduleDefinitions(pollIntervalMs: number): ScheduleDefini
   return [
     { name: "poll-jira-dispatch", cron: pollCron(pollIntervalMs), options: { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 2, retryDelay: 5 } },
     { name: "check-branches", cron: "*/5 * * * *", options: { singletonSeconds: 240, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 } },
+    { name: "sync-dev-status", cron: "*/5 * * * *", options: { singletonSeconds: 240, expireInSeconds: 300, retryLimit: 1, retryDelay: 30 } },
     { name: "parse-comment-branches", cron: "*/5 * * * *", options: { singletonSeconds: 240, expireInSeconds: 120, retryLimit: 2, retryDelay: 30 } },
     // This scan covers 80+ repositories and usually takes 10–15 minutes.
     { name: "poll-pr-comments", cron: "*/15 * * * *", options: { singletonSeconds: 840, expireInSeconds: 900, retryLimit: 1, retryDelay: 30 } },

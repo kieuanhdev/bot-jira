@@ -14,6 +14,7 @@ describe("queue registry contract", () => {
       { name: "poll-watched-issues", createOptions: { policy: "singleton" }, updateOptions: { notify: true, expireInSeconds: 30 } },
       { name: "refresh-board-membership", updateOptions: { notify: true, expireInSeconds: 180 } },
       { name: "check-branches", updateOptions: { notify: true, expireInSeconds: 300 } },
+      { name: "sync-dev-status", updateOptions: { notify: true, expireInSeconds: 300 } },
       { name: "parse-comment-branches", updateOptions: { notify: true, expireInSeconds: 120 } },
       { name: "poll-pr-comments", updateOptions: { notify: true, expireInSeconds: 180 } },
       { name: "ai-score", updateOptions: { notify: true, expireInSeconds: 300 } },
@@ -26,7 +27,7 @@ describe("queue registry contract", () => {
       { name: "capture-project-report-snapshots", updateOptions: { notify: true, expireInSeconds: 300 } },
       { name: "detect-people-fields", updateOptions: { notify: true, expireInSeconds: 300 } },
     ]);
-    expect(JOB_NAMES).toHaveLength(17);
+    expect(JOB_NAMES).toHaveLength(18);
   });
 });
 
@@ -35,6 +36,7 @@ describe("queue schedule contract", () => {
     expect(buildScheduleDefinitions(5 * 60_000)).toEqual([
       { name: "poll-jira-dispatch", cron: "*/5 * * * *", options: { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 2, retryDelay: 5 } },
       { name: "check-branches", cron: "*/5 * * * *", options: { singletonSeconds: 240, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 } },
+      { name: "sync-dev-status", cron: "*/5 * * * *", options: { singletonSeconds: 240, expireInSeconds: 300, retryLimit: 1, retryDelay: 30 } },
       { name: "parse-comment-branches", cron: "*/5 * * * *", options: { singletonSeconds: 240, expireInSeconds: 120, retryLimit: 2, retryDelay: 30 } },
       { name: "poll-pr-comments", cron: "*/15 * * * *", options: { singletonSeconds: 840, expireInSeconds: 900, retryLimit: 1, retryDelay: 30 } },
       { name: "ai-score", cron: "*/10 * * * *", options: { singletonSeconds: 540, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 } },
@@ -62,7 +64,7 @@ describe("queue schedule contract", () => {
     await registerSchedules(boss, 5 * 60_000);
 
     expect(boss.unschedule).toHaveBeenCalledWith("poll-jira");
-    expect(boss.schedule).toHaveBeenCalledTimes(11);
+    expect(boss.schedule).toHaveBeenCalledTimes(12);
     expect(boss.schedule).toHaveBeenNthCalledWith(
       1,
       "poll-jira-dispatch",
