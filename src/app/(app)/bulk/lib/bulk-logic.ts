@@ -11,6 +11,7 @@ import type {
   ProjectFieldOption,
 } from "./bulk-types";
 import { categoryOf, previewBucket } from "./bulk-utils";
+import type { PeopleState } from "./use-bulk-field-state";
 
 export type OperationKind = "update-fields" | "transition" | "log-work";
 export type SelectionMode = "pick" | "filter";
@@ -319,6 +320,7 @@ export interface BulkActionInput {
   fixVersions: string[];
   clearEpic: boolean;
   epic: string;
+  people: PeopleState;
 }
 
 /** The bulk action described by the form, or null while the form is incomplete or invalid. */
@@ -348,6 +350,7 @@ export function buildBulkAction({
   fixVersions,
   clearEpic,
   epic,
+  people,
 }: BulkActionInput): BulkAction | null {
   if (!filterProject) return null;
 
@@ -423,6 +426,13 @@ export function buildBulkAction({
       if (!epic.trim()) return null;
       value.epic = epic.trim().toUpperCase();
     }
+  }
+
+  for (const role of ["reporter", "approver", "tester"] as const) {
+    if (!enabledFields.has(role)) continue;
+    const { value: name, clear } = people[role];
+    if (!clear && !name.trim()) return null;
+    value[role] = clear ? null : name.trim();
   }
 
   return Object.keys(value).length > 0 ? { kind: "update-fields", value } : null;

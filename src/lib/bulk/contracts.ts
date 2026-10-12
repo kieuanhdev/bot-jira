@@ -12,6 +12,9 @@ export type BulkFieldValues = {
   dueDate?: string | null;
   fixVersions?: string[];
   epic?: string | null;
+  reporter?: string | null;
+  approver?: string | null;
+  tester?: string | null;
 };
 
 export type BranchParams = {

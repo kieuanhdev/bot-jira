@@ -6,6 +6,7 @@ import { extractEpicKey } from "@/lib/issues/epic";
 import { userJiraAuth, userBitbucketCreds } from "@/lib/user-creds";
 import { renderBranchName } from "./branch-name";
 import { expandDependencies } from "@/lib/issues/dependencies";
+import { getProjectPeopleFields } from "@/lib/jira/people-fields";
 
 /**
  * M4 — Bulk operations.
@@ -181,7 +182,15 @@ export async function previewBulk(
 
     if (action.kind === "update-fields") {
       const { value } = action;
-      if (value.points !== undefined) {
+      const wantedRoles = (["reporter", "approver", "tester"] as const).filter((r) => value[r] !== undefined);
+      if (wantedRoles.length > 0) {
+        const peopleMap = await getProjectPeopleFields(issue.projectKey).catch(() => null);
+        if (!peopleMap || wantedRoles.some((r) => !peopleMap[r])) {
+          fieldAvailable = false;
+          fieldSkipReason = "field_unavailable";
+        }
+      }
+      if (fieldAvailable !== false && value.points !== undefined) {
         try {
           targetField = (await jira.resolvePointsField?.(key)) ?? null;
           if (!targetField) {
@@ -358,6 +367,9 @@ export async function previewBulk(
       projectKey: issue.projectKey,
       status: issue.status,
       assigneeJira: issue.assigneeJira,
+      reporterJira: issue.reporterJira,
+      approverJira: issue.approverJira,
+      testerJira: issue.testerJira,
       labels: issue.labels,
       fixVersionIds: issue.fixVersionIds,
       fixVersionNames: issue.fixVersionNames,

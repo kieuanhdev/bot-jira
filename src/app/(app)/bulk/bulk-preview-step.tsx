@@ -66,6 +66,9 @@ export function PreviewItemCard({ item, jiraBaseUrl }: { item: PreviewItem; jira
           {fieldRow("Nhãn (Labels)", item.before, item.after, "labels")}
           {fieldRow("Fix Versions", item.before, item.after, "fixVersions")}
           {fieldRow("Epic / Task cha", item.before, item.after, "epic")}
+          {fieldRow("Reporter", item.before, item.after, "reporter")}
+          {fieldRow("Approver", item.before, item.after, "approver")}
+          {fieldRow("Tester", item.before, item.after, "tester")}
           {Boolean(item.after.worklog) ? (
             <div className="flex items-center justify-between text-xs py-0.5 border-t mt-0.5">
               <span className="text-muted-foreground font-medium">Ghi Worklog:</span>

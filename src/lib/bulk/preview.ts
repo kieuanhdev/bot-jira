@@ -11,6 +11,9 @@ export type IssueRow = {
   projectKey: string;
   status: string;
   assigneeJira: string | null;
+  reporterJira?: string | null;
+  approverJira?: string | null;
+  testerJira?: string | null;
   labels: string[];
   fixVersionIds: string[];
   fixVersionNames: string[];
@@ -88,6 +91,9 @@ export function classifyAction(
       const fields = action.value;
       const unchanged =
         (fields.assignee === undefined || fields.assignee === issue.assigneeJira) &&
+        (fields.reporter === undefined || fields.reporter === (issue.reporterJira ?? null)) &&
+        (fields.approver === undefined || fields.approver === (issue.approverJira ?? null)) &&
+        (fields.tester === undefined || fields.tester === (issue.testerJira ?? null)) &&
         (fields.labels === undefined || (
           fields.labels.length === issue.labels.length &&
           fields.labels.slice().sort().join(",") === issue.labels.slice().sort().join(",")
@@ -166,6 +172,9 @@ export function computePreview(
   const before: Record<string, unknown> = {
     status: issue.status,
     assignee: issue.assigneeJira,
+    reporter: issue.reporterJira ?? null,
+    approver: issue.approverJira ?? null,
+    tester: issue.testerJira ?? null,
     labels: issue.labels,
     priority: issue.priority,
     issueType: issue.type,
@@ -185,6 +194,9 @@ export function computePreview(
     case "update-fields": {
       const fields = action.value;
       if (fields.assignee !== undefined) after.assignee = fields.assignee;
+      if (fields.reporter !== undefined) after.reporter = fields.reporter;
+      if (fields.approver !== undefined) after.approver = fields.approver;
+      if (fields.tester !== undefined) after.tester = fields.tester;
       if (fields.labels !== undefined) after.labels = fields.labels;
       if (fields.priority !== undefined) after.priority = fields.priority;
       if (fields.issueType !== undefined) after.issueType = fields.issueType;

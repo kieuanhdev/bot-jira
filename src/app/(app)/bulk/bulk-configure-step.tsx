@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { AssigneeInput } from "./bulk-assignee-input";
 import { EpicInput } from "./bulk-epic-input";
+import type { PeopleRole, PeopleState, PersonFieldState } from "./lib/use-bulk-field-state";
 import type { OperationKind, ProjectStatus } from "./lib/bulk-logic";
 import type { BulkVersionOption, ProjectFieldOption } from "./lib/bulk-types";
 import { statusDot } from "./lib/bulk-utils";
@@ -302,6 +303,9 @@ export function BulkFieldPicker({
         { id: "dueDate", label: "Due date" },
         { id: "fixVersions", label: "Fix Versions" },
         { id: "epic", label: "Epic / Task cha" },
+        { id: "reporter", label: "Reporter" },
+        { id: "approver", label: "Approver" },
+        { id: "tester", label: "Tester" },
       ].map(({ id, label }) => {
         const isAvailable = availableFieldMap.get(id)?.available ?? true;
         const isEnabled = enabledFields.has(id);
@@ -351,6 +355,7 @@ export interface BulkFieldValuesState {
   clearFixVersions: boolean;
   epic: string;
   clearEpic: boolean;
+  people: PeopleState;
 }
 
 export interface BulkFieldSetters {
@@ -369,6 +374,7 @@ export interface BulkFieldSetters {
   setClearFixVersions: (value: boolean) => void;
   setEpic: (value: string) => void;
   setClearEpic: (value: boolean) => void;
+  setPerson: (role: PeopleRole, patch: Partial<PersonFieldState>) => void;
 }
 
 /** Value inputs for every enabled field. */
@@ -401,12 +407,12 @@ export function BulkFieldInputs({
 }) {
   const {
     assignee, clearAssignee, label, clearLabels, priority, issueType, points, clearPoints,
-    estimate, dueDate, clearDueDate, fixVersions, clearFixVersions, epic, clearEpic,
+    estimate, dueDate, clearDueDate, fixVersions, clearFixVersions, epic, clearEpic, people,
   } = values;
   const {
     setAssignee, setClearAssignee, setLabel, setClearLabels, setPriority, setIssueType, setPoints,
     setClearPoints, setEstimate, setDueDate, setClearDueDate, setFixVersions, setClearFixVersions,
-    setEpic, setClearEpic,
+    setEpic, setClearEpic, setPerson,
   } = setters;
 
   return (
@@ -684,6 +690,39 @@ export function BulkFieldInputs({
           </label>
         </div>
       )}
+
+      {(Object.keys(PEOPLE_ROLE_LABELS) as PeopleRole[]).map((role) =>
+        enabledFields.has(role) ? (
+          <div key={role} className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-foreground">{PEOPLE_ROLE_LABELS[role]} (Jira username)</span>
+            <AssigneeInput
+              value={people[role].value}
+              onChange={(v) => {
+                setPerson(role, { value: v });
+                resetPreview();
+              }}
+              options={availableAssignees}
+              disabled={people[role].clear}
+            />
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground hover:text-foreground">
+              <Checkbox
+                checked={people[role].clear}
+                onCheckedChange={(v) => {
+                  setPerson(role, { clear: v === true });
+                  resetPreview();
+                }}
+              />
+              Xóa {PEOPLE_ROLE_LABELS[role]}
+            </label>
+          </div>
+        ) : null
+      )}
     </div>
   );
 }
+
+const PEOPLE_ROLE_LABELS: Record<PeopleRole, string> = {
+  reporter: "Reporter",
+  approver: "Approver",
+  tester: "Tester",
+};

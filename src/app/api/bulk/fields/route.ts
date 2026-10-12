@@ -8,9 +8,10 @@ import {
 import { jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
+import { getProjectPeopleFields } from "@/lib/jira/people-fields";
 
 export type BulkFieldOption = {
-  id: "assignee" | "labels" | "priority" | "issueType" | "points" | "estimate" | "dueDate" | "fixVersions" | "epic";
+  id: "assignee" | "labels" | "priority" | "issueType" | "points" | "estimate" | "dueDate" | "fixVersions" | "epic" | "reporter" | "approver" | "tester";
   jiraFieldId: string;
   name: string;
   available: boolean;
@@ -68,6 +69,14 @@ export async function GET(req: Request) {
     }
   }
 
+  // Reporter/Approver/Tester live in per-project configured Jira fields (not editmeta ids).
+  const peopleMap = await getProjectPeopleFields(project).catch(() => null);
+  const peopleFieldOptions: BulkFieldOption[] = [
+    { id: "reporter", jiraFieldId: peopleMap?.reporter ?? "reporter", name: "Reporter", available: Boolean(peopleMap?.reporter) },
+    { id: "approver", jiraFieldId: peopleMap?.approver ?? "approver", name: "Approver", available: Boolean(peopleMap?.approver) },
+    { id: "tester", jiraFieldId: peopleMap?.tester ?? "tester", name: "Tester", available: Boolean(peopleMap?.tester) },
+  ];
+
   const defaultFields: BulkFieldOption[] = [
     { id: "assignee", jiraFieldId: "assignee", name: "Người phụ trách", available: true },
     { id: "labels", jiraFieldId: "labels", name: "Nhãn", available: true },
@@ -78,6 +87,7 @@ export async function GET(req: Request) {
     { id: "dueDate", jiraFieldId: "duedate", name: "Due date", available: true },
     { id: "fixVersions", jiraFieldId: "fixVersions", name: "Fix Versions", available: true },
     { id: "epic", jiraFieldId: "epic", name: "Epic / Task cha", available: true },
+    ...peopleFieldOptions,
   ];
 
   if (!sampleKey) {
@@ -135,6 +145,7 @@ export async function GET(req: Request) {
         name: epicEntry ? epicEntry[1].name : "Epic / Task cha",
         available: Boolean(epicEntry || m.parent),
       },
+      ...peopleFieldOptions,
     ];
 
     return NextResponse.json({

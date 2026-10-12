@@ -142,6 +142,12 @@ export function validateBulkRequest(body: unknown, resolvedKeys?: string[]): Val
             if (v.assignee === null || (isNonEmptyString(v.assignee) && v.assignee.length <= MAX_STRING_FIELD)) fields.assignee = v.assignee as string | null;
             else errors.push("update-fields.value.assignee must be a string or null");
           }
+          for (const role of ["reporter", "approver", "tester"] as const) {
+            if (!(role in v)) continue;
+            const person = v[role];
+            if (person === null || (isNonEmptyString(person) && person.length <= MAX_STRING_FIELD)) fields[role] = person === null ? null : person.trim();
+            else errors.push(`update-fields.value.${role} must be a string or null`);
+          }
           if ("labels" in v) {
             if (Array.isArray(v.labels) && v.labels.every((item) => typeof item === "string")) {
               const values = Array.from(new Set(v.labels.map((item) => item.trim()).filter(Boolean)));

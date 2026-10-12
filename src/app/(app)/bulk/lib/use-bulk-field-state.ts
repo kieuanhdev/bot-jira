@@ -2,6 +2,16 @@
 
 import { useState } from "react";
 
+export type PeopleRole = "reporter" | "approver" | "tester";
+export type PersonFieldState = { value: string; clear: boolean };
+export type PeopleState = Record<PeopleRole, PersonFieldState>;
+
+const EMPTY_PEOPLE: PeopleState = {
+  reporter: { value: "", clear: false },
+  approver: { value: "", clear: false },
+  tester: { value: "", clear: false },
+};
+
 export function useBulkFieldState() {
   const [assignee, setAssignee] = useState("");
   const [clearAssignee, setClearAssignee] = useState(false);
@@ -18,6 +28,9 @@ export function useBulkFieldState() {
   const [clearFixVersions, setClearFixVersions] = useState(false);
   const [epic, setEpic] = useState("");
   const [clearEpic, setClearEpic] = useState(false);
+  const [people, setPeople] = useState<PeopleState>(EMPTY_PEOPLE);
+  const setPerson = (role: PeopleRole, patch: Partial<PersonFieldState>) =>
+    setPeople((prev) => ({ ...prev, [role]: { ...prev[role], ...patch } }));
 
   function resetFields() {
     setAssignee("");
@@ -35,6 +48,7 @@ export function useBulkFieldState() {
     setClearFixVersions(false);
     setEpic("");
     setClearEpic(false);
+    setPeople(EMPTY_PEOPLE);
   }
 
   const values = {
@@ -53,6 +67,7 @@ export function useBulkFieldState() {
     clearFixVersions,
     epic,
     clearEpic,
+    people,
   };
 
   const setters = {
@@ -71,6 +86,7 @@ export function useBulkFieldState() {
     setClearFixVersions,
     setEpic,
     setClearEpic,
+    setPerson,
   };
 
   return {

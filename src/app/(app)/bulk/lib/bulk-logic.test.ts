@@ -169,12 +169,17 @@ describe("isValidEstimate", () => {
 
 describe("buildBulkAction", () => {
   const fieldMap = new Map<string, ProjectFieldOption>();
+  const noPeople = {
+    reporter: { value: "", clear: false },
+    approver: { value: "", clear: false },
+    tester: { value: "", clear: false },
+  };
   const input = (o: Partial<BulkActionInput> = {}): BulkActionInput => ({
     filterProject: "EPM", operationKind: "update-fields", targetStatus: "", worklogDuration: "", isWorklogDurationValid: false,
     worklogStarted: "", worklogComment: "", enabledFields: new Set(), clearAssignee: false, assignee: "", clearLabels: false,
     label: "", priority: "", issueType: "", clearPoints: false, points: "", availableFieldMap: fieldMap, estimate: "",
     isEstimateValid: true, clearDueDate: false, dueDate: "", clearFixVersions: false, fixVersions: [], clearEpic: false,
-    epic: "", ...o,
+    epic: "", people: noPeople, ...o,
   });
 
   it("needs a project", () => {
@@ -184,6 +189,13 @@ describe("buildBulkAction", () => {
   it("builds a transition action only with a target status", () => {
     expect(buildBulkAction(input({ operationKind: "transition" }))).toBeNull();
     expect(buildBulkAction(input({ operationKind: "transition", targetStatus: " Done " }))).toEqual({ kind: "transition", value: "Done" });
+  });
+
+  it("builds reporter/approver/tester values, or null to clear", () => {
+    const people = { ...noPeople, reporter: { value: " alice ", clear: false }, tester: { value: "", clear: true } };
+    expect(buildBulkAction(input({ enabledFields: new Set(["reporter", "tester"]), people })))
+      .toEqual({ kind: "update-fields", value: { reporter: "alice", tester: null } });
+    expect(buildBulkAction(input({ enabledFields: new Set(["approver"]) }))).toBeNull();
   });
 
   it("builds a log-work action with optional started/comment", () => {

@@ -128,6 +128,9 @@ async function defaultFetchAfterState(key: string) {
     select: {
       status: true,
       assigneeJira: true,
+      reporterJira: true,
+      approverJira: true,
+      testerJira: true,
       labels: true,
       priority: true,
       points: true,

@@ -192,6 +192,7 @@ export function useBulkConfigure({
         fixVersions: fieldState.values.fixVersions,
         clearEpic: fieldState.values.clearEpic,
         epic: fieldState.values.epic,
+        people: fieldState.values.people,
       }),
     [
       filterProject,

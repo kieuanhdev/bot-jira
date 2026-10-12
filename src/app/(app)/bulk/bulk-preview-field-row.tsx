@@ -25,6 +25,9 @@ export function fieldRow(label: string, before: Record<string, unknown> | null, 
   } else if (key === "assignee") {
     bText = b ? `@${String(b)}` : "Chưa giao";
     aText = a === null ? "(Bỏ gán)" : (a ? `@${String(a)}` : "Chưa giao");
+  } else if (key === "reporter" || key === "approver" || key === "tester") {
+    bText = b ? `@${String(b)}` : "—";
+    aText = a === null ? "(Xóa)" : (a ? `@${String(a)}` : "—");
   } else if (key === "dueDate") {
     bText = b ? String(b) : "—";
     aText = a === null ? "(Xóa ngày)" : (a ? String(a) : "—");

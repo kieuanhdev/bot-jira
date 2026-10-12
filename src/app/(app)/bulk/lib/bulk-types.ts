@@ -8,6 +8,9 @@ export type BulkFieldValues = {
   dueDate?: string | null;
   fixVersions?: string[];
   epic?: string | null;
+  reporter?: string | null;
+  approver?: string | null;
+  tester?: string | null;
 };
 
 export type BulkAction =
@@ -54,7 +57,7 @@ export type BulkVersionOption = {
 };
 
 export type ProjectFieldOption = {
-  id: "assignee" | "labels" | "priority" | "issueType" | "points" | "estimate" | "dueDate" | "fixVersions" | "epic";
+  id: "assignee" | "labels" | "priority" | "issueType" | "points" | "estimate" | "dueDate" | "fixVersions" | "epic" | "reporter" | "approver" | "tester";
   jiraFieldId: string;
   name: string;
   available: boolean;

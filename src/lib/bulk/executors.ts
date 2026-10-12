@@ -8,6 +8,7 @@ import type { JiraIssue } from "@/lib/jira/types";
 import { renderBranchName } from "./branch-name";
 import { recordExplicitBranchLink } from "@/lib/bitbucket/link-service";
 import { audit } from "@/lib/audit";
+import { getProjectPeopleFields } from "@/lib/jira/people-fields";
 import { formatJiraStartedAt } from "@/lib/worklogs/schema";
 import {
   type BulkAction,
@@ -184,7 +185,21 @@ export async function executeFieldUpdateAction(
         dueDate?: string | null;
         originalEstimate?: string;
         epic?: string | null;
+        extraFields?: Record<string, unknown>;
       } = {};
+      const peopleRoles = (["reporter", "approver", "tester"] as const).filter((r) => action.value[r] !== undefined);
+      if (peopleRoles.length > 0) {
+        const projectKey = issue.fields.project?.key ?? key.split("-")[0] ?? "";
+        const peopleMap = await getProjectPeopleFields(projectKey);
+        const extra: Record<string, unknown> = {};
+        for (const role of peopleRoles) {
+          const fieldId = peopleMap[role];
+          if (!fieldId) return { error: `Project has no ${role} field configured`, retryable: false };
+          const name = action.value[role];
+          extra[fieldId] = name ? { name } : null;
+        }
+        patch.extraFields = extra;
+      }
       if (action.value.assignee !== undefined) patch.assignee = action.value.assignee;
       if (action.value.labels !== undefined) patch.labels = action.value.labels;
       if (action.value.priority !== undefined) patch.priority = action.value.priority;
