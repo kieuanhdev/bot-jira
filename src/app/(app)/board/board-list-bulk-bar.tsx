@@ -1,4 +1,6 @@
-import { X } from "lucide-react";
+import { useState } from "react";
+import { Pencil, X } from "lucide-react";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import type { IssueItem } from "@/hooks/use-issues";
 import { DateCell, FixVersionCell, PointsCell, SelectCell } from "./board-list-inline-cells";
@@ -25,8 +27,11 @@ export function BoardListBulkBar({
   onBulkTransition: (targets: IssueItem[], toStatus: string) => void;
   onClear: () => void;
 }) {
-  const set = (api: Record<string, unknown>, item: Partial<IssueItem>) =>
-    onEdits(selected, api, () => item);
+  // Bulk edits touch many tasks at once, so every change waits for an explicit confirmation.
+  const [pending, setPending] = useState<{ text: string; run: () => void } | null>(null);
+  const ask = (text: string, run: () => void) => setPending({ text, run });
+  const set = (text: string, api: Record<string, unknown>, item: Partial<IssueItem>) =>
+    ask(text, () => onEdits(selected, api, () => item));
   const people = (field: "assignee" | "reporter" | "approver" | "tester", list: string[], clear?: string) => {
     const itemKey = `${field}Jira` as "assigneeJira" | "reporterJira" | "approverJira" | "testerJira";
     const label = { assignee: "Assignee", reporter: "Reporter", approver: "Approver", tester: "Tester" }[field];
@@ -37,7 +42,7 @@ export function BoardListBulkBar({
         value={null}
         options={list}
         clearLabel={clear}
-        onChange={(v) => set({ [field]: v }, { [itemKey]: v })}
+        onChange={(v) => set(`${label} → ${v ?? "(bỏ giá trị)"}`, { [field]: v }, { [itemKey]: v })}
       />
     );
   };
@@ -55,7 +60,7 @@ export function BoardListBulkBar({
         display="Status"
         value={null}
         options={options.statuses}
-        onChange={(v) => v && onBulkTransition(selected, v)}
+        onChange={(v) => v && ask(`Status → ${v}`, () => onBulkTransition(selected, v))}
       />
       {people("assignee", options.assignees, "Chưa gán")}
       <SelectCell
@@ -63,26 +68,26 @@ export function BoardListBulkBar({
         display="Priority"
         value={null}
         options={PRIORITIES}
-        onChange={(v) => v && set({ priority: v }, { priority: v })}
+        onChange={(v) => v && set(`Priority → ${v}`, { priority: v }, { priority: v })}
       />
       <PointsCell
         jiraKey={selected[0].jiraKey}
         value={null}
         display="Points"
-        onChange={(points) => set({ points }, { points })}
+        onChange={(points) => set(`Points → ${points ?? "(xóa)"}`, { points }, { points })}
       />
       <DateCell
         label="Due"
         display="Due"
         value={null}
-        onChange={(d) => set({ dueDate: d }, { dueDate: toIsoDay(d) })}
+        onChange={(d) => set(`Due → ${d ?? "(xóa)"}`, { dueDate: d }, { dueDate: toIsoDay(d) })}
       />
       <SelectCell
         label="Type"
         display="Type"
         value={null}
         options={options.types}
-        onChange={(v) => v && set({ issueType: v }, { type: v })}
+        onChange={(v) => v && set(`Type → ${v}`, { issueType: v }, { type: v })}
       />
       <SelectCell
         label="Epic"
@@ -90,7 +95,7 @@ export function BoardListBulkBar({
         value={null}
         options={options.epics}
         clearLabel="Bỏ epic"
-        onChange={(v) => set({ epic: v }, { epic: v })}
+        onChange={(v) => set(`Epic → ${v ?? "(bỏ epic)"}`, { epic: v }, { epic: v })}
       />
       <FixVersionCell
         jiraKey={selected[0].jiraKey}
@@ -98,11 +103,13 @@ export function BoardListBulkBar({
         display="Fix version"
         onToggle={(version, on) =>
           on &&
-          onEdits(selected, { addFixVersion: version }, (i) => ({
-            fixVersionNames: i.fixVersionNames.includes(version)
-              ? i.fixVersionNames
-              : [...i.fixVersionNames, version],
-          }))
+          ask(`Thêm Fix version → ${version}`, () =>
+            onEdits(selected, { addFixVersion: version }, (i) => ({
+              fixVersionNames: i.fixVersionNames.includes(version)
+                ? i.fixVersionNames
+                : [...i.fixVersionNames, version],
+            }))
+          )
         }
       />
       {people("reporter", options.reporters)}
@@ -111,6 +118,27 @@ export function BoardListBulkBar({
       <Button variant="ghost" size="sm" className="ml-auto h-7 gap-1 px-2 text-xs" onClick={onClear}>
         <X aria-hidden className="h-3.5 w-3.5" /> Bỏ chọn
       </Button>
+      <ConfirmDialog
+        open={pending !== null}
+        onOpenChange={(open) => !open && setPending(null)}
+        icon={Pencil}
+        title={`Sửa ${selected.length} task?`}
+        description="Thay đổi sẽ được áp dụng cho tất cả task đã chọn."
+        confirmLabel="Áp dụng"
+        onConfirm={() => {
+          pending?.run();
+          setPending(null);
+        }}
+      >
+        <div className="rounded-md bg-muted px-3 py-2 text-sm font-medium">{pending?.text}</div>
+        <p className="text-xs text-muted-foreground">
+          {selected
+            .slice(0, 8)
+            .map((i) => i.jiraKey)
+            .join(", ")}
+          {selected.length > 8 ? ` và ${selected.length - 8} task khác` : ""}
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }
