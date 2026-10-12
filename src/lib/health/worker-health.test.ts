@@ -126,6 +126,47 @@ describe("getWorkerHealth with per-project Jira cursors", () => {
     jiraProjectList.length = 0;
   });
 
+  it("names the failing project while Jira data is still fresh", async () => {
+    const { jiraProjectList } = await import("@/lib/env");
+    jiraProjectList.push("EPM", "CICM");
+
+    rows([
+      { integration: "worker", scope: "liveness", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+      { integration: "jira", scope: "EPM", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+      // Succeeded 2m ago (still inside the 5m SLA) but errored 1m ago.
+      { integration: "jira", scope: "CICM", lastStartedAt: ago(60_000), lastSuccessAt: ago(2 * 60_000), lastErrorAt: ago(60_000), lastError: "Jira 500", stats: null },
+    ]);
+
+    const h = await getWorkerHealth();
+    expect(h.status).toBe("degraded");
+    expect(isJiraFresh(h)).toBe(true);
+    expect(h.staleProjects).toEqual([]);
+    expect(h.failingProjects).toEqual(["CICM"]);
+
+    jiraProjectList.length = 0;
+  });
+
+  it("names the failing job when no project is implicated", async () => {
+    const { jiraProjectList } = await import("@/lib/env");
+    jiraProjectList.push("EPM");
+
+    rows([
+      { integration: "worker", scope: "liveness", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+      { integration: "worker", scope: "check-branches", lastStartedAt: ago(1000), lastSuccessAt: ago(5000), lastErrorAt: ago(1000), lastError: "GitLab 502", stats: null },
+      // A job that merely has stale `lastError` text but succeeded since must not be listed.
+      { integration: "worker", scope: "ai-score", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: ago(60_000), lastError: "old", stats: null },
+      { integration: "jira", scope: "EPM", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+    ]);
+
+    const h = await getWorkerHealth();
+    expect(h.status).toBe("degraded");
+    expect(isJiraFresh(h)).toBe(true);
+    expect(h.failingProjects).toEqual([]);
+    expect(h.failingJobs).toEqual(["check-branches"]);
+
+    jiraProjectList.length = 0;
+  });
+
   it("marks all 8 projects stale when 8 projects are configured and zero Jira cursors exist", async () => {
     const { jiraProjectList } = await import("@/lib/env");
     const eightProjects = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"];

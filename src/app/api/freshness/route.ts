@@ -26,5 +26,8 @@ export async function GET() {
     checkedAt: health.checkedAt,
     staleProjects: health.staleProjects ?? [],
     failingProjects: health.failingProjects ?? [],
+    // Job scopes only — never `lastError` text, which can leak URLs/tokens to
+    // any signed-in user (raw errors stay in the admin-only /api/health).
+    failingJobs: health.failingJobs ?? [],
   });
 }

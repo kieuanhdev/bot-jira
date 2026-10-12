@@ -36,6 +36,8 @@ export type WorkerHealth = {
   checkedAt: string;
   staleProjects?: string[];
   failingProjects?: string[];
+  /** Worker job scopes whose last error is newer than their last success. */
+  failingJobs?: string[];
   databaseError?: string | null;
 };
 
@@ -171,13 +173,18 @@ export async function getWorkerHealth(customProjects?: string[]): Promise<Worker
 
   let hasErrors = Boolean(dbError);
   let anyErrorRecent = false;
+  const failingJobs: string[] = [];
   for (const r of jobs) {
     if (r.lastErrorAt && r.lastSuccessAt) {
       const e = r.lastErrorAt instanceof Date ? r.lastErrorAt.getTime() : new Date(r.lastErrorAt).getTime();
       const s = r.lastSuccessAt instanceof Date ? r.lastSuccessAt.getTime() : new Date(r.lastSuccessAt).getTime();
-      if (!Number.isNaN(e) && e > s) anyErrorRecent = true;
+      if (!Number.isNaN(e) && e > s) {
+        anyErrorRecent = true;
+        failingJobs.push(r.scope);
+      }
     } else if (r.lastErrorAt) {
       anyErrorRecent = true;
+      failingJobs.push(r.scope);
     }
     if (r.lastError) hasErrors = true;
   }
@@ -211,6 +218,7 @@ export async function getWorkerHealth(customProjects?: string[]): Promise<Worker
     hasErrors,
     staleProjects,
     failingProjects,
+    failingJobs,
     databaseError: dbError,
     jobs: jobs.map((r) => ({
       job: r.scope,
