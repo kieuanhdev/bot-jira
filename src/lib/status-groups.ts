@@ -12,7 +12,7 @@ const DONE_KEYWORDS = ["done", "closed", "resolved", "cancelled", "canceled"];
 const REVIEW_KEYWORDS = ["review", "qa", "test", "verification"];
 const PROGRESS_KEYWORDS = ["progress", "active", "in progress", "working", "doing"];
 const BACKLOG_KEYWORDS = ["backlog", "parked", "someday", "later"];
-const TODO_KEYWORDS = ["todo", "to do", "new", "open", "ready", "unstarted", "unstarted"];
+const TODO_KEYWORDS = ["todo", "to do", "new", "open", "ready", "unstarted", "selected for development"];
 
 /**
  * Map an arbitrary Jira status name into one of the 5 fixed board columns.
