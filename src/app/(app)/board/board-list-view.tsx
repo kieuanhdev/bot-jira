@@ -318,7 +318,7 @@ export function BoardListView({
                 <td className="px-3 py-2 font-mono text-xs text-primary">{issue.jiraKey}</td>
                 <td className="max-w-xs truncate px-3 py-2 font-medium">{issue.summary}</td>
                 {show("type") && (
-                  <td className="px-3 py-2 text-muted-foreground" onClick={stop}>
+                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
                     <SelectCell
                       label={`Đổi loại ${issue.jiraKey}`}
                       value={issue.type || null}
@@ -328,7 +328,7 @@ export function BoardListView({
                   </td>
                 )}
                 {show("points") && (
-                  <td className="px-3 py-2 text-muted-foreground" onClick={stop}>
+                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
                     <PointsCell
                       jiraKey={issue.jiraKey}
                       value={issue.points}
@@ -337,7 +337,7 @@ export function BoardListView({
                   </td>
                 )}
                 {show("status") && (
-                  <td className="px-3 py-2 text-muted-foreground" onClick={stop}>
+                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
                     <StatusCell
                       jiraKey={issue.jiraKey}
                       status={statusOverrides.get(issue.jiraKey) ?? issue.status}
@@ -346,12 +346,12 @@ export function BoardListView({
                   </td>
                 )}
                 {show("assignee") && (
-                  <td className="px-3 py-2 text-muted-foreground" onClick={stop}>
+                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
                     {person(issue, "assignee", issue.assigneeJira, options.assignees, "Chưa gán")}
                   </td>
                 )}
                 {show("priority") && (
-                  <td className="px-3 py-2 text-muted-foreground" onClick={stop}>
+                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
                     <SelectCell
                       label={`Đổi độ ưu tiên ${issue.jiraKey}`}
                       value={issue.priority || null}
@@ -361,7 +361,7 @@ export function BoardListView({
                   </td>
                 )}
                 {show("due") && (
-                  <td className="px-3 py-2 text-muted-foreground" onClick={stop}>
+                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
                     <DateCell
                       label={`Đổi hạn ${issue.jiraKey}`}
                       value={issue.dueDate}
@@ -372,7 +372,7 @@ export function BoardListView({
                   </td>
                 )}
                 {show("epic") && (
-                  <td className="px-3 py-2 text-muted-foreground" onClick={stop}>
+                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
                     <SelectCell
                       label={`Đổi epic ${issue.jiraKey}`}
                       value={issue.epic ?? null}
@@ -402,17 +402,17 @@ export function BoardListView({
                   </td>
                 )}
                 {show("reporter") && (
-                  <td className="px-3 py-2 text-muted-foreground" onClick={stop}>
+                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
                     {person(issue, "reporter", issue.reporterJira, options.reporters)}
                   </td>
                 )}
                 {show("approver") && (
-                  <td className="px-3 py-2 text-muted-foreground" onClick={stop}>
+                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
                     {person(issue, "approver", issue.approverJira, options.approvers, "Xóa approver")}
                   </td>
                 )}
                 {show("tester") && (
-                  <td className="px-3 py-2 text-muted-foreground" onClick={stop}>
+                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
                     {person(issue, "tester", issue.testerJira, options.testers, "Xóa tester")}
                   </td>
                 )}
