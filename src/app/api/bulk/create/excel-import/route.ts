@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { checkAuthRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { userJiraAuth } from "@/lib/user-creds";
 import { jiraWith } from "@/lib/jira/client";
@@ -12,6 +13,9 @@ export async function POST(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (!checkAuthRateLimit(`excel-import:${session.user.id}`, 10, 60_000)) {
+    return NextResponse.json({ error: "Quá nhiều yêu cầu, vui lòng thử lại sau." }, { status: 429 });
   }
 
   let formData: FormData;

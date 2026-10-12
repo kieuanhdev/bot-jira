@@ -12,6 +12,7 @@ export async function GET(
 ) {
   const guard = await guardProjectReport(params, {
     permission: "report.export",
+    rateLimit: { bucket: "report-export", max: 10, windowMs: 60_000 },
     forbiddenMessage: (key) => `Bạn không có quyền xuất báo cáo dự án '${key}'.`,
   });
   if (guard.response) return guard.response;

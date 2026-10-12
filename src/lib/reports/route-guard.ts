@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { checkAuthRateLimit } from "@/lib/rate-limit";
 import { can, type Permission } from "@/lib/permissions";
 import { resolveUserProjectScope, assertProjectAccess } from "@/lib/reports/scope";
 type GuardResult = { projectKey: string; response?: undefined } | { projectKey?: undefined; response: NextResponse };
@@ -12,9 +13,14 @@ type GuardResult = { projectKey: string; response?: undefined } | { projectKey?:
  */
 export async function guardProjectReport(
   params: Promise<{ projectKey: string }>,
-  options: { permission?: Permission; forbiddenMessage?: (projectKey: string) => string } = {}
+  options: {
+    permission?: Permission;
+    forbiddenMessage?: (projectKey: string) => string;
+    /** Per-user limit for expensive handlers, e.g. exports. */
+    rateLimit?: { bucket: string; max: number; windowMs: number };
+  } = {}
 ): Promise<GuardResult> {
-  const { permission = "report.view", forbiddenMessage } = options;
+  const { permission = "report.view", forbiddenMessage, rateLimit } = options;
 
   const session = await getSession();
   if (!session?.user?.id) {
@@ -23,6 +29,10 @@ export async function guardProjectReport(
 
   if (!can(session, permission)) {
     return { response: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
+  }
+
+  if (rateLimit && !checkAuthRateLimit(`${rateLimit.bucket}:${session.user.id}`, rateLimit.max, rateLimit.windowMs)) {
+    return { response: NextResponse.json({ error: "rate_limited" }, { status: 429 }) };
   }
 
   const { projectKey } = await params;
