@@ -3,15 +3,22 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { getSystemJiraAuth, jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
-import { getIssueView } from "@/lib/issues/live";
+import { getCachedIssueView, getIssueView } from "@/lib/issues/live";
 import { refreshJiraIssueCache } from "@/lib/issues/cache";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 import { getProjectPeopleFields } from "@/lib/jira/people-fields";
 
-export async function handleIssueDetailRequest(_req: Request, ctx: { params: Promise<{ key: string }> }) {
+export async function handleIssueDetailRequest(req: Request, ctx: { params: Promise<{ key: string }> }) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { key } = await ctx.params;
+
+  // Fast path: `?source=cache` serves the DB snapshot without calling Jira.
+  if (new URL(req.url).searchParams.get("source") === "cache") {
+    const cachedView = await getCachedIssueView(key);
+    if (!cachedView) return NextResponse.json({ error: "not found" }, { status: 404 });
+    return NextResponse.json({ issue: cachedView });
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },

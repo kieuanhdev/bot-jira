@@ -82,6 +82,19 @@ export type IssueView = {
   relationships: IssueRelationships;
 };
 
+const CACHED_ISSUE_INCLUDE = {
+  comments: { orderBy: { createdAt: "asc" } },
+  aiScore: { include: { decisions: { orderBy: { decidedAt: "desc" }, take: 1 } } },
+  releaseTasks: { include: { release: true } },
+  staleSnapshots: { orderBy: { detectedAt: "desc" }, take: 1 },
+} as const;
+
+type CachedIssue = NonNullable<Awaited<ReturnType<typeof findCachedIssue>>>;
+
+function findCachedIssue(key: string) {
+  return prisma.issueCache.findUnique({ where: { jiraKey: key }, include: CACHED_ISSUE_INCLUDE });
+}
+
 async function getRelationships(
   key: string,
   fields: JiraIssue["fields"] | null | undefined
@@ -177,16 +190,12 @@ export async function fetchLiveIssue(
  * sync. Returns null only when neither live nor cache has the issue.
  */
 export async function getIssueView(key: string, auth: ReturnType<typeof userJiraAuth>): Promise<IssueView | null> {
-  const live = await fetchLiveIssue(key, auth);
-  const cached = await prisma.issueCache.findUnique({
-    where: { jiraKey: key },
-    include: {
-      comments: { orderBy: { createdAt: "asc" } },
-      aiScore: { include: { decisions: { orderBy: { decidedAt: "desc" }, take: 1 } } },
-      releaseTasks: { include: { release: true } },
-      staleSnapshots: { orderBy: { detectedAt: "desc" }, take: 1 },
-    },
-  });
+  // Jira round-trips dominate latency, so read the cache snapshot concurrently.
+  // The snapshot is still taken before the live upsert below.
+  const [live, cached] = await Promise.all([
+    fetchLiveIssue(key, auth),
+    findCachedIssue(key),
+  ]);
 
   if (live) {
     // Live reads can see a change before reconciliation. Notify using the old
@@ -197,17 +206,18 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
         await notifyWatchersOfIssueChange(cached, { jiraKey: key, ...current });
       }
     } catch { /* Live data remains usable if cache or notification delivery fails. */ }
-    await upsertJiraComments(
-      key,
-      live.comments.map((comment) => ({
-        id: comment.id,
-        author: { displayName: comment.author },
-        body: comment.body,
-        created: comment.createdAt ?? undefined,
-      }))
-    ).catch(() => null);
-
-    const relationships = await getRelationships(key, live.rawIssue.fields);
+    const [, relationships] = await Promise.all([
+      upsertJiraComments(
+        key,
+        live.comments.map((comment) => ({
+          id: comment.id,
+          author: { displayName: comment.author },
+          body: comment.body,
+          created: comment.createdAt ?? undefined,
+        }))
+      ).catch(() => null),
+      getRelationships(key, live.rawIssue.fields),
+    ]);
     return {
       jiraKey: key,
       summary: live.summary,
@@ -238,6 +248,16 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
   }
 
   if (!cached) return null;
+  return buildCachedIssueView(key, cached);
+}
+
+/** Instant view from the local DB cache only (no Jira round-trip). */
+export async function getCachedIssueView(key: string): Promise<IssueView | null> {
+  const cached = await findCachedIssue(key);
+  return cached ? buildCachedIssueView(key, cached) : null;
+}
+
+async function buildCachedIssueView(key: string, cached: CachedIssue): Promise<IssueView> {
   const cachedFields = cached.raw && typeof cached.raw === "object"
     ? cached.raw as JiraIssue["fields"]
     : undefined;

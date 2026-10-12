@@ -54,6 +54,14 @@ export function QuickPanel({
     retry: 1,
   });
 
+  // Instant DB snapshot so the panel fills in while the live Jira read is in flight.
+  const { data: cachedDetail } = useQuery({
+    queryKey: [...issuesKeys.detail(issue.jiraKey), "cached"] as const,
+    queryFn: () => api<{ issue: QuickPanelDetail }>(`/api/issues/${issue.jiraKey}?source=cache`),
+    staleTime: 15_000,
+    retry: 0,
+  });
+
   const { data: transitions } = useQuery({
     queryKey: transitionsKeys.forIssue(issue.jiraKey),
     queryFn: () =>
@@ -81,7 +89,7 @@ export function QuickPanel({
     staleTime: 60_000,
   });
 
-  const d = detail?.issue;
+  const d = detail?.issue ?? cachedDetail?.issue;
   const summary = (optimisticOverrides.summary as string | undefined) ?? d?.summary ?? issue.summary ?? "(no summary)";
   const status = d?.status ?? issue.status;
   const statusCat = issue.statusCategory;
