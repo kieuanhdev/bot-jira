@@ -8,6 +8,7 @@ import { formatDateTime, timeAgo, getJiraIssueUrl, getBitbucketBranchUrl } from 
 import { wikiToHtml } from "@/lib/wiki";
 import { formatJiraDuration } from "@/lib/worklogs/schema";
 import { IssueDependencies } from "@/components/issue-dependencies";
+import { IssueRelations } from "@/components/issues/issue-relations";
 import type { IssueDetail } from "./lib/issue-detail-types";
 import { IssueDetailHeader } from "./issue-detail-header";
 import { IssueDetailActions } from "./issue-detail-actions";
@@ -164,6 +165,12 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <IssueRelations relationships={issue.relationships} loading={false} />
             </CardContent>
           </Card>
 

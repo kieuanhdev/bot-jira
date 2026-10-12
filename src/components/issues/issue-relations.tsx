@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowUpRight, GitFork, Layers3, Link2, Network } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import type { IssueRelationships, LinkedIssue, RelatedIssue } from "@/lib/issues/relationships";
 
 function RelationRow({ issue, label }: { issue: RelatedIssue; label?: string }) {
@@ -62,16 +63,18 @@ function RelationGroup({
   );
 }
 
-export function QuickPanelRelations({
+export function IssueRelations({
   relationships,
   loading,
+  className,
 }: {
   relationships?: IssueRelationships;
   loading: boolean;
+  className?: string;
 }) {
   if (loading) {
     return (
-      <section className="mt-4 border-t pt-4" aria-label="Đang tải liên kết công việc">
+      <section className={cn(className)} aria-label="Đang tải liên kết công việc">
         <Skeleton className="h-4 w-36" />
         <div className="mt-2 space-y-2">
           <Skeleton className="h-12 w-full" />
@@ -88,7 +91,7 @@ export function QuickPanelRelations({
     (relationships?.links.length ?? 0);
 
   return (
-    <section className="mt-4 border-t pt-4" aria-labelledby="work-relations-title">
+    <section className={cn(className)} aria-labelledby="work-relations-title">
       <div className="mb-3 flex items-center gap-2">
         <Network className="h-4 w-4 text-primary" aria-hidden="true" />
         <h3 id="work-relations-title" className="text-sm font-semibold">Liên kết công việc</h3>

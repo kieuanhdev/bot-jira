@@ -16,7 +16,7 @@ import { QuickPanelActions } from "./quick-panel/quick-panel-actions";
 import { QuickPanelFields } from "./quick-panel/quick-panel-fields";
 import { QuickPanelComments } from "./quick-panel/quick-panel-comments";
 import { QuickPanelFooter } from "./quick-panel/quick-panel-footer";
-import { QuickPanelRelations } from "./quick-panel/quick-panel-relations";
+import { IssueRelations } from "@/components/issues/issue-relations";
 import { applyOptimisticIssuePatch } from "./lib/board-optimistic";
 
 export function QuickPanel({
@@ -348,9 +348,10 @@ export function QuickPanel({
             bitbucketBaseUrl={bitbucketBaseUrl}
           />
 
-          <QuickPanelRelations
+          <IssueRelations
             relationships={d?.relationships}
             loading={detailLoading}
+            className="mt-4 border-t pt-4"
           />
 
           <QuickPanelComments
