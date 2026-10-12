@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getErrorMessage } from "@/lib/api-client";
@@ -31,7 +31,7 @@ import {
   applyWorklogToIssue,
 } from "./issue-detail-model";
 
-export function useIssueDetailController(initialIssue: IssueDetail) {
+export function useIssueDetailController(initialIssue: IssueDetail, refreshOnMount = false) {
   const [issue, setIssue] = useState<IssueDetail>(initialIssue);
   const [watched, setWatched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -110,6 +110,21 @@ export function useIssueDetailController(initialIssue: IssueDetail) {
   const jiraBaseUrl = me?.jiraBaseUrl ?? "";
   const bitbucketBaseUrl = branches?.bitbucketBaseUrl || me?.bitbucketBaseUrl || "";
   const versionsList = computeVersionsList(issue.fixVersions, issue.releaseTasks);
+
+  // The server painted a cache snapshot; swap in live Jira data unless the user
+  // already changed something (any edit replaces the state object).
+  useEffect(() => {
+    if (!refreshOnMount) return;
+    let cancelled = false;
+    api<{ issue: IssueDetail }>(`/api/issues/${initialIssue.jiraKey}`)
+      .then((fresh) => {
+        if (!cancelled) setIssue((prev) => (prev === initialIssue ? fresh.issue : prev));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshOnMount, initialIssue]);
 
   async function refreshIssue() {
     const fresh = await api<{ issue: IssueDetail }>(`/api/issues/${issue.jiraKey}`);

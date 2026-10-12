@@ -19,7 +19,14 @@ import { IssueDetailTabsComments } from "./issue-detail-tabs-comments";
 import { IssueDetailLogWorkDialog } from "./issue-detail-log-work-dialog";
 import { useIssueDetailController } from "./lib/use-issue-detail-controller";
 
-export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
+export function IssueDetailClient({
+  issue: initial,
+  refreshOnMount = false,
+}: {
+  issue: IssueDetail;
+  /** `issue` is a DB-cache snapshot; pull the live Jira version after mount. */
+  refreshOnMount?: boolean;
+}) {
   const {
     issue,
     watched,
@@ -66,7 +73,7 @@ export function IssueDetailClient({ issue: initial }: { issue: IssueDetail }) {
     onAiScore,
     onAiDecision,
     onAddComment,
-  } = useIssueDetailController(initial);
+  } = useIssueDetailController(initial, refreshOnMount);
 
   const jiraUrl = getJiraIssueUrl(jiraBaseUrl, issue.jiraKey);
   const primaryBranch = branches?.items?.find((b) => b.linkState === "confirmed") || branches?.items?.[0];
