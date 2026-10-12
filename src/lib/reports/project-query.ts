@@ -50,13 +50,14 @@ export async function getProjectReportDetail(
     timezone: params.timezone,
     now,
   });
-  const periodLabel = getPeriodDisplayLabel(period);
-
   // Retrieve available versions from Release table
   const availableVersions = await fetchAvailableProjectVersions(normalizedKey);
 
   // Resolve version filter using unified resolver
   const resolvedVersion = await resolveProjectVersionFilter(normalizedKey, params.versionId);
+  const periodLabel = resolvedVersion
+    ? `Toàn bộ version ${resolvedVersion.versionName}`
+    : getPeriodDisplayLabel(period);
 
   // Fetch all issues in the scope
   const { mappedIssues } = await fetchProjectReportIssues(
@@ -66,11 +67,17 @@ export async function getProjectReportDetail(
 
   // Fetch transition events if available for current period
   const periodBounds = getPeriodDateBounds(period);
-  const transitionEvents = await fetchIssueTransitionEvents(normalizedKey, periodBounds);
+  const transitionEvents = resolvedVersion
+    ? await fetchIssueTransitionEvents(
+        normalizedKey,
+        undefined,
+        mappedIssues.map((issue) => issue.jiraKey)
+      )
+    : await fetchIssueTransitionEvents(normalizedKey, periodBounds);
 
   // Fetch previous transition events if comparison period is active
   let prevTransitionEvents: typeof transitionEvents = [];
-  if (params.comparePrevious !== false && comparisonPeriod) {
+  if (!resolvedVersion && params.comparePrevious !== false && comparisonPeriod) {
     const prevPeriodBounds = getPeriodDateBounds(comparisonPeriod);
     prevTransitionEvents = await fetchIssueTransitionEvents(normalizedKey, prevPeriodBounds);
   }
@@ -82,7 +89,8 @@ export async function getProjectReportDetail(
   const metrics = calculateProjectReportMetrics({
     mappedIssues,
     period,
-    comparisonPeriod: params.comparePrevious !== false ? comparisonPeriod : null,
+    comparisonPeriod:
+      !resolvedVersion && params.comparePrevious !== false ? comparisonPeriod : null,
     transitionEvents,
     prevTransitionEvents,
     resolvedVersion,

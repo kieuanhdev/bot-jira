@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,8 @@ export function StatusDonutView({
   onHoverGroup: (group: ReportStatusGroup | null) => void;
   onGroupClick: (group: ReportStatusGroup) => void;
 }) {
+  const [isPieHovered, setIsPieHovered] = useState(false);
+
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-center">
       {/* Donut Chart with Dynamic Interactive Centerpiece (5 cols on lg) */}
@@ -43,7 +46,7 @@ export function StatusDonutView({
           role="img"
           aria-label={`Biểu đồ tròn phân bố ${currentTotal} ${unitLabel} theo trạng thái`}
         >
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" className="relative z-10">
             <PieChart>
               <Pie
                 data={chartActiveItems}
@@ -58,11 +61,15 @@ export function StatusDonutView({
                 strokeWidth={2}
                 isAnimationActive={false}
                 onMouseEnter={(_, index) => {
+                  setIsPieHovered(true);
                   if (chartActiveItems[index]) {
                     onHoverGroup(chartActiveItems[index].group);
                   }
                 }}
-                onMouseLeave={() => onHoverGroup(null)}
+                onMouseLeave={() => {
+                  setIsPieHovered(false);
+                  onHoverGroup(null);
+                }}
                 onClick={(entry) => {
                   const group = (entry as { group?: ReportStatusGroup })?.group;
                   if (group) onGroupClick(group);
@@ -97,13 +104,14 @@ export function StatusDonutView({
 
               {/* Rich Hover Tooltip */}
               <Tooltip
+                wrapperStyle={{ zIndex: 50, pointerEvents: "none" }}
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
                   const data = payload[0].payload as EnrichedStatusItem;
                   const style = data.style;
 
                   return (
-                    <div className="space-y-1.5 rounded-lg border border-border bg-popover/95 p-3 text-xs text-popover-foreground shadow-xl backdrop-blur-sm min-w-44">
+                    <div className="space-y-1.5 rounded-lg border border-border bg-popover p-3 text-xs text-popover-foreground shadow-2xl min-w-44">
                       <div className="flex items-center gap-1.5 font-semibold text-foreground border-b border-border/60 pb-1.5">
                         <span
                           className={`h-2.5 w-2.5 rounded-full ${style.dot}`}
@@ -154,7 +162,9 @@ export function StatusDonutView({
 
           {/* Dynamic Centerpiece */}
           <div
-            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center p-2"
+            className={`pointer-events-none absolute inset-0 z-0 flex flex-col items-center justify-center text-center p-2 transition-opacity duration-200 ${
+              isPieHovered ? "opacity-0" : "opacity-100"
+            }`}
             aria-hidden="true"
           >
             {focusedItem ? (

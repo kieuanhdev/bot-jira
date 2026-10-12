@@ -78,6 +78,13 @@ export function TasksTab({
   const [search, setSearch] = useState<string>("");
   const [offset, setOffset] = useState<number>(0);
   const limit = 20;
+  const isVersionScope = Boolean(versionId && versionId !== "all");
+  const activityFilters = ACTIVITY_FILTERS.map((filter) => {
+    if (!isVersionScope) return filter;
+    if (filter.id === "completed") return { ...filter, label: "Đã hoàn thành" };
+    if (filter.id === "created") return { ...filter, label: "Tất cả task version" };
+    return filter;
+  });
 
   const { data: meStatus } = useQuery({
     queryKey: ["me", "status"],
@@ -123,12 +130,12 @@ export function TasksTab({
   const { data: membersData } = useQuery<ProjectMembersResponse>({
     queryKey: ["reports", "members", projectKey, period.preset, period.from, period.to, versionId],
     queryFn: () => {
-      const sp = new URLSearchParams({
-        period: period.preset,
-        from: period.from,
-        to: period.to,
-        timezone: period.timezone,
-      });
+      const sp = new URLSearchParams({ timezone: period.timezone });
+      if (!isVersionScope) {
+        sp.set("period", period.preset);
+        sp.set("from", period.from);
+        sp.set("to", period.to);
+      }
       if (versionId && versionId !== "all") sp.set("versionId", versionId);
       return api<ProjectMembersResponse>(`/api/reports/projects/${projectKey}/members?${sp.toString()}`);
     },
@@ -136,13 +143,16 @@ export function TasksTab({
   });
 
   const queryParams = new URLSearchParams({
-    period: period.preset,
-    from: period.from,
-    to: period.to,
     timezone: period.timezone,
     limit: String(limit),
     offset: String(offset),
   });
+
+  if (!isVersionScope) {
+    queryParams.set("period", period.preset);
+    queryParams.set("from", period.from);
+    queryParams.set("to", period.to);
+  }
 
   if (versionId && versionId !== "all") queryParams.set("versionId", versionId);
   if (activity !== "all") queryParams.set("activity", activity);
@@ -178,7 +188,7 @@ export function TasksTab({
     assignee !== "all" ||
     Boolean(search.trim());
 
-  const activeActivityLabel = ACTIVITY_FILTERS.find((f) => f.id === activity)?.label;
+  const activeActivityLabel = activityFilters.find((f) => f.id === activity)?.label;
   const activeMemberName =
     assignee === "unassigned"
       ? "Chưa phân công"
@@ -197,7 +207,11 @@ export function TasksTab({
             className="h-7 -ml-2 text-xs gap-1.5 text-muted-foreground hover:text-foreground cursor-pointer"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            <span>Quay lại Tổng quan</span>
+            <span>
+              {assignee !== "all"
+                ? `Quay lại ${activeMemberName}`
+                : "Quay lại Tổng quan"}
+            </span>
           </Button>
         </div>
       )}
@@ -298,7 +312,11 @@ export function TasksTab({
                 className="h-7 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 cursor-pointer"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
-                <span>Quay lại Tổng quan</span>
+                <span>
+                  {assignee !== "all"
+                    ? `Quay lại ${activeMemberName}`
+                    : "Quay lại Tổng quan"}
+                </span>
               </Button>
             )}
           </div>
@@ -307,7 +325,7 @@ export function TasksTab({
 
       {/* Activity Filter Pills */}
       <div className="flex flex-wrap items-center gap-1.5 pb-1">
-        {ACTIVITY_FILTERS.map((f) => {
+        {activityFilters.map((f) => {
           const Icon = f.icon;
           const isSelected = activity === f.id;
           return (
@@ -432,7 +450,9 @@ export function TasksTab({
               <tr className="border-b border-border bg-muted/40 font-semibold text-muted-foreground uppercase tracking-wider">
                 <th className="py-2.5 px-3">Mã task</th>
                 <th className="py-2.5 px-3">Tiêu đề</th>
-                <th className="py-2.5 px-3">Hoạt động trong kỳ</th>
+                <th className="py-2.5 px-3">
+                  {isVersionScope ? "Hoạt động trong version" : "Hoạt động trong kỳ"}
+                </th>
                 <th className="py-2.5 px-3">Trạng thái</th>
                 <th className="py-2.5 px-3">Người làm</th>
                 <th className="py-2.5 px-3 text-center">Story Point</th>
@@ -474,11 +494,13 @@ export function TasksTab({
                     <td className="py-2.5 px-3">
                       {task.activity === "completed" ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="h-3 w-3" /> Hoàn thành trong kỳ
+                          <CheckCircle2 className="h-3 w-3" />
+                          {isVersionScope ? "Đã hoàn thành" : "Hoàn thành trong kỳ"}
                         </span>
                       ) : task.activity === "created" ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400">
-                          <FolderPlus className="h-3 w-3" /> Tạo mới trong kỳ
+                          <FolderPlus className="h-3 w-3" />
+                          {isVersionScope ? "Thuộc version" : "Tạo mới trong kỳ"}
                         </span>
                       ) : task.activity === "current_open" ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-teal-500/10 text-teal-600 dark:text-teal-400">

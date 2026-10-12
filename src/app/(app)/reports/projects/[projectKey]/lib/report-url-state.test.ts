@@ -25,7 +25,7 @@ describe("report-url-state", () => {
       activeStatusGroup: null,
       activeAssignee: "all",
     });
-    expect(params.get("period")).toBe("this_month");
+    expect(params.has("period")).toBe(false);
     expect(params.get("versionId")).toBe("10001");
     expect(params.get("unit")).toBe("points");
     expect(params.has("tab")).toBe(false);
@@ -47,14 +47,50 @@ describe("report-url-state", () => {
     expect(params.get("assignee")).toBe("usr-42");
   });
 
-  it("builds report query params for API call", () => {
+  it("builds URL search params for members tab with selected member", () => {
+    const params = buildReportUrlSearchParams({
+      period,
+      versionId: "all",
+      unit: "auto",
+      activeTab: "members",
+      activeMember: "alice",
+      activeActivity: "all",
+      activeStatusGroup: null,
+      activeAssignee: "all",
+    });
+    expect(params.get("tab")).toBe("members");
+    expect(params.get("member")).toBe("alice");
+  });
+
+  it("omits member param when activeTab is not members", () => {
+    const params = buildReportUrlSearchParams({
+      period,
+      versionId: "all",
+      unit: "auto",
+      activeTab: "overview",
+      activeMember: "alice",
+      activeActivity: "all",
+      activeStatusGroup: null,
+      activeAssignee: "all",
+    });
+    expect(params.has("member")).toBe(false);
+  });
+
+  it("omits date filters from API calls scoped to a version", () => {
     const q = buildReportQueryParams(period, "10002", "estimate");
-    expect(q.period).toBe("this_month");
-    expect(q.from).toBe("2026-10-01");
-    expect(q.to).toBe("2026-10-31");
+    expect(q.period).toBeUndefined();
+    expect(q.from).toBeUndefined();
+    expect(q.to).toBeUndefined();
     expect(q.timezone).toBe("Asia/Ho_Chi_Minh");
     expect(q.versionId).toBe("10002");
     expect(q.unit).toBe("estimate");
+  });
+
+  it("keeps date filters when all versions are selected", () => {
+    const q = buildReportQueryParams(period, "all", "auto");
+    expect(q.period).toBe("this_month");
+    expect(q.from).toBe("2026-10-01");
+    expect(q.to).toBe("2026-10-31");
   });
 
   it("builds risk query params with limits, offsets, and filters", () => {

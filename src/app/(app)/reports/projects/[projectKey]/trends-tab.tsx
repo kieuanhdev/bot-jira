@@ -25,12 +25,13 @@ interface TrendsTabProps {
 }
 
 export function TrendsTab({ projectKey, period, versionId }: TrendsTabProps) {
-  const queryParams = new URLSearchParams({
-    period: period.preset,
-    from: period.from,
-    to: period.to,
-    timezone: period.timezone,
-  });
+  const isVersionScope = Boolean(versionId && versionId !== "all");
+  const queryParams = new URLSearchParams({ timezone: period.timezone });
+  if (!isVersionScope) {
+    queryParams.set("period", period.preset);
+    queryParams.set("from", period.from);
+    queryParams.set("to", period.to);
+  }
   if (versionId && versionId !== "all") queryParams.set("versionId", versionId);
 
   const { data, isLoading, isError } = useQuery<ProjectHistoryResponse>({
@@ -47,7 +48,7 @@ export function TrendsTab({ projectKey, period, versionId }: TrendsTabProps) {
       <div className="flex items-start gap-2.5 p-3 rounded-lg border border-border bg-muted/40 text-xs text-muted-foreground">
         <Info className="h-4 w-4 shrink-0 text-primary mt-0.5" aria-hidden="true" />
         <p>
-          <strong>Dữ liệu xu hướng:</strong> Biểu đồ thể hiện thông lượng hoàn thành và biến động tồn đọng theo từng ngày/tuần trong kỳ báo cáo. Dữ liệu lịch sử dài hạn được tổng hợp tự động từ sự kiện Jira và snapshot hằng ngày.
+          <strong>Dữ liệu xu hướng:</strong> Biểu đồ thể hiện thông lượng hoàn thành và biến động tồn đọng theo từng ngày/tuần {isVersionScope ? "trong toàn bộ vòng đời version" : "trong kỳ báo cáo"}. Dữ liệu lịch sử dài hạn được tổng hợp tự động từ sự kiện Jira và snapshot hằng ngày.
         </p>
       </div>
 
@@ -63,7 +64,9 @@ export function TrendsTab({ projectKey, period, versionId }: TrendsTabProps) {
       ) : points.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 text-center rounded-xl border border-dashed border-border bg-card">
           <TrendingUp className="h-8 w-8 text-muted-foreground mb-2" />
-          <h4 className="text-sm font-semibold">Chưa có dữ liệu xu hướng trong kỳ</h4>
+          <h4 className="text-sm font-semibold">
+            {isVersionScope ? "Chưa có dữ liệu xu hướng của version" : "Chưa có dữ liệu xu hướng trong kỳ"}
+          </h4>
           <p className="text-xs text-muted-foreground mt-1 max-w-sm">
             Không có hoạt động tạo mới hoặc hoàn thành nào trong khoảng thời gian đã chọn.
           </p>
@@ -77,7 +80,8 @@ export function TrendsTab({ projectKey, period, versionId }: TrendsTabProps) {
                 Xu hướng thông lượng hoàn thành (Throughput)
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                Số lượng task hoàn thành theo từng mốc thời gian trong {period.preset}.
+                Số lượng task hoàn thành theo từng mốc thời gian
+                {isVersionScope ? " của toàn bộ version." : ` trong ${period.preset}.`}
               </p>
             </CardHeader>
             <CardContent>

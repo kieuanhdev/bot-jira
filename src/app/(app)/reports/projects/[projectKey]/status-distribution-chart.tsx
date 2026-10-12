@@ -44,6 +44,7 @@ interface StatusDistributionChartProps {
   unit?: ReportUnit | null;
   periodLabel?: string | null;
   period?: ReportPeriod | null;
+  isVersionScope?: boolean;
 }
 
 
@@ -55,6 +56,7 @@ export function StatusDistributionChart({
   unit,
   periodLabel,
   period,
+  isVersionScope = false,
 }: StatusDistributionChartProps) {
   const [metric, setMetric] = useState<MetricDimension>(() => {
     if (unit === "points") return "points";
@@ -138,7 +140,10 @@ export function StatusDistributionChart({
     [periodLabel, period]
   );
 
-  const formattedPeriodEnd = useMemo(() => formatPeriodEnd(period), [period]);
+  const formattedPeriodEnd = useMemo(
+    () => (isVersionScope ? null : formatPeriodEnd(period)),
+    [isVersionScope, period]
+  );
 
   return (
     <Card className="border-border shadow-sm overflow-hidden">
@@ -165,7 +170,11 @@ export function StatusDistributionChart({
             </div>
 
             <CardDescription className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-2">
-              <span>Cơ cấu và luồng phân bổ công việc tại thời điểm cuối kỳ báo cáo</span>
+              <span>
+                {isVersionScope
+                  ? "Cơ cấu trạng thái hiện tại của toàn bộ task thuộc version"
+                  : "Cơ cấu và luồng phân bổ công việc tại thời điểm cuối kỳ báo cáo"}
+              </span>
               {formattedPeriodEnd && (
                 <span className="font-medium text-foreground/80">
                   (Mốc chốt: {formattedPeriodEnd})

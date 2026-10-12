@@ -69,8 +69,15 @@ export function generateProjectReportCsv(
   rows.push(toCsvRow(["Công việc hoàn thành / Tổng số", `${doneCount} / ${totalCount}`]));
 
   if (report.flow) {
-    rows.push(toCsvRow(["Hoàn thành trong kỳ (Throughput)", report.flow.completedInPeriod]));
-    rows.push(toCsvRow(["Tạo mới trong kỳ", report.flow.createdInPeriod]));
+    const isVersionScope = Boolean(report.scope.versionId);
+    rows.push(toCsvRow([
+      isVersionScope ? "Đã hoàn thành trong version" : "Hoàn thành trong kỳ (Throughput)",
+      report.flow.completedInPeriod,
+    ]));
+    rows.push(toCsvRow([
+      isVersionScope ? "Tổng task trong version" : "Tạo mới trong kỳ",
+      report.flow.createdInPeriod,
+    ]));
     rows.push(toCsvRow(["Thay đổi Backlog (Net change)", report.flow.netBacklogChange]));
   }
 

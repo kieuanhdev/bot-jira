@@ -21,6 +21,7 @@ export interface TaskExplorerEvaluationOptions {
   userMap?: Map<string, string>;
   offset?: number;
   limit?: number;
+  ignoreDateRange?: boolean;
 }
 
 export interface TaskExplorerEvaluationResult {
@@ -47,6 +48,7 @@ export function evaluateTaskExplorerItems(
     userMap = new Map<string, string>(),
     offset = 0,
     limit = 50,
+    ignoreDateRange = false,
   } = options;
 
   const explorerItems: TaskExplorerItem[] = [];
@@ -63,15 +65,16 @@ export function evaluateTaskExplorerItems(
       raw: issue.raw,
     });
 
-    const isCreatedInPeriod = isDateInPeriod(
+    const isCreatedInPeriod = ignoreDateRange || isDateInPeriod(
       issue.createdAt,
       period.from,
       period.to,
       period.timezone
     );
-    const isCompletedInPeriod =
-      Boolean(resolved.date) &&
-      isDateInPeriod(resolved.date, period.from, period.to, period.timezone);
+    const isCompletedInPeriod = ignoreDateRange
+      ? isDone
+      : Boolean(resolved.date) &&
+        isDateInPeriod(resolved.date, period.from, period.to, period.timezone);
 
     let taskActivity: TaskActivityType = "unchanged";
     if (isCompletedInPeriod) {
@@ -108,7 +111,7 @@ export function evaluateTaskExplorerItems(
     }
 
     // Exclude tasks created after period end
-    if (
+    if (!ignoreDateRange &&
       issue.createdAt &&
       issue.createdAt.getTime() > new Date(`${period.to}T23:59:59.999Z`).getTime()
     ) {
@@ -116,7 +119,7 @@ export function evaluateTaskExplorerItems(
     }
 
     // Exclude tasks already completed before period start
-    if (isDone && !isCompletedInPeriod) {
+    if (!ignoreDateRange && isDone && !isCompletedInPeriod) {
       const completionDate = resolved.date || issue.statusChangedAt;
       if (
         completionDate &&

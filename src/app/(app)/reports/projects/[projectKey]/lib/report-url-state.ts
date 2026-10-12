@@ -5,6 +5,7 @@ export interface ReportStateParams {
   versionId: string;
   unit: ReportUnit;
   activeTab: string;
+  activeMember?: string | null;
   activeActivity: string;
   activeStatusGroup: ReportStatusGroup | null;
   activeAssignee: string;
@@ -12,14 +13,20 @@ export interface ReportStateParams {
 
 export function buildReportUrlSearchParams(state: ReportStateParams): URLSearchParams {
   const params = new URLSearchParams();
-  if (state.period.preset !== "this_week") params.set("period", state.period.preset);
-  if (state.period.preset === "custom") {
-    params.set("from", state.period.from);
-    params.set("to", state.period.to);
+  const isVersionScope = state.versionId !== "all";
+  if (!isVersionScope) {
+    if (state.period.preset !== "this_week") params.set("period", state.period.preset);
+    if (state.period.preset === "custom") {
+      params.set("from", state.period.from);
+      params.set("to", state.period.to);
+    }
   }
   if (state.versionId !== "all") params.set("versionId", state.versionId);
   if (state.unit !== "auto") params.set("unit", state.unit);
   if (state.activeTab !== "overview") params.set("tab", state.activeTab);
+  if (state.activeTab === "members" && state.activeMember) {
+    params.set("member", state.activeMember);
+  }
   if (state.activeTab === "tasks") {
     if (state.activeActivity !== "all") params.set("activity", state.activeActivity);
     if (state.activeStatusGroup) params.set("statusGroup", state.activeStatusGroup);
@@ -33,14 +40,13 @@ export function buildReportQueryParams(
   versionId: string,
   unit: ReportUnit
 ): Record<string, string> {
-  const params: Record<string, string> = {
-    period: period.preset,
-    from: period.from,
-    to: period.to,
-    timezone: period.timezone,
-  };
+  const params: Record<string, string> = { timezone: period.timezone };
   if (versionId && versionId !== "all") {
     params.versionId = versionId;
+  } else {
+    params.period = period.preset;
+    params.from = period.from;
+    params.to = period.to;
   }
   if (unit !== "auto") params.unit = unit;
   return params;

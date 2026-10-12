@@ -82,11 +82,11 @@ export function ProjectKpis({
     },
     {
       id: "throughput",
-      label: "Hoàn thành trong kỳ",
+      label: isVersionScope ? "Đã hoàn thành" : "Hoàn thành trong kỳ",
       value: flow ? flow.completedInPeriod : doneCount,
       subtext: comparison
         ? `${comparison.completed.delta >= 0 ? "+" : ""}${comparison.completed.delta} so với kỳ trước`
-        : "Thông lượng hoàn thành",
+        : isVersionScope ? "Tổng task đã hoàn thành" : "Thông lượng hoàn thành",
       icon: CheckCircle,
       color: "text-emerald-600 dark:text-emerald-400",
       bg: "bg-emerald-500/10",
@@ -95,11 +95,11 @@ export function ProjectKpis({
     },
     {
       id: "created",
-      label: "Tạo mới trong kỳ",
+      label: isVersionScope ? "Tổng task version" : "Tạo mới trong kỳ",
       value: flow ? flow.createdInPeriod : 0,
       subtext: comparison
         ? `${comparison.created.delta >= 0 ? "+" : ""}${comparison.created.delta} so với kỳ trước`
-        : "Công việc mới phát sinh",
+        : isVersionScope ? "Không giới hạn theo ngày" : "Công việc mới phát sinh",
       icon: FolderPlus,
       color: "text-sky-600 dark:text-sky-400",
       bg: "bg-sky-500/10",

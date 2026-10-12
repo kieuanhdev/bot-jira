@@ -6,6 +6,7 @@ import type {
 } from "./types";
 import { resolveCompletionDate, isDateInPeriod } from "./completion-date";
 import type { ReportIssueInput } from "./metrics";
+import { isDoneGroup, normalizeStatusToGroup } from "./status";
 
 export interface CalculateFlowMetricsInput {
   issues: ReportIssueInput[];
@@ -19,6 +20,7 @@ export interface CalculateFlowMetricsInput {
     fromStatusGroup?: string | null;
     toStatusGroup: string;
   }>;
+  ignoreDateRange?: boolean;
 }
 
 export function calculateFlowMetrics(input: CalculateFlowMetricsInput): {
@@ -27,7 +29,7 @@ export function calculateFlowMetrics(input: CalculateFlowMetricsInput): {
   createdIssueKeys: Set<string>;
   lowConfidenceCompletionsCount: number;
 } {
-  const { issues, from, to, timezone, unit, transitionEvents = [] } = input;
+  const { issues, from, to, timezone, unit, transitionEvents = [], ignoreDateRange = false } = input;
 
   let createdInPeriod = 0;
   let completedInPeriod = 0;
@@ -44,7 +46,7 @@ export function calculateFlowMetrics(input: CalculateFlowMetricsInput): {
   let reopenedInPeriod = 0;
 
   for (const event of transitionEvents) {
-    if (isDateInPeriod(event.occurredAt, from, to, timezone)) {
+    if (ignoreDateRange || isDateInPeriod(event.occurredAt, from, to, timezone)) {
       statusTransitionsInPeriod++;
       if (event.fromStatusGroup === "Done" && event.toStatusGroup !== "Done") {
         reopenedInPeriod++;
@@ -57,7 +59,7 @@ export function calculateFlowMetrics(input: CalculateFlowMetricsInput): {
 
   for (const issue of issues) {
     // Check if created in period
-    if (isDateInPeriod(issue.createdAt, from, to, timezone)) {
+    if (ignoreDateRange || isDateInPeriod(issue.createdAt, from, to, timezone)) {
       createdInPeriod++;
       createdIssueKeys.add(issue.jiraKey);
     }
@@ -72,7 +74,11 @@ export function calculateFlowMetrics(input: CalculateFlowMetricsInput): {
       transitionDoneDate,
     });
 
-    if (resolved.date && isDateInPeriod(resolved.date, from, to, timezone)) {
+    const completedInScope = ignoreDateRange
+      ? isDoneGroup(normalizeStatusToGroup(issue.status, issue.statusCategory))
+      : Boolean(resolved.date && isDateInPeriod(resolved.date, from, to, timezone));
+
+    if (completedInScope) {
       completedInPeriod++;
       completedIssueKeys.add(issue.jiraKey);
       if (resolved.confidence === "low") {

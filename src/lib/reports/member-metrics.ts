@@ -13,6 +13,7 @@ export interface CalculateMemberMetricsInput {
   now?: Date;
   previousPeriodCompletions?: Map<string, number>;
   userDisplayNames?: Map<string, string>;
+  ignoreDateRange?: boolean;
 }
 
 export function calculateMemberMetrics(
@@ -26,6 +27,7 @@ export function calculateMemberMetrics(
     now = new Date(),
     previousPeriodCompletions,
     userDisplayNames,
+    ignoreDateRange = false,
   } = input;
 
   const memberStats = new Map<
@@ -89,7 +91,10 @@ export function calculateMemberMetrics(
       raw: issue.raw,
     });
 
-    if (resolved.date && isDateInPeriod(resolved.date, from, to, timezone)) {
+    if (
+      (ignoreDateRange && isDone) ||
+      (!ignoreDateRange && resolved.date && isDateInPeriod(resolved.date, from, to, timezone))
+    ) {
       stat.completedTasks++;
       stat.completedPoints += pts;
       stat.completedEstimateSeconds += est;
@@ -113,7 +118,12 @@ export function calculateMemberMetrics(
         if (ageDays > stat.maxBlockedAgeDays) stat.maxBlockedAgeDays = ageDays;
       }
 
-      if (issue.dueDate && isDateInPeriod(issue.dueDate, "1970-01-01", to, timezone)) {
+      if (
+        issue.dueDate &&
+        (ignoreDateRange
+          ? issue.dueDate.getTime() <= now.getTime()
+          : isDateInPeriod(issue.dueDate, "1970-01-01", to, timezone))
+      ) {
         stat.currentOverdue++;
       }
 

@@ -13,6 +13,7 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import type { ProjectReportSummary, HealthStatus, ReportPeriod } from "@/lib/reports/types";
@@ -88,7 +89,7 @@ export function ProjectReportTable({ projects, period, unit }: ProjectReportTabl
             <th className="py-3 px-4 text-center">Thay đổi Backlog</th>
             <th className="py-3 px-4">Sức khỏe</th>
             <th className="py-3 px-4">Đồng bộ</th>
-            <th className="py-3 px-4 text-right">Chi tiết</th>
+            <th className="py-3 px-4 text-right">Báo cáo</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -99,6 +100,7 @@ export function ProjectReportTable({ projects, period, unit }: ProjectReportTabl
             const topReason = p.healthReasons?.[0]?.message;
 
             const detailHref = `/reports/projects/${p.projectKey}?period=${period.preset}&from=${period.from}&to=${period.to}&unit=${unit}`;
+            const membersHref = `${detailHref}&tab=members`;
 
             return (
               <tr
@@ -213,15 +215,25 @@ export function ProjectReportTable({ projects, period, unit }: ProjectReportTabl
                 </td>
 
                 {/* Action */}
-                <td className="py-3.5 px-4 text-right">
-                  <Link
-                    href={detailHref}
-                    className="inline-flex items-center justify-center p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer transition-colors"
-                    title={`Xem chi tiết ${p.projectName}`}
-                    aria-label={`Xem chi tiết ${p.projectName}`}
-                  >
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </Link>
+                <td className="py-3.5 px-4">
+                  <div className="flex items-center justify-end gap-1">
+                    <Link
+                      href={membersHref}
+                      className="inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                      title={`Xem báo cáo thành viên của ${p.projectName}`}
+                    >
+                      <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                      Thành viên
+                    </Link>
+                    <Link
+                      href={detailHref}
+                      className="inline-flex cursor-pointer items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      title={`Xem báo cáo dự án ${p.projectName}`}
+                      aria-label={`Xem báo cáo dự án ${p.projectName}`}
+                    >
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  </div>
                 </td>
               </tr>
             );

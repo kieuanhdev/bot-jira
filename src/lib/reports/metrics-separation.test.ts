@@ -391,6 +391,76 @@ describe("Batch 6.2 - Metrics Separation, Timezone & Empty Data", () => {
     });
   });
 
+  describe("Version scope ignores report dates", () => {
+    it("uses every issue in the selected version for project metrics", () => {
+      const oldDone = makeIssue({
+        jiraKey: "VER-1",
+        status: "Done",
+        statusCategory: "done",
+        createdAt: new Date("2026-07-01T00:00:00.000Z"),
+        statusChangedAt: new Date("2026-08-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-08-01T00:00:00.000Z"),
+      });
+      const createdAfterPeriod = makeIssue({
+        jiraKey: "VER-2",
+        createdAt: new Date("2026-10-20T00:00:00.000Z"),
+        updatedAt: new Date("2026-10-20T00:00:00.000Z"),
+      });
+
+      const result = calculateProjectReportMetrics({
+        mappedIssues: [oldDone, createdAfterPeriod],
+        period: samplePeriod,
+        comparisonPeriod: {
+          ...samplePeriod,
+          from: "2026-09-24",
+          to: "2026-09-30",
+        },
+        resolvedVersion: { versionId: "v1", versionName: "1.0" },
+        freshness: mockFreshness,
+        now: new Date("2026-10-25T00:00:00.000Z"),
+      });
+
+      expect(result.periodIssues.map((issue) => issue.jiraKey)).toEqual(["VER-1", "VER-2"]);
+      expect(result.flow.createdInPeriod).toBe(2);
+      expect(result.flow.completedInPeriod).toBe(1);
+      expect(result.snapshotAtEnd.totalAtEnd).toBe(2);
+      expect(result.taskProgress.total).toBe(2);
+      expect(result.comparison).toBeNull();
+    });
+
+    it("keeps old completed tasks in the version task explorer", () => {
+      const rawIssue: RawReportTaskRecord = {
+        jiraKey: "VER-OLD",
+        projectKey: "VER",
+        summary: "Completed before selected dates",
+        status: "Done",
+        statusCategory: "done",
+        statusChangedAt: new Date("2026-08-01T00:00:00.000Z"),
+        assigneeJira: "alice",
+        priority: "Medium",
+        points: 3,
+        originalEstimateSeconds: null,
+        timeSpent: null,
+        dueDate: null,
+        createdAt: new Date("2026-07-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-08-01T00:00:00.000Z"),
+        labels: [],
+        raw: null,
+        lastSyncedAt: new Date("2026-10-01T00:00:00.000Z"),
+        fixVersionNames: ["1.0"],
+      };
+
+      const result = evaluateTaskExplorerItems([rawIssue], {
+        period: samplePeriod,
+        activity: "completed",
+        ignoreDateRange: true,
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.items[0].activity).toBe("completed");
+    });
+  });
+
   describe("Portfolio Rollup Filtering and Sorting", () => {
     it("sorts projects by health severity and filters correctly", () => {
       const summaryAtRisk = calculatePortfolioProjectSummary({

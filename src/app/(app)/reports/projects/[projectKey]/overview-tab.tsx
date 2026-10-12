@@ -125,6 +125,7 @@ export function OverviewTab({
         unit={unit || report.scope.unit}
         periodLabel={report.periodLabel}
         period={report.period}
+        isVersionScope={isVersionScope}
       />
 
       {/* Flow and bottleneck charts */}
@@ -133,6 +134,7 @@ export function OverviewTab({
           flow={report.flow}
           comparison={report.comparison}
           periodLabel={report.periodLabel}
+          isVersionScope={isVersionScope}
         />
         <BottleneckChart bottlenecks={report.bottlenecks} />
       </div>

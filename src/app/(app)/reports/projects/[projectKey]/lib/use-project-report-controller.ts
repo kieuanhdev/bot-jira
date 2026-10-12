@@ -40,6 +40,9 @@ export function useProjectReportController(projectKey: string) {
     (searchParams.get("unit") as ReportUnit) || "auto"
   );
   const [activeTab, setActiveTab] = useState<string>(searchParams.get("tab") || "overview");
+  const [activeMember, setActiveMember] = useState<string | null>(
+    searchParams.get("member") || null
+  );
 
   const [activeKpiFilter, setActiveKpiFilter] = useState<string | null>(null);
   const [activeActivity, setActiveActivity] = useState<string>(
@@ -60,11 +63,20 @@ export function useProjectReportController(projectKey: string) {
   if (searchParamsString !== prevParamsString) {
     setPrevParamsString(searchParamsString);
     setActiveTab(searchParams.get("tab") || "overview");
+    setActiveMember(searchParams.get("member") || null);
     setActiveStatusGroup((searchParams.get("statusGroup") as ReportStatusGroup) || null);
     setActiveActivity(searchParams.get("activity") || "all");
     setActiveAssignee(searchParams.get("assignee") || "all");
     setVersionId(searchParams.get("versionId") || "all");
     setUnit((searchParams.get("unit") as ReportUnit) || "auto");
+    setPeriod(
+      resolveReportPeriod({
+        period: searchParams.get("period") || "this_week",
+        from: searchParams.get("from"),
+        to: searchParams.get("to"),
+        timezone: searchParams.get("timezone") || "Asia/Ho_Chi_Minh",
+      }).period
+    );
   }
 
   // Sync state to URL
@@ -74,6 +86,7 @@ export function useProjectReportController(projectKey: string) {
       versionId,
       unit,
       activeTab,
+      activeMember,
       activeActivity,
       activeStatusGroup,
       activeAssignee,
@@ -92,6 +105,7 @@ export function useProjectReportController(projectKey: string) {
     versionId,
     unit,
     activeTab,
+    activeMember,
     activeActivity,
     activeStatusGroup,
     activeAssignee,
@@ -99,6 +113,55 @@ export function useProjectReportController(projectKey: string) {
     router,
     searchParams,
   ]);
+
+  const handleTabChange = (tabId: string) => {
+    if (tabId === activeTab) return;
+    setActiveTab(tabId);
+    const nextMember = tabId === "members" ? activeMember : null;
+    if (tabId !== "members") {
+      setActiveMember(null);
+    }
+    const params = buildReportUrlSearchParams({
+      period,
+      versionId,
+      unit,
+      activeTab: tabId,
+      activeMember: nextMember,
+      activeActivity,
+      activeStatusGroup,
+      activeAssignee,
+    });
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  const handleSelectMember = (assignee: string | null) => {
+    setActiveMember(assignee);
+    const params = buildReportUrlSearchParams({
+      period,
+      versionId,
+      unit,
+      activeTab: "members",
+      activeMember: assignee,
+      activeActivity,
+      activeStatusGroup,
+      activeAssignee,
+    });
+    const qs = params.toString();
+    if (assignee) {
+      router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    } else {
+      if (typeof window !== "undefined" && window.history.length > 1) {
+        router.back();
+      } else {
+        router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      }
+    }
+  };
+
+  const handleBackFromMember = () => {
+    handleSelectMember(null);
+  };
 
   const handleDrillDownToTasks = (filter: {
     activity?: string;
@@ -117,13 +180,15 @@ export function useProjectReportController(projectKey: string) {
       setActiveStatusGroup(filter.statusGroup as ReportStatusGroup);
     if (filter.assignee !== undefined) setActiveAssignee(filter.assignee);
     setActiveTab("tasks");
+    setActiveMember(null);
 
-    // Push new history state so Browser Back returns to overview
+    // Push new history state so Browser Back returns to overview / previous screen
     const params = buildReportUrlSearchParams({
       period,
       versionId,
       unit,
       activeTab: "tasks",
+      activeMember: null,
       activeActivity: nextActivity,
       activeStatusGroup: nextStatusGroup,
       activeAssignee: nextAssignee,
@@ -135,6 +200,7 @@ export function useProjectReportController(projectKey: string) {
 
   const handleNavigateToOverview = () => {
     setActiveTab("overview");
+    setActiveMember(null);
     setActiveStatusGroup(null);
     setActiveActivity("all");
     setActiveAssignee("all");
@@ -144,12 +210,21 @@ export function useProjectReportController(projectKey: string) {
       versionId,
       unit,
       activeTab: "overview",
+      activeMember: null,
       activeActivity: "all",
       activeStatusGroup: null,
       activeAssignee: "all",
     });
     const qs = params.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  const handleNavigateBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      handleNavigateToOverview();
+    }
   };
 
   const queryParams = useMemo(() => {
@@ -228,6 +303,8 @@ export function useProjectReportController(projectKey: string) {
     setUnit,
     activeTab,
     setActiveTab,
+    activeMember,
+    setActiveMember,
     activeKpiFilter,
     setActiveKpiFilter,
     activeActivity,
@@ -249,6 +326,10 @@ export function useProjectReportController(projectKey: string) {
     queryParams,
     handleDrillDownToTasks,
     handleNavigateToOverview,
+    handleNavigateBack,
+    handleSelectMember,
+    handleBackFromMember,
+    handleTabChange,
     handleExportCsv,
   };
 }

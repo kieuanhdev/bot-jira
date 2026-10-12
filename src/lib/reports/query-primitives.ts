@@ -183,7 +183,8 @@ export interface IssueTransitionEventItem {
  */
 export async function fetchIssueTransitionEvents(
   projectKey: string,
-  bounds: { startDate: Date; endDate: Date }
+  bounds?: { startDate: Date; endDate: Date },
+  issueKeys?: string[]
 ): Promise<IssueTransitionEventItem[]> {
   const normalizedKey = normalizeProjectKey(projectKey);
   if (!prisma.issueTransitionEvent) {
@@ -193,10 +194,15 @@ export async function fetchIssueTransitionEvents(
   return prisma.issueTransitionEvent.findMany({
     where: {
       projectKey: normalizedKey,
-      occurredAt: {
-        gte: bounds.startDate,
-        lte: bounds.endDate,
-      },
+      ...(bounds
+        ? {
+            occurredAt: {
+              gte: bounds.startDate,
+              lte: bounds.endDate,
+            },
+          }
+        : {}),
+      ...(issueKeys ? { jiraKey: { in: issueKeys } } : {}),
     },
     select: {
       jiraKey: true,

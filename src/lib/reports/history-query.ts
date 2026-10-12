@@ -7,6 +7,7 @@ import type {
 import { resolveProjectVersionFilter } from "./version";
 import { fetchProjectReportIssues } from "./query-primitives";
 import { calculateHistoryMetrics } from "./history-metrics";
+import { formatDateInTimezone } from "./period";
 
 export interface HistoryQueryParams {
   projectKey: string;
@@ -27,14 +28,32 @@ export async function getProjectHistory(
     resolvedVersion?.whereInput
   );
 
+  let effectivePeriod = period;
+  if (resolvedVersion && rawIssues.length > 0) {
+    const datedValues = rawIssues.flatMap((issue) =>
+      [issue.createdAt, issue.statusChangedAt, issue.updatedAt].filter(
+        (value): value is Date => value instanceof Date
+      )
+    );
+    if (datedValues.length > 0) {
+      const earliest = new Date(Math.min(...datedValues.map((value) => value.getTime())));
+      effectivePeriod = {
+        ...period,
+        preset: "custom",
+        from: formatDateInTimezone(earliest, period.timezone),
+        to: formatDateInTimezone(new Date(), period.timezone),
+      };
+    }
+  }
+
   const { dataPoints, dataSufficiencyWarning } = calculateHistoryMetrics({
     issues: rawIssues,
-    period,
+    period: effectivePeriod,
   });
 
   return {
     projectKey: normalizedKey,
-    period,
+    period: effectivePeriod,
     dataPoints,
     dataSufficiencyWarning,
   };

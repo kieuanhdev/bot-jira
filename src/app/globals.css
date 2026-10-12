@@ -129,6 +129,37 @@
   }
 }
 
+/* View transitions for reports & member drill-downs */
+@keyframes viewSlideForward {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes viewSlideBackward {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-view-forward {
+  animation: viewSlideForward 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-view-backward {
+  animation: viewSlideBackward 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* Rendered Jira wiki markup (descriptions, comments). */
 .wiki-content {
   line-height: 1.6;

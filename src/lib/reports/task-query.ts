@@ -54,6 +54,7 @@ export async function getProjectTasks(
     statusGroup: statusGroup ?? "all",
     assignee: assignee ?? "all",
     search: search ?? "",
+    ignoreDateRange: Boolean(resolvedVersion),
     userMap,
     offset,
     limit,

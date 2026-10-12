@@ -35,7 +35,7 @@ export async function getProjectMembers(
 
   // Previous period completions if comparison period exists
   let previousCompletions: Map<string, number> | undefined;
-  if (comparisonPeriod) {
+  if (comparisonPeriod && !resolvedVersion) {
     const prevMetrics = calculateMemberMetrics({
       issues: mappedIssues,
       from: comparisonPeriod.from,
@@ -53,12 +53,13 @@ export async function getProjectMembers(
     timezone: period.timezone,
     userDisplayNames: userMap,
     previousPeriodCompletions: previousCompletions,
+    ignoreDateRange: Boolean(resolvedVersion),
   });
 
   return {
     members,
     period,
-    comparisonPeriod,
+    comparisonPeriod: resolvedVersion ? null : comparisonPeriod,
     unit: effectiveUnit,
   };
 }

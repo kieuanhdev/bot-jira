@@ -9,18 +9,19 @@ interface ThroughputFlowChartProps {
   flow: ProjectFlowMetrics;
   comparison?: MetricComparison | null;
   periodLabel: string;
+  isVersionScope?: boolean;
 }
 
-export function ThroughputFlowChart({ flow, comparison, periodLabel }: ThroughputFlowChartProps) {
+export function ThroughputFlowChart({ flow, comparison, periodLabel, isVersionScope = false }: ThroughputFlowChartProps) {
   const chartData = [
     {
-      name: "Tạo mới trong kỳ",
+      name: isVersionScope ? "Tổng task version" : "Tạo mới trong kỳ",
       count: flow.createdInPeriod,
       previous: comparison?.created.previous ?? 0,
       fill: "var(--chart-2)",
     },
     {
-      name: "Hoàn thành trong kỳ",
+      name: isVersionScope ? "Đã hoàn thành" : "Hoàn thành trong kỳ",
       count: flow.completedInPeriod,
       previous: comparison?.completed.previous ?? 0,
       fill: "var(--chart-1)",
@@ -31,9 +32,13 @@ export function ThroughputFlowChart({ flow, comparison, periodLabel }: Throughpu
     <Card className="shadow-sm border-border">
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="text-base font-semibold">Luồng công việc trong kỳ</CardTitle>
+          <CardTitle className="text-base font-semibold">
+            {isVersionScope ? "Tổng quan công việc version" : "Luồng công việc trong kỳ"}
+          </CardTitle>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Tạo mới so với hoàn thành trong {periodLabel}.
+            {isVersionScope
+              ? `Toàn bộ task thuộc ${periodLabel.replace("Toàn bộ version ", "version ")}.`
+              : `Tạo mới so với hoàn thành trong ${periodLabel}.`}
           </p>
         </div>
 
@@ -72,7 +77,7 @@ export function ThroughputFlowChart({ flow, comparison, periodLabel }: Throughpu
                 }}
               />
               <Legend wrapperStyle={{ fontSize: "12px" }} />
-              <Bar dataKey="count" name="Kỳ hiện tại" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="count" name={isVersionScope ? "Version đã chọn" : "Kỳ hiện tại"} fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
               {comparison && (
                 <Bar dataKey="previous" name="Kỳ trước đó" fill="var(--muted-foreground)" opacity={0.4} radius={[4, 4, 0, 0]} />
               )}

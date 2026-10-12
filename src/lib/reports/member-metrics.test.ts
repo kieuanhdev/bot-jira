@@ -83,4 +83,22 @@ describe("member-metrics (Section 2.5, Section 6.6)", () => {
     expect(bob?.supportSignal).toBe("needs_unblock");
     expect(bob?.supportReasons[0]).toContain("bị tắc");
   });
+
+  it("counts completed work outside the date range for a version scope", () => {
+    const res = calculateMemberMetrics({
+      issues: [
+        makeIssue({
+          status: "Done",
+          statusCategory: "done",
+          statusChangedAt: new Date("2026-08-01T10:00:00Z"),
+        }),
+      ],
+      from,
+      to,
+      timezone,
+      ignoreDateRange: true,
+    });
+
+    expect(res[0].completedTasks).toBe(1);
+  });
 });

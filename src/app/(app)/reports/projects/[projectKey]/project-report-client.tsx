@@ -28,9 +28,12 @@ import {
   Users,
   TrendingUp,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api-client";
 import type {
   ReportUnit,
   ReportStatusGroup,
+  ProjectMembersResponse,
 } from "@/lib/reports/types";
 import { useProjectReportController } from "./lib/use-project-report-controller";
 
@@ -47,7 +50,7 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
     unit,
     setUnit,
     activeTab,
-    setActiveTab,
+    activeMember,
     activeKpiFilter,
     setActiveKpiFilter,
     activeActivity,
@@ -68,8 +71,46 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
     riskData,
     handleDrillDownToTasks,
     handleNavigateToOverview,
+    handleNavigateBack,
+    handleSelectMember,
+    handleBackFromMember,
+    handleTabChange,
     handleExportCsv,
   } = useProjectReportController(projectKey);
+
+  const isMemberTabAndSelected = activeTab === "members" && Boolean(activeMember);
+
+  const { data: membersData } = useQuery<ProjectMembersResponse>({
+    queryKey: [
+      "reports",
+      "members",
+      projectKey,
+      new URLSearchParams({
+        timezone: period.timezone,
+        ...(versionId && versionId !== "all"
+          ? { versionId }
+          : { period: period.preset, from: period.from, to: period.to }),
+      }).toString(),
+    ],
+    queryFn: () => {
+      const qp = new URLSearchParams({ timezone: period.timezone });
+      if (versionId && versionId !== "all") {
+        qp.set("versionId", versionId);
+      } else {
+        qp.set("period", period.preset);
+        qp.set("from", period.from);
+        qp.set("to", period.to);
+      }
+      return api<ProjectMembersResponse>(
+        `/api/reports/projects/${projectKey}/members?${qp.toString()}`
+      );
+    },
+    enabled: isMemberTabAndSelected,
+    staleTime: 30_000,
+  });
+
+  const activeMemberName =
+    membersData?.members.find((m) => m.assignee === activeMember)?.displayName || activeMember;
 
   const tabs = [
     { id: "overview", label: "Tổng quan", icon: Layers },
@@ -83,7 +124,17 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
       {/* Header & Back navigation */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          {activeTab !== "overview" ? (
+          {isMemberTabAndSelected ? (
+            <button
+              type="button"
+              onClick={handleBackFromMember}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer transition-colors shadow-xs"
+              title="Quay lại danh sách thành viên"
+              aria-label="Quay lại danh sách thành viên"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          ) : activeTab !== "overview" ? (
             <button
               type="button"
               onClick={handleNavigateToOverview}
@@ -127,9 +178,25 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
               {activeTab !== "overview" && (
                 <>
                   <span>/</span>
-                  <span className="text-foreground font-medium">
-                    {tabs.find((t) => t.id === activeTab)?.label || activeTab}
-                  </span>
+                  {isMemberTabAndSelected ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleBackFromMember}
+                        className="hover:text-foreground hover:underline transition-colors cursor-pointer"
+                      >
+                        Thành viên
+                      </button>
+                      <span>/</span>
+                      <span className="text-foreground font-medium">
+                        {activeMemberName}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-foreground font-medium">
+                      {tabs.find((t) => t.id === activeTab)?.label || activeTab}
+                    </span>
+                  )}
                 </>
               )}
             </div>
@@ -143,7 +210,10 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-0.5">
-              <span>{report?.periodLabel || `${period.from} - ${period.to}`}</span>
+              <span>
+                {report?.periodLabel ||
+                  (versionId !== "all" ? "Toàn bộ task trong version" : `${period.from} - ${period.to}`)}
+              </span>
               {report?.freshness?.lastSyncedAt && (
                 <span className="inline-flex items-center gap-1">
                   <Clock className="h-3 w-3" aria-hidden="true" />
@@ -157,7 +227,9 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
         {/* Filter Toolbar */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Period selector */}
-          <ReportPeriodFilter period={period} onPeriodChange={setPeriod} />
+          {versionId === "all" && (
+            <ReportPeriodFilter period={period} onPeriodChange={setPeriod} />
+          )}
 
           {/* Fix Version selector */}
           <div className="w-[160px]">
@@ -227,7 +299,7 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 className={`inline-flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium cursor-pointer transition-colors ${
                   isActive
                     ? "border-primary text-primary"
@@ -317,7 +389,7 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
                 );
                 setActiveAssignee(assignee);
               }}
-              onNavigateToOverview={handleNavigateToOverview}
+              onNavigateToOverview={handleNavigateBack}
             />
           )}
 
@@ -326,6 +398,8 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
               projectKey={projectKey}
               period={period}
               versionId={versionId}
+              selectedMemberId={activeMember}
+              onSelectMember={handleSelectMember}
               onDrillDownToTasks={handleDrillDownToTasks}
             />
           )}

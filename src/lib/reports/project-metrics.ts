@@ -30,6 +30,7 @@ import { calculateProjectHealth, type HealthEvaluationResult } from "./health";
 import { evaluateDataQuality } from "./data-quality";
 import { evaluateRiskTask, sortRiskTasks } from "./risk-query";
 import { getPeriodDateBounds, filterIssuesForPeriod } from "./query-primitives";
+import { formatDateInTimezone } from "./period";
 
 export interface ProjectReportMetricsInput {
   mappedIssues: ReportIssueInput[];
@@ -103,6 +104,7 @@ export function calculateProjectReportMetrics(
   // Coverage and unit
   const coverage = calculateCoverage(mappedIssues);
   const effectiveUnit: EffectiveUnit = resolveEffectiveUnit(unit, coverage);
+  const isVersionScope = Boolean(resolvedVersion);
 
   // Flow in period
   const periodBounds = getPeriodDateBounds(period);
@@ -113,28 +115,31 @@ export function calculateProjectReportMetrics(
     timezone: period.timezone,
     unit: effectiveUnit,
     transitionEvents,
+    ignoreDateRange: isVersionScope,
   });
 
   // Tasks relevant to this reporting period (active, open, or completed within the period)
-  const periodIssues = filterIssuesForPeriod(
-    mappedIssues,
-    periodBounds.startDate,
-    periodBounds.endDate,
-    completedIssueKeys
-  );
+  const periodIssues = isVersionScope
+    ? mappedIssues
+    : filterIssuesForPeriod(
+        mappedIssues,
+        periodBounds.startDate,
+        periodBounds.endDate,
+        completedIssueKeys
+      );
 
   // Snapshot at end of period
   const snapshotAtEnd = calculateSnapshotMetrics({
     issues: periodIssues,
     unit: effectiveUnit,
     coverage,
-    periodEndStr: period.to,
+    periodEndStr: isVersionScope ? formatDateInTimezone(now, period.timezone) : period.to,
     now,
   });
 
   // Comparison period metrics
   let comparison: MetricComparison | null = null;
-  if (comparePrevious !== false && comparisonPeriod) {
+  if (!isVersionScope && comparePrevious !== false && comparisonPeriod) {
     const prevPeriodBounds = getPeriodDateBounds(comparisonPeriod);
     const prevFlowRes = calculateFlowMetrics({
       issues: mappedIssues,
@@ -200,7 +205,9 @@ export function calculateProjectReportMetrics(
   });
 
   // Status distribution, workload, bottlenecks
-  const statusDistribution = calculateStatusDistribution(periodIssues, period.to, period.from);
+  const statusDistribution = isVersionScope
+    ? calculateStatusDistribution(periodIssues)
+    : calculateStatusDistribution(periodIssues, period.to, period.from);
   const workload = calculateWorkload(periodIssues);
   const bottlenecks = calculateBottlenecks(periodIssues, now);
 

@@ -431,6 +431,25 @@ describe("Reports Query Primitives", () => {
       expect(events).toHaveLength(1);
       expect(events[0].jiraKey).toBe("TEST-1");
     });
+
+    it("queries the full transition history for version issue keys without date bounds", async () => {
+      mocks.issueTransitionEventFindMany.mockResolvedValue([]);
+
+      await fetchIssueTransitionEvents("test", undefined, ["TEST-1", "TEST-2"]);
+
+      expect(mocks.issueTransitionEventFindMany).toHaveBeenCalledWith({
+        where: {
+          projectKey: "TEST",
+          jiraKey: { in: ["TEST-1", "TEST-2"] },
+        },
+        select: {
+          jiraKey: true,
+          occurredAt: true,
+          fromStatusGroup: true,
+          toStatusGroup: true,
+        },
+      });
+    });
   });
 
   describe("fetchAvailableProjectVersions", () => {

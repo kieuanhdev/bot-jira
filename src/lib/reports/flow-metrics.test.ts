@@ -102,4 +102,26 @@ describe("flow-metrics", () => {
     expect(comp.completed.percentChange).toBe(100);
     expect(comp.netBacklog.delta).toBe(1);
   });
+
+  it("includes transitions outside the date range for a version scope", () => {
+    const { flow } = calculateFlowMetrics({
+      issues: [makeIssue({ status: "In Progress", statusCategory: "indeterminate" })],
+      from: "2026-10-01",
+      to: "2026-10-07",
+      timezone: "UTC",
+      unit: "tasks",
+      ignoreDateRange: true,
+      transitionEvents: [
+        {
+          jiraKey: "TEST-1",
+          occurredAt: new Date("2026-08-01T00:00:00Z"),
+          fromStatusGroup: "Done",
+          toStatusGroup: "In Progress",
+        },
+      ],
+    });
+
+    expect(flow.statusTransitionsInPeriod).toBe(1);
+    expect(flow.reopenedInPeriod).toBe(1);
+  });
 });
