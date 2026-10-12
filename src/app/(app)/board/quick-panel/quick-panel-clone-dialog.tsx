@@ -49,7 +49,7 @@ export function QuickPanelCloneDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CopyPlus className="h-4 w-4 text-primary" aria-hidden="true" />
-            Nhân bản {jiraKey}
+            Clone {jiraKey}
           </DialogTitle>
           <DialogDescription className="line-clamp-1 text-xs">{summary}</DialogDescription>
         </DialogHeader>
@@ -122,7 +122,7 @@ export function QuickPanelCloneDialog({
             ) : (
               <CopyPlus className="h-3.5 w-3.5" aria-hidden="true" />
             )}
-            {cloning ? "Đang nhân bản…" : "Nhân bản"}
+            {cloning ? "Đang clone…" : "Clone"}
           </Button>
         </DialogFooter>
       </DialogContent>

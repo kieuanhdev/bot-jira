@@ -17,6 +17,10 @@ export const issuesKeys = {
   filters: (scope: string) => ["issues", "filters", scope] as const,
   /** `["issues", <jiraKey>, "versions"]` — available project versions for an issue. */
   versions: (jiraKey: string) => ["issues", jiraKey, "versions"] as const,
+  /** `["issues", <jiraKey>, "link-types"]` — issue link types offered by Jira. */
+  linkTypes: (jiraKey: string) => ["issues", jiraKey, "link-types"] as const,
+  /** `["issues", "search", <query>]` — the lightweight key/summary picker lookup. */
+  search: (query: string) => ["issues", "search", query] as const,
 };
 
 const JIRA_KEY_RE = /^[A-Z][A-Z0-9_]*-\d+$/i;

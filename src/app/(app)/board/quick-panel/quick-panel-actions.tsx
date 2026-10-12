@@ -49,6 +49,8 @@ interface QuickPanelActionsProps {
   cloning: boolean;
   onClone: () => void;
   cloneMsg: QuickPanelActionMessage | null;
+  /** Feedback from the footer "Thêm" menu (link, worklog, copy...). */
+  actionMsg: QuickPanelActionMessage | null;
 }
 
 function ActionMessage({ message }: { message: QuickPanelActionMessage | null }) {
@@ -95,6 +97,7 @@ export function QuickPanelActions({
   cloning,
   onClone,
   cloneMsg,
+  actionMsg,
 }: QuickPanelActionsProps) {
   return (
     <>
@@ -242,14 +245,14 @@ export function QuickPanelActions({
           disabled={cloning}
           onClick={onClone}
           className="h-7 gap-1.5 text-xs ml-auto cursor-pointer"
-          title="Nhân bản task này và liên kết với bản gốc"
+          title="Clone task này và liên kết với bản gốc"
         >
           {cloning ? (
             <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />
           ) : (
             <CopyPlus className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
           )}
-          {cloning ? "Đang nhân bản…" : "Nhân bản"}
+          {cloning ? "Đang clone…" : "Clone"}
         </Button>
 
         {/* Create Branch Button */}
@@ -272,6 +275,7 @@ export function QuickPanelActions({
 
       <ActionMessage message={branchMsg} />
       <ActionMessage message={cloneMsg} />
+      <ActionMessage message={actionMsg} />
     </>
   );
 }

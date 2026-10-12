@@ -5,15 +5,24 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getErrorMessage } from "@/lib/api-client";
-import { getJiraIssueUrl } from "@/lib/utils";
-import { issuesKeys, meKeys, transitionsKeys, branchesForKeys } from "@/lib/query-keys";
+import { getJiraIssueUrl, safeRandomUUID } from "@/lib/utils";
+import {
+  issuesKeys,
+  meKeys,
+  transitionsKeys,
+  branchesForKeys,
+  watchKeys,
+} from "@/lib/query-keys";
+import { getDefaultLogStartedAt, validateWorklog } from "@/lib/worklogs/schema";
 import type { IssueItem } from "@/hooks/use-issues";
-import type { QuickAction } from "./lib/board-types";
+import { useIssueWorklog } from "@/hooks/use-issue-detail";
 import { CATEGORY_DOT_MAP } from "./lib/board-types";
-import { toName, statusCatOf } from "./lib/quick-panel-utils";
+import { FLAG_LABEL } from "./lib/quick-panel-utils";
 import { QuickPanelHeader } from "./quick-panel/quick-panel-header";
 import { QuickPanelActions, type QuickPanelActionMessage } from "./quick-panel/quick-panel-actions";
 import { QuickPanelCloneDialog } from "./quick-panel/quick-panel-clone-dialog";
+import { QuickPanelLinkDialog } from "./quick-panel/quick-panel-link-dialog";
+import { LogWorkDialog } from "@/components/issues/log-work-dialog";
 import { QuickPanelFields } from "./quick-panel/quick-panel-fields";
 import { QuickPanelComments } from "./quick-panel/quick-panel-comments";
 import { QuickPanelFooter } from "./quick-panel/quick-panel-footer";
@@ -36,7 +45,6 @@ export function QuickPanel({
 }) {
   const router = useRouter();
   const qc = useQueryClient();
-  const [watched, setWatched] = useState(false);
   const [copied, setCopied] = useState(false);
   const [creatingBranch, setCreatingBranch] = useState(false);
   const [branchMsg, setBranchMsg] = useState<QuickPanelActionMessage | null>(null);
@@ -44,6 +52,17 @@ export function QuickPanel({
   const [cloning, setCloning] = useState(false);
   const [cloneError, setCloneError] = useState<string | null>(null);
   const [cloneMsg, setCloneMsg] = useState<QuickPanelActionMessage | null>(null);
+  const [actionMsg, setActionMsg] = useState<QuickPanelActionMessage | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [logWorkOpen, setLogWorkOpen] = useState(false);
+  const [logTimeSpent, setLogTimeSpent] = useState("");
+  const [logStartedAt, setLogStartedAt] = useState(() => getDefaultLogStartedAt());
+  const [logComment, setLogComment] = useState("");
+  const [submittingWorklog, setSubmittingWorklog] = useState(false);
+  const [worklogError, setWorklogError] = useState<string | null>(null);
+  const [worklogIdempotencyKey, setWorklogIdempotencyKey] = useState(() => safeRandomUUID());
   const [optimisticOverrides, setOptimisticOverrides] = useState<Record<string, unknown>>({});
   const panelRef = useRef<HTMLDivElement | null>(null);
 
@@ -85,6 +104,20 @@ export function QuickPanel({
   const bitbucketBaseUrl = branchesData?.bitbucketBaseUrl || me?.bitbucketBaseUrl || "";
   const jiraUrl = getJiraIssueUrl(jiraBaseUrl || me?.jiraBaseUrl, issue.jiraKey);
 
+  // The watch endpoint is a server-side toggle, so the panel reads the current
+  // state instead of assuming "not watching" on open.
+  const { data: watchList } = useQuery({
+    queryKey: watchKeys.all,
+    queryFn: () => api<{ items: { jiraKey: string }[] }>("/api/watch"),
+    staleTime: 30_000,
+    retry: 1,
+  });
+  const [watchOverride, setWatchOverride] = useState<boolean | null>(null);
+  const watched =
+    watchOverride ?? (watchList?.items ?? []).some((w) => w.jiraKey === issue.jiraKey);
+
+  const worklogMutation = useIssueWorklog(issue.jiraKey);
+
   const { data: projectVersions } = useQuery({
     queryKey: issuesKeys.versions(issue.jiraKey),
     queryFn: () => api<{ items: { id: string; name: string }[] }>(`/api/issues/${issue.jiraKey}/versions`),
@@ -111,6 +144,13 @@ export function QuickPanel({
   const aiScore = d?.aiScore ?? issue.aiScore;
   const aiDecision = d?.aiDecision ?? issue.aiDecision;
   const description = (optimisticOverrides.description as string | undefined) ?? d?.description ?? issue.description;
+  const dueDate =
+    optimisticOverrides.dueDate !== undefined
+      ? (optimisticOverrides.dueDate as string | null)
+      : (d?.dueDate ?? issue.dueDate);
+  const labels = d?.labels ?? issue.labels ?? [];
+  const flagged = labels.includes(FLAG_LABEL);
+  const timeSpentSeconds = d?.timeSpentSeconds ?? issue.timeSpent;
   const stale = d?.staleSnapshots?.[0] ?? null;
 
   // Auto-focus the panel on open; trap Tab inside; Escape closes.
@@ -232,60 +272,119 @@ export function QuickPanel({
         type: res.linkError ? "error" : "success",
         text: res.linkError
           ? `Đã tạo ${res.key} nhưng chưa liên kết được với ${issue.jiraKey}: ${res.linkError}`
-          : `Đã tạo bản sao ${res.key}${res.relation ? ` (${res.relation} ${issue.jiraKey})` : ""}.`,
+          : `Đã clone thành ${res.key}${res.relation ? ` (${res.relation} ${issue.jiraKey})` : ""}.`,
         href: `/issue/${encodeURIComponent(res.key)}`,
         linkLabel: `Mở ${res.key}`,
       });
       await invalidate();
     } catch (e) {
-      setCloneError(getErrorMessage(e, "Không nhân bản được task."));
+      setCloneError(getErrorMessage(e, "Không clone được task."));
     } finally {
       setCloning(false);
     }
   }
 
-  async function doAction(action: QuickAction) {
-    const key = issue.jiraKey;
+  /** Show a short-lived note under the action bar, like the branch/clone ones. */
+  function flashActionMsg(message: QuickPanelActionMessage) {
+    setActionMsg(message);
+    window.setTimeout(() => setActionMsg(null), 6000);
+  }
+
+  async function handleLinkIssue(input: {
+    typeName: string;
+    direction: "inward" | "outward";
+    targetKey: string;
+  }) {
+    setLinking(true);
+    setLinkError(null);
     try {
-      if (action.kind === "openJira") {
-        const base = jiraBaseUrl.replace(/\/$/, "");
-        if (base) window.open(`${base}/browse/${key}`, "_blank", "noopener");
-        return;
-      }
-      if (action.kind === "openFull") {
-        router.push(`/issue/${key}`);
-        return;
-      }
-      if (action.kind === "copyKey") {
-        await navigator.clipboard.writeText(key);
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1500);
-        return;
-      }
-      if (action.kind === "assignee") {
-        await mutateField({ assignee: action.value });
-        return;
-      }
-      if (action.kind === "priority") {
-        await mutateField({ priority: action.value });
-        return;
-      }
-      const done = (transitions?.transitions ?? []).find(
-        (t) => toName(t) && statusCatOf(t, issue)
-      );
-      if (done) await api(`/api/issues/${key}/transition`, { method: "POST", body: { transitionId: done.id } });
+      await api(`/api/issues/${issue.jiraKey}/links`, { method: "POST", body: input });
+      setLinkOpen(false);
+      flashActionMsg({
+        type: "success",
+        text: `Đã liên kết ${issue.jiraKey} với ${input.targetKey}.`,
+        href: `/issue/${encodeURIComponent(input.targetKey)}`,
+        linkLabel: `Mở ${input.targetKey}`,
+      });
       await invalidate();
+    } catch (e) {
+      setLinkError(getErrorMessage(e, "Không tạo được liên kết."));
+    } finally {
+      setLinking(false);
+    }
+  }
+
+  async function handleSubmitWorklog() {
+    const validation = validateWorklog(logTimeSpent, logStartedAt);
+    if (validation.error || !validation.startedDate) {
+      setWorklogError(validation.error ?? "Thời lượng hoặc thời điểm không hợp lệ.");
+      return;
+    }
+    setSubmittingWorklog(true);
+    setWorklogError(null);
+    try {
+      await worklogMutation.mutateAsync({
+        timeSpent: logTimeSpent.trim(),
+        startedAt: validation.startedDate.toISOString(),
+        comment: logComment.trim() || undefined,
+        adjustEstimate: "leave",
+        idempotencyKey: worklogIdempotencyKey,
+      });
+      setLogWorkOpen(false);
+      setLogTimeSpent("");
+      setLogComment("");
+      // A fresh key so the next worklog is not swallowed as a duplicate.
+      setWorklogIdempotencyKey(safeRandomUUID());
+      flashActionMsg({ type: "success", text: `Đã ghi ${logTimeSpent.trim()} lên Jira.` });
+      await invalidate();
+    } catch (e) {
+      setWorklogError(getErrorMessage(e, "Có lỗi xảy ra khi ghi worklog lên Jira."));
+    } finally {
+      setSubmittingWorklog(false);
+    }
+  }
+
+  /** Marks an impediment with the Impediment label (not Jira's Flagged field). */
+  async function toggleFlag() {
+    await mutateField(flagged ? { removeLabel: FLAG_LABEL } : { addLabel: FLAG_LABEL });
+  }
+
+  function openCloneDialog() {
+    setCloneError(null);
+    setCloneMsg(null);
+    setActionMsg(null);
+    setCloneOpen(true);
+  }
+
+  function copyKey() {
+    navigator.clipboard.writeText(issue.jiraKey).catch(() => {});
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  }
+
+  async function copyToClipboard(text: string, message: string) {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      flashActionMsg({ type: "success", text: message });
     } catch {
-      // Swallow; the board refetches on its own poll.
+      flashActionMsg({ type: "error", text: "Trình duyệt không cho phép sao chép." });
     }
   }
 
   async function toggleWatch() {
+    const next = !watched;
+    setWatchOverride(next);
     try {
-      await api(`/api/issues/${issue.jiraKey}/watch`, { method: "POST", body: {} });
-      setWatched(true);
+      const res = await api<{ watching: boolean }>(`/api/issues/${issue.jiraKey}/watch`, {
+        method: "POST",
+        body: {},
+      });
+      // The endpoint toggles server-side; its answer is the authority.
+      setWatchOverride(res.watching);
+      qc.invalidateQueries({ queryKey: watchKeys.all });
     } catch {
-      // Ignore.
+      setWatchOverride(!next);
     }
   }
 
@@ -324,11 +423,7 @@ export function QuickPanel({
           dotClass={dotClass}
           jiraUrl={jiraUrl}
           copied={copied}
-          onCopyKey={() => {
-            navigator.clipboard.writeText(issue.jiraKey).catch(() => {});
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1500);
-          }}
+          onCopyKey={copyKey}
           onClose={onClose}
         />
 
@@ -349,12 +444,9 @@ export function QuickPanel({
           onCreateBranch={handleCreateBranch}
           branchMsg={branchMsg}
           cloning={cloning}
-          onClone={() => {
-            setCloneError(null);
-            setCloneMsg(null);
-            setCloneOpen(true);
-          }}
+          onClone={openCloneDialog}
           cloneMsg={cloneMsg}
+          actionMsg={actionMsg}
         />
 
         {cloneOpen && (
@@ -366,6 +458,35 @@ export function QuickPanel({
             error={cloneError}
             onOpenChange={setCloneOpen}
             onConfirm={handleClone}
+          />
+        )}
+
+        {linkOpen && (
+          <QuickPanelLinkDialog
+            jiraKey={issue.jiraKey}
+            open={linkOpen}
+            linking={linking}
+            error={linkError}
+            onOpenChange={setLinkOpen}
+            onConfirm={handleLinkIssue}
+          />
+        )}
+
+        {logWorkOpen && (
+          <LogWorkDialog
+            open={logWorkOpen}
+            onOpenChange={(next) => !submittingWorklog && setLogWorkOpen(next)}
+            jiraKey={issue.jiraKey}
+            timeSpentSeconds={timeSpentSeconds}
+            logTimeSpent={logTimeSpent}
+            onLogTimeSpentChange={setLogTimeSpent}
+            logStartedAt={logStartedAt}
+            onLogStartedAtChange={setLogStartedAt}
+            logComment={logComment}
+            onLogCommentChange={setLogComment}
+            submitting={submittingWorklog}
+            worklogError={worklogError}
+            onSubmit={() => void handleSubmitWorklog()}
           />
         )}
 
@@ -420,15 +541,25 @@ export function QuickPanel({
         </div>
 
         <QuickPanelFooter
+          jiraKey={issue.jiraKey}
           watched={watched}
-          onToggleWatch={() => (watched ? setWatched(false) : void toggleWatch())}
+          onToggleWatch={() => void toggleWatch()}
           jiraUrl={jiraUrl}
-          assignees={assignees}
-          assigneeJira={assigneeJira}
-          priority={priority}
-          transitions={transitionList}
-          onAction={doAction}
-          onTransition={handleTransition}
+          dueDate={dueDate}
+          onSetDueDate={(value) => mutateField({ dueDate: value })}
+          flagged={flagged}
+          onToggleFlag={() => void toggleFlag()}
+          onLogWork={() => {
+            setWorklogError(null);
+            setLogStartedAt(getDefaultLogStartedAt());
+            setLogWorkOpen(true);
+          }}
+          onLinkIssue={() => {
+            setLinkError(null);
+            setActionMsg(null);
+            setLinkOpen(true);
+          }}
+          onCopyLink={() => void copyToClipboard(jiraUrl ?? "", "Đã sao chép liên kết Jira.")}
           onOpenFull={() => router.push(`/issue/${issue.jiraKey}`)}
         />
       </div>

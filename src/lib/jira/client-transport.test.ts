@@ -106,6 +106,23 @@ describe("Jira HTTP transport", () => {
     );
   });
 
+  it("accepts an empty body on a successful write (Jira answers 201 for issueLink)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      jiraWith(bearerAuth).createIssueLink("Cloners", "MR-33", "MR-32")
+    ).resolves.toBeUndefined();
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://jira.example.com/rest/api/2/issueLink");
+    expect(JSON.parse(String(init.body))).toEqual({
+      type: { name: "Cloners" },
+      inwardIssue: { key: "MR-33" },
+      outwardIssue: { key: "MR-32" },
+    });
+  });
+
   it("sends the normalized URL and default JSON headers with Bearer auth", async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ name: "alice" }));
     vi.stubGlobal("fetch", fetchMock);

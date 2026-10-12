@@ -16,7 +16,7 @@ import { IssueDetailVersionsLabels } from "./issue-detail-versions-labels";
 import { IssueDetailTabsAi } from "./issue-detail-tabs-ai";
 import { IssueDetailTabsBranches } from "./issue-detail-tabs-branches";
 import { IssueDetailTabsComments } from "./issue-detail-tabs-comments";
-import { IssueDetailLogWorkDialog } from "./issue-detail-log-work-dialog";
+import { LogWorkDialog } from "@/components/issues/log-work-dialog";
 import { useIssueDetailController } from "./lib/use-issue-detail-controller";
 
 export function IssueDetailClient({
@@ -230,7 +230,7 @@ export function IssueDetailClient({
         </TabsContent>
       </Tabs>
 
-      <IssueDetailLogWorkDialog
+      <LogWorkDialog
         open={logWorkOpen}
         onOpenChange={setLogWorkOpen}
         jiraKey={issue.jiraKey}
