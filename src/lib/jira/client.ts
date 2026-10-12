@@ -32,6 +32,7 @@ const BASE_ISSUE_FIELDS = [
   "priority",
   "issuetype",
   "issuelinks",
+  "subtasks",
   "created",
   "updated",
   "duedate",

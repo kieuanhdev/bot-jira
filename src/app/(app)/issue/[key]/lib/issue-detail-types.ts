@@ -1,3 +1,5 @@
+import type { IssueRelationships } from "@/lib/issues/relationships";
+
 export type IssueDetail = {
   jiraKey: string;
   summary: string;
@@ -36,6 +38,7 @@ export type IssueDetail = {
     stateAgeDays: number;
     blockedDays: number;
   }[];
+  relationships: IssueRelationships;
 };
 
 export type Transition = { id: string; name: string; to?: { name?: string } | string };

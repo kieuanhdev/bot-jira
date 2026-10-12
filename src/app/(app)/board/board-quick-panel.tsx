@@ -16,6 +16,7 @@ import { QuickPanelActions } from "./quick-panel/quick-panel-actions";
 import { QuickPanelFields } from "./quick-panel/quick-panel-fields";
 import { QuickPanelComments } from "./quick-panel/quick-panel-comments";
 import { QuickPanelFooter } from "./quick-panel/quick-panel-footer";
+import { QuickPanelRelations } from "./quick-panel/quick-panel-relations";
 import { applyOptimisticIssuePatch } from "./lib/board-optimistic";
 
 export function QuickPanel({
@@ -46,7 +47,7 @@ export function QuickPanel({
     staleTime: 60_000,
   });
 
-  const { data: detail } = useQuery({
+  const { data: detail, isPending: detailLoading } = useQuery({
     queryKey: issuesKeys.detail(issue.jiraKey),
     queryFn: () => api<{ issue: QuickPanelDetail }>(`/api/issues/${issue.jiraKey}`),
     staleTime: 15_000,
@@ -345,6 +346,11 @@ export function QuickPanel({
             onRemoveLabel={(val) => mutateField({ removeLabel: val })}
             branches={branchesData?.items ?? []}
             bitbucketBaseUrl={bitbucketBaseUrl}
+          />
+
+          <QuickPanelRelations
+            relationships={d?.relationships}
+            loading={detailLoading}
           />
 
           <QuickPanelComments

@@ -1,4 +1,5 @@
 import type { BoardTransition } from "@/lib/jira/board-transitions";
+import type { IssueRelationships } from "@/lib/issues/relationships";
 
 export type Project = { key: string; openCount: number };
 export type SortMode = "priority" | "updated" | "age";
@@ -78,4 +79,5 @@ export type QuickPanelDetail = {
   comments: { id: string; author: string; body: string; createdAt: string | null }[];
   releaseTasks: { release: { version: string; status: string } }[];
   fixVersions?: string[];
+  relationships?: IssueRelationships;
 };

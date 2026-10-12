@@ -15,8 +15,14 @@ export type JiraIssueLink = {
     inward: string;
     outward: string;
   };
-  inwardIssue?: { id?: string; key: string };
-  outwardIssue?: { id?: string; key: string };
+  inwardIssue?: JiraIssueReference;
+  outwardIssue?: JiraIssueReference;
+};
+
+export type JiraIssueReference = {
+  id?: string;
+  key: string;
+  fields?: Pick<JiraFields, "summary" | "status" | "issuetype">;
 };
 
 export type JiraComponent = {
@@ -42,6 +48,8 @@ export type JiraFields = {
   priority?: { name?: string; id?: string } | null;
   issuetype?: { name?: string; id?: string };
   issuelinks?: JiraIssueLink[];
+  parent?: JiraIssueReference;
+  subtasks?: JiraIssueReference[];
   created?: string;
   updated?: string;
   key?: string;
@@ -327,4 +335,3 @@ export type UserBoardPreferenceResponse = {
     jobId: string | null;
   };
 };
-

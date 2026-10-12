@@ -5,6 +5,11 @@ import type { JiraIssue } from "@/lib/jira/types";
 import { upsertJiraComments, upsertJiraIssue } from "@/lib/issues/cache";
 import { notifyWatchersOfIssueChange } from "@/lib/issues/notify-watchers";
 import { jiraIssueFieldsForProject } from "@/lib/jira/people-fields";
+import {
+  buildIssueRelationships,
+  relationshipKeys,
+  type IssueRelationships,
+} from "@/lib/issues/relationships";
 
 export type LiveComment = {
   id: string;
@@ -74,7 +79,34 @@ export type IssueView = {
     stateAgeDays: number;
     blockedDays: number;
   }[];
+  relationships: IssueRelationships;
 };
+
+async function getRelationships(
+  key: string,
+  fields: JiraIssue["fields"] | null | undefined
+): Promise<IssueRelationships> {
+  const referencedKeys = relationshipKeys(key, fields);
+  const cachedIssues = await prisma.issueCache.findMany({
+    where: {
+      OR: [
+        { epicKey: key },
+        ...(referencedKeys.length > 0 ? [{ jiraKey: { in: referencedKeys } }] : []),
+      ],
+      deletedAt: null,
+    },
+    select: {
+      jiraKey: true,
+      summary: true,
+      status: true,
+      type: true,
+      epicKey: true,
+    },
+    orderBy: { jiraKey: "asc" },
+  }).catch(() => []);
+
+  return buildIssueRelationships(key, fields, cachedIssues);
+}
 
 /**
  * Fetch a single issue + its comments live from Jira as the given user, and
@@ -175,6 +207,7 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
       }))
     ).catch(() => null);
 
+    const relationships = await getRelationships(key, live.rawIssue.fields);
     return {
       jiraKey: key,
       summary: live.summary,
@@ -200,10 +233,15 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
       aiDecision: toAiDecision(cached?.aiScore?.decisions),
       releaseTasks: toReleaseTasks(cached?.releaseTasks),
       staleSnapshots: toStale(cached?.staleSnapshots),
+      relationships,
     };
   }
 
   if (!cached) return null;
+  const cachedFields = cached.raw && typeof cached.raw === "object"
+    ? cached.raw as JiraIssue["fields"]
+    : undefined;
+  const relationships = await getRelationships(key, cachedFields);
   return {
     jiraKey: key,
     summary: cached.summary,
@@ -234,6 +272,7 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
     aiDecision: toAiDecision(cached.aiScore?.decisions),
     releaseTasks: toReleaseTasks(cached.releaseTasks),
     staleSnapshots: toStale(cached.staleSnapshots),
+    relationships,
   };
 }
 
