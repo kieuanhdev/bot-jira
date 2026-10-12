@@ -11,6 +11,7 @@ import type {
   JiraEditMeta,
   JiraFieldDefinition,
   JiraIssue,
+  JiraIssueLinkTypesResponse,
   JiraProject,
   JiraSearchResult,
   JiraTransition,
@@ -257,6 +258,26 @@ export function createIssueResource({
         body: JSON.stringify({ fields }),
       });
     },
+
+    getIssueLinkTypes: () =>
+      request<JiraIssueLinkTypesResponse>("/rest/api/2/issueLinkType"),
+
+    /**
+     * Links two issues. The pair reads as `inwardKey <type.outward> outwardKey`
+     * (and `outwardKey <type.inward> inwardKey`), matching how `GET /issue`
+     * renders a link: the entry naming the other issue as `outwardIssue` is read
+     * with the outward description. For a clone that means
+     * `inwardKey` = the new copy, `outwardKey` = the original.
+     */
+    createIssueLink: (typeName: string, inwardKey: string, outwardKey: string) =>
+      request<void>("/rest/api/2/issueLink", {
+        method: "POST",
+        body: JSON.stringify({
+          type: { name: typeName },
+          inwardIssue: { key: inwardKey },
+          outwardIssue: { key: outwardKey },
+        }),
+      }),
 
     getCreateMetaIssueTypes: (
       projectKey: string

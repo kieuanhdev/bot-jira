@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
+import { api, getErrorMessage } from "@/lib/api-client";
 import { getJiraIssueUrl } from "@/lib/utils";
 import { issuesKeys, meKeys, transitionsKeys, branchesForKeys } from "@/lib/query-keys";
 import type { IssueItem } from "@/hooks/use-issues";
@@ -12,7 +12,8 @@ import type { QuickAction } from "./lib/board-types";
 import { CATEGORY_DOT_MAP } from "./lib/board-types";
 import { toName, statusCatOf } from "./lib/quick-panel-utils";
 import { QuickPanelHeader } from "./quick-panel/quick-panel-header";
-import { QuickPanelActions } from "./quick-panel/quick-panel-actions";
+import { QuickPanelActions, type QuickPanelActionMessage } from "./quick-panel/quick-panel-actions";
+import { QuickPanelCloneDialog } from "./quick-panel/quick-panel-clone-dialog";
 import { QuickPanelFields } from "./quick-panel/quick-panel-fields";
 import { QuickPanelComments } from "./quick-panel/quick-panel-comments";
 import { QuickPanelFooter } from "./quick-panel/quick-panel-footer";
@@ -38,7 +39,11 @@ export function QuickPanel({
   const [watched, setWatched] = useState(false);
   const [copied, setCopied] = useState(false);
   const [creatingBranch, setCreatingBranch] = useState(false);
-  const [branchMsg, setBranchMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [branchMsg, setBranchMsg] = useState<QuickPanelActionMessage | null>(null);
+  const [cloneOpen, setCloneOpen] = useState(false);
+  const [cloning, setCloning] = useState(false);
+  const [cloneError, setCloneError] = useState<string | null>(null);
+  const [cloneMsg, setCloneMsg] = useState<QuickPanelActionMessage | null>(null);
   const [optimisticOverrides, setOptimisticOverrides] = useState<Record<string, unknown>>({});
   const panelRef = useRef<HTMLDivElement | null>(null);
 
@@ -210,6 +215,35 @@ export function QuickPanel({
     }
   }
 
+  async function handleClone(cloneSummaryText: string) {
+    setCloning(true);
+    setCloneError(null);
+    try {
+      const res = await api<{
+        key: string;
+        relation?: string | null;
+        linkError?: string | null;
+      }>(`/api/issues/${issue.jiraKey}/clone`, {
+        method: "POST",
+        body: { summary: cloneSummaryText },
+      });
+      setCloneOpen(false);
+      setCloneMsg({
+        type: res.linkError ? "error" : "success",
+        text: res.linkError
+          ? `Đã tạo ${res.key} nhưng chưa liên kết được với ${issue.jiraKey}: ${res.linkError}`
+          : `Đã tạo bản sao ${res.key}${res.relation ? ` (${res.relation} ${issue.jiraKey})` : ""}.`,
+        href: `/issue/${encodeURIComponent(res.key)}`,
+        linkLabel: `Mở ${res.key}`,
+      });
+      await invalidate();
+    } catch (e) {
+      setCloneError(getErrorMessage(e, "Không nhân bản được task."));
+    } finally {
+      setCloning(false);
+    }
+  }
+
   async function doAction(action: QuickAction) {
     const key = issue.jiraKey;
     try {
@@ -314,7 +348,26 @@ export function QuickPanel({
           creatingBranch={creatingBranch}
           onCreateBranch={handleCreateBranch}
           branchMsg={branchMsg}
+          cloning={cloning}
+          onClone={() => {
+            setCloneError(null);
+            setCloneMsg(null);
+            setCloneOpen(true);
+          }}
+          cloneMsg={cloneMsg}
         />
+
+        {cloneOpen && (
+          <QuickPanelCloneDialog
+            jiraKey={issue.jiraKey}
+            summary={summary}
+            open={cloneOpen}
+            cloning={cloning}
+            error={cloneError}
+            onOpenChange={setCloneOpen}
+            onConfirm={handleClone}
+          />
+        )}
 
         {/* Body */}
         <div className="flex-1 min-h-0 overflow-y-auto p-4">
