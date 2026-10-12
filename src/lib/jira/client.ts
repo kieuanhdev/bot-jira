@@ -331,7 +331,11 @@ async function requestOnce<T>(
       );
     }
     if (response.status === 204) return undefined as T;
-    return response.json() as Promise<T>;
+    // Some write endpoints answer 201 with an empty body (POST /issueLink is one),
+    // so an empty success is `undefined`, never a JSON parse error.
+    const body = await response.text();
+    if (!body.trim()) return undefined as T;
+    return JSON.parse(body) as T;
   } catch (error) {
     if (controller.signal.aborted && !init.signal?.aborted) {
       throw new JiraRequestError(

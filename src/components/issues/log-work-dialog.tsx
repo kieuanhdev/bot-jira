@@ -1,3 +1,5 @@
+"use client";
+
 import { Check, Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +16,7 @@ import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { formatJiraDuration } from "@/lib/worklogs/schema";
 import { cn } from "@/lib/utils";
 
-interface IssueDetailLogWorkDialogProps {
+interface LogWorkDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   jiraKey: string;
@@ -30,7 +32,7 @@ interface IssueDetailLogWorkDialogProps {
   onSubmit: () => void;
 }
 
-export function IssueDetailLogWorkDialog({
+export function LogWorkDialog({
   open,
   onOpenChange,
   jiraKey,
@@ -44,7 +46,7 @@ export function IssueDetailLogWorkDialog({
   submitting,
   worklogError,
   onSubmit,
-}: IssueDetailLogWorkDialogProps) {
+}: LogWorkDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">

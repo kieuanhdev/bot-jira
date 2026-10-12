@@ -156,6 +156,9 @@ describe("POST /api/issues/[key]/clone", () => {
 
   it("keeps the created issue when linking fails", async () => {
     mocks.createIssueLink.mockRejectedValue(new Error("no link permission"));
+    mocks.getIssue.mockImplementation((key: string, fields?: string) =>
+      Promise.resolve(fields === "issuelinks" ? { key, fields: { issuelinks: [] } } : sourceIssue())
+    );
 
     const res = await POST(request(), ctx);
     expect(res.status).toBe(200);
@@ -166,8 +169,19 @@ describe("POST /api/issues/[key]/clone", () => {
     });
   });
 
+  it("trusts the read-back over a link call that only looked like it failed", async () => {
+    // Jira answers the link POST with an empty body, yet the link is there.
+    mocks.createIssueLink.mockRejectedValue(new Error("Unexpected end of JSON input"));
+
+    const payload = await (await POST(request(), ctx)).json();
+    expect(payload).toMatchObject({ ok: true, relation: "clones", linkError: null });
+  });
+
   it("reports a missing clone link type without failing the copy", async () => {
     mocks.getIssueLinkTypes.mockResolvedValue({ issueLinkTypes: [] });
+    mocks.getIssue.mockImplementation((key: string, fields?: string) =>
+      Promise.resolve(fields === "issuelinks" ? { key, fields: { issuelinks: [] } } : sourceIssue())
+    );
 
     const payload = await (await POST(request(), ctx)).json();
     expect(payload.key).toBe("EPM-11");

@@ -140,6 +140,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ key: string }>
     .then((issue) => describeLinkTo(issue.fields?.issuelinks, key))
     .catch(() => null);
 
+  // The link may land even when the POST looked like it failed (an empty body,
+  // a timeout after Jira committed). What Jira reports back is the authority.
+  if (relation) linkError = null;
+
   // Both sides go into the cache: the copy so the board shows it before the next
   // sync, the original so its link list picks up the new relation.
   await Promise.all([

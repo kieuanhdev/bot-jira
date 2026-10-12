@@ -789,6 +789,9 @@ export function BoardClient() {
 
       {quickPanel && (
         <QuickPanel
+          // Remount per issue so panel-local drafts (worklog, link, optimistic
+          // overrides) never leak into the next task opened.
+          key={quickPanel.jiraKey}
           issue={quickPanel}
           jiraBaseUrl={jiraBaseUrl}
           assignees={assignees}
