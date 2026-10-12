@@ -1,5 +1,7 @@
+import Link from "next/link";
 import {
   ChevronDown,
+  CopyPlus,
   CornerDownLeft,
   Flag,
   GitBranch,
@@ -20,6 +22,14 @@ import {
 import { cn } from "@/lib/utils";
 import { PRIORITIES, toName } from "../lib/quick-panel-utils";
 
+/** Inline feedback shown under the action bar, optionally linking to a task. */
+export type QuickPanelActionMessage = {
+  type: "success" | "error";
+  text: string;
+  href?: string;
+  linkLabel?: string;
+};
+
 interface QuickPanelActionsProps {
   status: string;
   dotClass: string;
@@ -35,7 +45,35 @@ interface QuickPanelActionsProps {
   onSetPriority: (priority: string) => void;
   creatingBranch: boolean;
   onCreateBranch: () => void;
-  branchMsg: { type: "success" | "error"; text: string } | null;
+  branchMsg: QuickPanelActionMessage | null;
+  cloning: boolean;
+  onClone: () => void;
+  cloneMsg: QuickPanelActionMessage | null;
+}
+
+function ActionMessage({ message }: { message: QuickPanelActionMessage | null }) {
+  if (!message) return null;
+  return (
+    <div
+      role="status"
+      className={cn(
+        "flex flex-wrap items-center gap-2 px-4 py-1.5 text-xs font-medium",
+        message.type === "success"
+          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          : "bg-destructive/10 text-destructive"
+      )}
+    >
+      <span className="min-w-0 break-words">{message.text}</span>
+      {message.href && (
+        <Link
+          href={message.href}
+          className="shrink-0 cursor-pointer underline underline-offset-2 transition-opacity duration-150 hover:opacity-80"
+        >
+          {message.linkLabel ?? "Mở"}
+        </Link>
+      )}
+    </div>
+  );
 }
 
 export function QuickPanelActions({
@@ -54,6 +92,9 @@ export function QuickPanelActions({
   creatingBranch,
   onCreateBranch,
   branchMsg,
+  cloning,
+  onClone,
+  cloneMsg,
 }: QuickPanelActionsProps) {
   return (
     <>
@@ -194,13 +235,30 @@ export function QuickPanelActions({
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* Clone Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={cloning}
+          onClick={onClone}
+          className="h-7 gap-1.5 text-xs ml-auto cursor-pointer"
+          title="Nhân bản task này và liên kết với bản gốc"
+        >
+          {cloning ? (
+            <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />
+          ) : (
+            <CopyPlus className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+          )}
+          {cloning ? "Đang nhân bản…" : "Nhân bản"}
+        </Button>
+
         {/* Create Branch Button */}
         <Button
           variant="outline"
           size="sm"
           disabled={creatingBranch}
           onClick={onCreateBranch}
-          className="h-7 gap-1.5 text-xs ml-auto"
+          className="h-7 gap-1.5 text-xs cursor-pointer"
           title="Tạo nhánh Bitbucket theo định dạng chuẩn"
         >
           {creatingBranch ? (
@@ -212,18 +270,8 @@ export function QuickPanelActions({
         </Button>
       </div>
 
-      {branchMsg && (
-        <div
-          className={cn(
-            "px-4 py-1.5 text-xs font-medium",
-            branchMsg.type === "success"
-              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-              : "bg-destructive/10 text-destructive"
-          )}
-        >
-          {branchMsg.text}
-        </div>
-      )}
+      <ActionMessage message={branchMsg} />
+      <ActionMessage message={cloneMsg} />
     </>
   );
 }

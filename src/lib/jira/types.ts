@@ -19,6 +19,17 @@ export type JiraIssueLink = {
   outwardIssue?: JiraIssueReference;
 };
 
+export type JiraIssueLinkType = {
+  id: string;
+  name: string;
+  inward: string;
+  outward: string;
+};
+
+export type JiraIssueLinkTypesResponse = {
+  issueLinkTypes: JiraIssueLinkType[];
+};
+
 export type JiraIssueReference = {
   id?: string;
   key: string;
