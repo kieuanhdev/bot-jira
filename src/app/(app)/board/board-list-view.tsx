@@ -303,6 +303,7 @@ export function BoardListView({
               <tr
                 key={issue.jiraKey}
                 data-row
+                data-issue-key={issue.jiraKey}
                 data-selected={selectedKeys.has(issue.jiraKey) || undefined}
                 className="cursor-pointer border-t transition-colors hover:bg-muted/30 data-[selected]:bg-primary/5"
                 onClick={() => onOpen(issue)}

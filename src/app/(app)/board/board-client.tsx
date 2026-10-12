@@ -27,6 +27,7 @@ import { Search } from "lucide-react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { BoardStatsLine } from "./board-summary-cards";
 import { BoardSkeleton } from "./board-column";
+import { useIssueHoverPrefetch } from "./lib/issue-detail-queries";
 import { QuickPanel } from "./board-quick-panel";
 import {
   type Project,
@@ -277,6 +278,7 @@ export function BoardClient() {
   }, [view]);
 
   const [quickPanel, setQuickPanel] = useState<IssueItem | null>(null);
+  const hoverPrefetch = useIssueHoverPrefetch();
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const cardRefs = useRef<Map<string, HTMLElement | null>>(new Map());
 
@@ -590,7 +592,11 @@ export function BoardClient() {
   const dndDisabled = effectiveView === "list" || transitionBusy;
 
   return (
-    <div className="relative flex h-full flex-col gap-3">
+    <div
+      className="relative flex h-full flex-col gap-3"
+      onPointerOver={hoverPrefetch.onPointerOver}
+      onPointerLeave={hoverPrefetch.onPointerLeave}
+    >
       {toast && (
         <div
           role="status"

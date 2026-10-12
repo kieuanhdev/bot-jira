@@ -96,7 +96,7 @@ export function BoardTeamView({
                     <div key={column.key} className="min-h-20 rounded-md bg-muted/30 p-2">
                       <div className="mb-2 flex items-center justify-between text-xs font-medium"><span>{column.label}</span><span className="tabular-nums text-muted-foreground">{bucket.length}</span></div>
                       <div className="space-y-2">
-                        {shown.map((issue) => <button key={issue.jiraKey} type="button" onClick={() => onOpen(issue)} className={cn("block w-full cursor-pointer text-left")}><CardContent issue={issue} done={issue.statusCategory === "done"} /></button>)}
+                        {shown.map((issue) => <button key={issue.jiraKey} data-issue-key={issue.jiraKey} type="button" onClick={() => onOpen(issue)} className={cn("block w-full cursor-pointer text-left")}><CardContent issue={issue} done={issue.statusCategory === "done"} /></button>)}
                         {shown.length < bucket.length && (
                           <button type="button" onClick={() => setExpandedCells((current) => new Set(current).add(cellId))} className="w-full cursor-pointer rounded-lg border border-dashed py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary">
                             Xem thêm {bucket.length - shown.length}

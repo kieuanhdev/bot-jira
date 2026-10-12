@@ -8,7 +8,7 @@ import { api } from "@/lib/api-client";
 import { getJiraIssueUrl } from "@/lib/utils";
 import { issuesKeys, meKeys, transitionsKeys, branchesForKeys } from "@/lib/query-keys";
 import type { IssueItem } from "@/hooks/use-issues";
-import type { QuickAction, QuickPanelDetail } from "./lib/board-types";
+import type { QuickAction } from "./lib/board-types";
 import { CATEGORY_DOT_MAP } from "./lib/board-types";
 import { toName, statusCatOf } from "./lib/quick-panel-utils";
 import { QuickPanelHeader } from "./quick-panel/quick-panel-header";
@@ -17,6 +17,7 @@ import { QuickPanelFields } from "./quick-panel/quick-panel-fields";
 import { QuickPanelComments } from "./quick-panel/quick-panel-comments";
 import { QuickPanelFooter } from "./quick-panel/quick-panel-footer";
 import { IssueRelations } from "@/components/issues/issue-relations";
+import { issueCachedDetailQuery, issueDetailQuery } from "./lib/issue-detail-queries";
 import { applyOptimisticIssuePatch } from "./lib/board-optimistic";
 
 export function QuickPanel({
@@ -48,17 +49,13 @@ export function QuickPanel({
   });
 
   const { data: detail, isPending: detailLoading } = useQuery({
-    queryKey: issuesKeys.detail(issue.jiraKey),
-    queryFn: () => api<{ issue: QuickPanelDetail }>(`/api/issues/${issue.jiraKey}`),
-    staleTime: 15_000,
+    ...issueDetailQuery(issue.jiraKey),
     retry: 1,
   });
 
   // Instant DB snapshot so the panel fills in while the live Jira read is in flight.
   const { data: cachedDetail } = useQuery({
-    queryKey: [...issuesKeys.detail(issue.jiraKey), "cached"] as const,
-    queryFn: () => api<{ issue: QuickPanelDetail }>(`/api/issues/${issue.jiraKey}?source=cache`),
-    staleTime: 15_000,
+    ...issueCachedDetailQuery(issue.jiraKey),
     retry: 0,
   });
 

@@ -299,6 +299,7 @@ export const DraggableCard = memo(function DraggableCard({
         registerRef?.(issue.jiraKey, el);
       }}
       style={style}
+      data-issue-key={issue.jiraKey}
       {...attributes}
       {...listeners}
       className={cn(
