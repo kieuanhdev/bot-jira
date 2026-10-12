@@ -20,6 +20,7 @@ import {
   type PollJiraProjectJobData,
 } from "./workers/poll-jira";
 import { runReconcileDeletedIssues } from "./workers/reconcile-deleted-issues";
+import { runNotifyUnmergedPrs } from "./workers/notify-unmerged-prs";
 import { runPollPrComments } from "./workers/poll-pr-comments";
 import { runPollWatchedIssues } from "./workers/poll-watched-issues";
 import { runProcessWebhook, type ProcessWebhookJobData } from "./workers/process-webhook";
@@ -182,6 +183,9 @@ export async function registerWorkers(
   );
   await boss.work("reconcile-deleted-issues", async () =>
     recordRun("reconcile-deleted-issues", runReconcileDeletedIssues)
+  );
+  await boss.work("notify-unmerged-prs", async () =>
+    recordRun("notify-unmerged-prs", () => runNotifyUnmergedPrs())
   );
   await boss.work<ProcessWebhookJobData>("process-webhook", { pollingIntervalSeconds: 0.5 }, async (jobs) => {
     const data = jobs[0]?.data ?? { source: "jira", eventId: "" };
