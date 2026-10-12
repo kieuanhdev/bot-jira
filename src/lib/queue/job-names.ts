@@ -19,6 +19,7 @@ export const JOB_NAMES = [
   "health-alert",
   "capture-project-report-snapshots",
   "detect-people-fields",
+  "reconcile-deleted-issues",
 ] as const;
 
 export type JobName = (typeof JOB_NAMES)[number];
@@ -48,6 +49,7 @@ const QUEUE_EXPIRE_SECONDS: Record<JobName, number | "jira-sync"> = {
   "health-alert": 60,
   "capture-project-report-snapshots": 300,
   "detect-people-fields": 300,
+  "reconcile-deleted-issues": 900,
 };
 
 const QUEUE_POLICIES: Partial<Record<JobName, Queue["policy"]>> = {

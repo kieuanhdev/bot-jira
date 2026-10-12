@@ -1,3 +1,4 @@
+import { isJiraNotFound, markIssuesDeleted } from "@/lib/issues/deleted";
 import { prisma } from "@/lib/prisma";
 import { jiraPointsFromFields, jiraWith, parseJiraDate } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
@@ -92,7 +93,10 @@ const CACHED_ISSUE_INCLUDE = {
 type CachedIssue = NonNullable<Awaited<ReturnType<typeof findCachedIssue>>>;
 
 function findCachedIssue(key: string) {
-  return prisma.issueCache.findUnique({ where: { jiraKey: key }, include: CACHED_ISSUE_INCLUDE });
+  return prisma.issueCache.findFirst({
+    where: { jiraKey: key, deletedAt: null },
+    include: CACHED_ISSUE_INCLUDE,
+  });
 }
 
 async function getRelationships(
@@ -179,7 +183,9 @@ export async function fetchLiveIssue(
         createdAt: (parseJiraDate(c.created) ?? null)?.toISOString() ?? null,
       })),
     };
-  } catch {
+  } catch (error) {
+    // A 404 means the issue was deleted in Jira, so hide it locally right away.
+    if (isJiraNotFound(error)) await markIssuesDeleted([key]).catch(() => null);
     return null;
   }
 }
@@ -248,7 +254,9 @@ export async function getIssueView(key: string, auth: ReturnType<typeof userJira
   }
 
   if (!cached) return null;
-  return buildCachedIssueView(key, cached);
+  // The live fetch may have just soft-deleted this issue; re-read to honor it.
+  const current = await findCachedIssue(key);
+  return current ? buildCachedIssueView(key, current) : null;
 }
 
 /** Instant view from the local DB cache only (no Jira round-trip). */

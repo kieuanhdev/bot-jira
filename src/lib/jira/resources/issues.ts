@@ -67,6 +67,17 @@ export function createIssueResource({
       return request<JiraSearchResult>(`/rest/api/2/search?${params}`, { signal });
     },
 
+    /** Key-only search used to reconcile deletions without downloading issue bodies. */
+    searchKeys: (jql: string, maxResults = 100, startAt = 0, signal?: AbortSignal) => {
+      const params = new URLSearchParams({
+        jql,
+        fields: "key",
+        maxResults: String(maxResults),
+        startAt: String(startAt),
+      });
+      return request<JiraSearchResult>(`/rest/api/2/search?${params}`, { signal });
+    },
+
     getIssue: async (key: string, extraFields?: string) => {
       const fields = new URLSearchParams();
       if (extraFields) {

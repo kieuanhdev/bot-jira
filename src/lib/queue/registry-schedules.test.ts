@@ -26,8 +26,9 @@ describe("queue registry contract", () => {
       { name: "health-alert", updateOptions: { notify: true, expireInSeconds: 60 } },
       { name: "capture-project-report-snapshots", updateOptions: { notify: true, expireInSeconds: 300 } },
       { name: "detect-people-fields", updateOptions: { notify: true, expireInSeconds: 300 } },
+      { name: "reconcile-deleted-issues", updateOptions: { notify: true, expireInSeconds: 900 } },
     ]);
-    expect(JOB_NAMES).toHaveLength(18);
+    expect(JOB_NAMES).toHaveLength(19);
   });
 });
 
@@ -46,6 +47,7 @@ describe("queue schedule contract", () => {
       { name: "health-alert", cron: "* * * * *", options: { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 2, retryDelay: 10 } },
       { name: "capture-project-report-snapshots", cron: "15 0 * * *", options: { singletonSeconds: 3600, expireInSeconds: 1800, retryLimit: 2, retryDelay: 60 } },
       { name: "detect-people-fields", cron: "30 1 * * *", options: { singletonSeconds: 3600, expireInSeconds: 1800, retryLimit: 2, retryDelay: 60 } },
+      { name: "reconcile-deleted-issues", cron: "*/20 * * * *", options: { singletonSeconds: 1140, expireInSeconds: 900, retryLimit: 1, retryDelay: 60 } },
     ]);
   });
 
@@ -64,7 +66,7 @@ describe("queue schedule contract", () => {
     await registerSchedules(boss, 5 * 60_000);
 
     expect(boss.unschedule).toHaveBeenCalledWith("poll-jira");
-    expect(boss.schedule).toHaveBeenCalledTimes(12);
+    expect(boss.schedule).toHaveBeenCalledTimes(13);
     expect(boss.schedule).toHaveBeenNthCalledWith(
       1,
       "poll-jira-dispatch",

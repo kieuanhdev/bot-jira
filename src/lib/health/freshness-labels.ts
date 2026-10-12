@@ -25,6 +25,7 @@ const JOB_LABELS: Record<string, string> = {
   "health-alert": "Cảnh báo sức khỏe hệ thống",
   "capture-project-report-snapshots": "Chụp số liệu báo cáo",
   "detect-people-fields": "Dò trường nhân sự",
+  "reconcile-deleted-issues": "Dọn issue đã xóa trên Jira",
 };
 
 /** Job scopes whose suffix after ":" is a Jira project key. */

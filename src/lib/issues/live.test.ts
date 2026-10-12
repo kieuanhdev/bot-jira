@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   cached: vi.fn(), issue: vi.fn(), comments: vi.fn(), upsert: vi.fn(), cacheComments: vi.fn(), notify: vi.fn(),
 }));
-vi.mock("@/lib/prisma", () => ({ prisma: { issueCache: { findUnique: mocks.cached, findMany: vi.fn().mockResolvedValue([]) } } }));
+vi.mock("@/lib/prisma", () => ({ prisma: { issueCache: { findFirst: mocks.cached, findMany: vi.fn().mockResolvedValue([]) } } }));
 vi.mock("@/lib/jira/client", () => ({
   jiraWith: () => ({ getIssue: mocks.issue, getComments: mocks.comments }),
   jiraIssueFields: () => "status,updated",

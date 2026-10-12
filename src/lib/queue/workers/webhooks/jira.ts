@@ -7,6 +7,7 @@ import {
   notifyWatchersOfIssueChange,
 } from "@/lib/issues/notify-watchers";
 import { normalizeStatusToGroup } from "@/lib/reports/status";
+import { isJiraNotFound, markIssuesDeleted } from "@/lib/issues/deleted";
 
 type JiraChangelogItem = {
   field?: string;
@@ -86,6 +87,11 @@ export async function handleJiraWebhook(
     return { skipped: true, reason: "jira not configured" };
   }
 
+  if (eventName === "jira:issue_deleted") {
+    const deleted = await markIssuesDeleted([key]);
+    return { deleted: key, rows: deleted };
+  }
+
   if (eventName === "jira:issue_commented" || Boolean(webhook.comment?.id)) {
     const previous = await prisma.issueCache.findUnique({ where: { jiraKey: key } });
     const issue = await jira.getIssue(
@@ -115,7 +121,14 @@ export async function handleJiraWebhook(
     return { refreshed: key, newComments: newComments.length };
   }
 
-  await refreshIssue(key, authorName);
+  try {
+    await refreshIssue(key, authorName);
+  } catch (error) {
+    if (isJiraNotFound(error)) {
+      return { deleted: key, rows: await markIssuesDeleted([key]) };
+    }
+    throw error;
+  }
   const items = legacyEnvelope?.changelog?.items ?? webhook.changelog?.items ?? [];
   const statusItem = items.find(
     (item) => (item.field ?? "").toLowerCase() === "status"

@@ -27,6 +27,7 @@ export function buildScheduleDefinitions(pollIntervalMs: number): ScheduleDefini
     { name: "health-alert", cron: "* * * * *", options: { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 2, retryDelay: 10 } },
     { name: "capture-project-report-snapshots", cron: "15 0 * * *", options: { singletonSeconds: 3600, expireInSeconds: 1800, retryLimit: 2, retryDelay: 60 } },
     { name: "detect-people-fields", cron: "30 1 * * *", options: { singletonSeconds: 3600, expireInSeconds: 1800, retryLimit: 2, retryDelay: 60 } },
+    { name: "reconcile-deleted-issues", cron: "*/20 * * * *", options: { singletonSeconds: 1140, expireInSeconds: 900, retryLimit: 1, retryDelay: 60 } },
   ];
 }
 

@@ -3,6 +3,7 @@ import { jira, hasJiraCredentials } from "@/lib/jira/client";
 import { upsertJiraIssue, upsertJiraCommentsWithNew } from "@/lib/issues/cache";
 import { notifyWatchersOfComment, notifyWatchersOfIssueChange } from "@/lib/issues/notify-watchers";
 import type { WorkerLog } from "../guard";
+import { isJiraNotFound, markIssuesDeleted } from "@/lib/issues/deleted";
 import { jiraIssueFieldsForProject } from "@/lib/jira/people-fields";
 
 /** Direct reads keep watches fresh even without an inbound webhook. */
@@ -26,6 +27,10 @@ export async function runPollWatchedIssues(): Promise<WorkerLog> {
           await notifyWatchersOfComment(jiraKey, comment.author, comment.body, comment.id);
         }
       } catch (error) {
+        if (isJiraNotFound(error)) {
+          await markIssuesDeleted([jiraKey]).catch(() => null);
+          continue;
+        }
         errors.push(`${jiraKey}: ${(error instanceof Error ? error.message : String(error)).slice(0, 300)}`);
       }
     }

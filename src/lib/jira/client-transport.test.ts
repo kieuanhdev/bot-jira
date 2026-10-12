@@ -96,6 +96,7 @@ describe("Jira HTTP transport", () => {
         "resolvePointsField",
         "resolveVersionId",
         "search",
+        "searchKeys",
         "searchAssignableUsers",
         "searchParentIssues",
         "searchTemplateIssues",
