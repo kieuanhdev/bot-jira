@@ -126,6 +126,71 @@ export async function fetchPortfolioProjectIssues(
 }
 
 /**
+ * Batched fetch of issues across multiple projects for portfolio reporting.
+ * Reduces database queries from 1-per-project to 1-for-all-projects.
+ */
+export async function fetchBatchPortfolioIssues(
+  projectKeys: string[]
+): Promise<
+  Map<
+    string,
+    {
+      rawIssues: RawReportIssueRecord[];
+      mappedIssues: ReportIssueInput[];
+      lastSyncedAt: Date | null;
+    }
+  >
+> {
+  const normalizedKeys = [...new Set(projectKeys.map(normalizeProjectKey))];
+  const resultMap = new Map<
+    string,
+    {
+      rawIssues: RawReportIssueRecord[];
+      mappedIssues: ReportIssueInput[];
+      lastSyncedAt: Date | null;
+    }
+  >();
+
+  for (const key of normalizedKeys) {
+    resultMap.set(key, { rawIssues: [], mappedIssues: [], lastSyncedAt: null });
+  }
+
+  if (normalizedKeys.length === 0) {
+    return resultMap;
+  }
+
+  if (typeof prisma.issueCache?.findMany !== "function") {
+    for (const key of normalizedKeys) {
+      resultMap.set(key, await fetchPortfolioProjectIssues(key));
+    }
+    return resultMap;
+  }
+
+  const rawIssues = await prisma.issueCache.findMany({
+    where: {
+      projectKey: { in: normalizedKeys },
+      deletedAt: null,
+    },
+    select: REPORT_ISSUE_SELECT,
+  });
+
+  for (const raw of rawIssues) {
+    const entry = resultMap.get(raw.projectKey);
+    if (entry) {
+      entry.rawIssues.push(raw);
+      entry.mappedIssues.push(mapIssueRecordToReportInput(raw));
+      if (raw.lastSyncedAt && (!entry.lastSyncedAt || raw.lastSyncedAt > entry.lastSyncedAt)) {
+        entry.lastSyncedAt = raw.lastSyncedAt;
+      }
+    }
+  }
+
+  return resultMap;
+}
+
+
+
+/**
  * Fetches issues for task explorer with ordering by priority asc and jiraKey desc.
  */
 export async function fetchTaskExplorerIssues(
@@ -383,6 +448,61 @@ export async function fetchReferenceRelease(
       : null,
   };
 }
+
+/**
+ * Batched fetch of primary unreleased reference releases for multiple projects.
+ * Groups by projectKey in memory preserving order (releaseDate asc, createdAt desc).
+ */
+export async function fetchBatchReferenceReleases(
+  projectKeys: string[]
+): Promise<Map<string, ReferenceReleaseSummary>> {
+  const normalizedKeys = [...new Set(projectKeys.map(normalizeProjectKey))];
+  const map = new Map<string, ReferenceReleaseSummary>();
+
+  if (normalizedKeys.length === 0) {
+    return map;
+  }
+
+  if (typeof prisma.release?.findMany !== "function") {
+    for (const key of normalizedKeys) {
+      const rel = await fetchReferenceRelease(key);
+      if (rel) {
+        map.set(key, rel);
+      }
+    }
+    return map;
+  }
+
+  const releases = await prisma.release.findMany({
+    where: {
+      projectKey: { in: normalizedKeys },
+      archived: false,
+      status: { not: "released" },
+    },
+    orderBy: [{ releaseDate: "asc" }, { createdAt: "desc" }],
+    select: {
+      projectKey: true,
+      id: true,
+      jiraVersionId: true,
+      version: true,
+      releaseDate: true,
+    },
+  });
+
+
+  for (const r of releases) {
+    if (!map.has(r.projectKey)) {
+      map.set(r.projectKey, {
+        id: r.jiraVersionId || r.id,
+        name: r.version,
+        releaseDate: r.releaseDate ? r.releaseDate.toISOString().split("T")[0] : null,
+      });
+    }
+  }
+
+  return map;
+}
+
 
 /**
  * Parses period-related query parameters from URL search params.

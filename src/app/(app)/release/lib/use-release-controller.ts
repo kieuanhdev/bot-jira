@@ -2,9 +2,11 @@
 
 import { useState, useMemo } from "react";
 import { useSession } from "next-auth/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { queryPolicy } from "@/lib/query-policy";
 import { api, ApiError, getErrorMessage } from "@/lib/api-client";
 import { releasesKeys, boardKeys, meKeys } from "@/lib/query-keys";
+
 import { useReleaseSync, useCreateRelease } from "@/hooks/use-releases";
 import { can } from "@/lib/permissions";
 import type { ReleaseSummary } from "@/lib/releases/release-summary";
@@ -76,7 +78,11 @@ export function useReleaseController() {
         };
       }>(`/api/releases${p}`);
     },
+    placeholderData: keepPreviousData,
+    staleTime: queryPolicy.releases.staleTime,
+    gcTime: queryPolicy.releases.gcTime,
   });
+
 
   const jiraBaseUrl = data?.jiraBaseUrl || meStatus?.jiraBaseUrl || "";
   const syncMeta = data?.sync;

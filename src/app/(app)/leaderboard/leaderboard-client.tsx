@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { queryPolicy } from "@/lib/query-policy";
+
 import { Trophy, Sparkles, RotateCw } from "lucide-react";
 import { api, getErrorMessage } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -58,8 +60,11 @@ export function LeaderboardClient() {
   const { data, isLoading, isFetching, error, refetch } = useQuery<LeaderboardResponse>({
     queryKey: ["leaderboard", timeframe, selectedYear, selectedMonth, selectedQuarter, selectedProject],
     queryFn: () => api<LeaderboardResponse>(queryUrl),
-    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    staleTime: queryPolicy.leaderboard.staleTime,
+    gcTime: queryPolicy.leaderboard.gcTime,
   });
+
 
   const members = useMemo(() => data?.members ?? [], [data?.members]);
   const summary = data?.summary;

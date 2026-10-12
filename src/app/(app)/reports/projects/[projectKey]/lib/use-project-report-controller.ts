@@ -2,9 +2,10 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { reportsKeys } from "@/lib/query-keys";
+import { queryPolicy } from "@/lib/query-policy";
 import type {
   ProjectDetailResponse,
   ReportUnit,
@@ -261,12 +262,17 @@ export function useProjectReportController(projectKey: string) {
         `/api/reports/projects/${projectKey}${qs ? `?${qs}` : ""}`
       );
     },
-    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    staleTime: queryPolicy.reports.projectDetail.staleTime,
+    gcTime: queryPolicy.reports.projectDetail.gcTime,
   });
 
   const riskQueryParams = useMemo(() => {
     return buildRiskQueryParams(versionId, riskOffset, activeKpiFilter);
   }, [versionId, riskOffset, activeKpiFilter]);
+
+  // Section 7.3: Avoid redundant risk fetch when overview already has topRisks
+  const shouldFetchRisks = Boolean(activeKpiFilter || riskOffset > 0) && activeTab === "overview";
 
   const { data: riskData } = useQuery<RiskTasksResponse>({
     queryKey: reportsKeys.risks(projectKey, riskQueryParams),
@@ -277,8 +283,12 @@ export function useProjectReportController(projectKey: string) {
         `/api/reports/projects/${projectKey}/risks${qs ? `?${qs}` : ""}`
       );
     },
-    staleTime: 60_000,
+    enabled: shouldFetchRisks,
+    placeholderData: keepPreviousData,
+    staleTime: queryPolicy.reports.risks.staleTime,
+    gcTime: queryPolicy.reports.risks.gcTime,
   });
+
 
   const handleExportCsv = async () => {
     try {

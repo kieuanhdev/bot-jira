@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { guardProjectReport } from "@/lib/reports/route-guard";
 import { getProjectReportDetail } from "@/lib/reports/project-query";
 import type { ReportUnit } from "@/lib/reports/types";
+import {
+  buildReportCacheKey,
+  getOrComputeReport,
+  isRefreshRequested,
+  applyCacheHeaders,
+} from "@/lib/reports/server-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -23,18 +29,38 @@ export async function GET(
   const comparePrevious = url.searchParams.get("comparePrevious") !== "false";
   const includeSubtasks = url.searchParams.get("includeSubtasks") !== "false";
 
+  const bypass = isRefreshRequested(req);
+  const cacheKey = buildReportCacheKey("project-detail", {
+    projectKey,
+    versionId: versionId || "",
+    unit: unit || "auto",
+    period: period || "this_week",
+    from: from || "",
+    to: to || "",
+    timezone: timezone || "Asia/Ho_Chi_Minh",
+    comparePrevious,
+    includeSubtasks,
+  });
+
   try {
-    const report = await getProjectReportDetail({
-      projectKey,
-      versionId,
-      unit,
-      period,
-      from,
-      to,
-      timezone,
-      comparePrevious,
-      includeSubtasks,
+    const { data: report, cacheStatus, durationMs } = await getOrComputeReport({
+      key: cacheKey,
+      ttlMs: 60_000,
+      bypass,
+      compute: () =>
+        getProjectReportDetail({
+          projectKey,
+          versionId,
+          unit,
+          period,
+          from,
+          to,
+          timezone,
+          comparePrevious,
+          includeSubtasks,
+        }),
     });
+
 
     if (!report) {
       return NextResponse.json(
@@ -43,7 +69,8 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(report);
+    const res = NextResponse.json(report);
+    return applyCacheHeaders(res, cacheStatus, durationMs);
   } catch (error: unknown) {
     return NextResponse.json(
       {
@@ -54,3 +81,4 @@ export async function GET(
     );
   }
 }
+

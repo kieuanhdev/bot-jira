@@ -1,11 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { listActiveProjects, normalizeProjectKey } from "@/lib/jira/project-catalog";
 
+import type { ProjectCatalogItem } from "@/lib/jira/project-catalog";
+
 export interface ResolvedUserScope {
   userId: string;
   role: string;
   allowedProjects: string[]; // Set of active project keys the user has access to
   hasConfiguredProjects: boolean;
+  catalog?: ProjectCatalogItem[];
 }
 
 /**
@@ -14,9 +17,10 @@ export interface ResolvedUserScope {
  */
 export async function resolveUserProjectScope(
   userId: string,
-  userRole: string = "member"
+  userRole: string = "member",
+  cachedCatalog?: ProjectCatalogItem[]
 ): Promise<ResolvedUserScope> {
-  const activeCatalog = await listActiveProjects();
+  const activeCatalog = cachedCatalog ?? (await listActiveProjects());
   const activeCatalogKeys = new Set(activeCatalog.map((p) => p.key));
 
   const user = await prisma.user.findUnique({
@@ -44,6 +48,7 @@ export async function resolveUserProjectScope(
     role: userRole,
     allowedProjects,
     hasConfiguredProjects,
+    catalog: activeCatalog,
   };
 }
 
@@ -55,7 +60,7 @@ export async function assertProjectAccess(
   userScope: ResolvedUserScope
 ): Promise<boolean> {
   const normalized = normalizeProjectKey(projectKey);
-  const activeCatalog = await listActiveProjects();
+  const activeCatalog = userScope.catalog ?? (await listActiveProjects());
   const exists = activeCatalog.some((p) => p.key === normalized);
   if (!exists) return false;
 
@@ -66,5 +71,6 @@ export async function assertProjectAccess(
 
   return true;
 }
+
 
 export { resolveScopedProjectKeys } from "./query-primitives";

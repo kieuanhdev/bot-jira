@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { reportsKeys } from "@/lib/query-keys";
+import { queryPolicy } from "@/lib/query-policy";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -126,45 +128,59 @@ export function TasksTab({
     onFilterChange?.({ activity, statusGroup, assignee });
   }, [activity, statusGroup, assignee, onFilterChange]);
 
+  const memberParams = useMemo(() => {
+    const params: Record<string, string> = { timezone: period.timezone };
+    if (!isVersionScope) {
+      params.period = period.preset;
+      params.from = period.from;
+      params.to = period.to;
+    }
+    if (versionId && versionId !== "all") params.versionId = versionId;
+    return params;
+  }, [period, isVersionScope, versionId]);
+
   // Fetch members list for assignee dropdown
   const { data: membersData } = useQuery<ProjectMembersResponse>({
-    queryKey: ["reports", "members", projectKey, period.preset, period.from, period.to, versionId],
+    queryKey: reportsKeys.members(projectKey, memberParams),
     queryFn: () => {
-      const sp = new URLSearchParams({ timezone: period.timezone });
-      if (!isVersionScope) {
-        sp.set("period", period.preset);
-        sp.set("from", period.from);
-        sp.set("to", period.to);
-      }
-      if (versionId && versionId !== "all") sp.set("versionId", versionId);
+      const sp = new URLSearchParams(memberParams);
       return api<ProjectMembersResponse>(`/api/reports/projects/${projectKey}/members?${sp.toString()}`);
     },
-    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    staleTime: queryPolicy.reports.members.staleTime,
+    gcTime: queryPolicy.reports.members.gcTime,
   });
 
-  const queryParams = new URLSearchParams({
-    timezone: period.timezone,
-    limit: String(limit),
-    offset: String(offset),
-  });
-
-  if (!isVersionScope) {
-    queryParams.set("period", period.preset);
-    queryParams.set("from", period.from);
-    queryParams.set("to", period.to);
-  }
-
-  if (versionId && versionId !== "all") queryParams.set("versionId", versionId);
-  if (activity !== "all") queryParams.set("activity", activity);
-  if (statusGroup !== "all") queryParams.set("statusGroup", statusGroup);
-  if (assignee !== "all") queryParams.set("assignee", assignee);
-  if (search.trim()) queryParams.set("search", search.trim());
+  const taskParams = useMemo(() => {
+    const params: Record<string, string> = {
+      timezone: period.timezone,
+      limit: String(limit),
+      offset: String(offset),
+    };
+    if (!isVersionScope) {
+      params.period = period.preset;
+      params.from = period.from;
+      params.to = period.to;
+    }
+    if (versionId && versionId !== "all") params.versionId = versionId;
+    if (activity !== "all") params.activity = activity;
+    if (statusGroup !== "all") params.statusGroup = statusGroup;
+    if (assignee !== "all") params.assignee = assignee;
+    if (search.trim()) params.search = search.trim();
+    return params;
+  }, [period, isVersionScope, versionId, activity, statusGroup, assignee, search, offset]);
 
   const { data, isLoading, isError } = useQuery<ProjectTasksResponse>({
-    queryKey: ["reports", "tasks", projectKey, queryParams.toString()],
-    queryFn: () => api<ProjectTasksResponse>(`/api/reports/projects/${projectKey}/tasks?${queryParams.toString()}`),
-    staleTime: 30_000,
+    queryKey: reportsKeys.tasks(projectKey, taskParams),
+    queryFn: () => {
+      const sp = new URLSearchParams(taskParams);
+      return api<ProjectTasksResponse>(`/api/reports/projects/${projectKey}/tasks?${sp.toString()}`);
+    },
+    placeholderData: keepPreviousData,
+    staleTime: queryPolicy.reports.tasks.staleTime,
+    gcTime: queryPolicy.reports.tasks.gcTime,
   });
+
 
   const total = data?.total ?? 0;
   const currentPage = Math.floor(offset / limit) + 1;

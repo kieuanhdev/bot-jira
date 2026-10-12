@@ -28,14 +28,19 @@ import {
   Users,
   TrendingUp,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+
+import { reportsKeys } from "@/lib/query-keys";
+import { queryPolicy } from "@/lib/query-policy";
 import type {
   ReportUnit,
   ReportStatusGroup,
   ProjectMembersResponse,
 } from "@/lib/reports/types";
 import { useProjectReportController } from "./lib/use-project-report-controller";
+
 
 interface ProjectReportClientProps {
   projectKey: string;
@@ -79,35 +84,33 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
   } = useProjectReportController(projectKey);
 
   const isMemberTabAndSelected = activeTab === "members" && Boolean(activeMember);
+  const isVersionScope = Boolean(versionId && versionId !== "all");
+
+  const memberParams = useMemo(() => {
+    const params: Record<string, string> = { timezone: period.timezone };
+    if (!isVersionScope) {
+      params.period = period.preset;
+      params.from = period.from;
+      params.to = period.to;
+    }
+    if (versionId && versionId !== "all") params.versionId = versionId;
+    return params;
+  }, [period, isVersionScope, versionId]);
 
   const { data: membersData } = useQuery<ProjectMembersResponse>({
-    queryKey: [
-      "reports",
-      "members",
-      projectKey,
-      new URLSearchParams({
-        timezone: period.timezone,
-        ...(versionId && versionId !== "all"
-          ? { versionId }
-          : { period: period.preset, from: period.from, to: period.to }),
-      }).toString(),
-    ],
+    queryKey: reportsKeys.members(projectKey, memberParams),
     queryFn: () => {
-      const qp = new URLSearchParams({ timezone: period.timezone });
-      if (versionId && versionId !== "all") {
-        qp.set("versionId", versionId);
-      } else {
-        qp.set("period", period.preset);
-        qp.set("from", period.from);
-        qp.set("to", period.to);
-      }
+      const qp = new URLSearchParams(memberParams);
       return api<ProjectMembersResponse>(
         `/api/reports/projects/${projectKey}/members?${qp.toString()}`
       );
     },
     enabled: isMemberTabAndSelected,
-    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+    staleTime: queryPolicy.reports.members.staleTime,
+    gcTime: queryPolicy.reports.members.gcTime,
   });
+
 
   const activeMemberName =
     membersData?.members.find((m) => m.assignee === activeMember)?.displayName || activeMember;
@@ -119,6 +122,54 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
     { id: "trends", label: "Xu hướng", icon: TrendingUp },
   ];
 
+  const queryClient = useQueryClient();
+
+  const handleTabPrefetch = (tabId: string) => {
+    if (tabId === "tasks") {
+      const taskParams = {
+        timezone: period.timezone,
+        limit: "20",
+        offset: "0",
+        ...(versionId && versionId !== "all"
+          ? { versionId }
+          : { period: period.preset, from: period.from, to: period.to }),
+      };
+      void queryClient.prefetchQuery({
+        queryKey: reportsKeys.tasks(projectKey, taskParams),
+        queryFn: () => {
+          const sp = new URLSearchParams(taskParams);
+          return api(`/api/reports/projects/${projectKey}/tasks?${sp.toString()}`);
+        },
+        staleTime: queryPolicy.reports.tasks.staleTime,
+      });
+    } else if (tabId === "members") {
+      void queryClient.prefetchQuery({
+        queryKey: reportsKeys.members(projectKey, memberParams),
+        queryFn: () => {
+          const sp = new URLSearchParams(memberParams);
+          return api(`/api/reports/projects/${projectKey}/members?${sp.toString()}`);
+        },
+        staleTime: queryPolicy.reports.members.staleTime,
+      });
+    } else if (tabId === "trends") {
+      const histParams = {
+        timezone: period.timezone,
+        ...(versionId && versionId !== "all"
+          ? { versionId }
+          : { period: period.preset, from: period.from, to: period.to }),
+      };
+      void queryClient.prefetchQuery({
+        queryKey: reportsKeys.history(projectKey, histParams),
+        queryFn: () => {
+          const sp = new URLSearchParams(histParams);
+          return api(`/api/reports/projects/${projectKey}/history?${sp.toString()}`);
+        },
+        staleTime: queryPolicy.reports.history.staleTime,
+      });
+    }
+  };
+
+  /* Tabs Navigation */
   return (
     <div className="space-y-6">
       {/* Header & Back navigation */}
@@ -300,6 +351,8 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
                 key={tab.id}
                 type="button"
                 onClick={() => handleTabChange(tab.id)}
+                onMouseEnter={() => handleTabPrefetch(tab.id)}
+                onFocus={() => handleTabPrefetch(tab.id)}
                 className={`inline-flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium cursor-pointer transition-colors ${
                   isActive
                     ? "border-primary text-primary"
@@ -313,6 +366,7 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
           })}
         </nav>
       </div>
+
 
       {/* Loading state */}
       {isLoading && (

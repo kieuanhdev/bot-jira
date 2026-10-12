@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { reportsKeys } from "@/lib/query-keys";
+import { queryPolicy } from "@/lib/query-policy";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Users,
@@ -83,19 +85,28 @@ export function MembersTab({
   const isVersionScope = Boolean(versionId && versionId !== "all");
   const periodLabel = isVersionScope ? "Toàn bộ version" : getPeriodDisplayLabel(period);
 
-  const queryParams = new URLSearchParams({ timezone: period.timezone });
-  if (!isVersionScope) {
-    queryParams.set("period", period.preset);
-    queryParams.set("from", period.from);
-    queryParams.set("to", period.to);
-  }
-  if (versionId && versionId !== "all") queryParams.set("versionId", versionId);
+  const memberParams = useMemo(() => {
+    const params: Record<string, string> = { timezone: period.timezone };
+    if (!isVersionScope) {
+      params.period = period.preset;
+      params.from = period.from;
+      params.to = period.to;
+    }
+    if (versionId && versionId !== "all") params.versionId = versionId;
+    return params;
+  }, [period, isVersionScope, versionId]);
 
   const { data, isLoading, isError } = useQuery<ProjectMembersResponse>({
-    queryKey: ["reports", "members", projectKey, queryParams.toString()],
-    queryFn: () => api<ProjectMembersResponse>(`/api/reports/projects/${projectKey}/members?${queryParams.toString()}`),
-    staleTime: 30_000,
+    queryKey: reportsKeys.members(projectKey, memberParams),
+    queryFn: () => {
+      const sp = new URLSearchParams(memberParams);
+      return api<ProjectMembersResponse>(`/api/reports/projects/${projectKey}/members?${sp.toString()}`);
+    },
+    placeholderData: keepPreviousData,
+    staleTime: queryPolicy.reports.members.staleTime,
+    gcTime: queryPolicy.reports.members.gcTime,
   });
+
 
   const selectedMember = data?.members.find((member) => member.assignee === effectiveSelectedAssignee) ?? null;
 

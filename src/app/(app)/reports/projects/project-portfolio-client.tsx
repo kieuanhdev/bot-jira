@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { reportsKeys } from "@/lib/query-keys";
+import { queryPolicy } from "@/lib/query-policy";
 import { PortfolioSummary } from "./portfolio-summary";
 import { ProjectReportTable } from "./project-report-table";
 import { ReportPeriodFilter } from "../report-period-filter";
@@ -79,8 +80,11 @@ export function ProjectPortfolioClient() {
       const qs = sp.toString();
       return api<ProjectPortfolioResponse>(`/api/reports/projects${qs ? `?${qs}` : ""}`);
     },
-    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    staleTime: queryPolicy.reports.portfolio.staleTime,
+    gcTime: queryPolicy.reports.portfolio.gcTime,
   });
+
 
   const filteredProjects = useMemo(() => {
     if (!data?.projects) return [];

@@ -1,4 +1,4 @@
-import { listActiveProjects, normalizeProjectKey } from "@/lib/jira/project-catalog";
+import { listActiveProjects, normalizeProjectKey, type ProjectCatalogItem } from "@/lib/jira/project-catalog";
 import type {
   ProjectDetailResponse,
   ReportUnit,
@@ -27,6 +27,7 @@ export interface ProjectReportQueryParams {
   unit?: ReportUnit | null;
   includeSubtasks?: boolean;
   comparePrevious?: boolean;
+  catalog?: ProjectCatalogItem[];
 }
 
 export async function getProjectReportDetail(
@@ -35,8 +36,15 @@ export async function getProjectReportDetail(
   const now = new Date();
   const normalizedKey = normalizeProjectKey(params.projectKey);
 
-  const activeCatalog = await listActiveProjects();
-  const projectItem = activeCatalog.find((p) => p.key === normalizedKey);
+  // Parallel lookup of catalog, available versions, resolved version, and freshness
+  const [activeCatalog, availableVersions, resolvedVersion, freshness] = await Promise.all([
+    params.catalog ? Promise.resolve(params.catalog) : listActiveProjects(),
+    fetchAvailableProjectVersions(normalizedKey),
+    resolveProjectVersionFilter(normalizedKey, params.versionId),
+    getReportFreshness(),
+  ]);
+
+  const projectItem = activeCatalog.find((p) => normalizeProjectKey(p.key) === normalizedKey);
   if (!projectItem) {
     return null;
   }
@@ -50,11 +58,7 @@ export async function getProjectReportDetail(
     timezone: params.timezone,
     now,
   });
-  // Retrieve available versions from Release table
-  const availableVersions = await fetchAvailableProjectVersions(normalizedKey);
 
-  // Resolve version filter using unified resolver
-  const resolvedVersion = await resolveProjectVersionFilter(normalizedKey, params.versionId);
   const periodLabel = resolvedVersion
     ? `Toàn bộ version ${resolvedVersion.versionName}`
     : getPeriodDisplayLabel(period);
@@ -65,25 +69,26 @@ export async function getProjectReportDetail(
     resolvedVersion?.whereInput
   );
 
-  // Fetch transition events if available for current period
+  // Fetch current and previous transition events in parallel
   const periodBounds = getPeriodDateBounds(period);
-  const transitionEvents = resolvedVersion
-    ? await fetchIssueTransitionEvents(
+  const currentTransitionsPromise = resolvedVersion
+    ? fetchIssueTransitionEvents(
         normalizedKey,
         undefined,
         mappedIssues.map((issue) => issue.jiraKey)
       )
-    : await fetchIssueTransitionEvents(normalizedKey, periodBounds);
+    : fetchIssueTransitionEvents(normalizedKey, periodBounds);
 
-  // Fetch previous transition events if comparison period is active
-  let prevTransitionEvents: typeof transitionEvents = [];
-  if (!resolvedVersion && params.comparePrevious !== false && comparisonPeriod) {
-    const prevPeriodBounds = getPeriodDateBounds(comparisonPeriod);
-    prevTransitionEvents = await fetchIssueTransitionEvents(normalizedKey, prevPeriodBounds);
-  }
+  const prevTransitionsPromise =
+    !resolvedVersion && params.comparePrevious !== false && comparisonPeriod
+      ? fetchIssueTransitionEvents(normalizedKey, getPeriodDateBounds(comparisonPeriod))
+      : Promise.resolve([]);
 
-  // Freshness
-  const freshness = await getReportFreshness();
+  const [transitionEvents, prevTransitionEvents] = await Promise.all([
+    currentTransitionsPromise,
+    prevTransitionsPromise,
+  ]);
+
 
   // Pure metric calculations
   const metrics = calculateProjectReportMetrics({

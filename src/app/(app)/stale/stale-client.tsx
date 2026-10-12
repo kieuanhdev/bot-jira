@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { staleKeys } from "@/lib/query-keys";
+import { queryPolicy } from "@/lib/query-policy";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -143,9 +145,13 @@ export function StaleClient() {
   const { data, dataUpdatedAt, error, isFetching, isLoading, refetch } = useQuery({
     queryKey: staleKeys.list(project, assignee, status, reason, severity),
     queryFn: () => api<StaleResponse>(`/api/stale${queryString ? `?${queryString}` : ""}`),
+    placeholderData: keepPreviousData,
+    staleTime: queryPolicy.staleIssues.staleTime,
+    gcTime: queryPolicy.staleIssues.gcTime,
     refetchInterval: 60_000,
     retry: 1,
   });
+
 
   const focusedTasks = useMemo(() => {
     let tasks = filterFocusedTasks(data?.tasks ?? [], focus, query);

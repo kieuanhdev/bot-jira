@@ -4,6 +4,12 @@ import { can } from "@/lib/permissions";
 import { resolveUserProjectScope } from "@/lib/reports/scope";
 import { getProjectPortfolio } from "@/lib/reports/portfolio-query";
 import type { HealthStatus, ReportUnit } from "@/lib/reports/types";
+import {
+  buildReportCacheKey,
+  getOrComputeReport,
+  isRefreshRequested,
+  applyCacheHeaders,
+} from "@/lib/reports/server-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -36,19 +42,39 @@ export async function GET(req: Request) {
   const toParam = url.searchParams.get("to");
   const timezoneParam = url.searchParams.get("timezone");
 
+  const bypass = isRefreshRequested(req);
+  const cacheKey = buildReportCacheKey("portfolio", {
+    allowedProjects: [...userScope.allowedProjects].sort(),
+    filterProjects: filterProjects ? [...filterProjects].sort() : [],
+    filterHealth: filterHealth ? [...filterHealth].sort() : [],
+    unit: unitParam || "auto",
+    period: periodParam || "this_week",
+    from: fromParam || "",
+    to: toParam || "",
+    timezone: timezoneParam || "Asia/Ho_Chi_Minh",
+  });
+
   try {
-    const response = await getProjectPortfolio({
-      allowedProjects: userScope.allowedProjects,
-      filterProjects,
-      filterHealth,
-      unit: unitParam || undefined,
-      period: periodParam,
-      from: fromParam,
-      to: toParam,
-      timezone: timezoneParam,
+    const { data, cacheStatus, durationMs } = await getOrComputeReport({
+      key: cacheKey,
+      ttlMs: 60_000,
+      bypass,
+      compute: () =>
+        getProjectPortfolio({
+          allowedProjects: userScope.allowedProjects,
+          filterProjects,
+          filterHealth,
+          unit: unitParam || undefined,
+          period: periodParam,
+          from: fromParam,
+          to: toParam,
+          timezone: timezoneParam,
+          catalog: userScope.catalog,
+        }),
     });
 
-    return NextResponse.json(response);
+    const res = NextResponse.json(data);
+    return applyCacheHeaders(res, cacheStatus, durationMs);
   } catch (error: unknown) {
     return NextResponse.json(
       {
@@ -59,3 +85,4 @@ export async function GET(req: Request) {
     );
   }
 }
+

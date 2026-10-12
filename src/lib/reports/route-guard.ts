@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { can, type Permission } from "@/lib/permissions";
 import { resolveUserProjectScope, assertProjectAccess } from "@/lib/reports/scope";
-
 type GuardResult = { projectKey: string; response?: undefined } | { projectKey?: undefined; response: NextResponse };
+
 
 /**
  * Shared prelude for `/api/reports/projects/[projectKey]/*` handlers:
@@ -46,3 +46,5 @@ export async function guardProjectReport(
 
   return { projectKey };
 }
+
+

@@ -168,11 +168,36 @@ export const bulkKeys = {
     ["bulk-create-template-issues", projectKey, query] as const,
 };
 
+function normalizeReportParams(params?: Record<string, unknown>): Record<string, unknown> {
+  if (!params) return {};
+  const sortedKeys = Object.keys(params).sort();
+  const result: Record<string, unknown> = {};
+  for (const k of sortedKeys) {
+    const val = params[k];
+    if (val !== undefined && val !== null && val !== "") {
+      if (Array.isArray(val)) {
+        result[k] = [...val].sort();
+      } else {
+        result[k] = val;
+      }
+    }
+  }
+  return result;
+}
+
 export const reportsKeys = {
   all: ["reports"] as const,
-  portfolio: (params?: Record<string, unknown>) => ["reports", "portfolio", params ?? {}] as const,
+  portfolio: (params?: Record<string, unknown>) =>
+    ["reports", "portfolio", normalizeReportParams(params)] as const,
   project: (projectKey: string, params?: Record<string, unknown>) =>
-    ["reports", "project", projectKey, params ?? {}] as const,
+    ["reports", "project", projectKey.trim().toUpperCase(), normalizeReportParams(params)] as const,
   risks: (projectKey: string, params?: Record<string, unknown>) =>
-    ["reports", "risks", projectKey, params ?? {}] as const,
+    ["reports", "risks", projectKey.trim().toUpperCase(), normalizeReportParams(params)] as const,
+  tasks: (projectKey: string, params?: Record<string, unknown>) =>
+    ["reports", "tasks", projectKey.trim().toUpperCase(), normalizeReportParams(params)] as const,
+  members: (projectKey: string, params?: Record<string, unknown>) =>
+    ["reports", "members", projectKey.trim().toUpperCase(), normalizeReportParams(params)] as const,
+  history: (projectKey: string, params?: Record<string, unknown>) =>
+    ["reports", "history", projectKey.trim().toUpperCase(), normalizeReportParams(params)] as const,
 };
+

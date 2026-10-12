@@ -1,7 +1,10 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { reportsKeys } from "@/lib/query-keys";
+import { queryPolicy } from "@/lib/query-policy";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -26,19 +29,28 @@ interface TrendsTabProps {
 
 export function TrendsTab({ projectKey, period, versionId }: TrendsTabProps) {
   const isVersionScope = Boolean(versionId && versionId !== "all");
-  const queryParams = new URLSearchParams({ timezone: period.timezone });
-  if (!isVersionScope) {
-    queryParams.set("period", period.preset);
-    queryParams.set("from", period.from);
-    queryParams.set("to", period.to);
-  }
-  if (versionId && versionId !== "all") queryParams.set("versionId", versionId);
+  const historyParams = useMemo(() => {
+    const params: Record<string, string> = { timezone: period.timezone };
+    if (!isVersionScope) {
+      params.period = period.preset;
+      params.from = period.from;
+      params.to = period.to;
+    }
+    if (versionId && versionId !== "all") params.versionId = versionId;
+    return params;
+  }, [period, isVersionScope, versionId]);
 
   const { data, isLoading, isError } = useQuery<ProjectHistoryResponse>({
-    queryKey: ["reports", "history", projectKey, queryParams.toString()],
-    queryFn: () => api<ProjectHistoryResponse>(`/api/reports/projects/${projectKey}/history?${queryParams.toString()}`),
-    staleTime: 60_000,
+    queryKey: reportsKeys.history(projectKey, historyParams),
+    queryFn: () => {
+      const sp = new URLSearchParams(historyParams);
+      return api<ProjectHistoryResponse>(`/api/reports/projects/${projectKey}/history?${sp.toString()}`);
+    },
+    placeholderData: keepPreviousData,
+    staleTime: queryPolicy.reports.history.staleTime,
+    gcTime: queryPolicy.reports.history.gcTime,
   });
+
 
   const points = data?.dataPoints || [];
 

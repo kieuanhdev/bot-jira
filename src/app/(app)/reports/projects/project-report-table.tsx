@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
+import { reportsKeys } from "@/lib/query-keys";
+import { queryPolicy } from "@/lib/query-policy";
+import { api } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
+
 import {
   AlertOctagon,
   AlertTriangle,
@@ -61,6 +66,27 @@ function formatRelativeTime(isoString: string | null): string {
 }
 
 export function ProjectReportTable({ projects, period, unit }: ProjectReportTableProps) {
+  const queryClient = useQueryClient();
+
+  const handlePrefetchProject = (projectKey: string) => {
+    const queryParams: Record<string, string> = {
+      period: period.preset,
+      from: period.from,
+      to: period.to,
+      timezone: period.timezone,
+    };
+    if (unit !== "auto") queryParams.unit = unit;
+
+    void queryClient.prefetchQuery({
+      queryKey: reportsKeys.project(projectKey, queryParams),
+      queryFn: () => {
+        const sp = new URLSearchParams(queryParams);
+        return api(`/api/reports/projects/${projectKey}?${sp.toString()}`);
+      },
+      staleTime: queryPolicy.reports.projectDetail.staleTime,
+    });
+  };
+
   if (projects.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center rounded-xl border border-dashed border-border bg-card">
@@ -111,6 +137,8 @@ export function ProjectReportTable({ projects, period, unit }: ProjectReportTabl
                 <td className="py-3.5 px-4 font-medium">
                   <Link
                     href={detailHref}
+                    onMouseEnter={() => handlePrefetchProject(p.projectKey)}
+                    onFocus={() => handlePrefetchProject(p.projectKey)}
                     className="flex flex-col group-hover:text-primary transition-colors cursor-pointer"
                   >
                     <span className="font-semibold text-foreground group-hover:text-primary">
@@ -121,6 +149,7 @@ export function ProjectReportTable({ projects, period, unit }: ProjectReportTabl
                     </span>
                   </Link>
                 </td>
+
 
                 {/* Period */}
                 <td className="py-3.5 px-4 text-xs text-muted-foreground whitespace-nowrap">
