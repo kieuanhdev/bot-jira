@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
 
 // SEC-01 — append-only audit trail.
 //
@@ -94,7 +95,7 @@ export async function audit(input: AuditInput): Promise<string | null> {
     });
     return row.id;
   } catch (e) {
-    console.error(JSON.stringify({ level: "error", message: "audit write failed", action: input.action, error: (e as Error).message }));
+    logger.error({ message: "audit write failed", action: input.action, error: (e as Error).message });
     return null;
   }
 }

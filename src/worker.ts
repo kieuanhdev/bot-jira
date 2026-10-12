@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { registerJobs, stopBoss } from "@/lib/queue/boss";
 import { writeWorkerHeartbeat } from "@/lib/health/worker-health";
 import { validateWorkerStartup } from "@/lib/health/config-validation";
+import { logger } from "@/lib/logger";
 
 let stopping = false;
 let heartbeat: NodeJS.Timeout | null = null;
@@ -22,10 +23,10 @@ function startHeartbeat() {
 async function shutdown(signal: string) {
   if (stopping) return;
   stopping = true;
-  console.info(JSON.stringify({ level: "info", message: "worker stopping", signal }));
+  logger.info({ message: "worker stopping", signal });
   if (heartbeat) clearInterval(heartbeat);
   await stopBoss().catch((error) => {
-    console.error(JSON.stringify({ level: "error", message: "pg-boss stop failed", error: String(error) }));
+    logger.error({ message: "pg-boss stop failed", error: String(error) });
   });
   await prisma.$disconnect().catch(() => null);
   process.exit(0);
@@ -39,13 +40,10 @@ process.on("SIGINT", () => void shutdown("SIGINT"));
 // never values, so the process exits non-zero and the orchestrator can alert on the crash.
 const configErrors = validateWorkerStartup();
 if (configErrors.length > 0) {
-  console.error(
-    JSON.stringify({
-      level: "error",
-      message: "worker configuration validation failed",
-      errors: configErrors,
-    })
-  );
+  logger.error({
+    message: "worker configuration validation failed",
+    errors: configErrors
+  });
   process.exit(1);
 }
 
@@ -58,10 +56,10 @@ registerJobs()
     // 2. Start heartbeat interval
     startHeartbeat();
     // 3. Log worker ready
-    console.info(JSON.stringify({ level: "info", message: "worker ready" }));
+    logger.info({ message: "worker ready" });
   })
   .catch(async (error) => {
-    console.error(JSON.stringify({ level: "error", message: "worker failed to start", error: String(error) }));
+    logger.error({ message: "worker failed to start", error: String(error) });
     if (heartbeat) clearInterval(heartbeat);
     await prisma.$disconnect().catch(() => null);
     process.exit(1);

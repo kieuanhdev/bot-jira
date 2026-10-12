@@ -3,6 +3,7 @@ import { env } from "@/lib/env";
 import { getWorkerHealth } from "@/lib/health/worker-health";
 import type { WorkerLog } from "../guard";
 import { enqueueJiraRecoveries } from "../jira-recovery";
+import { logger } from "@/lib/logger";
 
 const ALERT_KEY = "worker";
 export type HealthAlertOptions = {
@@ -41,12 +42,11 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
     : { requested: 0, queued: 0, coalesced: 0, failed: 0, errors: [] };
 
   if (recovery.failed > 0) {
-    console.error(JSON.stringify({
-      level: "error",
+    logger.error({
       job: "health-alert",
       message: "Failed to enqueue one or more Jira recovery jobs",
-      errors: recovery.errors,
-    }));
+      errors: recovery.errors
+    });
   }
 
   const conditions: { key: string; title: string; body: string }[] = [];
@@ -206,8 +206,8 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
     },
   }).catch(() => null);
 
-  console.info(JSON.stringify({
-    level: recovery.failed > 0 ? "warn" : "info",
+  logger[recovery.failed > 0 ? "warn" : "info"]({
+    message: "health-alert run completed",
     job: "health-alert",
     status: health.status,
     recoveryRequested: recovery.requested,
@@ -217,7 +217,7 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
     alerted,
     recovered,
     activeKeys,
-  }));
+  });
 
   return {
     ok: recovery.failed === 0,

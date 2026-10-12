@@ -12,6 +12,7 @@ import {
 import { registerQueues, registerWorkers, stopRegistryTimers } from "./registry";
 import { registerSchedules } from "./schedules";
 import { enqueueJiraProjectSync } from "./enqueue";
+import { logger } from "@/lib/logger";
 
 export { getBoss, startBoss } from "./connection";
 export { JOB_NAMES, type JobName } from "./job-names";
@@ -31,7 +32,7 @@ export {
 export async function recordRun(name: string, run: () => Promise<WorkerLog>): Promise<WorkerLog> {
   const startedAt = Date.now();
   if (name !== "poll-watched-issues") {
-    console.info(JSON.stringify({ level: "info", job: name, message: `job ${name} started` }));
+    logger.info({ job: name, message: `job ${name} started` });
   }
   const cursor = await prisma.integrationCursor.upsert({
     where: { integration_scope: { integration: "worker", scope: name } },
@@ -52,42 +53,33 @@ export async function recordRun(name: string, run: () => Promise<WorkerLog>): Pr
       },
     });
     if (!result.ok) {
-      console.warn(
-        JSON.stringify({
-          level: "warn",
-          job: name,
-          durationMs,
-          message: `job ${name} finished with warning/error`,
-          error: errorText,
-          stats: result.stats,
-        })
-      );
+      logger.warn({
+        job: name,
+        durationMs,
+        message: `job ${name} finished with warning/error`,
+        error: errorText,
+        stats: result.stats
+      });
       throw new Error(errorText ?? `${name} failed`);
     }
     if (name !== "poll-watched-issues") {
-      console.info(
-        JSON.stringify({
-          level: "info",
-          job: name,
-          durationMs,
-          message: `job ${name} completed`,
-          stats: result.stats,
-        })
-      );
+      logger.info({
+        job: name,
+        durationMs,
+        message: `job ${name} completed`,
+        stats: result.stats
+      });
     }
     return result;
   } catch (error) {
     const durationMs = Date.now() - startedAt;
     const message = (error instanceof Error ? error.message : String(error)).slice(0, 2000);
-    console.error(
-      JSON.stringify({
-        level: "error",
-        job: name,
-        durationMs,
-        message: `job ${name} failed`,
-        error: message,
-      })
-    );
+    logger.error({
+      job: name,
+      durationMs,
+      message: `job ${name} failed`,
+      error: message
+    });
     await prisma.integrationCursor.update({
       where: { id: cursor.id },
       data: { lastErrorAt: new Date(), lastError: message },
@@ -110,12 +102,11 @@ export async function registerJobs(): Promise<PgBoss> {
   // OPS: Reconcile only stale or failing Jira projects on startup (avoid blind full queue flood)
   setTimeout(() => {
     void reconcileStartupJiraProjects().catch((error) => {
-      console.error(JSON.stringify({
-        level: "error",
+      logger.error({
         job: "startup-reconciliation",
         message: "Startup Jira reconciliation failed",
-        error: String(error),
-      }));
+        error: String(error)
+      });
     });
   }, 1000);
 
@@ -141,12 +132,11 @@ export async function reconcileStartupJiraProjects(): Promise<{
     ...(health.failingProjects ?? []),
   ])];
 
-  console.info(JSON.stringify({
-    level: "info",
+  logger.info({
     job: "startup-reconciliation",
     message: `Worker startup: checked ${syncProjects.length} projects, found ${targetProjects.length} stale/failing`,
-    targetProjects,
-  }));
+    targetProjects
+  });
 
   if (targetProjects.length === 0) {
     return { checked: syncProjects.length, staleCount: 0, queued: 0, coalesced: 0, errors: [] };
