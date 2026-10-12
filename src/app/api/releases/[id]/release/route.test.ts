@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST } from "./route";
 
-const { prismaMock, sessionMock, canMock, releaseVersionMock, notifyAllMock, userJiraAuthMock, getReleaseReadinessMock } = vi.hoisted(() => {
+const { prismaMock, sessionMock, canMock, releaseVersionMock, notifyAllMock, notifyEveryoneMock, userJiraAuthMock, getReleaseReadinessMock } = vi.hoisted(() => {
   const releaseVersionMock = vi.fn();
   const notifyAllMock = vi.fn(() => Promise.resolve());
+  const notifyEveryoneMock = vi.fn(() => Promise.resolve());
   const sessionMock = vi.fn();
   const canMock = vi.fn();
   const userJiraAuthMock = vi.fn();
@@ -12,14 +13,14 @@ const { prismaMock, sessionMock, canMock, releaseVersionMock, notifyAllMock, use
     release: { findUnique: vi.fn(), update: vi.fn() },
     user: { findUnique: vi.fn() },
   };
-  return { prismaMock, sessionMock, canMock, releaseVersionMock, notifyAllMock, userJiraAuthMock, getReleaseReadinessMock };
+  return { prismaMock, sessionMock, canMock, releaseVersionMock, notifyAllMock, notifyEveryoneMock, userJiraAuthMock, getReleaseReadinessMock };
 });
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/session", () => ({ getSession: sessionMock }));
 vi.mock("@/lib/permissions", () => ({ can: canMock }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn().mockResolvedValue("a1") }));
-vi.mock("@/lib/notify", () => ({ notifyAll: notifyAllMock }));
+vi.mock("@/lib/notify", () => ({ notifyAll: notifyAllMock, notifyEveryone: notifyEveryoneMock }));
 vi.mock("@/lib/user-creds", () => ({ userJiraAuth: userJiraAuthMock }));
 vi.mock("@/lib/jira/client", () => ({
   jiraWith: () => ({
