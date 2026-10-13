@@ -62,6 +62,8 @@ export async function GET(req: Request) {
         title: true,
         body: true,
         link: true,
+        sourceLink: true,
+        sourceType: true,
         read: true,
         readAt: true,
         eventKey: true,

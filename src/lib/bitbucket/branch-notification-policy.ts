@@ -7,6 +7,8 @@ export type BranchNotificationMessage = {
   title: string;
   body: string;
   link: string;
+  sourceLink: string;
+  sourceType: "git";
   severity: "info" | "warning";
   eventKey: string;
   /** Discord deliveries sharing this group are batched into one message. */
@@ -112,7 +114,17 @@ export type FormatPrCommentNotificationArgs = {
     text: string;
     author: BbUser;
   };
+  baseUrl?: string;
 };
+
+/** Build a Bitbucket Data Center PR URL when the webhook omits its self link. */
+export function buildBitbucketPrUrl(baseUrl: string | undefined, repo: string, prId: number): string | null {
+  const [projectKey, ...repoParts] = repo.split("/").filter(Boolean);
+  const repoSlug = repoParts.join("/");
+  const base = (baseUrl ?? "").replace(/\/+$/, "");
+  if (!base || !projectKey || !repoSlug) return null;
+  return `${base}/projects/${encodeURIComponent(projectKey)}/repos/${encodeURIComponent(repoSlug)}/pull-requests/${prId}`;
+}
 
 /** Format notification payload for a PR comment. */
 export function formatPrCommentNotification(
@@ -123,7 +135,10 @@ export function formatPrCommentNotification(
   const prTitle = pr.title ? ` ${pr.title}` : "";
   const title = `Bình luận mới trên PR #${pr.id}${prTitle ? `: ${prTitle.trim()}` : ` (${repo})`}`;
   const bodyText = `${authorDisplayName}: ${comment.text.slice(0, 200)}`;
-  const link = pr.url || (pr.branch ? `/branches?q=${encodeURIComponent(pr.branch)}` : "/branches");
+  const link = pr.branch
+    ? `/branches?q=${encodeURIComponent(pr.branch)}`
+    : `/branches?repo=${encodeURIComponent(repo)}`;
+  const sourceLink = pr.url || buildBitbucketPrUrl(args.baseUrl, repo, pr.id) || link;
   const chatDigestGroup = `bb-pr-comment:${repo}:${pr.id}`;
   const eventKey = `${chatDigestGroup}:${comment.id}`;
 
@@ -132,6 +147,8 @@ export function formatPrCommentNotification(
     title,
     body: bodyText,
     link,
+    sourceLink,
+    sourceType: "git",
     severity: "info",
     eventKey,
     chatDigestGroup,
@@ -174,12 +191,13 @@ export function formatCommitCommentNotification(
 
   const [projectKey, repoSlug] = repo.split("/");
   const cleanBaseUrl = (baseUrl || "").replace(/\/+$/, "");
-  const link =
+  const sourceLink =
     projectKey && repoSlug && cleanBaseUrl
       ? `${cleanBaseUrl}/projects/${projectKey}/repos/${repoSlug}/commits/${commit.id}${
           comment.anchor?.path ? `#${encodeURIComponent(comment.anchor.path)}` : ""
         }`
-      : "/branches";
+      : `/branches?repo=${encodeURIComponent(repo)}`;
+  const link = `/branches?repo=${encodeURIComponent(repo)}`;
 
   const chatDigestGroup = `bb-commit-comment:${repo}:${commit.id}`;
   const eventKey = `${chatDigestGroup}:${comment.id}`;
@@ -189,6 +207,8 @@ export function formatCommitCommentNotification(
     title,
     body: bodyText,
     link,
+    sourceLink,
+    sourceType: "git",
     severity: "info",
     eventKey,
     chatDigestGroup,
@@ -210,6 +230,7 @@ export type FormatUnauthorizedMergeNotificationArgs = {
     emailAddress?: string;
   };
   jiraKeys?: string[];
+  baseUrl?: string;
 };
 
 /** Format notification payload when a PR is merged by a non-leader. */
@@ -225,9 +246,11 @@ export function formatUnauthorizedMergeNotification(
   const prTitlePart = pr.title ? `${pr.title}: ` : "";
   const bodyText = `${prTitlePart}${branchesPart}${jiraPart}`.slice(0, 200);
 
-  const link =
-    pr.url ||
-    (pr.toBranch ? `/branches?q=${encodeURIComponent(pr.toBranch)}` : "/branches");
+  const branchQuery = pr.fromBranch || pr.toBranch;
+  const link = branchQuery
+    ? `/branches?q=${encodeURIComponent(branchQuery)}`
+    : `/branches?repo=${encodeURIComponent(repo)}`;
+  const sourceLink = pr.url || buildBitbucketPrUrl(args.baseUrl, repo, pr.id) || link;
 
   const eventKey = `bb-pr-merged-nonleader:${repo}:${pr.id}`;
 
@@ -236,6 +259,8 @@ export function formatUnauthorizedMergeNotification(
     title,
     body: bodyText,
     link,
+    sourceLink,
+    sourceType: "git",
     severity: "warning",
     eventKey,
   };

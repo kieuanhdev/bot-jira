@@ -492,6 +492,8 @@ model Notification {
   title      String
   body       String    @default("")
   link       String?
+  sourceLink String?
+  sourceType String?
   read       Boolean   @default(false)
   readAt     DateTime?
   createdAt  DateTime  @default(now())
@@ -620,6 +622,8 @@ model NotificationOutbox {
   title         String
   body          String         @default("")
   link          String?
+  sourceLink    String?
+  sourceType    String?
   dedupeKey     String?
   state         DeliveryState  @default(pending)
   attemptCount  Int            @default(0)

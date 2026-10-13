@@ -157,13 +157,33 @@ export function NotificationRow({
         )}
 
         {/* Card Footer Actions */}
-        <div className="mt-3 pt-2 flex items-center justify-between border-t border-border/40 text-xs">
+        <div className="mt-3 pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border/40 text-xs">
           {/* Resource link */}
-          {n.link ? (
-            <span className="text-primary group-hover:underline inline-flex items-center gap-1 font-medium text-xs">
-              Xem chi tiết công việc
-              <ExternalLink className="h-3 w-3" aria-hidden="true" />
-            </span>
+          {n.link || n.sourceLink ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {n.link && (
+                <a
+                  href={n.link}
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex cursor-pointer items-center gap-1 font-medium text-primary transition-colors duration-200 hover:underline"
+                >
+                  Mở trên web
+                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                </a>
+              )}
+              {n.sourceLink && n.sourceLink !== n.link && (
+                <a
+                  href={n.sourceLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex cursor-pointer items-center gap-1 font-medium text-primary transition-colors duration-200 hover:underline"
+                >
+                  {n.sourceType === "jira" ? "Mở trên Jira" : "Mở trên Git"}
+                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                </a>
+              )}
+            </div>
           ) : (
             <span className="text-[11px] text-muted-foreground/60 flex items-center gap-1">
               <Info className="h-3 w-3" aria-hidden="true" />

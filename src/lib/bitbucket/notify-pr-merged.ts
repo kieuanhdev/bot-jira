@@ -7,6 +7,7 @@ import { deliverBranchNotifications } from "./branch-notification-delivery";
 import { getProjectLeaders } from "@/lib/projects/roles";
 import { isValidProjectKeyFormat } from "@/lib/jira/project-catalog";
 import { logger } from "@/lib/logger";
+import { env } from "@/lib/env";
 
 export type NotifyUnauthorizedMergeArgs = {
   repo: string;
@@ -144,6 +145,7 @@ export async function notifyUnauthorizedMerge(
     pr,
     actor,
     jiraKeys,
+    baseUrl: env.bitbucketBaseUrl,
   });
 
   // 5. Deliver notification to all target leaders

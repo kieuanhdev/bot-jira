@@ -16,6 +16,8 @@ export interface OutboxItem {
   title: string;
   body: string;
   link: string | null;
+  sourceLink?: string | null;
+  sourceType?: string | null;
   attemptCount: number;
 }
 

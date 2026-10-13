@@ -1,10 +1,26 @@
 import { describe, it, expect, vi } from "vitest";
 
+const chatMocks = vi.hoisted(() => ({
+  resolveDestination: vi.fn(),
+  sendWebhook: vi.fn(),
+}));
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     discordIntegration: { findUnique: vi.fn() },
     notificationOutbox: { create: vi.fn(), findFirst: vi.fn() },
   },
+}));
+
+vi.mock("@/lib/chat/discord-integration", () => ({
+  resolveDiscordDestination: chatMocks.resolveDestination,
+}));
+
+vi.mock("@/lib/chat/discord", () => ({
+  resolveAbsoluteUrl: (url?: string) =>
+    url?.startsWith("http") ? url : url ? `https://app.example.com${url}` : undefined,
+  sendDiscordWebhook: chatMocks.sendWebhook,
+  sendDiscordDirectMessage: vi.fn(),
 }));
 
 import { prisma } from "@/lib/prisma";
@@ -14,6 +30,7 @@ import {
   chatDedupeKey,
   chatDigestGroupPrefix,
   deliverToChat,
+  sendChatOutbox,
 } from "./chat-delivery";
 
 const outbox = prisma.notificationOutbox as unknown as {
@@ -110,5 +127,34 @@ describe("chat digest", () => {
     expect(digest.body.split("\n")).toHaveLength(9);
     expect(digest.body).toContain("… và 2 bình luận khác");
     expect(buildChatDigest(rows.slice(0, 1))).toEqual(rows[0]);
+  });
+});
+
+describe("sendChatOutbox", () => {
+  it("includes separate web and Jira source links", async () => {
+    chatMocks.resolveDestination.mockResolvedValue({
+      type: "webhook",
+      webhookUrl: "https://discord.com/api/webhooks/1/token",
+    });
+    chatMocks.sendWebhook.mockResolvedValue(undefined);
+
+    await sendChatOutbox({
+      userId: "u1",
+      title: "Task MR-10 vừa được cập nhật",
+      body: "Đã thay đổi trạng thái",
+      link: "/issue/MR-10",
+      sourceLink: "https://jira.example.com/browse/MR-10",
+      sourceType: "jira",
+    });
+
+    expect(chatMocks.sendWebhook).toHaveBeenCalledWith(
+      "https://discord.com/api/webhooks/1/token",
+      expect.objectContaining({
+        blocks: expect.arrayContaining([
+          { kind: "link", label: "Mở trên web", url: "https://app.example.com/issue/MR-10" },
+          { kind: "link", label: "Mở trên Jira", url: "https://jira.example.com/browse/MR-10" },
+        ]),
+      })
+    );
   });
 });

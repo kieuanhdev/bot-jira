@@ -11,6 +11,8 @@ export type Notification = {
   title: string;
   body: string;
   link: string | null;
+  sourceLink?: string | null;
+  sourceType?: "jira" | "git" | null;
   read: boolean;
   readAt: string | null;
   createdAt: string;

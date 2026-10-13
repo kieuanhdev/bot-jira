@@ -14,7 +14,9 @@ const { prismaMock } = vi.hoisted(() => {
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/notify/push", () => ({ sendPush: vi.fn() }));
-vi.mock("@/lib/env", () => ({ env: { notifyBackoffBaseMs: 60_000 } }));
+vi.mock("@/lib/env", () => ({
+  env: { notifyBackoffBaseMs: 60_000, jiraBaseUrl: "https://jira.example.com" },
+}));
 vi.mock("@/lib/queue/boss", () => ({ enqueueNotificationDelivery: vi.fn().mockResolvedValue("job-1") }));
 
 import { dedupeKeyFor, backoffMs, deliverNotification } from "./outbox";
@@ -164,6 +166,14 @@ describe("deliverNotification", () => {
     expect(res.delivered).toBe(true);
     expect(res.notificationId).toBe("n1");
     expect(prismaMock.notification.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sourceLink: "https://jira.example.com/browse/MR-10",
+          sourceType: "jira",
+        }),
+      })
+    );
     expect(prismaMock.notificationOutbox.create).not.toHaveBeenCalled();
   });
 

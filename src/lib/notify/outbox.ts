@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import type { NotifyType } from "./index";
+import type { NotifySourceType } from "./index";
 import { deliverToChat } from "./chat-delivery";
 import { DEFAULT_DISABLED_NOTIFICATION_TYPES, isAllNotificationsRequired } from "./policy";
 
@@ -41,6 +42,27 @@ export type DeliverResult = {
   outboxId?: string;
 };
 
+function resolveSource(data: {
+  link?: string;
+  sourceLink?: string;
+  sourceType?: NotifySourceType;
+}): { sourceLink: string | null; sourceType: NotifySourceType | null } {
+  if (data.sourceLink && data.sourceType) {
+    return { sourceLink: data.sourceLink, sourceType: data.sourceType };
+  }
+
+  const issueMatch = data.link?.match(/^\/issue\/([A-Z][A-Z0-9_]*-\d+)(?:[/?#]|$)/i);
+  if (issueMatch && env.jiraBaseUrl) {
+    const base = env.jiraBaseUrl.replace(/\/+$/, "");
+    return {
+      sourceLink: `${base}/browse/${encodeURIComponent(issueMatch[1].toUpperCase())}`,
+      sourceType: "jira",
+    };
+  }
+
+  return { sourceLink: null, sourceType: null };
+}
+
 async function wakeDeliveryWorker(scheduledAt?: Date): Promise<void> {
   // The one-minute schedule remains the recovery path if this best-effort
   // wake-up cannot reach pg-boss during a deploy or transient DB failure.
@@ -55,6 +77,8 @@ export async function deliverNotification(
     title: string;
     body?: string;
     link?: string;
+    sourceLink?: string;
+    sourceType?: NotifySourceType;
     severity?: string;
     /** Stable id of the logical event this notification refers to. */
     eventKey?: string;
@@ -84,6 +108,7 @@ export async function deliverNotification(
   }
 
   const rawEventKey = data.eventKey ?? data.eventId;
+  const source = resolveSource(data);
   const eventKey = rawEventKey && rawEventKey.trim() !== ""
     ? rawEventKey.trim()
     : `legacy:${userId}:${data.type}:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`;
@@ -111,6 +136,8 @@ export async function deliverNotification(
           title: data.title,
           body: data.body ?? "",
           link: data.link ?? null,
+          sourceLink: source.sourceLink,
+          sourceType: source.sourceType,
         },
       });
       isNew = true;
@@ -158,6 +185,8 @@ export async function deliverNotification(
     title: data.title,
     body: data.body,
     link: data.link,
+    sourceLink: source.sourceLink,
+    sourceType: source.sourceType,
     eventId: eventKey,
     scheduledAt: data.scheduledAt,
     digestGroup: data.chatDigestGroup,
@@ -182,6 +211,8 @@ export async function deliverNotification(
         title: data.title,
         body: data.body ?? "",
         link: data.link ?? null,
+        sourceLink: source.sourceLink,
+        sourceType: source.sourceType,
         dedupeKey: key,
         state: "pending",
         scheduledAt: data.scheduledAt ?? null,

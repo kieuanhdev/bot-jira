@@ -22,6 +22,8 @@ const OUTBOX_SELECT = {
   title: true,
   body: true,
   link: true,
+  sourceLink: true,
+  sourceType: true,
   attemptCount: true,
   dedupeKey: true,
 } as const;
@@ -33,6 +35,8 @@ type DueRow = {
   title: string;
   body: string;
   link: string | null;
+  sourceLink: string | null;
+  sourceType: string | null;
   attemptCount: number;
   dedupeKey: string | null;
 };

@@ -19,12 +19,16 @@ export type NotifyType =
   | "pr";
 
 export type NotifySeverity = "info" | "warning" | "danger" | "success";
+export type NotifySourceType = "jira" | "git";
 
 export type NotifyInput = {
   type: NotifyType;
   title: string;
   body?: string;
   link?: string;
+  /** Direct link to the source system in addition to the internal web link. */
+  sourceLink?: string;
+  sourceType?: NotifySourceType;
   severity?: NotifySeverity;
   /** Stable identifier of the logical event for web & push deduplication. */
   eventKey?: string;
@@ -47,6 +51,8 @@ export async function notifyUser(userId: string, data: NotifyInput) {
     title: data.title,
     body: data.body,
     link: data.link,
+    sourceLink: data.sourceLink,
+    sourceType: data.sourceType,
     severity: data.severity,
     eventKey: data.eventKey ?? data.eventId,
     eventId: data.eventId ?? data.eventKey,

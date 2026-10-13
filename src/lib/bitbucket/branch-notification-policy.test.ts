@@ -117,7 +117,9 @@ describe("branch-notification-policy", () => {
         type: "comment",
         title: "Bình luận mới trên PR #42: Fix payment calculation bug",
         body: "John Doe: Please double check tax rate",
-        link: "https://bitbucket.corp/projects/PROJECT/repos/repo_slug/pull-requests/42",
+        link: "/branches?repo=PROJECT%2Frepo_slug",
+        sourceLink: "https://bitbucket.corp/projects/PROJECT/repos/repo_slug/pull-requests/42",
+        sourceType: "git",
         severity: "info",
         eventKey: "bb-pr-comment:PROJECT/repo_slug:42:101",
         chatDigestGroup: "bb-pr-comment:PROJECT/repo_slug:42",
@@ -136,10 +138,12 @@ describe("branch-notification-policy", () => {
           text: "Looks good",
           author: { name: "john_d" },
         },
+        baseUrl: "https://bitbucket.corp",
       });
 
       expect(result.title).toBe("Bình luận mới trên PR #42 (PROJECT/repo_slug)");
       expect(result.link).toBe("/branches?q=feature%2FPROJ-123");
+      expect(result.sourceLink).toBe("https://bitbucket.corp/projects/PROJECT/repos/repo_slug/pull-requests/42");
       expect(result.body).toBe("john_d: Looks good");
     });
 
@@ -156,7 +160,8 @@ describe("branch-notification-policy", () => {
       });
 
       expect(result.body).toBe(`tester: ${"A".repeat(200)}`);
-      expect(result.link).toBe("/branches");
+      expect(result.link).toBe("/branches?repo=PROJECT%2Frepo_slug");
+      expect(result.sourceLink).toBe("/branches?repo=PROJECT%2Frepo_slug");
     });
   });
 
@@ -181,7 +186,9 @@ describe("branch-notification-policy", () => {
         type: "comment",
         title: "Bình luận mới trên commit [1234567890]: feat: add invoice validation (PROJECT/repo_slug)",
         body: "Alice Wonder (src/invoice.ts:42): Consider using zod schema",
-        link: "https://bitbucket.corp/projects/PROJECT/repos/repo_slug/commits/1234567890abcdef1234567890abcdef12345678#src%2Finvoice.ts",
+        link: "/branches?repo=PROJECT%2Frepo_slug",
+        sourceLink: "https://bitbucket.corp/projects/PROJECT/repos/repo_slug/commits/1234567890abcdef1234567890abcdef12345678#src%2Finvoice.ts",
+        sourceType: "git",
         severity: "info",
         eventKey: "bb-commit-comment:PROJECT/repo_slug:1234567890abcdef1234567890abcdef12345678:555",
         chatDigestGroup: "bb-commit-comment:PROJECT/repo_slug:1234567890abcdef1234567890abcdef12345678",
@@ -199,7 +206,8 @@ describe("branch-notification-policy", () => {
         },
       });
 
-      expect(result.link).toBe("/branches");
+      expect(result.link).toBe("/branches?repo=invalid-repo-format");
+      expect(result.sourceLink).toBe("/branches?repo=invalid-repo-format");
       expect(result.title).toBe("Bình luận mới trên commit [abcdef1234] (invalid-repo-format)");
       expect(result.body).toBe("bob: Quick fix");
     });
@@ -249,7 +257,9 @@ describe("branch-notification-policy", () => {
       expect(result.severity).toBe("warning");
       expect(result.title).toBe("PR #42 vừa được merge bởi Dev One (không phải leader) — PRJ/my-repo");
       expect(result.body).toBe("Fix authentication leak: feature/EPM-123 → master [EPM-123]");
-      expect(result.link).toBe("https://git.example.com/pr/42");
+      expect(result.link).toBe("/branches?q=feature%2FEPM-123");
+      expect(result.sourceLink).toBe("https://git.example.com/pr/42");
+      expect(result.sourceType).toBe("git");
       expect(result.eventKey).toBe("bb-pr-merged-nonleader:PRJ/my-repo:42");
     });
 
@@ -268,7 +278,8 @@ describe("branch-notification-policy", () => {
 
       expect(result.title).toBe("PR #99 vừa được merge bởi stranger (không phải leader) — PRJ/backend");
       expect(result.body).toBe("dev → main");
-      expect(result.link).toBe("/branches?q=main");
+      expect(result.link).toBe("/branches?q=dev");
+      expect(result.sourceLink).toBe("/branches?q=dev");
       expect(result.eventKey).toBe("bb-pr-merged-nonleader:PRJ/backend:99");
     });
   });

@@ -8,6 +8,8 @@ describe("branch-notification-delivery", () => {
     title: "Bình luận mới",
     body: "Nội dung",
     link: "/branches",
+    sourceLink: "https://git.example.com/projects/PRJ/repos/app/pull-requests/1",
+    sourceType: "git",
     severity: "info",
     eventKey: "bb-test-1",
   };

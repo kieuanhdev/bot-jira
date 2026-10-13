@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import type { ChatMessagePayload } from "@/lib/chat";
 import type { NotifyType } from "./index";
+import type { NotifySourceType } from "./index";
 
 export function chatDedupeKey(userId: string, type: NotifyType, eventId: string): string {
   return `${userId}:discord:${type}:${eventId}`;
@@ -67,6 +68,8 @@ export async function deliverToChat(args: {
   title: string;
   body?: string;
   link?: string | null;
+  sourceLink?: string | null;
+  sourceType?: NotifySourceType | null;
   eventId?: string;
   scheduledAt?: Date;
   digestGroup?: string;
@@ -105,6 +108,8 @@ export async function deliverToChat(args: {
         title: args.title,
         body: args.body ?? "",
         link: args.link ?? null,
+        sourceLink: args.sourceLink ?? null,
+        sourceType: args.sourceType ?? null,
         dedupeKey: key,
         state: "pending",
         scheduledAt: scheduledAt ?? null,
@@ -125,18 +130,25 @@ export async function sendChatOutbox(row: {
   title: string;
   body: string;
   link: string | null;
+  sourceLink?: string | null;
+  sourceType?: string | null;
 }): Promise<boolean> {
   const { resolveDiscordDestination } = await import("@/lib/chat/discord-integration");
   const destination = await resolveDiscordDestination(row.userId);
   if (!destination) return false;
   const { sendDiscordDirectMessage, sendDiscordWebhook, resolveAbsoluteUrl } = await import("@/lib/chat/discord");
   const fullUrl = resolveAbsoluteUrl(row.link ?? undefined);
+  const sourceUrl = resolveAbsoluteUrl(row.sourceLink ?? undefined);
+  const sourceLabel = row.sourceType === "jira" ? "Mở trên Jira" : "Mở trên Git";
   const payload: ChatMessagePayload = {
     text: row.title,
     blocks: [
       { kind: "text", text: row.title },
       ...(row.body ? [{ kind: "text" as const, text: row.body }] : []),
-      ...(fullUrl ? [{ kind: "link" as const, label: "Open in web", url: fullUrl }] : []),
+      ...(fullUrl ? [{ kind: "link" as const, label: "Mở trên web", url: fullUrl }] : []),
+      ...(sourceUrl && sourceUrl !== fullUrl
+        ? [{ kind: "link" as const, label: sourceLabel, url: sourceUrl }]
+        : []),
     ],
     url: fullUrl ?? undefined,
   };

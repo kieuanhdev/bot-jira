@@ -10,6 +10,7 @@ import {
   resolveBranchNotificationRecipients,
 } from "./branch-recipient-resolver";
 import { deliverBranchNotifications } from "./branch-notification-delivery";
+import { env } from "@/lib/env";
 
 export { isSameUser };
 
@@ -69,7 +70,7 @@ export async function notifyPrComment(args: NotifyPrCommentArgs): Promise<{
   }
 
   // 4. Format notification payload using policy message model
-  const message = formatPrCommentNotification({ repo, pr, comment });
+  const message = formatPrCommentNotification({ repo, pr, comment, baseUrl: env.bitbucketBaseUrl });
 
   // 5. Deliver notification to recipients outside policy
   const notifiedCount = await deliverBranchNotifications(targetUserIds, message);
