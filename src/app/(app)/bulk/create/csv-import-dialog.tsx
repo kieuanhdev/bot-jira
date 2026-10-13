@@ -214,7 +214,7 @@ export function CsvImportDialog({
 
   // Calculate items to import
   const rawItems = excelResult
-    ? excelResult.items
+    ? resolveCsvNamesToIds(excelResult.items, metadata)
     : parsed
       ? resolveCsvNamesToIds(parsed.items, metadata)
       : [];
