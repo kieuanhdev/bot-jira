@@ -170,5 +170,44 @@ describe("board filter controller model", () => {
       expect(result.filters.statuses).toEqual(["Done"]);
       expect(result.filters.assigneeScope.roster).toEqual(["bob"]);
     });
+
+    it("ignores URL filters when URL project does not match selected project", () => {
+      vi.spyOn(boardStorage, "loadStoredTeamMode").mockReturnValue(false);
+      vi.spyOn(boardStorage, "loadStoredFilters").mockReturnValue(null);
+
+      const urlParams = new URLSearchParams("project=EPM&assignee=ALL&status=Done");
+      const result = loadInitialBoardFilters({
+        searchParams: urlParams,
+        selectedProject: "CICM",
+        myName: "alice",
+        canUseTeamMode: true,
+      });
+
+      expect(result.teamMode).toBe(false);
+      expect(result.filters.project).toBe("CICM");
+      expect(result.filters.statuses).toEqual([]);
+      expect(result.filters.assigneeScope.roster).toEqual(["me"]);
+    });
+
+    it("resets assigneeScope to 'me' if stored team mode is false even if stored filters has mode 'all'", () => {
+      vi.spyOn(boardStorage, "loadStoredTeamMode").mockReturnValue(false);
+      vi.spyOn(boardStorage, "loadStoredFilters").mockReturnValue({
+        ...DEFAULT_BOARD_FILTERS,
+        project: "EPM",
+        assigneeScope: { mode: "all", roster: [], view: "all-selected" },
+      });
+
+      const result = loadInitialBoardFilters({
+        searchParams: null,
+        selectedProject: "EPM",
+        myName: "alice",
+        canUseTeamMode: true,
+      });
+
+      expect(result.teamMode).toBe(false);
+      expect(result.filters.assigneeScope.mode).toBe("roster");
+      expect(result.filters.assigneeScope.roster).toEqual(["me"]);
+    });
   });
 });
+

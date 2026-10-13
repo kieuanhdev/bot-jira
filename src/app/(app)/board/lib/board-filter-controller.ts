@@ -143,13 +143,18 @@ export function loadInitialBoardFilters({
   myName,
   canUseTeamMode,
 }: LoadInitialBoardFiltersOptions): InitialBoardFilters {
-  const hasFilterParamsInUrl = hasBoardFilterParams(searchParams ?? null);
+  const urlProject = searchParams?.get("project")?.trim().toUpperCase();
+  const searchParamsBelongToProject =
+    !urlProject || !selectedProject || urlProject === selectedProject.toUpperCase();
+  const activeSearchParams = searchParamsBelongToProject ? searchParams : null;
+
+  const hasFilterParamsInUrl = hasBoardFilterParams(activeSearchParams ?? null);
   const storedTeamMode = Boolean(
     selectedProject && canUseTeamMode && loadStoredTeamMode(selectedProject)
   );
 
-  if (searchParams && hasFilterParamsInUrl) {
-    const parsed = parseIssueFilters(searchParams, DEFAULT_BOARD_FILTERS, myName);
+  if (activeSearchParams && hasFilterParamsInUrl) {
+    const parsed = parseIssueFilters(activeSearchParams, DEFAULT_BOARD_FILTERS, myName);
     const teamMode = Boolean(
       canUseTeamMode &&
       (parsed.assigneeScope.mode === "all" || storedTeamMode)
@@ -178,6 +183,11 @@ export function loadInitialBoardFilters({
         assigneeScope: { mode: "all", roster: [], view: "all-selected" },
       };
     }
+  } else if (baseFilters.assigneeScope.mode === "all") {
+    baseFilters = {
+      ...baseFilters,
+      assigneeScope: { mode: "roster", roster: ["me"], view: "all-selected" },
+    };
   }
 
   return {
@@ -248,6 +258,7 @@ export function useBoardFilterController({
       myName,
       canUseTeamMode,
     });
+    setPrevProject(nextProject);
     setTeamModeState({ project: nextProject, enabled: nextInit.teamMode });
     setFilters(nextInit.filters);
   }
@@ -259,8 +270,10 @@ export function useBoardFilterController({
   const [prevProject, setPrevProject] = useState(initialProject);
   if (selectedProject && selectedProject !== prevProject) {
     setPrevProject(selectedProject);
+    const isUrlForProject =
+      searchParams?.get("project")?.trim().toUpperCase() === selectedProject.toUpperCase();
     const nextInit = loadInitialBoardFilters({
-      searchParams,
+      searchParams: isUrlForProject ? searchParams : null,
       selectedProject,
       myName,
       canUseTeamMode,
