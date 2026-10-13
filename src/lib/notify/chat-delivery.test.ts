@@ -30,6 +30,7 @@ import {
   chatDedupeKey,
   chatDigestGroupPrefix,
   deliverToChat,
+  inferNotificationTone,
   sendChatOutbox,
 } from "./chat-delivery";
 
@@ -131,6 +132,13 @@ describe("chat digest", () => {
 });
 
 describe("sendChatOutbox", () => {
+  it("maps important outcomes to a visual emphasis tone", () => {
+    expect(inferNotificationTone("CI backend thất bại", "Build failed")).toBe("danger");
+    expect(inferNotificationTone("Cảnh báo SLA", "Task quá hạn")).toBe("warning");
+    expect(inferNotificationTone("Đồng bộ đã phục hồi", "Sẵn sàng")).toBe("success");
+    expect(inferNotificationTone("Task vừa cập nhật", "Đổi người phụ trách")).toBe("info");
+  });
+
   it("includes separate web and Jira source links", async () => {
     chatMocks.resolveDestination.mockResolvedValue({
       type: "webhook",
@@ -145,15 +153,27 @@ describe("sendChatOutbox", () => {
       link: "/issue/MR-10",
       sourceLink: "https://jira.example.com/browse/MR-10",
       sourceType: "jira",
+      dedupeKey: "u1:discord:transition:jira-update:MR-10",
     });
 
     expect(chatMocks.sendWebhook).toHaveBeenCalledWith(
       "https://discord.com/api/webhooks/1/token",
       expect.objectContaining({
-        blocks: expect.arrayContaining([
-          { kind: "link", label: "Mở trên web", url: "https://app.example.com/issue/MR-10" },
-          { kind: "link", label: "Mở trên Jira", url: "https://jira.example.com/browse/MR-10" },
-        ]),
+        blocks: [{
+          kind: "fields",
+          fields: [
+            { label: "Nội dung chính", value: "Đã thay đổi trạng thái", inline: false },
+            { label: "Nguồn", value: "Jira", inline: true },
+            { label: "Loại thông báo", value: "Chuyển trạng thái", inline: true },
+            {
+              label: "Hành động",
+              value: "[Mở trên web](https://app.example.com/issue/MR-10)  •  [Mở trên Jira](https://jira.example.com/browse/MR-10)",
+              inline: false,
+            },
+          ],
+        }],
+        footer: "Team Task Web • Jira",
+        tone: "info",
       })
     );
   });

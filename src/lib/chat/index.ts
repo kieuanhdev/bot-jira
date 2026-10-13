@@ -26,6 +26,10 @@ export type ChatMessagePayload = {
   blocks?: ChatBlock[];
   /** Optional deep-link into the web app, surfaced as an action button when supported. */
   url?: string;
+  /** Semantic emphasis used by rich-chat adapters. */
+  tone?: "info" | "success" | "warning" | "danger";
+  /** Short provenance shown below rich messages. */
+  footer?: string;
 };
 
 /** An inbound chat message, normalized from any vendor. */

@@ -99,6 +99,45 @@ describe("discordProvider.send", () => {
     expect(url).toContain("/channels/chan-1/messages");
     const body = JSON.parse(init.body);
     expect(body.embeds[0].title).toBe("Release 1.4.2 ready");
+    expect(body.embeds[0].color).toBe(0x0d9488);
+  });
+
+  it("renders semantic color, structured fields, and footer", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: "new-msg" }), { status: 200 }));
+    setDiscordFetch(fetchMock);
+    await discordProvider.send("", {
+      text: "CI backend thất bại",
+      tone: "danger",
+      footer: "Team Task Web • Git",
+      blocks: [{
+        kind: "fields",
+        fields: [{ label: "Nội dung chính", value: "Build failed", inline: false }],
+      }],
+    });
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
+    const body = JSON.parse(init.body);
+    expect(body.embeds[0]).toEqual(expect.objectContaining({
+      color: 0xdc2626,
+      footer: { text: "Team Task Web • Git" },
+      fields: [{ name: "Nội dung chính", value: "Build failed", inline: false }],
+    }));
+  });
+
+  it("clips rich embed content to Discord limits", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: "new-msg" }), { status: 200 }));
+    setDiscordFetch(fetchMock);
+    await discordProvider.send("", {
+      text: "T".repeat(300),
+      blocks: [{
+        kind: "fields",
+        fields: [{ label: "N".repeat(300), value: "V".repeat(1200), inline: false }],
+      }],
+    });
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
+    const body = JSON.parse(init.body);
+    expect(body.embeds[0].title).toHaveLength(256);
+    expect(body.embeds[0].fields[0].name).toHaveLength(256);
+    expect(body.embeds[0].fields[0].value).toHaveLength(1024);
   });
 
   it("throws when Discord returns an error status", async () => {

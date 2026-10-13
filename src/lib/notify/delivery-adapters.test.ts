@@ -93,6 +93,9 @@ describe("DiscordDeliveryAdapter", () => {
     title: "Chat Alert",
     body: "Chat Body",
     link: null,
+    sourceLink: "https://jira.example.com/browse/MR-10",
+    sourceType: "jira",
+    dedupeKey: "user-2:discord:issue:event-1",
     attemptCount: 0,
   };
 
@@ -110,6 +113,11 @@ describe("DiscordDeliveryAdapter", () => {
 
     const outcome = await adapter.deliver(item);
     expect(outcome).toEqual({ status: "sent" });
+    expect(sendChatMock).toHaveBeenCalledWith(expect.objectContaining({
+      sourceLink: "https://jira.example.com/browse/MR-10",
+      sourceType: "jira",
+      dedupeKey: "user-2:discord:issue:event-1",
+    }));
   });
 
   it("returns retry with retryAfterMs when rate limited", async () => {

@@ -105,12 +105,18 @@ export function resolveAbsoluteUrl(url: string | undefined): string | undefined 
 }
 
 function toEmbed(payload: ChatMessagePayload) {
+  const clip = (value: string, max: number) =>
+    value.length > max ? `${value.slice(0, Math.max(0, max - 3))}...` : value;
   const fields: { name: string; value: string; inline: boolean }[] = [];
   const descriptionParts: string[] = [];
   if (payload.blocks) {
     for (const b of payload.blocks) {
       if (b.kind === "text") descriptionParts.push(b.text);
-      else if (b.kind === "fields") for (const f of b.fields) fields.push({ name: f.label, value: f.value, inline: f.inline !== false });
+      else if (b.kind === "fields") for (const f of b.fields) fields.push({
+        name: clip(f.label, 256),
+        value: clip(f.value, 1024),
+        inline: f.inline !== false,
+      });
       else if (b.kind === "link") {
         const absUrl = resolveAbsoluteUrl(b.url);
         if (absUrl) {
@@ -124,10 +130,17 @@ function toEmbed(payload: ChatMessagePayload) {
     }
   }
   const embed: Record<string, unknown> = {
-    title: payload.text,
-    description: descriptionParts.join("\n") || null,
+    title: clip(payload.text, 256),
+    description: descriptionParts.length > 0 ? clip(descriptionParts.join("\n"), 4096) : null,
+    color: {
+      info: 0x0d9488,
+      success: 0x16a34a,
+      warning: 0xd97706,
+      danger: 0xdc2626,
+    }[payload.tone ?? "info"],
   };
   if (fields.length) embed.fields = fields;
+  if (payload.footer) embed.footer = { text: clip(payload.footer, 2048) };
   const absPayloadUrl = resolveAbsoluteUrl(payload.url);
   if (absPayloadUrl) embed.url = absPayloadUrl;
   return {

@@ -18,6 +18,7 @@ export interface OutboxItem {
   link: string | null;
   sourceLink?: string | null;
   sourceType?: string | null;
+  dedupeKey?: string | null;
   attemptCount: number;
 }
 

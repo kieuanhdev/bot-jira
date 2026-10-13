@@ -87,6 +87,9 @@ export class DiscordDeliveryAdapter implements DeliveryAdapter {
         title: item.title,
         body: item.body,
         link: item.link,
+        sourceLink: item.sourceLink,
+        sourceType: item.sourceType,
+        dedupeKey: item.dedupeKey,
       });
 
       if (!delivered) {

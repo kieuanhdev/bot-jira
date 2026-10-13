@@ -57,6 +57,31 @@ export type ChatDeliverResult = {
   scheduledAt?: Date;
 };
 
+const TYPE_LABELS: Record<string, string> = {
+  comment: "Bình luận",
+  issue: "Cập nhật task",
+  transition: "Chuyển trạng thái",
+  stale: "SLA / Tồn đọng",
+  release: "Phát hành",
+  sentry: "Lỗi Sentry",
+  ci: "Build / CI",
+  ai: "AI gợi ý",
+  system: "Hệ thống",
+  pr: "Pull Request",
+};
+
+export function inferNotificationTone(title: string, body: string): "info" | "success" | "warning" | "danger" {
+  const text = `${title} ${body}`.toLowerCase();
+  if (/thất bại|failed|failure|lỗi|error|khẩn cấp|chặn phát hành/.test(text)) return "danger";
+  if (/cảnh báo|warning|quá hạn|tồn đọng|stale|không phải leader|sắp đến hạn/.test(text)) return "warning";
+  if (/thành công|success|phục hồi|recovered|sẵn sàng|ready/.test(text)) return "success";
+  return "info";
+}
+
+function notificationTypeFromDedupeKey(dedupeKey?: string | null): string | null {
+  return dedupeKey?.match(/^[^:]+:discord:([^:]+):/)?.[1] ?? null;
+}
+
 /**
  * Queue a Discord delivery only when this user has configured a destination.
  * With `digestGroup`, the row joins the group's open window (or opens a new
@@ -132,6 +157,7 @@ export async function sendChatOutbox(row: {
   link: string | null;
   sourceLink?: string | null;
   sourceType?: string | null;
+  dedupeKey?: string | null;
 }): Promise<boolean> {
   const { resolveDiscordDestination } = await import("@/lib/chat/discord-integration");
   const destination = await resolveDiscordDestination(row.userId);
@@ -140,17 +166,32 @@ export async function sendChatOutbox(row: {
   const fullUrl = resolveAbsoluteUrl(row.link ?? undefined);
   const sourceUrl = resolveAbsoluteUrl(row.sourceLink ?? undefined);
   const sourceLabel = row.sourceType === "jira" ? "Mở trên Jira" : "Mở trên Git";
+  const sourceName = row.sourceType === "jira" ? "Jira" : row.sourceType === "git" ? "Git" : "Team Task Web";
+  const notificationType = notificationTypeFromDedupeKey(row.dedupeKey);
+  const actions = [
+    fullUrl ? `[Mở trên web](${fullUrl})` : null,
+    sourceUrl && sourceUrl !== fullUrl ? `[${sourceLabel}](${sourceUrl})` : null,
+  ].filter((action): action is string => Boolean(action));
   const payload: ChatMessagePayload = {
     text: row.title,
     blocks: [
-      { kind: "text", text: row.title },
-      ...(row.body ? [{ kind: "text" as const, text: row.body }] : []),
-      ...(fullUrl ? [{ kind: "link" as const, label: "Mở trên web", url: fullUrl }] : []),
-      ...(sourceUrl && sourceUrl !== fullUrl
-        ? [{ kind: "link" as const, label: sourceLabel, url: sourceUrl }]
-        : []),
+      {
+        kind: "fields",
+        fields: [
+          ...(row.body ? [{ label: "Nội dung chính", value: row.body, inline: false }] : []),
+          { label: "Nguồn", value: sourceName, inline: true },
+          ...(notificationType
+            ? [{ label: "Loại thông báo", value: TYPE_LABELS[notificationType] ?? notificationType, inline: true }]
+            : []),
+          ...(actions.length > 0
+            ? [{ label: "Hành động", value: actions.join("  •  "), inline: false }]
+            : []),
+        ],
+      },
     ],
     url: fullUrl ?? undefined,
+    tone: inferNotificationTone(row.title, row.body),
+    footer: `Team Task Web • ${sourceName}`,
   };
   if (destination.type === "webhook") {
     await sendDiscordWebhook(destination.webhookUrl, payload);
