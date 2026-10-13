@@ -19,6 +19,7 @@ import {
   Info,
   ChevronRight,
   Search,
+  UserRoundX,
   type LucideIcon,
 } from "lucide-react";
 import { getPeriodDisplayLabel } from "@/lib/reports/period";
@@ -27,6 +28,13 @@ import type {
   ReportPeriod,
   SupportSignal,
 } from "@/lib/reports/types";
+import { MemberVisibilityDialog } from "./member-visibility-dialog";
+import {
+  clearMemberVisibility,
+  filterMembersByVisibility,
+  loadMemberVisibility,
+  saveMemberVisibility,
+} from "./lib/member-report-preferences";
 
 const MemberWorkloadChart = dynamic(
   () => import("./member-workload-chart").then((module) => module.MemberWorkloadChart),
@@ -68,6 +76,7 @@ export function MembersTab({
   const [internalSelectedAssignee, setInternalSelectedAssignee] = useState<string | null>(null);
   const [transitionDirection, setTransitionDirection] = useState<"forward" | "backward">("forward");
   const [searchQuery, setSearchQuery] = useState("");
+  const [memberVisibility, setMemberVisibility] = useState(() => loadMemberVisibility(projectKey));
 
   const effectiveSelectedAssignee =
     selectedMemberId !== undefined ? selectedMemberId : internalSelectedAssignee;
@@ -108,7 +117,13 @@ export function MembersTab({
   });
 
 
-  const selectedMember = data?.members.find((member) => member.assignee === effectiveSelectedAssignee) ?? null;
+  const allMembers = useMemo(() => data?.members ?? [], [data?.members]);
+  const visibleMembers = useMemo(
+    () => filterMembersByVisibility(allMembers, memberVisibility),
+    [allMembers, memberVisibility]
+  );
+  // Keep direct links to an individual report usable even if that person is hidden from the team overview.
+  const selectedMember = allMembers.find((member) => member.assignee === effectiveSelectedAssignee) ?? null;
 
   const handleSelectMember = (assignee: string) => {
     setTransitionDirection("forward");
@@ -128,7 +143,7 @@ export function MembersTab({
     }
   };
 
-  const filteredMembers = (data?.members ?? []).filter((m) => {
+  const filteredMembers = visibleMembers.filter((m) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return m.displayName.toLowerCase().includes(q) || m.assignee.toLowerCase().includes(q);
@@ -174,7 +189,7 @@ export function MembersTab({
             member={selectedMember}
             periodLabel={periodLabel}
             isVersionScope={isVersionScope}
-            allMembers={data?.members ?? []}
+            allMembers={visibleMembers}
             onSelectMember={handleSelectMember}
             onBack={handleBack}
             onDrillDownToTasks={onDrillDownToTasks}
@@ -187,13 +202,45 @@ export function MembersTab({
             transitionDirection === "backward" ? "animate-view-backward" : ""
           }`}
         >
-          <MemberWorkloadChart
-            members={data?.members ?? []}
-            periodLabel={periodLabel}
-            onSelectMember={(member) => handleSelectMember(member.assignee)}
-          />
+          <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                {memberVisibility.hasSavedSelection
+                  ? `Đang xem ${visibleMembers.length}/${allMembers.length} thành viên`
+                  : `Đang xem tất cả ${allMembers.length} thành viên`}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Ẩn người đã nghỉ hoặc tài khoản test khỏi báo cáo và ghi nhớ lựa chọn cho lần sau.
+              </p>
+            </div>
+            <MemberVisibilityDialog
+              members={allMembers}
+              selectedAssignees={memberVisibility.assignees}
+              hasSavedSelection={memberVisibility.hasSavedSelection}
+              onSave={(assignees) => setMemberVisibility(saveMemberVisibility(projectKey, assignees))}
+              onShowAll={() => setMemberVisibility(clearMemberVisibility(projectKey))}
+            />
+          </div>
 
-          <div>
+          {visibleMembers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card p-10 text-center">
+              <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+                <UserRoundX className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+              </span>
+              <h4 className="text-sm font-semibold text-foreground">Nhóm đã lưu chưa có dữ liệu trong phạm vi này</h4>
+              <p className="mt-1 max-w-md text-xs text-muted-foreground">
+                Hãy chọn lại thành viên hoặc chuyển sang “Hiển thị tất cả” để xem toàn bộ báo cáo.
+              </p>
+            </div>
+          ) : (
+            <MemberWorkloadChart
+              members={visibleMembers}
+              periodLabel={periodLabel}
+              onSelectMember={(member) => handleSelectMember(member.assignee)}
+            />
+          )}
+
+          {visibleMembers.length > 0 && <div>
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">Bảng chi tiết thành viên</h3>
@@ -203,7 +250,7 @@ export function MembersTab({
               </div>
 
               {/* Quick search input if there are multiple members */}
-              {data && data.members.length > 3 && (
+              {visibleMembers.length > 3 && (
                 <div className="relative w-full sm:w-64">
                   <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                   <input
@@ -375,7 +422,7 @@ export function MembersTab({
                 </tbody>
               </table>
             </div>
-          </div>
+          </div>}
         </div>
       )}
     </div>
