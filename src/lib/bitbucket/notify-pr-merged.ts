@@ -1,4 +1,3 @@
-import type { BbUser } from "./client";
 import {
   isUserAuthor,
   formatUnauthorizedMergeNotification,

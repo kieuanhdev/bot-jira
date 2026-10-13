@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Shield, ShieldAlert, ShieldCheck, Save, Search, Check } from "lucide-react";
 import { api } from "@/lib/api-client";
@@ -37,8 +37,7 @@ export function ProjectLeadersSettings({
   const qc = useQueryClient();
   const [selectedProject, setSelectedProject] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedLeaderIds, setSelectedLeaderIds] = useState<string[]>([]);
-  const [isDirty, setIsDirty] = useState(false);
+  const [draftState, setDraftState] = useState<{ project: string; ids: string[] } | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const { data: projectsData, isLoading: isProjectsLoading } = useQuery({
@@ -56,14 +55,14 @@ export function ProjectLeadersSettings({
       api<ProjectMembersResponse>(`/api/projects/${encodeURIComponent(effectiveProject)}/members`),
   });
 
-  // Keep local draft in sync with server data when project changes or query finishes
-  useEffect(() => {
-    if (membersData?.leaders) {
-      setSelectedLeaderIds(membersData.leaders.map((u) => u.id));
-      setIsDirty(false);
-      setStatusMessage(null);
-    }
-  }, [membersData, effectiveProject]);
+  const serverLeaderIds = useMemo(
+    () => membersData?.leaders.map((u) => u.id) ?? [],
+    [membersData?.leaders]
+  );
+
+  const selectedLeaderIds =
+    draftState?.project === effectiveProject ? draftState.ids : serverLeaderIds;
+  const isDirty = draftState?.project === effectiveProject;
 
   const saveMutation = useMutation({
     mutationFn: (leaderUserIds: string[]) =>
@@ -73,7 +72,7 @@ export function ProjectLeadersSettings({
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey });
-      setIsDirty(false);
+      setDraftState(null);
       setStatusMessage("Đã cập nhật danh sách Leader thành công.");
       setTimeout(() => setStatusMessage(null), 4000);
     },
@@ -87,13 +86,11 @@ export function ProjectLeadersSettings({
 
   const toggleLeader = (userId: string) => {
     if (!canManage) return;
-    setSelectedLeaderIds((prev) => {
-      const next = prev.includes(userId)
-        ? prev.filter((id) => id !== userId)
-        : [...prev, userId];
-      setIsDirty(true);
-      return next;
-    });
+    const current = selectedLeaderIds;
+    const next = current.includes(userId)
+      ? current.filter((id) => id !== userId)
+      : [...current, userId];
+    setDraftState({ project: effectiveProject, ids: next });
   };
 
   const filteredUsers = useMemo(() => {

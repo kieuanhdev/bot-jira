@@ -14,7 +14,7 @@ const { mockProjectMember, mockTransaction } = vi.hoisted(() => {
     deleteMany: vi.fn(),
     upsert: vi.fn(),
   };
-  const mockTransaction = vi.fn(async (cb: (tx: any) => Promise<any>) => {
+  const mockTransaction = vi.fn(async (cb: (tx: { projectMember: typeof mockProjectMember }) => Promise<unknown>) => {
     return cb({
       projectMember: mockProjectMember,
     });
