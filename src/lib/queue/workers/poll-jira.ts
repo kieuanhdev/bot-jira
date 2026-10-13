@@ -103,13 +103,36 @@ export async function runPollJiraProject(
 
     try {
       const { updateProjectBootstrapState } = await import("@/lib/jira/project-catalog");
+      const { prisma } = await import("@/lib/prisma");
+      const currentProject = await prisma.jiraProject.findUnique({
+        where: { key: projectKey },
+        select: { bootstrapState: true },
+      });
+      const nextBootstrapState = stats.exhaustedAllPages
+        ? (ok ? "ready" : "partial")
+        : (currentProject?.bootstrapState === "ready" ? "ready" : "syncing_issues");
       await updateProjectBootstrapState(
         projectKey,
-        ok ? "ready" : "partial",
+        nextBootstrapState,
         stats.errors.length > 0 ? stats.errors.join("; ") : null
       );
     } catch {
       // Non-critical catalog update
+    }
+
+    if (ok && stats.exhaustedAllPages === false) {
+      try {
+        const { enqueueJiraProjectSync } = await import("@/lib/queue/enqueue");
+        await enqueueJiraProjectSync({
+          projectKey,
+          full: false,
+          source: data.source,
+          requestedBy: data.requestedBy,
+          requestedAt: new Date().toISOString(),
+        });
+      } catch {
+        // Scheduled poll will catch up next
+      }
     }
 
     return {

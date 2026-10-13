@@ -88,8 +88,9 @@ export async function runJiraSyncPipeline(
       throw new JiraSyncAbortedError(`Jira sync aborted for ${input.projectKey}`);
     }
     if (!exhaustedAllPages) {
-      throw new Error(
-        `Jira sync exceeded ${JIRA_SYNC_MAX_PAGES * JIRA_SYNC_PAGE_SIZE} issues for ${input.projectKey}; cursor was not advanced`
+      dependencies.warn(
+        `[poll-jira] Jira sync reached page limit for ${input.projectKey}`,
+        `${JIRA_SYNC_MAX_PAGES} pages, ${JIRA_SYNC_MAX_PAGES * JIRA_SYNC_PAGE_SIZE} issues; advancing cursor to continue in next batch.`
       );
     }
 

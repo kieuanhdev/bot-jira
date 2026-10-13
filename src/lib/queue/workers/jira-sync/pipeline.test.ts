@@ -110,4 +110,40 @@ describe("runJiraSyncPipeline", () => {
     expect(events).not.toContain("record-error");
     expect(events).not.toContain("finalize");
   });
+
+  it("does not throw when page limit is reached without exhausting all pages and finalizes with cursor advanced", async () => {
+    const { dependencies, events, jira } = createHarness();
+    dependencies.upsertIssue = vi.fn(async () => ({ applied: true, data: {} as any }));
+    jira.search = vi.fn(async () => ({
+      startAt: 0,
+      maxResults: 50,
+      total: 100000,
+      issues: Array.from({ length: 50 }, (_, i) => ({
+        id: `issue-${i}`,
+        key: `EPM-${i}`,
+        fields: {
+          updated: "2026-10-09T01:00:00.000Z",
+          comment: { total: 0, comments: [] },
+        },
+      })) as any,
+    }));
+
+    const result = await runJiraSyncPipeline(
+      {
+        projectKey: "EPM",
+        full: false,
+        runToken: "run-1",
+        leaseTtlSeconds: 900,
+        jira,
+      },
+      dependencies
+    );
+
+    expect(result.exhaustedAllPages).toBe(false);
+    expect(events).toContain("finalize");
+    expect(dependencies.warn).toHaveBeenCalledWith(
+      expect.stringContaining("reached page limit"),
+      expect.anything()
+    );
+  });
 });

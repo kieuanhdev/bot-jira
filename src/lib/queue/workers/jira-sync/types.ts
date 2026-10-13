@@ -1,8 +1,9 @@
+import { env } from "@/lib/env";
 import type { JiraClient } from "@/lib/jira/client";
 import type { JiraIssue } from "@/lib/jira/types";
 import type { notifyWatchersOfIssueChange } from "@/lib/issues/notify-watchers";
 
-export const JIRA_SYNC_MAX_PAGES = 150;
+export const JIRA_SYNC_MAX_PAGES = env.jiraSyncMaxPages ?? 300;
 export const JIRA_SYNC_PAGE_SIZE = 50;
 
 export type JiraSyncSource = "schedule" | "manual" | "startup" | "admin" | "recovery";
@@ -33,6 +34,7 @@ export type ProjectStats = {
   cursor: string | null;
   errors: string[];
   cursorAdvanced?: boolean;
+  exhaustedAllPages?: boolean;
   lastSuccessAt?: string | null;
   lastError?: string | null;
   workflowStatusCount?: number;
@@ -120,7 +122,7 @@ export type JiraSyncDependencies = {
     message: string,
     stats: ProjectStats
   ) => Promise<void>;
-  warn: (message: string, detail: string) => void;
+  warn: (message: string, detail?: unknown) => void;
 };
 
 export function safeError(error: unknown): string {

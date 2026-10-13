@@ -75,6 +75,7 @@ export async function finalizeSync(
     Boolean(cursor && cursor !== loaded.current.cursor);
   loaded.stats.cursor = cursor;
   loaded.stats.cursorAdvanced = cursorAdvanced;
+  loaded.stats.exhaustedAllPages = input.exhaustedAllPages;
 
   await refreshWorkflow(
     input.projectKey,

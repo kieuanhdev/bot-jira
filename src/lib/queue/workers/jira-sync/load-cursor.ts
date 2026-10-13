@@ -33,6 +33,7 @@ export async function loadCursor(
       cursor: current.cursor,
       errors: [],
       cursorAdvanced: false,
+      exhaustedAllPages: false,
     },
   };
 }

@@ -48,6 +48,8 @@ export const env = {
   // Incremental sync overlaps its previous cursor to avoid losing updates that
   // share a timestamp or arrive while a page is being processed.
   jiraSyncOverlapSeconds: int("JIRA_SYNC_OVERLAP_SECONDS", 300),
+  // Maximum pages fetched in one Jira sync run (default 300 = 15,000 issues).
+  jiraSyncMaxPages: Math.max(50, int("JIRA_SYNC_MAX_PAGES", 300)),
   // Expire timeout for Jira sync job in pg-boss (default 15 minutes = 900s).
   jiraSyncExpireSeconds: Math.max(120, int("JIRA_SYNC_EXPIRE_SECONDS", 900)),
   // Heartbeat interval for Jira sync job in pg-boss to detect crashed workers (>= 10s, default 60s).
