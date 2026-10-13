@@ -20,7 +20,7 @@ describe("notifyAll broadcast policy", () => {
     deliverNotificationMock.mockResolvedValue({ notificationId: null });
   });
 
-  it("targets operational roles and regular members who explicitly opted in", async () => {
+  it("targets admins and non-admin users who explicitly opted in", async () => {
     prismaMock.user.findMany.mockResolvedValue([{ id: "admin-1" }, { id: "member-opted-in" }]);
 
     await notifyAll({
@@ -32,9 +32,8 @@ describe("notifyAll broadcast policy", () => {
     expect(prismaMock.user.findMany).toHaveBeenCalledWith({
       where: {
         OR: [
-          { role: { in: ["lead", "release_manager", "admin"] } },
+          { role: { in: ["admin"] } },
           { preferences: { is: { broadcastEnabled: true } } },
-          { jiraUsername: { in: ["anhnk_mb"], mode: "insensitive" } },
         ],
       },
       select: { id: true },

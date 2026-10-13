@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { deliverNotification } from "./outbox";
-import { ALWAYS_NOTIFY_JIRA_USERNAMES, DEFAULT_BROADCAST_ROLES } from "./policy";
+import { DEFAULT_BROADCAST_ROLES } from "./policy";
 
 export * from "./delivery-contract";
 export * from "./delivery-adapters";
@@ -78,7 +78,6 @@ export async function notifyAll(data: NotifyInput) {
       OR: [
         { role: { in: DEFAULT_BROADCAST_ROLES } },
         { preferences: { is: { broadcastEnabled: true } } },
-        { jiraUsername: { in: [...ALWAYS_NOTIFY_JIRA_USERNAMES], mode: "insensitive" } },
       ],
     },
     select: { id: true },

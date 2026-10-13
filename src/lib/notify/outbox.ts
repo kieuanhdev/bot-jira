@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import type { NotifyType } from "./index";
 import { deliverToChat } from "./chat-delivery";
-import { DEFAULT_DISABLED_NOTIFICATION_TYPES, isAlwaysNotifyUser } from "./policy";
+import { DEFAULT_DISABLED_NOTIFICATION_TYPES, isAllNotificationsRequired } from "./policy";
 
 export * from "./delivery-contract";
 export * from "./delivery-adapters";
@@ -67,7 +67,7 @@ export async function deliverNotification(
 ): Promise<DeliverResult> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, jiraUsername: true, pushSubscription: true },
+    select: { id: true, role: true, pushSubscription: true },
   });
   if (!user) return { delivered: false, skippedReason: "no_user" };
 
@@ -77,8 +77,9 @@ export async function deliverNotification(
 
   // AI and system notifications are opt-in. Users without a preference row
   // receive the safe defaults; once configured, their saved list is authoritative.
+  // Admins are the exception and always receive every type.
   const disabledTypes = pref?.disabledTypes ?? DEFAULT_DISABLED_NOTIFICATION_TYPES;
-  if (!isAlwaysNotifyUser(user.jiraUsername) && disabledTypes.includes(data.type as "ai" | "system")) {
+  if (!isAllNotificationsRequired(user.role) && disabledTypes.includes(data.type as "ai" | "system")) {
     return { delivered: false, skippedReason: "disabled" };
   }
 

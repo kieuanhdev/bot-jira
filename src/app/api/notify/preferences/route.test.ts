@@ -103,6 +103,49 @@ describe("Notification Preferences API", () => {
       expect(data.digestHour).toBe(8);
       expect(data.hasSubscription).toBe(false);
     });
+
+    it("requires every notification type and broadcast for admins", async () => {
+      sessionMock.mockResolvedValue({ user: { id: "admin-1" } });
+      prismaMock.notificationPreference.findUnique.mockResolvedValue({
+        userId: "admin-1",
+        disabledTypes: ["ai", "system"],
+        broadcastEnabled: false,
+        pushEnabled: false,
+        pushDisabledTypes: [],
+        deliveryMode: "instant",
+        digestHour: 8,
+      });
+      prismaMock.user.findUnique.mockResolvedValue({
+        pushSubscription: null,
+        role: "admin",
+      });
+
+      const res = await GET();
+      const data = await res.json();
+
+      expect(data.broadcastRequired).toBe(true);
+      expect(data.allNotificationsRequired).toBe(true);
+    });
+
+    it.each(["lead", "release_manager"])(
+      "uses normal member defaults for the %s role",
+      async (role) => {
+        sessionMock.mockResolvedValue({ user: { id: `${role}-1` } });
+        prismaMock.notificationPreference.findUnique.mockResolvedValue(null);
+        prismaMock.user.findUnique.mockResolvedValue({
+          pushSubscription: null,
+          role,
+        });
+
+        const res = await GET();
+        const data = await res.json();
+
+        expect(data.disabledTypes).toEqual(["ai", "system"]);
+        expect(data.broadcastEnabled).toBe(false);
+        expect(data.broadcastRequired).toBe(false);
+        expect(data.allNotificationsRequired).toBe(false);
+      }
+    );
   });
 
   describe("PATCH /api/notify/preferences", () => {

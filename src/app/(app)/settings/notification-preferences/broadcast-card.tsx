@@ -31,9 +31,9 @@ export function BroadcastCard({ values, pending, onChange }: BroadcastCardProps)
             Cho phép thông báo broadcast
           </span>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Mặc định tắt cho thành viên thường để tránh nhận quá nhiều thông báo không liên quan.
+            Mặc định chỉ quản trị viên nhận broadcast; các vai trò khác có thể tự bật khi cần.
             {values.broadcastRequired
-              ? " Vai trò của bạn cần nhận broadcast; bạn có thể tắt từng loại thông báo ở danh sách phía trên."
+              ? " Quản trị viên luôn nhận toàn bộ thông báo hệ thống."
               : " Bạn có thể bật khi muốn theo dõi hoạt động chung của toàn đội."}
           </p>
         </div>

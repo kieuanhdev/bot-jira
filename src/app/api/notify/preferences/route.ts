@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import {
   DEFAULT_DISABLED_NOTIFICATION_TYPES,
-  isAlwaysNotifyUser,
+  isAllNotificationsRequired,
   isDefaultBroadcastRole,
 } from "@/lib/notify/policy";
 
@@ -43,16 +43,15 @@ export async function GET() {
     }),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { pushSubscription: true, role: true, jiraUsername: true },
+      select: { pushSubscription: true, role: true },
     }),
   ]);
 
   return NextResponse.json({
     disabledTypes: pref?.disabledTypes ?? [...DEFAULT_DISABLED_NOTIFICATION_TYPES],
     broadcastEnabled: pref?.broadcastEnabled ?? false,
-    broadcastRequired:
-      isDefaultBroadcastRole(user?.role) || isAlwaysNotifyUser(user?.jiraUsername),
-    allNotificationsRequired: isAlwaysNotifyUser(user?.jiraUsername),
+    broadcastRequired: isDefaultBroadcastRole(user?.role),
+    allNotificationsRequired: isAllNotificationsRequired(user?.role),
     pushEnabled: pref?.pushEnabled ?? false,
     pushDisabledTypes: pref?.pushDisabledTypes ?? [],
     deliveryMode: pref?.deliveryMode ?? "instant",
@@ -144,15 +143,14 @@ export async function PATCH(req: Request) {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { pushSubscription: true, role: true, jiraUsername: true },
+    select: { pushSubscription: true, role: true },
   });
 
   return NextResponse.json({
     disabledTypes: pref.disabledTypes,
     broadcastEnabled: pref.broadcastEnabled,
-    broadcastRequired:
-      isDefaultBroadcastRole(user?.role) || isAlwaysNotifyUser(user?.jiraUsername),
-    allNotificationsRequired: isAlwaysNotifyUser(user?.jiraUsername),
+    broadcastRequired: isDefaultBroadcastRole(user?.role),
+    allNotificationsRequired: isAllNotificationsRequired(user?.role),
     pushEnabled: pref.pushEnabled,
     pushDisabledTypes: pref.pushDisabledTypes,
     deliveryMode: pref.deliveryMode,

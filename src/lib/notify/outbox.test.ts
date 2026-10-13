@@ -107,29 +107,29 @@ describe("deliverNotification", () => {
     }
   );
 
-  it("always delivers every notification type to anhnk_mb", async () => {
+  it("always delivers every notification type to admins", async () => {
     prismaMock.user.findUnique.mockResolvedValue({
-      id: "u-anhnk",
-      jiraUsername: "anhnk_mb",
+      id: "u-admin",
+      role: "admin",
       pushSubscription: null,
     });
     prismaMock.notificationPreference.findUnique.mockResolvedValue({
-      userId: "u-anhnk",
+      userId: "u-admin",
       disabledTypes: ["ai", "system"],
       pushEnabled: false,
       pushDisabledTypes: [],
     });
     prismaMock.notification.findUnique.mockResolvedValue(null);
-    prismaMock.notification.create.mockResolvedValue({ id: "n-anhnk" });
+    prismaMock.notification.create.mockResolvedValue({ id: "n-admin" });
 
-    const res = await deliverNotification("u-anhnk", {
+    const res = await deliverNotification("u-admin", {
       type: "ai",
       title: "AI estimate ready",
-      eventId: "ai:anhnk:1",
+      eventId: "ai:admin:1",
     });
 
     expect(res.delivered).toBe(true);
-    expect(res.notificationId).toBe("n-anhnk");
+    expect(res.notificationId).toBe("n-admin");
     expect(prismaMock.notification.create).toHaveBeenCalledTimes(1);
   });
 
