@@ -81,7 +81,7 @@ export function userMatchesCandidates(
 /** Check if a local user matches the comment author (to be excluded). */
 export function isUserAuthor(
   user: { jiraUsername?: string | null; email?: string | null; bitbucketUserEnc?: string | null },
-  author: BbUser
+  author: { name?: string; emailAddress?: string; displayName?: string }
 ): boolean {
   const authorAliases = author.name ? jiraUsernameAliases(author.name) : [];
   const uAliases = user.jiraUsername ? jiraUsernameAliases(user.jiraUsername) : [];
@@ -204,7 +204,11 @@ export type FormatUnauthorizedMergeNotificationArgs = {
     fromBranch?: string;
     toBranch?: string;
   };
-  actor: BbUser;
+  actor: {
+    name?: string;
+    displayName?: string;
+    emailAddress?: string;
+  };
   jiraKeys?: string[];
 };
 

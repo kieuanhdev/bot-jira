@@ -18,7 +18,11 @@ export type NotifyUnauthorizedMergeArgs = {
     fromBranch?: string;
     toBranch?: string;
   };
-  actor: BbUser;
+  actor: {
+    name?: string;
+    displayName?: string;
+    emailAddress?: string;
+  };
 };
 
 export type NotifyUnauthorizedMergeResult = {
@@ -41,7 +45,7 @@ export async function notifyUnauthorizedMerge(
   const jiraKeys = await discoverPrJiraKeys(repo, {
     id: pr.id,
     title: pr.title,
-    fromRef: pr.fromBranch ? { branch: pr.fromBranch } : undefined,
+    branch: pr.fromBranch,
   });
 
   if (jiraKeys.length === 0) {
