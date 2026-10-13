@@ -14,6 +14,7 @@ async function keyFrom(ctx: { params: Promise<{ key: string }> }) {
 }
 
 export async function GET(_req: Request, ctx: { params: Promise<{ key: string }> }) {
+  const reqStart = Date.now();
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const projectKey = await keyFrom(ctx);
@@ -21,7 +22,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ key: string }>
     getProjectPeopleFields(projectKey),
     prisma.projectPeopleField.findMany({ where: { projectKey }, orderBy: { role: "asc" } }),
   ]);
-  return NextResponse.json({ projectKey, fields, items: rows });
+  const dur = Date.now() - reqStart;
+  return NextResponse.json(
+    { projectKey, fields, items: rows },
+    { headers: { "Server-Timing": `total;dur=${dur}` } }
+  );
 }
 
 export async function PUT(req: Request, ctx: { params: Promise<{ key: string }> }) {

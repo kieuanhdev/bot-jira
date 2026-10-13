@@ -29,7 +29,6 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { BoardStatsLine } from "./board-summary-cards";
 import { BoardSkeleton } from "./board-column";
 import { useIssueHoverPrefetch } from "./lib/issue-detail-queries";
-import { QuickPanel } from "./board-quick-panel";
 import {
   type Project,
   type QuickAction,
@@ -40,20 +39,31 @@ import { patchIssueLists } from "./lib/board-optimistic";
 import { sortIssues, columnKeyForIssue } from "./lib/board-utils";
 import { HiddenColumnsBanner, StaleSyncBanner } from "./board-banners";
 import { BoardNoProjectsState } from "./board-empty-projects";
-import { BoardListView } from "./board-list-view";
 import { BoardHeader } from "./board-header";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { BoardBootstrap } from "@/lib/board/bootstrap";
 
-// dnd-kit only loads when the board renders.
+// Lazy-loaded components to keep initial bundle size minimal
 const BoardKanbanView = dynamic(
   () => import("./board-kanban-view").then((m) => m.BoardKanbanView),
-  { ssr: false, loading: () => <Skeleton className="h-96 w-full" /> },
+  { ssr: false, loading: () => <Skeleton className="h-96 w-full" /> }
 );
-import { BoardTeamView } from "./board-team-view";
+const BoardListView = dynamic(
+  () => import("./board-list-view").then((m) => m.BoardListView),
+  { ssr: false, loading: () => <Skeleton className="h-96 w-full" /> }
+);
+const BoardTeamView = dynamic(
+  () => import("./board-team-view").then((m) => m.BoardTeamView),
+  { ssr: false, loading: () => <Skeleton className="h-96 w-full" /> }
+);
+const QuickPanel = dynamic(
+  () => import("./board-quick-panel").then((m) => m.QuickPanel),
+  { ssr: false }
+);
+
 import { useBoardKeyboardNav } from "./lib/board-keyboard-nav";
 import { useBoardActions } from "./lib/board-actions-hook";
-import { useBoardDnD } from "./lib/board-dnd-hook";
 import {
   COL_BATCH,
   buildColumns,
@@ -72,7 +82,7 @@ import { useJiraSync } from "./lib/use-jira-sync";
 import { useBoardFilterController } from "./lib/board-filter-controller";
 import { applyOptimisticStatus, useBoardOptimisticStatus } from "./lib/use-board-optimistic";
 
-export function BoardClient() {
+export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBootstrap | null } = {}) {
   const qc = useQueryClient();
   const router = useRouter();
   const boardScrollRef = useRef<HTMLDivElement | null>(null);
@@ -87,6 +97,7 @@ export function BoardClient() {
   const { data: projects } = useQuery({
     queryKey: boardKeys.projects,
     queryFn: () => api<{ items: Project[] }>("/api/projects"),
+    initialData: initialBootstrap?.projects,
     staleTime: 5 * 60_000,
     retry: 0,
   });
@@ -96,6 +107,7 @@ export function BoardClient() {
     queryKey: meKeys.status,
     queryFn: () =>
       api<{ jiraName: string | null; jiraBaseUrl?: string; role?: string; canBoardTeam?: boolean }>("/api/me/status"),
+    initialData: initialBootstrap?.meStatus,
     retry: 0,
   });
   const myName = meStatus?.jiraName ?? null;
@@ -111,6 +123,7 @@ export function BoardClient() {
   } = useQuery({
     queryKey: meKeys.prefs,
     queryFn: () => api<{ projects: string[]; available: string[] }>("/api/me/preferences"),
+    initialData: initialBootstrap?.preferences,
   });
   const [showPicker, setShowPicker] = useState(false);
   const [pickerSelection, setPickerSelection] = useState<string[] | null>(null);
@@ -123,6 +136,7 @@ export function BoardClient() {
 
   const [project, setProject] = useState<string>(() => {
     if (urlProject) return urlProject;
+    if (initialBootstrap?.initialProject) return initialBootstrap.initialProject;
     return loadStoredProject() || "";
   });
   const [boardNewKey, setBoardNewKey] = useState("");
@@ -291,7 +305,9 @@ export function BoardClient() {
   const cardRefs = useRef<Map<string, HTMLElement | null>>(new Map());
 
   const boardQueriesEnabled =
-    effectivePreferred.length > 0 && Boolean(selectedProject);
+    filterController.filtersReady &&
+    effectivePreferred.length > 0 &&
+    Boolean(selectedProject);
 
   const activeFilterCount = countActiveIssueFilters(filters, DEFAULT_BOARD_FILTERS);
 
@@ -332,9 +348,33 @@ export function BoardClient() {
 
   const { boardSync, isCurrentProjectSyncing, syncJira } = useJiraSync(selectedProject, setToast);
 
+  useEffect(() => {
+    if (typeof performance !== "undefined" && performance.mark) {
+      performance.mark("board:start");
+      if (initialBootstrap) {
+        performance.mark("board:bootstrap-ready");
+      }
+    }
+  }, [initialBootstrap]);
+
+  const markedIssuesRef = useRef(false);
+  useEffect(() => {
+    if (issueData && !markedIssuesRef.current) {
+      markedIssuesRef.current = true;
+      if (typeof performance !== "undefined" && performance.mark) {
+        performance.mark("board:issues-ready");
+        try {
+          performance.measure("board:load-to-issues", "board:start", "board:issues-ready");
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [issueData]);
+
   const { data: optData } = useQuery({
     queryKey: issuesKeys.filters(selectedProject),
-    enabled: effectivePreferred.length > 0,
+    enabled: Boolean(selectedProject) && Boolean(issueData),
     queryFn: () =>
       api<{
         assignees: string[]; labels: string[]; priorities: string[]; statuses: string[];
@@ -378,6 +418,10 @@ export function BoardClient() {
     queryFn: () => api<{ fields: { reporter: string; approver?: string | null; tester?: string | null } }>(
       `/api/projects/${encodeURIComponent(selectedProject)}/people-fields`
     ),
+    initialData:
+      initialBootstrap && initialBootstrap.initialProject === selectedProject
+        ? (initialBootstrap.peopleFieldData ?? undefined)
+        : undefined,
     staleTime: 5 * 60_000,
   });
 
@@ -516,16 +560,20 @@ export function BoardClient() {
     cardRefs.current.set(key, el);
   }, []);
 
-  const dnd = useBoardDnD({
-    boardScrollRef,
-    issues,
-    columns,
-    statusCategoryMap,
-    transitionCache,
-    fetchTransitions,
-    findColumnForIssue,
-    onTransition: handleTransition,
-  });
+  const markedContentRef = useRef(false);
+  useEffect(() => {
+    if ((columns.length > 0 || issues.length > 0) && !markedContentRef.current) {
+      markedContentRef.current = true;
+      if (typeof performance !== "undefined" && performance.mark) {
+        performance.mark("board:content-rendered");
+        try {
+          performance.measure("board:load-to-content", "board:start", "board:content-rendered");
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [columns.length, issues.length]);
 
   const colResetSig = useMemo(
     () => `${selectedProject}|${sortMode}|${filterSig}|${issues.length}`,
@@ -791,18 +839,15 @@ export function BoardClient() {
       ) : effectiveView === "board" ? (
         <BoardKanbanView
           boardScrollRef={boardScrollRef}
-          sensors={dnd.sensors}
-          collisionDetection={dnd.collisionDetection}
-          onDragStart={dnd.onDragStart}
-          onDragOver={dnd.onDragOver}
-          onDragEnd={dnd.onDragEnd}
-          onDragCancel={dnd.onDragCancel}
-          activeDrag={dnd.activeDrag}
+          issues={issues}
+          columns={columns}
+          statusCategoryMap={statusCategoryMap}
+          transitionCache={transitionCache}
+          fetchTransitions={fetchTransitions}
+          findColumnForIssue={findColumnForIssue}
           boardColumnsRender={boardColumnsRender}
           transitionBusy={transitionBusy}
           dndDisabled={dndDisabled}
-          setDragOverCol={dnd.setDragOverCol}
-          allowedCols={dnd.allowedCols}
           optimistic={optimistic}
           visibleColumnsLength={visibleColumns.length}
           growColumn={growColumn}

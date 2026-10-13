@@ -1,11 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import { DEFAULT_BOARD_FILTERS, type IssueFilters } from "@/lib/issues/issue-filters";
 import {
   createBoardFilterQuery,
   createBoardFilterSignature,
   createBoardIssueFilters,
   hasBoardFilterParams,
+  loadInitialBoardFilters,
 } from "./board-filter-controller";
+import * as boardStorage from "./board-storage";
 
 function filters(patch: Partial<IssueFilters> = {}): IssueFilters {
   return {
@@ -101,5 +103,72 @@ describe("board filter controller model", () => {
       createBoardFilterQuery(filters({ query: "login", overdue: true }), "EPM")
     );
     expect(Object.fromEntries(query)).toMatchObject({ project: "EPM", q: "login", overdue: "1" });
+  });
+
+  describe("loadInitialBoardFilters", () => {
+    beforeEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("initializes with assignee=ALL on step 1 when stored team mode is true", () => {
+      vi.spyOn(boardStorage, "loadStoredTeamMode").mockReturnValue(true);
+      vi.spyOn(boardStorage, "loadStoredFilters").mockReturnValue(null);
+
+      const result = loadInitialBoardFilters({
+        searchParams: null,
+        selectedProject: "EPM",
+        myName: "alice",
+        canUseTeamMode: true,
+      });
+
+      expect(result.teamMode).toBe(true);
+      expect(result.filters.assigneeScope.mode).toBe("all");
+
+      const queryFilters = createBoardIssueFilters({
+        filters: result.filters,
+        selectedProject: "EPM",
+        debouncedQuery: "",
+        quickFilter: "",
+      });
+      expect(queryFilters.assignee).toBe("ALL");
+    });
+
+    it("initializes with assignee=me when team mode is false", () => {
+      vi.spyOn(boardStorage, "loadStoredTeamMode").mockReturnValue(false);
+      vi.spyOn(boardStorage, "loadStoredFilters").mockReturnValue(null);
+
+      const result = loadInitialBoardFilters({
+        searchParams: null,
+        selectedProject: "EPM",
+        myName: "alice",
+        canUseTeamMode: true,
+      });
+
+      expect(result.teamMode).toBe(false);
+      expect(result.filters.assigneeScope.roster).toEqual(["me"]);
+
+      const queryFilters = createBoardIssueFilters({
+        filters: result.filters,
+        selectedProject: "EPM",
+        debouncedQuery: "",
+        quickFilter: "",
+      });
+      expect(queryFilters.assignee).toEqual(["me"]);
+    });
+
+    it("prioritizes URL filters over stored filters and stored team mode", () => {
+      vi.spyOn(boardStorage, "loadStoredTeamMode").mockReturnValue(true);
+
+      const urlParams = new URLSearchParams("project=EPM&assignee=bob&status=Done");
+      const result = loadInitialBoardFilters({
+        searchParams: urlParams,
+        selectedProject: "EPM",
+        myName: "alice",
+        canUseTeamMode: true,
+      });
+
+      expect(result.filters.statuses).toEqual(["Done"]);
+      expect(result.filters.assigneeScope.roster).toEqual(["bob"]);
+    });
   });
 });

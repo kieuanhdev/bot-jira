@@ -11,6 +11,7 @@ import { jiraWith } from "@/lib/jira/client";
 
 /** Current user's board preference: which project keys they want to see. */
 export async function GET() {
+  const reqStart = Date.now();
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -27,10 +28,18 @@ export async function GET() {
     .map(normalizeProjectKey)
     .filter((k) => activeKeys.has(k));
 
-  return NextResponse.json({
-    projects: userProjects,
-    available: activeCatalog.map((p) => p.key),
-  });
+  const dur = Date.now() - reqStart;
+  return NextResponse.json(
+    {
+      projects: userProjects,
+      available: activeCatalog.map((p) => p.key),
+    },
+    {
+      headers: {
+        "Server-Timing": `total;dur=${dur}`,
+      },
+    }
+  );
 }
 
 /** Save the set of project keys the user wants on their board. */

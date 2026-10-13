@@ -18,6 +18,7 @@ import { detectPeopleFields } from "@/lib/jira/people-fields";
  * Returns all active catalog projects with their selection state for current user.
  */
 export async function GET() {
+  const reqStart = Date.now();
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -62,7 +63,11 @@ export async function GET() {
     dataState: project.bootstrapState ?? "ready",
   }));
 
-  return NextResponse.json({ items });
+  const dur = Date.now() - reqStart;
+  return NextResponse.json(
+    { items },
+    { headers: { "Server-Timing": `total;dur=${dur}` } }
+  );
 }
 
 /**

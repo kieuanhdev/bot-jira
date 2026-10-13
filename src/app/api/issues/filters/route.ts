@@ -19,6 +19,7 @@ const filtersCache = new Map<string, { at: number; body: unknown }>();
  * options — the previous approach fetched up to 500 issues client-side.
  */
 export async function GET(req: Request) {
+  const reqStart = Date.now();
   const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -172,5 +173,8 @@ export async function GET(req: Request) {
   };
   if (filtersCache.size > 200) filtersCache.clear();
   filtersCache.set(cacheKey, { at: Date.now(), body });
-  return NextResponse.json(body);
+  const dur = Date.now() - reqStart;
+  return NextResponse.json(body, {
+    headers: { "Server-Timing": `total;dur=${dur}` },
+  });
 }

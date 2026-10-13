@@ -4,7 +4,6 @@ import {
   resolveCompletionDate,
   calculateLeaderboard,
   isExcludedLeaderboardUser,
-  EXCLUDED_LEADERBOARD_ACCOUNTS,
   type RawLeaderboardIssue,
   type LeaderboardDbUser,
 } from "./calculator";

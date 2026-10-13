@@ -28,6 +28,64 @@ function values(url: URL, name: string): string[] {
     .filter(Boolean);
 }
 
+export function createIssueListSelect(includeDescription = false) {
+  return {
+    jiraKey: true,
+    projectKey: true,
+    summary: true,
+    description: includeDescription,
+    status: true,
+    statusId: true,
+    statusCategory: true,
+    statusChangedAt: true,
+    assigneeJira: true,
+    reporterJira: true,
+    approverJira: true,
+    testerJira: true,
+    labels: true,
+    fixVersionIds: true,
+    fixVersionNames: true,
+    priority: true,
+    points: true,
+    type: true,
+    dueDate: true,
+    timeSpent: true,
+    originalEstimateSeconds: true,
+    createdAt: true,
+    updatedAt: true,
+    lastSyncedAt: true,
+    epicKey: true,
+    aiScore: {
+      select: {
+        points: true,
+        confidence: true,
+        reasoning: true,
+        risks: true,
+        missingInformation: true,
+        similarTasks: true,
+        model: true,
+        promptVersion: true,
+        scoredAt: true,
+        decisions: {
+          orderBy: { decidedAt: "desc" as const },
+          take: 1,
+          select: {
+            decision: true,
+            finalPoints: true,
+            decidedAt: true,
+          },
+        },
+      },
+    },
+    branches: {
+      where: { deletedAt: null, linkState: { notIn: ["rejected" as const, "manual_unlinked" as const] } },
+      select: { prState: true, merged: true },
+    },
+  } satisfies Prisma.IssueCacheSelect;
+}
+
+export const ISSUE_LIST_SELECT = createIssueListSelect(false);
+
 /**
  * Single project board read path: pure PostgreSQL query from IssueCache,
  * without any Jira Agile / board membership dependencies.
@@ -241,20 +299,14 @@ export async function handleIssueListRequest(req: Request) {
   }
 
   const dbStart = Date.now();
+  const select = includeDescription ? createIssueListSelect(true) : ISSUE_LIST_SELECT;
   const [items, total, cursors] = await prisma.$transaction([
     prisma.issueCache.findMany({
       where,
       orderBy: [{ updatedAt: "desc" }, { jiraKey: "asc" }],
       skip: offset,
       take: limit,
-      omit: { description: !includeDescription },
-      include: {
-        aiScore: { include: { decisions: { orderBy: { decidedAt: "desc" }, take: 1 } } },
-        branches: {
-          where: { deletedAt: null, linkState: { notIn: ["rejected", "manual_unlinked"] } },
-          select: { prState: true, merged: true },
-        },
-      },
+      select,
     }),
     prisma.issueCache.count({ where }),
     prisma.integrationCursor.findMany({

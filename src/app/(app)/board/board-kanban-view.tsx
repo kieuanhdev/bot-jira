@@ -1,35 +1,25 @@
 "use client";
 
 import React from "react";
-import {
-  DndContext,
-  DragOverlay,
-  type CollisionDetection,
-  type DragEndEvent,
-  type DragOverEvent,
-  type SensorDescriptor,
-  type SensorOptions,
-} from "@dnd-kit/core";
+import { DndContext, DragOverlay } from "@dnd-kit/core";
 import type { IssueItem } from "@/hooks/use-issues";
-import { BoardColumn } from "./board-column";
+import { BoardColumn as BoardColumnComponent } from "./board-column";
 import { CardContent } from "./board-card";
-import type { buildColumnViews } from "./lib/board-columns";
-import type { QuickAction } from "./lib/board-types";
+import type { BoardColumn, buildColumnViews } from "./lib/board-columns";
+import type { QuickAction, Transition } from "./lib/board-types";
+import { useBoardDnD } from "./lib/board-dnd-hook";
 
 export interface BoardKanbanViewProps {
   boardScrollRef: React.RefObject<HTMLDivElement | null>;
-  sensors: SensorDescriptor<SensorOptions>[];
-  collisionDetection: CollisionDetection;
-  onDragStart: (key: string) => void;
-  onDragOver: (event: DragOverEvent) => void;
-  onDragEnd: (event: DragEndEvent) => void;
-  onDragCancel: () => void;
-  activeDrag: IssueItem | null;
+  issues: IssueItem[];
+  columns: BoardColumn[];
+  statusCategoryMap: Record<string, string>;
+  transitionCache: React.MutableRefObject<Map<string, Transition[]>>;
+  fetchTransitions: (key: string) => Promise<Transition[]>;
+  findColumnForIssue: (issue: IssueItem) => string;
   boardColumnsRender: ReturnType<typeof buildColumnViews>;
   transitionBusy: boolean;
-  dndDisabled: boolean;
-  setDragOverCol: (over: boolean) => void;
-  allowedCols: Set<string> | null;
+  dndDisabled?: boolean;
   optimistic: Map<string, string>;
   visibleColumnsLength: number;
   growColumn: (colId: string) => void;
@@ -45,18 +35,15 @@ export interface BoardKanbanViewProps {
 
 export function BoardKanbanView({
   boardScrollRef,
-  sensors,
-  collisionDetection,
-  onDragStart,
-  onDragOver,
-  onDragEnd,
-  onDragCancel,
-  activeDrag,
+  issues,
+  columns,
+  statusCategoryMap,
+  transitionCache,
+  fetchTransitions,
+  findColumnForIssue,
   boardColumnsRender,
   transitionBusy,
-  dndDisabled,
-  setDragOverCol,
-  allowedCols,
+  dndDisabled: externalDndDisabled = false,
   optimistic,
   visibleColumnsLength,
   growColumn,
@@ -69,21 +56,32 @@ export function BoardKanbanView({
   registerRef,
   focusKey,
 }: BoardKanbanViewProps) {
+  const dnd = useBoardDnD({
+    boardScrollRef,
+    issues,
+    columns,
+    statusCategoryMap,
+    transitionCache,
+    fetchTransitions,
+    findColumnForIssue,
+    onTransition,
+  });
+
   return (
     <DndContext
-      sensors={sensors}
-      collisionDetection={collisionDetection}
-      onDragStart={(e) => onDragStart(String(e.active.id))}
-      onDragOver={onDragOver}
-      onDragEnd={onDragEnd}
-      onDragCancel={onDragCancel}
+      sensors={dnd.sensors}
+      collisionDetection={dnd.collisionDetection}
+      onDragStart={(e) => dnd.onDragStart(String(e.active.id))}
+      onDragOver={dnd.onDragOver}
+      onDragEnd={dnd.onDragEnd}
+      onDragCancel={dnd.onDragCancel}
     >
       <div
         ref={boardScrollRef}
         className="flex flex-1 gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]"
       >
         {boardColumnsRender.map((col) => (
-          <BoardColumn
+          <BoardColumnComponent
             key={col.id}
             id={col.id}
             label={col.label}
@@ -96,10 +94,10 @@ export function BoardKanbanView({
             columnCount={col.columnCount}
             onTransition={onTransition}
             busy={transitionBusy}
-            dndDisabled={dndDisabled}
-            onOverChange={setDragOverCol}
+            dndDisabled={externalDndDisabled}
+            onOverChange={dnd.setDragOverCol}
             dotColor={col.dotColor}
-            dragBlocked={allowedCols != null && !allowedCols.has(col.id)}
+            dragBlocked={dnd.allowedCols != null && !dnd.allowedCols.has(col.id)}
             optimistic={optimistic}
             wipOver={col.wipOver}
             collapsed={col.collapsed}
@@ -117,8 +115,8 @@ export function BoardKanbanView({
         ))}
       </div>
       <DragOverlay>
-        {activeDrag ? (
-          <CardContent issue={activeDrag} done={false} dragging />
+        {dnd.activeDrag ? (
+          <CardContent issue={dnd.activeDrag} done={false} dragging />
         ) : null}
       </DragOverlay>
     </DndContext>

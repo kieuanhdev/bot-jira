@@ -125,6 +125,67 @@ export function createBoardFilterQuery(filters: IssueFilters, selectedProject: s
   return params.toString();
 }
 
+export interface LoadInitialBoardFiltersOptions {
+  searchParams?: URLSearchParams | ReadonlyURLSearchParams | null;
+  selectedProject: string;
+  myName: string | null;
+  canUseTeamMode: boolean;
+}
+
+export interface InitialBoardFilters {
+  filters: IssueFilters;
+  teamMode: boolean;
+}
+
+export function loadInitialBoardFilters({
+  searchParams,
+  selectedProject,
+  myName,
+  canUseTeamMode,
+}: LoadInitialBoardFiltersOptions): InitialBoardFilters {
+  const hasFilterParamsInUrl = hasBoardFilterParams(searchParams ?? null);
+  const storedTeamMode = Boolean(
+    selectedProject && canUseTeamMode && loadStoredTeamMode(selectedProject)
+  );
+
+  if (searchParams && hasFilterParamsInUrl) {
+    const parsed = parseIssueFilters(searchParams, DEFAULT_BOARD_FILTERS, myName);
+    const teamMode = Boolean(
+      canUseTeamMode &&
+      (parsed.assigneeScope.mode === "all" || storedTeamMode)
+    );
+    return {
+      filters: {
+        ...parsed,
+        project: selectedProject || parsed.project,
+      },
+      teamMode,
+    };
+  }
+
+  const storedFilters = selectedProject ? loadStoredFilters(selectedProject, myName) : null;
+  let baseFilters: IssueFilters = storedFilters ?? {
+    ...DEFAULT_BOARD_FILTERS,
+    ...(selectedProject ? { project: selectedProject } : {}),
+  };
+
+  if (storedTeamMode) {
+    const { mode, roster } = baseFilters.assigneeScope;
+    const onlyMe = mode === "roster" && roster.length === 1 && roster[0] === "me";
+    if (onlyMe || mode === "all") {
+      baseFilters = {
+        ...baseFilters,
+        assigneeScope: { mode: "all", roster: [], view: "all-selected" },
+      };
+    }
+  }
+
+  return {
+    filters: baseFilters,
+    teamMode: storedTeamMode,
+  };
+}
+
 interface BoardFilterControllerOptions {
   searchParams: ReadonlyURLSearchParams | null;
   selectedProject: string;
@@ -144,17 +205,21 @@ export function useBoardFilterController({
   replaceUrl,
 }: BoardFilterControllerOptions) {
   const urlProject = searchParams?.get("project")?.trim().toUpperCase() || "";
-  const hasFilterParamsInUrl = hasBoardFilterParams(searchParams);
-  const [filters, setFilters] = useState<IssueFilters>(() => {
-    if (searchParams && hasFilterParamsInUrl) {
-      return parseIssueFilters(searchParams, DEFAULT_BOARD_FILTERS, myName);
-    }
-    const initialProject = urlProject || loadStoredProject() || "";
-    return (initialProject && loadStoredFilters(initialProject, myName)) || DEFAULT_BOARD_FILTERS;
+  const initialProject = urlProject || selectedProject || loadStoredProject() || "";
+  const initialSettings = loadInitialBoardFilters({
+    searchParams,
+    selectedProject: initialProject,
+    myName,
+    canUseTeamMode,
   });
+
+  const [filters, setFilters] = useState<IssueFilters>(() => initialSettings.filters);
   const [quickFilter, setQuickFilter] = useState<BoardQuickFilter>("");
   const [debouncedQuery, setDebouncedQuery] = useState(filters.query);
-  const [teamModeState, setTeamModeState] = useState({ project: "", enabled: false });
+  const [teamModeState, setTeamModeState] = useState({
+    project: initialProject,
+    enabled: initialSettings.teamMode,
+  });
 
   const teamMode =
     canUseTeamMode &&
@@ -177,51 +242,32 @@ export function useBoardFilterController({
   function selectProject(nextProject: string, previousProject: string) {
     if (previousProject) saveStoredFilters(previousProject, filters);
     saveStoredProject(nextProject);
-    setFilters(
-      loadStoredFilters(nextProject, myName) ?? {
-        ...DEFAULT_BOARD_FILTERS,
-        project: nextProject,
-      }
-    );
+    const nextInit = loadInitialBoardFilters({
+      searchParams: null,
+      selectedProject: nextProject,
+      myName,
+      canUseTeamMode,
+    });
+    setTeamModeState({ project: nextProject, enabled: nextInit.teamMode });
+    setFilters(nextInit.filters);
   }
 
   useEffect(() => {
     if (selectedProject && persistProject) saveStoredProject(selectedProject);
   }, [selectedProject, persistProject]);
 
-  const teamScopeAppliedRef = useRef("");
-  useEffect(() => {
-    if (!teamMode || !selectedProject || teamScopeAppliedRef.current === selectedProject) return;
-    teamScopeAppliedRef.current = selectedProject;
-    setFilters((current) => {
-      const { mode, roster } = current.assigneeScope;
-      const onlyMe = mode === "roster" && roster.length === 1 && roster[0] === "me";
-      return onlyMe
-        ? { ...current, assigneeScope: { mode: "all", roster: [], view: "all-selected" } }
-        : current;
+  const [prevProject, setPrevProject] = useState(initialProject);
+  if (selectedProject && selectedProject !== prevProject) {
+    setPrevProject(selectedProject);
+    const nextInit = loadInitialBoardFilters({
+      searchParams,
+      selectedProject,
+      myName,
+      canUseTeamMode,
     });
-  }, [teamMode, selectedProject]);
-
-  const initialSyncDoneRef = useRef(false);
-  useEffect(() => {
-    if (!initialSyncDoneRef.current && selectedProject && !hasFilterParamsInUrl) {
-      initialSyncDoneRef.current = true;
-      const saved = loadStoredFilters(selectedProject, myName);
-      if (saved) queueMicrotask(() => setFilters(saved));
-    }
-  }, [selectedProject, myName, hasFilterParamsInUrl]);
-
-  const myNameSyncedRef = useRef(false);
-  useEffect(() => {
-    if (!myName || myNameSyncedRef.current) return;
-    myNameSyncedRef.current = true;
-    setFilters((previous) => {
-      if (hasFilterParamsInUrl && searchParams) {
-        return parseIssueFilters(searchParams, previous, myName);
-      }
-      return (selectedProject && loadStoredFilters(selectedProject, myName)) || previous;
-    });
-  }, [myName, searchParams, hasFilterParamsInUrl, selectedProject]);
+    setTeamModeState({ project: selectedProject, enabled: nextInit.teamMode });
+    setFilters(nextInit.filters);
+  }
 
   useEffect(() => {
     if (selectedProject) saveStoredFilters(selectedProject, filters);
@@ -248,6 +294,7 @@ export function useBoardFilterController({
     return () => clearTimeout(timer);
   }, [filters.query, debouncedQuery]);
 
+  const filtersReady = Boolean(selectedProject);
   const model = { filters, selectedProject, debouncedQuery, quickFilter };
   return {
     filters,
@@ -260,5 +307,6 @@ export function useBoardFilterController({
     changeTeamMode,
     selectProject,
     urlProject,
+    filtersReady,
   };
 }

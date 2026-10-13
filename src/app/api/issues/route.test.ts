@@ -269,4 +269,80 @@ describe("GET /api/issues single project board", () => {
     const json = await res.json();
     expect(json.error).toContain("không tồn tại");
   });
+
+  it("uses explicit Prisma select and excludes raw, storyField, and description by default", async () => {
+    mocks.findManyIssues.mockResolvedValueOnce([
+      {
+        jiraKey: "MR-101",
+        projectKey: "MR",
+        summary: "Test select",
+        status: "In Progress",
+        statusId: "3",
+        statusCategory: "indeterminate",
+        statusChangedAt: new Date("2026-10-10T00:00:00Z"),
+        assigneeJira: "current_user",
+        reporterJira: "alice",
+        approverJira: null,
+        testerJira: null,
+        labels: ["backend"],
+        fixVersionIds: [],
+        fixVersionNames: [],
+        priority: "High",
+        points: 5,
+        type: "Story",
+        dueDate: null,
+        timeSpent: 3600,
+        originalEstimateSeconds: 7200,
+        createdAt: new Date("2026-10-01T00:00:00Z"),
+        updatedAt: new Date("2026-10-02T00:00:00Z"),
+        lastSyncedAt: new Date("2026-10-02T00:00:00Z"),
+        epicKey: "MR-100",
+        aiScore: {
+          points: 5,
+          confidence: 0.9,
+          reasoning: "clear scope",
+          risks: [],
+          missingInformation: [],
+          similarTasks: [],
+          model: "gemini",
+          promptVersion: "v1",
+          scoredAt: new Date("2026-10-01T00:00:00Z"),
+          decisions: [
+            { decision: "accepted", finalPoints: 5, decidedAt: new Date("2026-10-02T00:00:00Z") },
+          ],
+        },
+        branches: [{ prState: "OPEN", merged: false }],
+      },
+    ]);
+
+    const res = await GET(new Request("http://localhost/api/issues?project=MR"));
+    expect(res.status).toBe(200);
+
+    const callArgs = mocks.findManyIssues.mock.calls[0][0];
+    expect(callArgs.select).toBeDefined();
+    expect(callArgs.select.jiraKey).toBe(true);
+    expect(callArgs.select.summary).toBe(true);
+    expect(callArgs.select.raw).toBeUndefined();
+    expect(callArgs.select.storyField).toBeUndefined();
+    expect(callArgs.select.description).toBe(false);
+
+    const json = await res.json();
+    expect(json.items).toHaveLength(1);
+    expect(json.items[0]).toMatchObject({
+      jiraKey: "MR-101",
+      projectKey: "MR",
+      summary: "Test select",
+      description: "",
+      aiScore: expect.objectContaining({ points: 5, confidence: 0.9 }),
+      aiDecision: { decision: "accepted", finalPoints: 5, decidedAt: expect.any(String) },
+      delivery: { branchCount: 1, prOpen: true, prMerged: false },
+      epic: "MR-100",
+    });
+  });
+
+  it("selects description when includeDescription=1 is requested", async () => {
+    await GET(new Request("http://localhost/api/issues?project=MR&includeDescription=1"));
+    const callArgs = mocks.findManyIssues.mock.calls[0][0];
+    expect(callArgs.select.description).toBe(true);
+  });
 });

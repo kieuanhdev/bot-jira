@@ -14,6 +14,7 @@ import { can } from "@/lib/permissions";
  * "Open in Jira"). This is a public value (the app's Jira host), not a secret.
  */
 export async function GET() {
+  const reqStart = Date.now();
   const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -33,27 +34,36 @@ export async function GET() {
   });
 
   const auth = userJiraAuth(user);
+  const dur = Date.now() - reqStart;
+  const headers = { "Server-Timing": `total;dur=${dur}` };
+
   if (!auth) {
-    return NextResponse.json({
-      jiraLinked: false,
+    return NextResponse.json(
+      {
+        jiraLinked: false,
+        onboarded: Boolean(user?.onboarded),
+        jiraName: null,
+        jiraVerifiedAt: user?.jiraVerifiedAt ?? null,
+        jiraBaseUrl: env.jiraBaseUrl,
+        bitbucketBaseUrl: env.bitbucketBaseUrl || null,
+        role: user?.role ?? session.user.role ?? "member",
+        canBoardTeam: can({ user: { role: user?.role ?? session.user.role } }, "board.team"),
+      },
+      { headers }
+    );
+  }
+
+  return NextResponse.json(
+    {
+      jiraLinked: true,
       onboarded: Boolean(user?.onboarded),
-      jiraName: null,
+      jiraName: userJiraUsername(user),
       jiraVerifiedAt: user?.jiraVerifiedAt ?? null,
       jiraBaseUrl: env.jiraBaseUrl,
       bitbucketBaseUrl: env.bitbucketBaseUrl || null,
       role: user?.role ?? session.user.role ?? "member",
       canBoardTeam: can({ user: { role: user?.role ?? session.user.role } }, "board.team"),
-    });
-  }
-
-  return NextResponse.json({
-    jiraLinked: true,
-    onboarded: Boolean(user?.onboarded),
-    jiraName: userJiraUsername(user),
-    jiraVerifiedAt: user?.jiraVerifiedAt ?? null,
-    jiraBaseUrl: env.jiraBaseUrl,
-    bitbucketBaseUrl: env.bitbucketBaseUrl || null,
-    role: user?.role ?? session.user.role ?? "member",
-    canBoardTeam: can({ user: { role: user?.role ?? session.user.role } }, "board.team"),
-  });
+    },
+    { headers }
+  );
 }
