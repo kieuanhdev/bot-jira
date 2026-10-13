@@ -48,7 +48,7 @@ export function IssueDetailTabsBranches({
             {syncPending ? "Đang đồng bộ..." : "Đồng bộ Jira"}
           </Button>
           <Button asChild variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-foreground">
-            <Link href={`/branches?q=${encodeURIComponent(jiraKey)}`}>
+            <Link href={`/branches?view=all-branches&q=${encodeURIComponent(jiraKey)}`}>
               Xem trong mục Nhánh →
             </Link>
           </Button>
@@ -175,7 +175,7 @@ export function IssueDetailTabsBranches({
                 Nhánh gợi ý ({branches.suggestedItems.length})
               </span>
               <Button asChild variant="outline" size="sm" className="h-6 text-xs border-amber-500/30 text-amber-600 dark:text-amber-400">
-                <Link href={`/branches?link=suggested&q=${encodeURIComponent(jiraKey)}`}>
+                <Link href={`/branches?view=all-branches&link=suggested&q=${encodeURIComponent(jiraKey)}`}>
                   Xem xét trong mục Nhánh →
                 </Link>
               </Button>

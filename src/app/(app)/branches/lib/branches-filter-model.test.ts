@@ -36,6 +36,22 @@ describe("branches-filter-model", () => {
     expect(parsed.pageSize).toBe(50);
   });
 
+  it("defaults to all-branches when q or repo is provided without explicit view", () => {
+    const parsedQ = parseBranchFilters(new URLSearchParams({ q: "feature/PROJ-1" }));
+    expect(parsedQ.view).toBe("all-branches");
+    expect(parsedQ.q).toBe("feature/PROJ-1");
+
+    const parsedRepo = parseBranchFilters(new URLSearchParams({ repo: "PROJ/app" }));
+    expect(parsedRepo.view).toBe("all-branches");
+    expect(parsedRepo.repo).toBe("PROJ/app");
+  });
+
+  it("preserves explicit view even when q is provided", () => {
+    const parsed = parseBranchFilters(new URLSearchParams({ view: "my-work", q: "feature/PROJ-1" }));
+    expect(parsed.view).toBe("my-work");
+    expect(parsed.q).toBe("feature/PROJ-1");
+  });
+
   it("builds URLSearchParams omitting default values", () => {
     const filters = {
       ...DEFAULT_FILTERS,

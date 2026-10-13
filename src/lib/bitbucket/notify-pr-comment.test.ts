@@ -125,7 +125,7 @@ describe("notifyPrComment", () => {
         type: "comment",
         title: "Bình luận mới trên PR #42: Fix invoice calculation",
         body: "Reviewer Guy: Looks good to me, please check line 40.",
-        link: "/branches?repo=EPM%2Feasy_pos",
+        link: "/branches?view=all-branches&repo=EPM%2Feasy_pos",
         sourceLink: "https://git.local/epm/easy_pos/pull-requests/42",
         sourceType: "git",
         severity: "info",

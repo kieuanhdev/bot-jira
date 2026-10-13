@@ -7,11 +7,22 @@ import {
 export function parseBranchFilters(
   searchParams: { get: (key: string) => string | null }
 ): BranchFilterState {
+  const explicitView = searchParams.get("view") as BranchFilterState["view"] | null;
+  const q = searchParams.get("q") ?? DEFAULT_FILTERS.q;
+  const repo = searchParams.get("repo") ?? DEFAULT_FILTERS.repo;
+
+  // When view is omitted but a specific search term or repo is provided (e.g., from Discord links or shared URLs),
+  // default to "all-branches" so leaders and reviewers aren't constrained by "my-work" filter.
+  const defaultView: BranchFilterState["view"] =
+    q !== "" || (repo !== "" && repo !== "ALL")
+      ? "all-branches"
+      : DEFAULT_FILTERS.view;
+
   return {
-    view: (searchParams.get("view") as BranchFilterState["view"]) ?? DEFAULT_FILTERS.view,
-    q: searchParams.get("q") ?? DEFAULT_FILTERS.q,
+    view: explicitView ?? defaultView,
+    q,
     project: searchParams.get("project") ?? DEFAULT_FILTERS.project,
-    repo: searchParams.get("repo") ?? DEFAULT_FILTERS.repo,
+    repo,
     link: (searchParams.get("link") as BranchFilterState["link"]) ?? DEFAULT_FILTERS.link,
     pr: (searchParams.get("pr") as BranchFilterState["pr"]) ?? DEFAULT_FILTERS.pr,
     taskStatus: searchParams.get("taskStatus") ?? DEFAULT_FILTERS.taskStatus,
@@ -27,7 +38,13 @@ export function parseBranchFilters(
 export function buildBranchFilterParams(next: BranchFilterState): URLSearchParams {
   const params = new URLSearchParams();
 
-  if (next.view && next.view !== DEFAULT_FILTERS.view) params.set("view", next.view);
+  const isSearchContext = next.q !== "" || (next.repo !== "" && next.repo !== "ALL");
+  if (
+    next.view &&
+    (next.view !== DEFAULT_FILTERS.view || (isSearchContext && next.view === DEFAULT_FILTERS.view))
+  ) {
+    params.set("view", next.view);
+  }
   if (next.q) params.set("q", next.q);
   if (next.project && next.project !== "ALL") params.set("project", next.project);
   if (next.repo && next.repo !== "ALL") params.set("repo", next.repo);

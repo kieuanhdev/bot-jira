@@ -136,8 +136,8 @@ export function formatPrCommentNotification(
   const title = `Bình luận mới trên PR #${pr.id}${prTitle ? `: ${prTitle.trim()}` : ` (${repo})`}`;
   const bodyText = `${authorDisplayName}: ${comment.text.slice(0, 200)}`;
   const link = pr.branch
-    ? `/branches?q=${encodeURIComponent(pr.branch)}`
-    : `/branches?repo=${encodeURIComponent(repo)}`;
+    ? `/branches?view=all-branches&q=${encodeURIComponent(pr.branch)}`
+    : `/branches?view=all-branches&repo=${encodeURIComponent(repo)}`;
   const sourceLink = pr.url || buildBitbucketPrUrl(args.baseUrl, repo, pr.id) || link;
   const chatDigestGroup = `bb-pr-comment:${repo}:${pr.id}`;
   const eventKey = `${chatDigestGroup}:${comment.id}`;
@@ -196,8 +196,8 @@ export function formatCommitCommentNotification(
       ? `${cleanBaseUrl}/projects/${projectKey}/repos/${repoSlug}/commits/${commit.id}${
           comment.anchor?.path ? `#${encodeURIComponent(comment.anchor.path)}` : ""
         }`
-      : `/branches?repo=${encodeURIComponent(repo)}`;
-  const link = `/branches?repo=${encodeURIComponent(repo)}`;
+      : `/branches?view=all-branches&repo=${encodeURIComponent(repo)}`;
+  const link = `/branches?view=all-branches&repo=${encodeURIComponent(repo)}`;
 
   const chatDigestGroup = `bb-commit-comment:${repo}:${commit.id}`;
   const eventKey = `${chatDigestGroup}:${comment.id}`;
@@ -248,8 +248,8 @@ export function formatUnauthorizedMergeNotification(
 
   const branchQuery = pr.fromBranch || pr.toBranch;
   const link = branchQuery
-    ? `/branches?q=${encodeURIComponent(branchQuery)}`
-    : `/branches?repo=${encodeURIComponent(repo)}`;
+    ? `/branches?view=all-branches&q=${encodeURIComponent(branchQuery)}`
+    : `/branches?view=all-branches&repo=${encodeURIComponent(repo)}`;
   const sourceLink = pr.url || buildBitbucketPrUrl(args.baseUrl, repo, pr.id) || link;
 
   const eventKey = `bb-pr-merged-nonleader:${repo}:${pr.id}`;
