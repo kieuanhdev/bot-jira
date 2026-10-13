@@ -98,6 +98,87 @@ export async function resolveFilterKeys(
     }
   }
 
+  if (filters.types && filters.types.length > 0) {
+    if (filters.types.length === 1) {
+      where.type = filters.types[0];
+    } else {
+      where.type = { in: filters.types };
+    }
+  }
+
+  if (filters.reporters && filters.reporters.length > 0) {
+    if (filters.reporters.length === 1) {
+      where.reporterJira = filters.reporters[0];
+    } else {
+      where.reporterJira = { in: filters.reporters };
+    }
+  }
+
+  if (filters.approvers && filters.approvers.length > 0) {
+    if (filters.approvers.length === 1) {
+      where.approverJira = filters.approvers[0];
+    } else {
+      where.approverJira = { in: filters.approvers };
+    }
+  }
+
+  if (filters.testers && filters.testers.length > 0) {
+    if (filters.testers.length === 1) {
+      where.testerJira = filters.testers[0];
+    } else {
+      where.testerJira = { in: filters.testers };
+    }
+  }
+
+  if (filters.fixVersions && filters.fixVersions.length > 0) {
+    if (filters.fixVersions.length === 1) {
+      where.fixVersionNames = { has: filters.fixVersions[0] };
+    } else {
+      where.fixVersionNames = { hasSome: filters.fixVersions };
+    }
+  }
+
+  if (filters.roles && filters.roles.length > 0 && jiraUsername) {
+    const roleConditions: Prisma.IssueCacheWhereInput[] = [];
+    for (const role of filters.roles) {
+      const r = role.toLowerCase();
+      if (r === "assignee") roleConditions.push({ assigneeJira: jiraUsername });
+      if (r === "reporter") roleConditions.push({ reporterJira: jiraUsername });
+      if (r === "approver") roleConditions.push({ approverJira: jiraUsername });
+      if (r === "tester") roleConditions.push({ testerJira: jiraUsername });
+    }
+    if (roleConditions.length > 0) {
+      const existingAnd = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
+      where.AND = [...existingAnd, { OR: roleConditions }];
+    }
+  }
+
+  if (filters.overdue) {
+    const existingAnd = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
+    where.AND = [
+      ...existingAnd,
+      { dueDate: { lt: new Date() }, statusCategory: { not: "done" } },
+    ];
+  }
+
+  if (filters.quickFilter) {
+    const qf = filters.quickFilter;
+    const existingAnd = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
+    if (qf === "overdue") {
+      where.AND = [...existingAnd, { dueDate: { lt: new Date() }, statusCategory: { not: "done" } }];
+    } else if (qf === "unassigned") {
+      where.AND = [...existingAnd, { OR: [{ assigneeJira: null }, { assigneeJira: "" }] }];
+    } else if (qf === "unestimated") {
+      where.AND = [...existingAnd, { originalEstimateSeconds: null, points: null, statusCategory: { not: "done" } }];
+    } else if (qf === "stale") {
+      where.AND = [...existingAnd, { updatedAt: { lt: new Date(Date.now() - 7 * 86_400_000) }, statusCategory: { not: "done" } }];
+    } else if (qf === "missingApprover") {
+      where.AND = [...existingAnd, { OR: [{ approverJira: null }, { approverJira: "" }], statusCategory: { not: "done" } }];
+    } else if (qf === "missingTester") {
+      where.AND = [...existingAnd, { OR: [{ testerJira: null }, { testerJira: "" }], statusCategory: { not: "done" } }];
+    }
+  }
+
   const hasEpicFilter = Boolean(filters.epics && filters.epics.length > 0);
 
   const rows = await prisma.issueCache.findMany({

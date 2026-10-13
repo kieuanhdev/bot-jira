@@ -20,6 +20,7 @@ export interface UseBulkPreviewOptions {
   selected: Set<string>;
   buildAction: () => BulkAction | null;
   targetStatus: string;
+  quickFilter?: string;
   onBeforePreview?: () => void;
 }
 
@@ -30,6 +31,7 @@ export function useBulkPreview({
   selected,
   buildAction,
   targetStatus,
+  quickFilter,
   onBeforePreview,
 }: UseBulkPreviewOptions) {
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -50,8 +52,9 @@ export function useBulkPreview({
       filterProject,
       taskFilters,
       selected,
+      quickFilter,
     });
-  }, [selectionMode, filterProject, taskFilters, selected, buildAction]);
+  }, [selectionMode, filterProject, taskFilters, selected, buildAction, quickFilter]);
 
   const previewOutdated = preview != null && previewBasis !== currentBasis;
 
@@ -64,7 +67,14 @@ export function useBulkPreview({
     onBeforePreview?.();
     setPreviewError(null);
     try {
-      const body = buildPreviewRequestBody({ selectionMode, filterProject, taskFilters, selected, action });
+      const body = buildPreviewRequestBody({
+        selectionMode,
+        filterProject,
+        taskFilters,
+        selected,
+        action,
+        quickFilter,
+      });
       const r = await api<Preview>("/api/issues/bulk", {
         method: "POST",
         body,

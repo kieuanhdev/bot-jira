@@ -39,6 +39,7 @@ export function BulkClient() {
     selected: selection.selected,
     buildAction: configure.buildAction,
     targetStatus: configure.targetStatus,
+    quickFilter: selection.quickFilter,
     onBeforePreview: () => operations.setActiveOp(null),
   });
 
@@ -94,6 +95,15 @@ export function BulkClient() {
         epicOptions={selection.epicOptions}
         labelOptions={selection.labelOptions}
         priorityOptions={selection.priorityOptions}
+        typeOptions={selection.typeOptions}
+        fixVersionOptions={selection.fixVersionOptions}
+        reporterOptions={selection.reporterOptions}
+        approverOptions={selection.approverOptions}
+        testerOptions={selection.testerOptions}
+        peopleFieldData={selection.peopleFieldData}
+        displayNames={selection.displayNames}
+        quickFilter={selection.quickFilter}
+        onQuickFilterChange={selection.setQuickFilter}
         myName={session?.user?.jiraUsername}
         filteredIssues={selection.filteredIssues}
         onSelectionModeChange={selection.setSelectionMode}

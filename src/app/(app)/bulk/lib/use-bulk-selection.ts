@@ -9,10 +9,15 @@ import { issuesKeys, boardKeys, meKeys } from "@/lib/query-keys";
 import { scopeProjectItems } from "@/lib/project-scope-client";
 import { type IssueFilters, DEFAULT_BULK_FILTERS } from "@/lib/issues/issue-filters";
 import {
+  deriveApproverOptions,
   deriveAssigneeOptions,
   deriveEpicOptions,
+  deriveFixVersionOptions,
   deriveLabelOptions,
   derivePriorityOptions,
+  deriveReporterOptions,
+  deriveTesterOptions,
+  deriveTypeOptions,
   filterAndSortIssues,
   resolveInitialProject,
   withPlaceholderIssues,
@@ -111,6 +116,18 @@ export function useBulkSelection({
   });
   const projectOptions = useMemo(() => scopeProjectItems(projectsData?.items ?? []), [projectsData?.items]);
 
+  // Project people fields (approver, tester custom fields)
+  const { data: peopleFieldData } = useQuery({
+    queryKey: ["projects", filterProject, "people-fields"],
+    enabled: Boolean(filterProject),
+    queryFn: () =>
+      api<{ fields: { reporter: string; approver?: string | null; tester?: string | null } }>(
+        `/api/projects/${encodeURIComponent(filterProject)}/people-fields`
+      ),
+    staleTime: 5 * 60_000,
+    retry: 0,
+  });
+
   // User preferences (to pre-select the active project)
   const { data: prefs } = useQuery({
     queryKey: meKeys.prefs,
@@ -136,6 +153,7 @@ export function useBulkSelection({
   // Selection mode and task filters
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("pick");
   const [taskFilters, setTaskFilters] = useState<IssueFilters>(DEFAULT_BULK_FILTERS);
+  const [quickFilter, setQuickFilter] = useState<string>("");
 
   // Tasks belonging ONLY to the selected project
   const projectIssues = useMemo(
@@ -160,6 +178,31 @@ export function useBulkSelection({
   const epicOptions = useMemo(
     () => deriveEpicOptions(filtersData, projectIssues, sessionUsername),
     [filtersData, projectIssues, sessionUsername]
+  );
+
+  const typeOptions = useMemo(
+    () => deriveTypeOptions(filtersData, projectIssues),
+    [filtersData, projectIssues]
+  );
+
+  const fixVersionOptions = useMemo(
+    () => deriveFixVersionOptions(filtersData, projectIssues),
+    [filtersData, projectIssues]
+  );
+
+  const reporterOptions = useMemo(
+    () => deriveReporterOptions(filtersData, projectIssues),
+    [filtersData, projectIssues]
+  );
+
+  const approverOptions = useMemo(
+    () => deriveApproverOptions(filtersData, projectIssues),
+    [filtersData, projectIssues]
+  );
+
+  const testerOptions = useMemo(
+    () => deriveTesterOptions(filtersData, projectIssues),
+    [filtersData, projectIssues]
   );
 
   // Selected task keys
@@ -197,6 +240,7 @@ export function useBulkSelection({
         selected,
         sortOption,
         initialKeyIndexMap,
+        quickFilter,
       }),
     [
       filterProject,
@@ -207,6 +251,7 @@ export function useBulkSelection({
       sortOption,
       selected,
       initialKeyIndexMap,
+      quickFilter,
     ]
   );
 
@@ -240,6 +285,7 @@ export function useBulkSelection({
     setFilterProject(newProject);
     setSelected(new Set());
     setTaskFilters(DEFAULT_BULK_FILTERS);
+    setQuickFilter("");
     setFilterOnlySelected(false);
     setSortOption("default");
     onProjectChange?.();
@@ -261,10 +307,19 @@ export function useBulkSelection({
     labelOptions,
     priorityOptions,
     epicOptions,
+    typeOptions,
+    fixVersionOptions,
+    reporterOptions,
+    approverOptions,
+    testerOptions,
+    peopleFieldData,
+    displayNames: filtersData?.displayNames ?? {},
     selectionMode,
     setSelectionMode,
     taskFilters,
     setTaskFilters,
+    quickFilter,
+    setQuickFilter,
     selected,
     setSelected,
     clearSelected,

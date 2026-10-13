@@ -81,7 +81,6 @@ export function BulkNoProjectState() {
   );
 }
 
-/** Selection mode, filter bar and match summary. */
 export function BulkTaskFilters({
   filterProject,
   selectionMode,
@@ -91,6 +90,15 @@ export function BulkTaskFilters({
   epicOptions,
   labelOptions,
   priorityOptions,
+  typeOptions,
+  fixVersionOptions,
+  reporterOptions,
+  approverOptions,
+  testerOptions,
+  peopleFieldData,
+  displayNames,
+  quickFilter,
+  onQuickFilterChange,
   myName,
   filteredCount,
   onSelectionModeChange,
@@ -104,11 +112,26 @@ export function BulkTaskFilters({
   epicOptions: { value: string; label: string }[];
   labelOptions: string[];
   priorityOptions: string[];
+  typeOptions?: string[];
+  fixVersionOptions?: string[];
+  reporterOptions?: string[];
+  approverOptions?: string[];
+  testerOptions?: string[];
+  peopleFieldData?: { fields: { reporter: string; approver?: string | null; tester?: string | null } } | null;
+  displayNames?: Record<string, string>;
+  quickFilter?: string;
+  onQuickFilterChange?: (filter: string) => void;
   myName: string | null | undefined;
   filteredCount: number;
   onSelectionModeChange: (mode: SelectionMode) => void;
   onTaskFiltersChange: (filters: IssueFilters) => void;
 }) {
+  const personOptions = (values: string[] | undefined) =>
+    (values ?? []).map((value) => ({
+      value,
+      label: displayNames?.[value] ? `${displayNames[value]} (${value})` : value,
+    }));
+
   return (
     <div className="flex flex-col gap-3 border-b p-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -133,12 +156,21 @@ export function BulkTaskFilters({
         value={taskFilters}
         defaults={DEFAULT_BULK_FILTERS}
         onChange={onTaskFiltersChange}
+        onReset={() => {
+          onTaskFiltersChange(DEFAULT_BULK_FILTERS);
+          onQuickFilterChange?.("");
+        }}
         options={{
-          assignees: availableAssignees,
+          assignees: personOptions(availableAssignees),
           statuses: statusOptions,
           epics: epicOptions,
           labels: labelOptions,
           priorities: priorityOptions,
+          types: typeOptions ?? [],
+          fixVersions: fixVersionOptions ?? [],
+          reporters: personOptions(reporterOptions),
+          approvers: personOptions(approverOptions),
+          testers: personOptions(testerOptions),
         }}
         capabilities={{
           search: true,
@@ -147,11 +179,44 @@ export function BulkTaskFilters({
           epic: "multi",
           label: "multi",
           priority: "multi",
-          quickSwitch: false,
+          role: "multi",
+          reporter: "multi",
+          approver: peopleFieldData?.fields?.approver ? "multi" : false,
+          tester: peopleFieldData?.fields?.tester ? "multi" : false,
+          type: "multi",
+          fixVersion: "multi",
+          quickSwitch: true,
         }}
         myName={myName}
         searchPlaceholder={`Tìm kiếm trong ${filterProject}…`}
         collapseExtras
+        extrasActive={quickFilter ? 1 : 0}
+        extras={
+          <div className="flex flex-wrap items-center gap-1 border-l pl-2">
+            {([
+              ["overdue", "Quá hạn"],
+              ["unassigned", "Chưa assign"],
+              ["unestimated", "Chưa estimate"],
+              ["stale", "Stale 7d+"],
+              ...(peopleFieldData?.fields?.approver ? [["missingApprover", "Thiếu Approver"]] : []),
+              ...(peopleFieldData?.fields?.tester ? [["missingTester", "Thiếu Tester"]] : []),
+            ] as Array<[string, string]>).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onQuickFilterChange?.(quickFilter === key ? "" : key)}
+                className={cn(
+                  "h-7 cursor-pointer rounded-full border px-2.5 text-[11px] font-medium transition-colors",
+                  quickFilter === key
+                    ? "border-primary/50 bg-primary/10 text-primary"
+                    : "bg-background hover:bg-muted"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        }
       />
       <p className="text-[11px] text-muted-foreground">
         {filteredCount} task khớp bộ lọc

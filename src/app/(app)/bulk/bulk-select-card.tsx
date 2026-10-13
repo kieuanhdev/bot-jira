@@ -24,6 +24,15 @@ export interface BulkSelectCardProps {
   epicOptions: { value: string; label: string }[];
   labelOptions: string[];
   priorityOptions: string[];
+  typeOptions?: string[];
+  fixVersionOptions?: string[];
+  reporterOptions?: string[];
+  approverOptions?: string[];
+  testerOptions?: string[];
+  peopleFieldData?: { fields: { reporter: string; approver?: string | null; tester?: string | null } } | null;
+  displayNames?: Record<string, string>;
+  quickFilter?: string;
+  onQuickFilterChange?: (filter: string) => void;
   myName?: string | null;
   filteredIssues: IssueItem[];
   onSelectionModeChange: (mode: "pick" | "filter") => void;
@@ -72,6 +81,15 @@ export function BulkSelectCard({
   epicOptions,
   labelOptions,
   priorityOptions,
+  typeOptions,
+  fixVersionOptions,
+  reporterOptions,
+  approverOptions,
+  testerOptions,
+  peopleFieldData,
+  displayNames,
+  quickFilter,
+  onQuickFilterChange,
   myName,
   filteredIssues,
   onSelectionModeChange,
@@ -120,6 +138,15 @@ export function BulkSelectCard({
               epicOptions={epicOptions}
               labelOptions={labelOptions}
               priorityOptions={priorityOptions}
+              typeOptions={typeOptions}
+              fixVersionOptions={fixVersionOptions}
+              reporterOptions={reporterOptions}
+              approverOptions={approverOptions}
+              testerOptions={testerOptions}
+              peopleFieldData={peopleFieldData}
+              displayNames={displayNames}
+              quickFilter={quickFilter}
+              onQuickFilterChange={onQuickFilterChange}
               myName={myName}
               filteredCount={filteredIssues.length}
               onSelectionModeChange={onSelectionModeChange}

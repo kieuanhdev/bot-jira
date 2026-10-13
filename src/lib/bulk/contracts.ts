@@ -43,6 +43,14 @@ export type BulkFilterCriteria = {
   labels?: string[];
   priorities?: string[];
   epics?: string[];
+  types?: string[];
+  fixVersions?: string[];
+  reporters?: string[];
+  approvers?: string[];
+  testers?: string[];
+  roles?: string[];
+  overdue?: boolean;
+  quickFilter?: string;
 };
 
 export type BulkSelector =

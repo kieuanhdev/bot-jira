@@ -5,13 +5,19 @@ import type { Preview, ProjectFieldOption } from "./bulk-types";
 import {
   buildBulkAction,
   buildPreviewRequestBody,
+  computePreviewBasis,
   countPreviewBuckets,
+  deriveApproverOptions,
   deriveAssigneeOptions,
   deriveEpicOptions,
+  deriveFixVersionOptions,
   deriveLabelOptions,
   derivePriorityOptions,
   deriveProjectStatuses,
+  deriveReporterOptions,
   deriveStatusOptions,
+  deriveTesterOptions,
+  deriveTypeOptions,
   filterAndSortIssues,
   getConfirmLabel,
   isValidEstimate,
@@ -71,6 +77,23 @@ describe("option derivation", () => {
     expect(deriveStatusOptions(list, undefined, issues)).toEqual(["Done", "QA", "To Do"]);
     expect(deriveStatusOptions([], ["Z", "A"], issues)).toEqual(["Z", "A"]);
     expect(deriveStatusOptions([], undefined, issues)).toEqual(["Done", "To Do"]);
+  });
+
+  it("derives types, fixVersions, reporters, approvers, testers correctly", () => {
+    const issuesWithPeople = [
+      issue({ jiraKey: "EPM-1", type: "Bug", fixVersionNames: ["v1.0"], reporterJira: "rep1", approverJira: "app1", testerJira: "test1" }),
+      issue({ jiraKey: "EPM-2", type: "Task", fixVersionNames: ["v2.0", "v1.0"], reporterJira: "rep2", approverJira: "app2", testerJira: "test2" }),
+    ];
+    expect(deriveTypeOptions({ ...emptyFilters, types: ["Story"] }, issuesWithPeople)).toEqual(["Story"]);
+    expect(deriveTypeOptions(undefined, issuesWithPeople)).toEqual(["Bug", "Task"]);
+    expect(deriveFixVersionOptions({ ...emptyFilters, fixVersions: ["v3"] }, issuesWithPeople)).toEqual(["v3"]);
+    expect(deriveFixVersionOptions(undefined, issuesWithPeople)).toEqual(["v1.0", "v2.0"]);
+    expect(deriveReporterOptions({ ...emptyFilters, reporters: ["admin"] }, issuesWithPeople)).toEqual(["admin"]);
+    expect(deriveReporterOptions(undefined, issuesWithPeople)).toEqual(["rep1", "rep2"]);
+    expect(deriveApproverOptions({ ...emptyFilters, approvers: ["lead"] }, issuesWithPeople)).toEqual(["lead"]);
+    expect(deriveApproverOptions(undefined, issuesWithPeople)).toEqual(["app1", "app2"]);
+    expect(deriveTesterOptions({ ...emptyFilters, testers: ["qc"] }, issuesWithPeople)).toEqual(["qc"]);
+    expect(deriveTesterOptions(undefined, issuesWithPeople)).toEqual(["test1", "test2"]);
   });
 });
 
@@ -151,6 +174,45 @@ describe("filterAndSortIssues", () => {
     expect(keys(filterAndSortIssues(issues, base({ initialKeyIndexMap })))).toEqual(["EPM-3", "EPM-2", "EPM-1"]);
     // an explicit sort wins over the URL order
     expect(keys(filterAndSortIssues(issues, base({ initialKeyIndexMap, sortOption: "name-asc" })))).toEqual(["EPM-2", "EPM-1", "EPM-3"]);
+  });
+
+  it("filters by types, fixVersions, reporters, approvers, testers, and roles", () => {
+    const richIssues = [
+      issue({ jiraKey: "EPM-1", type: "Bug", fixVersionNames: ["v1"], reporterJira: "alice", approverJira: "bob", testerJira: "charlie" }),
+      issue({ jiraKey: "EPM-2", type: "Task", fixVersionNames: ["v2"], reporterJira: "bob", approverJira: "alice", testerJira: "alice" }),
+      issue({ jiraKey: "EPM-3", type: "Story", fixVersionNames: [], reporterJira: "charlie", approverJira: null, testerJira: null }),
+    ];
+    expect(keys(filterAndSortIssues(richIssues, base({ taskFilters: withFilters({ types: ["Bug"] }) })))).toEqual(["EPM-1"]);
+    expect(keys(filterAndSortIssues(richIssues, base({ taskFilters: withFilters({ fixVersions: ["v2"] }) })))).toEqual(["EPM-2"]);
+    expect(keys(filterAndSortIssues(richIssues, base({ taskFilters: withFilters({ reporters: ["bob"] }) })))).toEqual(["EPM-2"]);
+    expect(keys(filterAndSortIssues(richIssues, base({ taskFilters: withFilters({ approvers: ["bob"] }) })))).toEqual(["EPM-1"]);
+    expect(keys(filterAndSortIssues(richIssues, base({ taskFilters: withFilters({ testers: ["charlie"] }) })))).toEqual(["EPM-1"]);
+    expect(keys(filterAndSortIssues(richIssues, base({ jiraUsername: "alice", taskFilters: withFilters({ roles: ["reporter"] }) })))).toEqual(["EPM-1"]);
+    expect(keys(filterAndSortIssues(richIssues, base({ jiraUsername: "alice", taskFilters: withFilters({ roles: ["approver"] }) })))).toEqual(["EPM-2"]);
+    expect(keys(filterAndSortIssues(richIssues, base({ jiraUsername: "alice", taskFilters: withFilters({ roles: ["tester"] }) })))).toEqual(["EPM-2"]);
+  });
+
+  it("filters by overdue and quickFilter presets", () => {
+    const now = new Date("2026-10-13T12:00:00Z");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(now);
+
+    const faceted = [
+      issue({ jiraKey: "EPM-1", dueDate: "2026-10-01", statusCategory: "indeterminate", assigneeJira: null, originalEstimateSeconds: null, points: null, approverJira: null, testerJira: null, updatedAt: "2026-10-12T00:00:00Z" }),
+      issue({ jiraKey: "EPM-2", dueDate: "2026-10-20", statusCategory: "new", assigneeJira: "alice", originalEstimateSeconds: 3600, points: 3, approverJira: null, testerJira: null, updatedAt: "2026-10-12T00:00:00Z" }),
+      issue({ jiraKey: "EPM-3", dueDate: "2026-10-01", statusCategory: "done", assigneeJira: null, updatedAt: "2026-09-01T00:00:00Z" }),
+      issue({ jiraKey: "EPM-4", dueDate: null, statusCategory: "new", assigneeJira: null, originalEstimateSeconds: null, points: null, updatedAt: "2026-10-01T00:00:00Z", approverJira: "bob", testerJira: "carol" }),
+    ];
+
+    expect(keys(filterAndSortIssues(faceted, base({ taskFilters: withFilters({ overdue: true }) })))).toEqual(["EPM-1"]);
+    expect(keys(filterAndSortIssues(faceted, base({ quickFilter: "overdue" })))).toEqual(["EPM-1"]);
+    expect(keys(filterAndSortIssues(faceted, base({ quickFilter: "unassigned" })))).toEqual(["EPM-1", "EPM-3", "EPM-4"]);
+    expect(keys(filterAndSortIssues(faceted, base({ quickFilter: "unestimated" })))).toEqual(["EPM-1", "EPM-4"]);
+    expect(keys(filterAndSortIssues(faceted, base({ quickFilter: "stale" })))).toEqual(["EPM-4"]);
+    expect(keys(filterAndSortIssues(faceted, base({ quickFilter: "missingApprover" })))).toEqual(["EPM-1", "EPM-2"]);
+    expect(keys(filterAndSortIssues(faceted, base({ quickFilter: "missingTester" })))).toEqual(["EPM-1", "EPM-2"]);
+
+    vi.useRealTimers();
   });
 
   it("does not mutate the input", () => {
@@ -260,6 +322,48 @@ describe("buildPreviewRequestBody", () => {
     } }, action });
     const all = buildPreviewRequestBody({ selectionMode: "filter", filterProject: "EPM", taskFilters: DEFAULT_BULK_FILTERS, selected: new Set(), action });
     expect(all).toMatchObject({ selector: { filters: { q: undefined, assignees: "ALL", epics: undefined } } });
+  });
+
+  it("sends new filter facets and quickFilter in filter mode", () => {
+    const advanced = buildPreviewRequestBody({
+      selectionMode: "filter",
+      filterProject: "EPM",
+      selected: new Set(),
+      action,
+      quickFilter: "overdue",
+      taskFilters: {
+        ...DEFAULT_BULK_FILTERS,
+        types: ["Bug"],
+        fixVersions: ["v1"],
+        reporters: ["r1"],
+        approvers: ["a1"],
+        testers: ["t1"],
+        roles: ["reporter"],
+      },
+    });
+    expect(advanced).toEqual({
+      selector: {
+        mode: "filter",
+        project: "EPM",
+        filters: {
+          assignees: "ALL",
+          types: ["Bug"],
+          fixVersions: ["v1"],
+          reporters: ["r1"],
+          approvers: ["a1"],
+          testers: ["t1"],
+          roles: ["reporter"],
+          quickFilter: "overdue",
+        },
+      },
+      action,
+    });
+  });
+
+  it("includes quickFilter in preview basis when in filter mode", () => {
+    const basis1 = computePreviewBasis({ action, selectionMode: "filter", filterProject: "EPM", taskFilters: DEFAULT_BULK_FILTERS, selected: new Set(), quickFilter: "overdue" });
+    const basis2 = computePreviewBasis({ action, selectionMode: "filter", filterProject: "EPM", taskFilters: DEFAULT_BULK_FILTERS, selected: new Set(), quickFilter: "stale" });
+    expect(basis1).not.toEqual(basis2);
   });
 });
 

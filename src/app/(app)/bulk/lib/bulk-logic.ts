@@ -30,6 +30,12 @@ export interface BulkFiltersResponse {
   labels: string[];
   priorities: string[];
   epics?: string[];
+  types?: string[];
+  fixVersions?: string[];
+  reporters?: string[];
+  approvers?: string[];
+  testers?: string[];
+  displayNames?: Record<string, string>;
 }
 
 export interface ProjectStatus {
@@ -60,6 +66,46 @@ export function derivePriorityOptions(
   if (filtersData?.priorities && filtersData.priorities.length > 0) return filtersData.priorities;
   const values = Array.from(new Set(projectIssues.map((issue) => issue.priority).filter(Boolean)));
   return (values.length > 0 ? values : ["Low", "Medium", "High", "Highest", "Blocker"]).sort((a, b) => a.localeCompare(b));
+}
+
+export function deriveTypeOptions(
+  filtersData: BulkFiltersResponse | undefined,
+  projectIssues: IssueItem[]
+): string[] {
+  if (filtersData?.types && filtersData.types.length > 0) return filtersData.types;
+  return Array.from(new Set(projectIssues.map((issue) => issue.type).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+}
+
+export function deriveFixVersionOptions(
+  filtersData: BulkFiltersResponse | undefined,
+  projectIssues: IssueItem[]
+): string[] {
+  if (filtersData?.fixVersions && filtersData.fixVersions.length > 0) return filtersData.fixVersions;
+  return Array.from(new Set(projectIssues.flatMap((issue) => issue.fixVersionNames))).sort((a, b) => a.localeCompare(b));
+}
+
+export function deriveReporterOptions(
+  filtersData: BulkFiltersResponse | undefined,
+  projectIssues: IssueItem[]
+): string[] {
+  if (filtersData?.reporters && filtersData.reporters.length > 0) return filtersData.reporters;
+  return Array.from(new Set(projectIssues.map((issue) => issue.reporterJira).filter((v): v is string => Boolean(v)))).sort((a, b) => a.localeCompare(b));
+}
+
+export function deriveApproverOptions(
+  filtersData: BulkFiltersResponse | undefined,
+  projectIssues: IssueItem[]
+): string[] {
+  if (filtersData?.approvers && filtersData.approvers.length > 0) return filtersData.approvers;
+  return Array.from(new Set(projectIssues.map((issue) => issue.approverJira).filter((v): v is string => Boolean(v)))).sort((a, b) => a.localeCompare(b));
+}
+
+export function deriveTesterOptions(
+  filtersData: BulkFiltersResponse | undefined,
+  projectIssues: IssueItem[]
+): string[] {
+  if (filtersData?.testers && filtersData.testers.length > 0) return filtersData.testers;
+  return Array.from(new Set(projectIssues.map((issue) => issue.testerJira).filter((v): v is string => Boolean(v)))).sort((a, b) => a.localeCompare(b));
 }
 
 /** Epic dropdown options: "no epic", then every epic (marking the user's own). */
@@ -197,12 +243,13 @@ interface FilterAndSortParams {
   selected: Set<string>;
   sortOption: SortOption;
   initialKeyIndexMap: Map<string, number>;
+  quickFilter?: string;
 }
 
 /** Apply the task filters, "only selected" toggle and sort order to the project's issues. */
 export function filterAndSortIssues(
   displayProjectIssues: IssueItem[],
-  { filterProject, taskFilters, jiraUsername, filterOnlySelected, selected, sortOption, initialKeyIndexMap }: FilterAndSortParams
+  { filterProject, taskFilters, jiraUsername, filterOnlySelected, selected, sortOption, initialKeyIndexMap, quickFilter }: FilterAndSortParams
 ): IssueItem[] {
   if (!filterProject) return [];
   const query = (taskFilters.query || "").trim().toLowerCase();
@@ -253,6 +300,67 @@ export function filterAndSortIssues(
         }
         return issueAssignee === t;
       });
+    })
+    .filter((issue) => {
+      if (!taskFilters.types || taskFilters.types.length === 0) return true;
+      return Boolean(issue.type && taskFilters.types.includes(issue.type));
+    })
+    .filter((issue) => {
+      if (!taskFilters.fixVersions || taskFilters.fixVersions.length === 0) return true;
+      return Boolean(issue.fixVersionNames && taskFilters.fixVersions.some((v) => issue.fixVersionNames.includes(v)));
+    })
+    .filter((issue) => {
+      if (!taskFilters.reporters || taskFilters.reporters.length === 0) return true;
+      return Boolean(issue.reporterJira && taskFilters.reporters.includes(issue.reporterJira));
+    })
+    .filter((issue) => {
+      if (!taskFilters.approvers || taskFilters.approvers.length === 0) return true;
+      return Boolean(issue.approverJira && taskFilters.approvers.includes(issue.approverJira));
+    })
+    .filter((issue) => {
+      if (!taskFilters.testers || taskFilters.testers.length === 0) return true;
+      return Boolean(issue.testerJira && taskFilters.testers.includes(issue.testerJira));
+    })
+    .filter((issue) => {
+      if (!taskFilters.roles || taskFilters.roles.length === 0) return true;
+      if (!myUsername) return true;
+      return taskFilters.roles.some((role) => {
+        const r = role.toLowerCase();
+        if (r === "assignee") return issue.assigneeJira?.toLowerCase() === myUsername;
+        if (r === "reporter") return issue.reporterJira?.toLowerCase() === myUsername;
+        if (r === "approver") return issue.approverJira?.toLowerCase() === myUsername;
+        if (r === "tester") return issue.testerJira?.toLowerCase() === myUsername;
+        return false;
+      });
+    })
+    .filter((issue) => {
+      if (!taskFilters.overdue) return true;
+      if (!issue.dueDate) return false;
+      const d = new Date(issue.dueDate);
+      return !isNaN(d.getTime()) && d < new Date() && issue.statusCategory.toLowerCase() !== "done";
+    })
+    .filter((issue) => {
+      if (!quickFilter) return true;
+      const isDone = issue.statusCategory.toLowerCase() === "done";
+      if (quickFilter === "overdue") {
+        return Boolean(issue.dueDate && new Date(issue.dueDate) < new Date() && !isDone);
+      }
+      if (quickFilter === "unassigned") {
+        return !issue.assigneeJira;
+      }
+      if (quickFilter === "unestimated") {
+        return issue.originalEstimateSeconds == null && issue.points == null && !isDone;
+      }
+      if (quickFilter === "stale") {
+        return Boolean(issue.updatedAt && (Date.now() - new Date(issue.updatedAt).getTime()) >= 7 * 86_400_000 && !isDone);
+      }
+      if (quickFilter === "missingApprover") {
+        return !issue.approverJira && !isDone;
+      }
+      if (quickFilter === "missingTester") {
+        return !issue.testerJira && !isDone;
+      }
+      return true;
     })
     .filter((issue) =>
       query ? issue.jiraKey.toLowerCase().includes(query) || issue.summary.toLowerCase().includes(query) : true
@@ -444,6 +552,7 @@ interface PreviewRequestParams {
   taskFilters: IssueFilters;
   selected: Set<string>;
   action: BulkAction;
+  quickFilter?: string;
 }
 
 /** Body of the `POST /api/issues/bulk` preview request. */
@@ -453,6 +562,7 @@ export function buildPreviewRequestBody({
   taskFilters,
   selected,
   action,
+  quickFilter,
 }: PreviewRequestParams) {
   const activeAssignees = effectiveAssignees(taskFilters.assigneeScope);
   const isAllAssignees = activeAssignees === "ALL";
@@ -469,6 +579,14 @@ export function buildPreviewRequestBody({
               labels: taskFilters.labels.length > 0 ? taskFilters.labels : undefined,
               priorities: taskFilters.priorities.length > 0 ? taskFilters.priorities : undefined,
               epics: taskFilters.epics && taskFilters.epics.length > 0 ? taskFilters.epics : undefined,
+              types: taskFilters.types && taskFilters.types.length > 0 ? taskFilters.types : undefined,
+              fixVersions: taskFilters.fixVersions && taskFilters.fixVersions.length > 0 ? taskFilters.fixVersions : undefined,
+              reporters: taskFilters.reporters && taskFilters.reporters.length > 0 ? taskFilters.reporters : undefined,
+              approvers: taskFilters.approvers && taskFilters.approvers.length > 0 ? taskFilters.approvers : undefined,
+              testers: taskFilters.testers && taskFilters.testers.length > 0 ? taskFilters.testers : undefined,
+              roles: taskFilters.roles && taskFilters.roles.length > 0 ? taskFilters.roles : undefined,
+              overdue: taskFilters.overdue || undefined,
+              quickFilter: quickFilter || undefined,
             },
           },
           action,
@@ -519,12 +637,14 @@ export function computePreviewBasis({
   filterProject,
   taskFilters,
   selected,
+  quickFilter,
 }: {
   action: BulkAction | null;
   selectionMode: SelectionMode;
   filterProject: string;
   taskFilters: IssueFilters;
   selected: Set<string>;
+  quickFilter?: string;
 }): string {
   if (selectionMode === "filter") {
     return JSON.stringify({
@@ -532,6 +652,7 @@ export function computePreviewBasis({
       mode: "filter",
       project: filterProject,
       filters: taskFilters,
+      quickFilter,
     });
   }
   return JSON.stringify({
