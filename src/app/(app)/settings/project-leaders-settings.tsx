@@ -127,7 +127,7 @@ export function ProjectLeadersSettings({
                 value={effectiveProject}
                 onValueChange={(val) => {
                   setSelectedProject(val);
-                  setIsDirty(false);
+                  setDraftState(null);
                 }}
               >
                 <SelectTrigger className="w-full sm:w-72">
