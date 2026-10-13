@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useActiveSync } from "@/hooks/use-active-sync";
-import { api } from "@/lib/api-client";
+import { api, ApiError } from "@/lib/api-client";
 import { boardKeys, freshnessKeys, issuesTouchingProjects } from "@/lib/query-keys";
 import { isBoardSyncBusy, resolveBoardSyncPoll, type BoardSyncStatusResponse } from "./board-sync-model";
 import type { BoardSyncState } from "./board-types";
@@ -115,7 +115,15 @@ export function useJiraSync(selectedProject: string, setToast: (message: string 
         pollStartMs: Date.now(),
       });
     } catch (error) {
-      setToast(`Không thể đồng bộ ${targetProject}: ${(error as Error).message.slice(0, 100)}`);
+      // 409 = an admin disabled this project since the board loaded; refresh the badge.
+      if (error instanceof ApiError && error.status === 409) {
+        void qc.invalidateQueries({ queryKey: boardKeys.projects });
+      }
+      setToast(
+        error instanceof ApiError && error.status === 409
+          ? `Quản trị viên đã tắt đồng bộ ${targetProject}.`
+          : `Không thể đồng bộ ${targetProject}: ${(error as Error).message.slice(0, 100)}`
+      );
       setBoardSync({ projectKey: "", state: "idle" });
     }
   }

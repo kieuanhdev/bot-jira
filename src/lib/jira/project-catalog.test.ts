@@ -8,6 +8,9 @@ import {
   isCatalogProject,
   registerVerifiedProject,
   archiveProject,
+  isProjectSyncEnabled,
+  listSyncDisabledProjectKeys,
+  setProjectSyncEnabled,
 } from "./project-catalog";
 import { prisma } from "@/lib/prisma";
 
@@ -16,6 +19,7 @@ vi.mock("@/lib/prisma", () => ({
     jiraProject: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      count: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
     },
@@ -99,6 +103,69 @@ describe("project-catalog", () => {
         orderBy: [{ key: "asc" }],
         select: { key: true },
       });
+    });
+
+    it("falls back to env projects only when the catalog is empty", async () => {
+      vi.mocked(prisma.jiraProject.findMany).mockResolvedValueOnce([] as never);
+      vi.mocked(prisma.jiraProject.count).mockResolvedValueOnce(0);
+
+      const keys = await listSyncEnabledProjectKeys();
+      expect(keys.length).toBeGreaterThan(0);
+    });
+
+    it("returns no keys when every catalog project has sync disabled", async () => {
+      vi.mocked(prisma.jiraProject.findMany).mockResolvedValueOnce([] as never);
+      vi.mocked(prisma.jiraProject.count).mockResolvedValueOnce(3);
+
+      await expect(listSyncEnabledProjectKeys()).resolves.toEqual([]);
+    });
+  });
+
+  describe("sync toggle helpers", () => {
+    it("lists disabled or archived projects as upper-case keys", async () => {
+      vi.mocked(prisma.jiraProject.findMany).mockResolvedValueOnce([
+        { key: "epm" },
+        { key: "CICM" },
+      ] as never);
+
+      const keys = await listSyncDisabledProjectKeys();
+      expect([...keys].sort()).toEqual(["CICM", "EPM"]);
+      expect(prisma.jiraProject.findMany).toHaveBeenCalledWith({
+        where: { OR: [{ active: false }, { syncEnabled: false }] },
+        select: { key: true },
+      });
+    });
+
+    it("treats a disabled catalog project as not syncable", async () => {
+      vi.mocked(prisma.jiraProject.findUnique).mockResolvedValueOnce({ active: true, syncEnabled: false } as never);
+      await expect(isProjectSyncEnabled("epm")).resolves.toBe(false);
+    });
+
+    it("keeps syncing projects that are not in the catalog", async () => {
+      vi.mocked(prisma.jiraProject.findUnique).mockResolvedValueOnce(null);
+      await expect(isProjectSyncEnabled("NEW")).resolves.toBe(true);
+    });
+
+    it("updates the flag and reports the previous value", async () => {
+      vi.mocked(prisma.jiraProject.findUnique).mockResolvedValueOnce({ key: "EPM", syncEnabled: true } as never);
+      vi.mocked(prisma.jiraProject.update).mockResolvedValueOnce({ key: "EPM", syncEnabled: false } as never);
+
+      await expect(setProjectSyncEnabled("epm", false)).resolves.toEqual({
+        key: "EPM",
+        syncEnabled: false,
+        previous: true,
+      });
+      expect(prisma.jiraProject.update).toHaveBeenCalledWith({
+        where: { key: "EPM" },
+        data: { syncEnabled: false },
+        select: { key: true, syncEnabled: true },
+      });
+    });
+
+    it("returns null for an unknown project", async () => {
+      vi.mocked(prisma.jiraProject.findUnique).mockResolvedValueOnce(null);
+      await expect(setProjectSyncEnabled("NOPE", true)).resolves.toBeNull();
+      expect(prisma.jiraProject.update).not.toHaveBeenCalled();
     });
   });
 
@@ -206,10 +273,11 @@ describe("project-catalog", () => {
           name: "Enterprise Project Management",
           jiraId: "999",
           active: true,
-          syncEnabled: true,
         }),
         select: expect.any(Object),
       });
+      const data = vi.mocked(prisma.jiraProject.update).mock.calls[0][0].data;
+      expect(data).not.toHaveProperty("syncEnabled");
     });
 
     it("throws an error if key format is invalid", async () => {

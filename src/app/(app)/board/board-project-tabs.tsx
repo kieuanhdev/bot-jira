@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { ListFilter, Plus, RefreshCw } from "lucide-react";
+import { ListFilter, PauseCircle, Plus, RefreshCw } from "lucide-react";
 
 const tabCls = (active: boolean) =>
   "flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
@@ -11,7 +11,7 @@ const tabCls = (active: boolean) =>
     : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground");
 
 interface BoardProjectTabsProps {
-  projectList: Array<{ key: string; openCount: number }>;
+  projectList: Array<{ key: string; openCount: number; syncDisabled?: boolean }>;
   selectedProject: string;
   showPicker: boolean;
   preferredCount: number;
@@ -65,8 +65,12 @@ export function BoardProjectTabs({
             onSelectProject(p.key);
           }}
           className={tabCls(selectedProject === p.key)}
+          title={p.syncDisabled ? `${p.key}: đồng bộ Jira đã bị tắt` : undefined}
         >
           {p.key}
+          {p.syncDisabled && (
+            <PauseCircle className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" aria-label="Đã tắt đồng bộ" />
+          )}
           <span
             className={
               "rounded-full px-1.5 text-xs " +

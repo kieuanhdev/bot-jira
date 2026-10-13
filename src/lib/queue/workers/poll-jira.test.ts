@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   notifyIssue: vi.fn(),
   notifyComment: vi.fn(),
   getSystemJiraAuth: vi.fn(),
+  projectFindUnique: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -40,6 +41,9 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.issueFindUnique,
       findMany: mocks.issueFindMany,
       updateMany: mocks.issueUpdateMany,
+    },
+    jiraProject: {
+      findUnique: mocks.projectFindUnique,
     },
   },
 }));
@@ -366,6 +370,21 @@ describe("runPollJiraProject", () => {
     mocks.issueFindMany.mockResolvedValue([]);
     mocks.upsertJiraIssue.mockResolvedValue({ applied: true, data: { status: "In Progress" } });
     mocks.search.mockResolvedValue({ total: 0, issues: [] });
+    mocks.projectFindUnique.mockResolvedValue(null);
+  });
+
+  it("skips an admin-disabled project without touching its cursor", async () => {
+    mocks.projectFindUnique.mockResolvedValue({ active: true, syncEnabled: false });
+    const res = await runPollJiraProject({
+      projectKey: "epm",
+      full: false,
+      source: "manual",
+      requestedAt: new Date().toISOString(),
+    });
+    expect(res).toEqual({ ok: true, skipped: true, reason: "sync_disabled" });
+    expect(mocks.cursorUpsert).not.toHaveBeenCalled();
+    expect(mocks.cursorUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.search).not.toHaveBeenCalled();
   });
 
   it("returns error if Jira auth is not configured", async () => {

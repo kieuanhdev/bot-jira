@@ -1,7 +1,7 @@
 import type { BoardTransition } from "@/lib/jira/board-transitions";
 import type { IssueRelationships } from "@/lib/issues/relationships";
 
-export type Project = { key: string; openCount: number };
+export type Project = { key: string; openCount: number; syncEnabled?: boolean };
 export type SortMode = "priority" | "updated" | "age";
 export type QuickAction =
   | { kind: "assignee"; value: string | null }

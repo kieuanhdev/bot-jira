@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   peopleFieldsUpsert: vi.fn(),
   getProjectStatuses: vi.fn(),
   search: vi.fn(),
+  isProjectSyncEnabled: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getSession: mocks.session }));
@@ -50,6 +51,7 @@ vi.mock("@/lib/jira/project-catalog", async (importOriginal) => {
     listActiveProjects: mocks.listActiveProjects,
     registerVerifiedProject: mocks.registerVerifiedProject,
     updateProjectBootstrapState: mocks.updateProjectBootstrapState,
+    isProjectSyncEnabled: mocks.isProjectSyncEnabled,
   };
 });
 
@@ -76,6 +78,7 @@ describe("/api/projects", () => {
     mocks.peopleFieldsUpsert.mockResolvedValue({});
     mocks.getProjectStatuses.mockResolvedValue([]);
     mocks.search.mockResolvedValue({ issues: [] });
+    mocks.isProjectSyncEnabled.mockResolvedValue(true);
   });
 
   describe("GET /api/projects", () => {
@@ -90,6 +93,7 @@ describe("/api/projects", () => {
         selected: true,
         openCount: 5,
         dataState: "ready",
+        syncEnabled: true,
       });
       expect(data.items[1]).toEqual({
         key: "NEW",
@@ -97,6 +101,7 @@ describe("/api/projects", () => {
         selected: false,
         openCount: 0,
         dataState: "syncing_issues",
+        syncEnabled: true,
       });
     });
   });
@@ -186,6 +191,31 @@ describe("/api/projects", () => {
         full: true,
         source: "manual",
         requestedBy: "user-1",
+      });
+    });
+
+    it("adds an admin-disabled project to the board without syncing it", async () => {
+      mocks.isProjectSyncEnabled.mockResolvedValueOnce(false);
+      mocks.getProject.mockResolvedValueOnce({ key: "FROZEN", name: "Frozen", id: "1" });
+      mocks.registerVerifiedProject.mockResolvedValueOnce({ key: "FROZEN", name: "Frozen", active: true, syncEnabled: false });
+
+      const res = await POST(
+        new Request("http://localhost/api/projects", {
+          method: "POST",
+          body: JSON.stringify({ key: "frozen" }),
+        })
+      );
+
+      const data = await res.json();
+      expect(data.ok).toBe(true);
+      expect(data.bootstrap).toEqual({ state: "sync_disabled", issueSyncJobId: null });
+      expect(mocks.enqueueJiraProjectSync).not.toHaveBeenCalled();
+      expect(mocks.registerVerifiedProject).toHaveBeenCalledWith(
+        expect.not.objectContaining({ bootstrapState: "syncing_issues" })
+      );
+      expect(mocks.userUpdate).toHaveBeenCalledWith({
+        where: { id: "user-1" },
+        data: { boardProjects: ["EPM", "FROZEN"] },
       });
     });
   });

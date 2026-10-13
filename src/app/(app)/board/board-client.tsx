@@ -37,7 +37,7 @@ import {
 } from "./lib/board-types";
 import { patchIssueLists } from "./lib/board-optimistic";
 import { sortIssues, columnKeyForIssue } from "./lib/board-utils";
-import { HiddenColumnsBanner, StaleSyncBanner } from "./board-banners";
+import { HiddenColumnsBanner, StaleSyncBanner, SyncDisabledBanner } from "./board-banners";
 import { BoardNoProjectsState } from "./board-empty-projects";
 import { BoardHeader } from "./board-header";
 import dynamic from "next/dynamic";
@@ -170,8 +170,12 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
     () =>
       effectivePreferred
         .filter((k) => availableKeys.includes(k) || effectivePreferred.includes(k))
-        .map((k) => ({ key: k, openCount: countMap.get(k) ?? 0 })),
-    [effectivePreferred, countMap, availableKeys]
+        .map((k) => ({
+          key: k,
+          openCount: countMap.get(k) ?? 0,
+          syncDisabled: allProjects.find((p) => p.key === k)?.syncEnabled === false,
+        })),
+    [effectivePreferred, countMap, availableKeys, allProjects]
   );
 
   const pickerActive = pickerSelection ?? effectivePreferred;
@@ -242,7 +246,11 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
       setBoardNewKey("");
       closePicker();
       handleSelectProject(verifiedKey);
-      setToast(`Đã thêm dự án ${res.project.name} (${verifiedKey}) và bắt đầu đồng bộ.`);
+      setToast(
+        res.bootstrap?.state === "sync_disabled"
+          ? `Đã thêm dự án ${res.project.name} (${verifiedKey}). Quản trị viên đang tắt đồng bộ dự án này.`
+          : `Đã thêm dự án ${res.project.name} (${verifiedKey}) và bắt đầu đồng bộ.`
+      );
     } catch (err: unknown) {
       setBoardValidateError((err as Error).message || "Lỗi kiểm tra dự án trên Jira.");
     } finally {
@@ -347,6 +355,8 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
   }, [qc]);
 
   const { boardSync, isCurrentProjectSyncing, syncJira } = useJiraSync(selectedProject, setToast);
+  const selectedProjectSyncDisabled =
+    allProjects.find((p) => p.key === selectedProject)?.syncEnabled === false;
 
   useEffect(() => {
     if (typeof performance !== "undefined" && performance.mark) {
@@ -708,6 +718,7 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
         onAddProject={handleAddProjectToBoard}
         boardSync={boardSync}
         isCurrentProjectSyncing={isCurrentProjectSyncing}
+        syncDisabled={selectedProjectSyncDisabled}
         isFetching={isFetching}
         onSync={syncJira}
         effectiveView={effectiveView}
@@ -734,7 +745,11 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
         onSortModeChange={setSortMode}
       />
 
-      {issueData?.sync.stale && <StaleSyncBanner lastSuccessAt={issueData.sync.lastSuccessAt} />}
+      {selectedProjectSyncDisabled ? (
+        <SyncDisabledBanner projectKey={selectedProject} lastSuccessAt={issueData?.sync.lastSuccessAt ?? null} />
+      ) : (
+        issueData?.sync.stale && <StaleSyncBanner lastSuccessAt={issueData.sync.lastSuccessAt} />
+      )}
 
       <IssueFilterBar
         value={filters}

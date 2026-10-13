@@ -205,3 +205,9 @@ export const reportsKeys = {
     ["reports", "history", projectKey.trim().toUpperCase(), normalizeReportParams(params)] as const,
 };
 
+
+export const adminKeys = {
+  all: ["admin"] as const,
+  projects: ["admin", "projects"] as const,
+  overview: ["admin", "overview"] as const,
+};

@@ -6,6 +6,7 @@ import type { JiraIssue } from "@/lib/jira/types";
 import { upsertJiraComments, upsertJiraIssue } from "@/lib/issues/cache";
 import { notifyWatchersOfIssueChange } from "@/lib/issues/notify-watchers";
 import { jiraIssueFieldsForProject } from "@/lib/jira/people-fields";
+import { isProjectSyncEnabled } from "@/lib/jira/project-catalog";
 import {
   buildIssueRelationships,
   relationshipKeys,
@@ -196,6 +197,8 @@ export async function fetchLiveIssue(
  * sync. Returns null only when neither live nor cache has the issue.
  */
 export async function getIssueView(key: string, auth: ReturnType<typeof userJiraAuth>): Promise<IssueView | null> {
+  // An admin-disabled project stays frozen: serve the cache, no live read-through.
+  if (!(await isProjectSyncEnabled(key.split("-")[0]))) return getCachedIssueView(key);
   // Jira round-trips dominate latency, so read the cache snapshot concurrently.
   // The snapshot is still taken before the live upsert below.
   const [live, cached] = await Promise.all([

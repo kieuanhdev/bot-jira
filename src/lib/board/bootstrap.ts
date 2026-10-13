@@ -23,6 +23,7 @@ export interface BoardBootstrap {
       name: string;
       selected: boolean;
       openCount: number;
+      syncEnabled: boolean;
     }>;
   };
   meStatus: {
@@ -102,6 +103,7 @@ export async function getBoardBootstrap(
     name: project.name || project.key,
     selected: userProjects.includes(project.key),
     openCount: counts.get(project.key) ?? 0,
+    syncEnabled: project.syncEnabled,
   }));
 
   const auth = userJiraAuth(user);

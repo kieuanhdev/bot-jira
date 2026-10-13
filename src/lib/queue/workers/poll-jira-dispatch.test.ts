@@ -20,11 +20,21 @@ vi.mock("@/lib/jira/project-access", () => ({
 }));
 
 import { runPollJiraDispatch } from "./poll-jira-dispatch";
+import { listSyncEnabledProjectKeys } from "@/lib/jira/project-catalog";
 
 describe("runPollJiraDispatch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.enqueueJiraProjectSync.mockResolvedValue("job-123");
+  });
+
+  it("skips without error when an admin disabled every project", async () => {
+    vi.mocked(listSyncEnabledProjectKeys).mockResolvedValueOnce([]);
+
+    const res = await runPollJiraDispatch({ source: "schedule" });
+
+    expect(res).toEqual({ ok: true, skipped: true, reason: "No Jira projects have sync enabled" });
+    expect(mocks.enqueueJiraProjectSync).not.toHaveBeenCalled();
   });
 
   it("fans out configured projects to individual project sync jobs", async () => {

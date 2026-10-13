@@ -19,6 +19,7 @@ import {
   ChartNoAxesCombined,
   PanelLeftClose,
   PanelLeftOpen,
+  ShieldCheck,
 } from "lucide-react";
 import { useUnreadCount } from "@/hooks/use-notifications";
 import { FreshnessBanner } from "./freshness-banner";
@@ -26,7 +27,7 @@ import { ReconnectBanner } from "./reconnect-banner";
 import { GlobalSyncIndicator } from "./global-sync-indicator";
 import { cn } from "@/lib/utils";
 
-const nav = [
+const baseNav = [
   { href: "/board", label: "Bảng công việc", icon: LayoutGrid },
   { href: "/stale", label: "Task cần xử lý", icon: BarChart3 },
   { href: "/bulk", label: "Cập nhật hàng loạt", icon: ListChecks },
@@ -39,8 +40,11 @@ const nav = [
   { href: "/settings", label: "Cài đặt", icon: Settings },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+const adminNavItem = { href: "/admin", label: "Quản trị", icon: ShieldCheck };
+
+export function AppShell({ children, isAdmin = false }: { children: React.ReactNode; isAdmin?: boolean }) {
   const pathname = usePathname();
+  const nav = isAdmin ? [...baseNav, adminNavItem] : baseNav;
   const unreadCount = useUnreadCount();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);

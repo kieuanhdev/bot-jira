@@ -2,8 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   cached: vi.fn(), issue: vi.fn(), comments: vi.fn(), upsert: vi.fn(), cacheComments: vi.fn(), notify: vi.fn(),
+  project: vi.fn(),
 }));
-vi.mock("@/lib/prisma", () => ({ prisma: { issueCache: { findFirst: mocks.cached, findMany: vi.fn().mockResolvedValue([]) } } }));
+vi.mock("@/lib/prisma", () => ({ prisma: {
+  issueCache: { findFirst: mocks.cached, findMany: vi.fn().mockResolvedValue([]) },
+  jiraProject: { findUnique: mocks.project },
+} }));
 vi.mock("@/lib/jira/client", () => ({
   jiraWith: () => ({ getIssue: mocks.issue, getComments: mocks.comments }),
   jiraIssueFields: () => "status,updated",
@@ -23,6 +27,14 @@ describe("live task reads", () => {
     mocks.upsert.mockResolvedValue({ applied: true, data: { status: "Done" } });
     mocks.cacheComments.mockResolvedValue(0);
     mocks.notify.mockResolvedValue(1);
+    mocks.project.mockResolvedValue(null);
+  });
+  it("serves the frozen cache for an admin-disabled project without calling Jira", async () => {
+    mocks.project.mockResolvedValue({ active: true, syncEnabled: false });
+    const result = await getIssueView("APP-1", { user: "test", token: "test", authMode: "Bearer" });
+    expect(result?.status).toBe("To Do");
+    expect(mocks.issue).not.toHaveBeenCalled();
+    expect(mocks.upsert).not.toHaveBeenCalled();
   });
   it("notifies a transition seen by the detail page before the worker reads it", async () => {
     const result = await getIssueView("APP-1", { user: "test", token: "test", authMode: "Bearer" });

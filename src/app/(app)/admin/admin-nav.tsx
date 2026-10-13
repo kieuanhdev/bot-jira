@@ -1,0 +1,38 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Activity, RefreshCcw } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const items = [
+  { href: "/admin", label: "Tổng quan", icon: Activity, exact: true },
+  { href: "/admin/sync", label: "Đồng bộ dự án", icon: RefreshCcw, exact: false },
+];
+
+export function AdminNav() {
+  const pathname = usePathname() ?? "";
+  return (
+    <nav aria-label="Điều hướng quản trị" className="flex gap-1 overflow-x-auto border-b">
+      {items.map((item) => {
+        const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "-mb-px flex shrink-0 cursor-pointer items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150",
+              active
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <item.icon className="h-4 w-4" aria-hidden="true" />
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}

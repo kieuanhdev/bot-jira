@@ -12,11 +12,13 @@ vi.mock("@/lib/env", () => ({
   env: { jiraFreshnessMinutes: 5 },
   jiraProjectList: [],
 }));
+const { disabledKeys } = vi.hoisted(() => ({ disabledKeys: vi.fn() }));
 vi.mock("@/lib/jira/project-catalog", () => ({
   listSyncEnabledProjectKeys: async () => {
     const { jiraProjectList } = await import("@/lib/env");
     return [...jiraProjectList];
   },
+  listSyncDisabledProjectKeys: disabledKeys,
 }));
 
 import { getWorkerHealth, isJiraFresh } from "./worker-health";
@@ -31,6 +33,7 @@ function rows(r: Record<string, unknown>[]) {
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.jiraProject.findMany.mockResolvedValue([]);
+  disabledKeys.mockResolvedValue(new Set());
 });
 
 describe("getWorkerHealth", () => {
@@ -39,6 +42,20 @@ describe("getWorkerHealth", () => {
     const h = await getWorkerHealth();
     expect(h.status).toBe("unknown");
     expect(isJiraFresh(h)).toBe(false);
+  });
+
+  it("stays healthy and fresh when an admin disabled every project", async () => {
+    disabledKeys.mockResolvedValue(new Set(["EPM", "MR"]));
+    rows([
+      { scope: "liveness", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+      // A long-stale legacy row must not be used once sync is intentionally paused.
+      { scope: "poll-jira", lastStartedAt: ago(86_400_000), lastSuccessAt: ago(86_400_000), lastErrorAt: null, lastError: null, stats: null },
+    ]);
+    const h = await getWorkerHealth();
+    expect(h.status).toBe("healthy");
+    expect(h.jiraSyncPaused).toBe(true);
+    expect(h.jiraSyncAgeMs).toBeNull();
+    expect(isJiraFresh(h)).toBe(true);
   });
 
   it("is healthy when liveness and jira sync are both fresh", async () => {

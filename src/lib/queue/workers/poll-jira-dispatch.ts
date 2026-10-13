@@ -38,6 +38,10 @@ export async function runPollJiraDispatch(data: PollJiraDispatchJobData = {}): P
   }
 
   if (projects.length === 0) {
+    // Every catalog project disabled by an admin is a valid state, not a fault.
+    if (rawProjects.length === 0) {
+      return { ok: true, skipped: true, reason: "No Jira projects have sync enabled" };
+    }
     return { ok: false, errors: ["No valid Jira projects to dispatch"] };
   }
 

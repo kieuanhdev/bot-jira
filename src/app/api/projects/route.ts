@@ -10,6 +10,7 @@ import {
   isValidProjectKeyFormat,
   registerVerifiedProject,
   updateProjectBootstrapState,
+  isProjectSyncEnabled,
 } from "@/lib/jira/project-catalog";
 import { detectPeopleFields } from "@/lib/jira/people-fields";
 
@@ -61,6 +62,7 @@ export async function GET() {
     selected: userSelectedKeys.has(project.key),
     openCount: counts.get(project.key) ?? 0,
     dataState: project.bootstrapState ?? "ready",
+    syncEnabled: project.syncEnabled,
   }));
 
   const dur = Date.now() - reqStart;
@@ -143,6 +145,9 @@ export async function POST(req: Request) {
   const verifiedKey = normalizeProjectKey(jiraProject.key);
   const projectName = jiraProject.name || verifiedKey;
 
+  // An admin-disabled project can still be added to the board, but is never synced.
+  const syncAllowed = await isProjectSyncEnabled(verifiedKey);
+
   // Upsert into JiraProject catalog
   const catalogItem = await registerVerifiedProject({
     key: verifiedKey,
@@ -150,7 +155,7 @@ export async function POST(req: Request) {
     jiraId: jiraProject.id ?? null,
     discoveredById: session.user.id,
     source: "user_added",
-    bootstrapState: "syncing_issues",
+    ...(syncAllowed ? { bootstrapState: "syncing_issues" } : {}),
   });
 
   // Detection is best-effort: an empty project or restricted editmeta must not
@@ -172,12 +177,14 @@ export async function POST(req: Request) {
   let syncJobId: string | null = null;
   let queueFailed = false;
   try {
-    syncJobId = await enqueueJiraProjectSync({
-      projectKey: verifiedKey,
-      full: true,
-      source: "manual",
-      requestedBy: session.user.id,
-    });
+    if (syncAllowed) {
+      syncJobId = await enqueueJiraProjectSync({
+        projectKey: verifiedKey,
+        full: true,
+        source: "manual",
+        requestedBy: session.user.id,
+      });
+    }
   } catch (err) {
     queueFailed = true;
     console.error(`Failed to enqueue initial sync for ${verifiedKey}:`, err);
@@ -198,7 +205,7 @@ export async function POST(req: Request) {
         selected: true,
       },
       bootstrap: {
-        state: queueFailed ? "queue_failed" : "queued",
+        state: !syncAllowed ? "sync_disabled" : queueFailed ? "queue_failed" : "queued",
         issueSyncJobId: syncJobId,
       },
     },

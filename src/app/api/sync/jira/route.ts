@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import {
   normalizeProjectKey,
   isValidProjectKeyFormat,
+  isProjectSyncEnabled,
 } from "@/lib/jira/project-catalog";
 import { enqueueJiraProjectSync, enqueueJiraDispatch } from "@/lib/queue/boss";
 
@@ -20,6 +21,12 @@ export async function POST(req: Request) {
     const projectKey = normalizeProjectKey(rawKey);
     if (!isValidProjectKeyFormat(projectKey)) {
       return NextResponse.json({ error: "unknown_project" }, { status: 400 });
+    }
+    if (!(await isProjectSyncEnabled(projectKey))) {
+      return NextResponse.json(
+        { error: "sync_disabled", message: `Quản trị viên đã tắt đồng bộ dự án ${projectKey}.` },
+        { status: 409 }
+      );
     }
 
     try {

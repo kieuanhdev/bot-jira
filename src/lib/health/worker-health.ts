@@ -36,6 +36,8 @@ export type WorkerHealth = {
   checkedAt: string;
   staleProjects?: string[];
   failingProjects?: string[];
+  /** Every catalog project has sync turned off by an admin, so Jira freshness does not apply. */
+  jiraSyncPaused?: boolean;
   /** Worker job scopes whose last error is newer than their last success. */
   failingJobs?: string[];
   databaseError?: string | null;
@@ -135,6 +137,7 @@ export async function getWorkerHealth(customProjects?: string[]): Promise<Worker
   const failingProjects: string[] = [];
   let jiraSyncAgeMs: number | null = null;
   let jiraStale = false;
+  let jiraSyncPaused = false;
 
   if (configuredProjects.length > 0) {
     let maxAgeMs: number | null = 0;
@@ -165,10 +168,20 @@ export async function getWorkerHealth(customProjects?: string[]): Promise<Worker
     jiraSyncAgeMs = maxAgeMs;
     jiraStale = staleProjects.length > 0;
   } else {
-    // Fallback to legacy poll-jira row only when no projects are configured
-    const jiraRow = jobs.find((r) => r.scope === "poll-jira");
-    jiraSyncAgeMs = ageMs(jiraRow?.lastSuccessAt, now);
-    jiraStale = jiraSyncAgeMs !== null && jiraSyncAgeMs > SLA.jiraStaleMs;
+    if (!customProjects) {
+      try {
+        const { listSyncDisabledProjectKeys } = await import("@/lib/jira/project-catalog");
+        jiraSyncPaused = (await listSyncDisabledProjectKeys()).size > 0;
+      } catch {
+        jiraSyncPaused = false;
+      }
+    }
+    if (!jiraSyncPaused) {
+      // Fallback to legacy poll-jira row only when no projects are configured
+      const jiraRow = jobs.find((r) => r.scope === "poll-jira");
+      jiraSyncAgeMs = ageMs(jiraRow?.lastSuccessAt, now);
+      jiraStale = jiraSyncAgeMs !== null && jiraSyncAgeMs > SLA.jiraStaleMs;
+    }
   }
 
   let hasErrors = Boolean(dbError);
@@ -218,6 +231,7 @@ export async function getWorkerHealth(customProjects?: string[]): Promise<Worker
     hasErrors,
     staleProjects,
     failingProjects,
+    jiraSyncPaused,
     failingJobs,
     databaseError: dbError,
     jobs: jobs.map((r) => ({
@@ -236,6 +250,7 @@ export async function getWorkerHealth(customProjects?: string[]): Promise<Worker
 export function isJiraFresh(health: WorkerHealth): boolean {
   if (health.databaseError || health.status === "down" || health.status === "unknown") return false;
   if (health.staleProjects && health.staleProjects.length > 0) return false;
+  if (health.jiraSyncPaused) return true;
   return health.jiraSyncAgeMs !== null && health.jiraSyncAgeMs <= SLA.jiraStaleMs;
 }
 

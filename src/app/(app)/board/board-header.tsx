@@ -18,7 +18,7 @@ import type { IssueItem } from "@/hooks/use-issues";
 import type { BoardWidth } from "@/lib/status-groups";
 
 export interface BoardHeaderProps {
-  projectList: Array<{ key: string; openCount: number }>;
+  projectList: Array<{ key: string; openCount: number; syncDisabled?: boolean }>;
   selectedProject: string;
   showPicker: boolean;
   preferredCount: number;
@@ -45,6 +45,7 @@ export interface BoardHeaderProps {
     pollStartMs?: number;
   };
   isCurrentProjectSyncing: boolean;
+  syncDisabled: boolean;
   isFetching: boolean;
   onSync: () => void;
 
@@ -97,6 +98,7 @@ export function BoardHeader({
 
   boardSync,
   isCurrentProjectSyncing,
+  syncDisabled,
   isFetching,
   onSync,
 
@@ -167,6 +169,7 @@ export function BoardHeader({
           boardSync={boardSync}
           selectedProject={selectedProject}
           isCurrentProjectSyncing={isCurrentProjectSyncing}
+          syncDisabled={syncDisabled}
           isFetching={isFetching}
           onSync={onSync}
         />

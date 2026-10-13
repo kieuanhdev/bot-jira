@@ -8,12 +8,14 @@ export function BoardSyncButton({
   boardSync,
   selectedProject,
   isCurrentProjectSyncing,
+  syncDisabled,
   isFetching,
   onSync,
 }: {
   boardSync: { projectKey: string; state: BoardSyncState };
   selectedProject: string;
   isCurrentProjectSyncing: boolean;
+  syncDisabled: boolean;
   isFetching: boolean;
   onSync: () => void;
 }) {
@@ -22,10 +24,12 @@ export function BoardSyncButton({
       variant="outline"
       size="sm"
       onClick={onSync}
-      disabled={isCurrentProjectSyncing}
-      className="gap-1.5 cursor-pointer"
+      disabled={isCurrentProjectSyncing || syncDisabled}
+      className="gap-1.5 cursor-pointer disabled:cursor-not-allowed"
       title={
-        isCurrentProjectSyncing
+        syncDisabled
+          ? `Quản trị viên đã tắt đồng bộ ${selectedProject}.`
+          : isCurrentProjectSyncing
           ? boardSync.state === "enqueueing"
             ? `Đang gửi yêu cầu đồng bộ ${selectedProject}…`
             : boardSync.state === "running"

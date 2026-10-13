@@ -68,6 +68,13 @@ export async function runPollJiraProject(
     return { ok: false, errors: ["Missing or invalid projectKey"] };
   }
 
+  // Final gate for every enqueue path: an admin-disabled project never syncs,
+  // and the cursor is left untouched so its data is reported as stale, not fresh.
+  const { isProjectSyncEnabled } = await import("@/lib/jira/project-catalog");
+  if (!(await isProjectSyncEnabled(projectKey))) {
+    return { ok: true, skipped: true, reason: "sync_disabled" };
+  }
+
   const requestedAtMs = data.requestedAt ? new Date(data.requestedAt).getTime() : Date.now();
   const queueLagMs = Math.max(0, Date.now() - (Number.isNaN(requestedAtMs) ? Date.now() : requestedAtMs));
   const startedAt = Date.now();

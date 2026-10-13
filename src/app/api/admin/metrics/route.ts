@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await getSession();
   if (!session?.user?.role) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (session.user.role !== "admin" && session.user.role !== "release_manager") {
+  if (session.user.role !== "admin") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

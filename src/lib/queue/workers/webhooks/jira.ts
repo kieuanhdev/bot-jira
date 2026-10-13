@@ -8,6 +8,7 @@ import {
 } from "@/lib/issues/notify-watchers";
 import { normalizeStatusToGroup } from "@/lib/reports/status";
 import { isJiraNotFound, markIssuesDeleted } from "@/lib/issues/deleted";
+import { listSyncDisabledProjectKeys } from "@/lib/jira/project-catalog";
 
 type JiraChangelogItem = {
   field?: string;
@@ -86,6 +87,10 @@ export async function handleJiraWebhook(
   if (!(await hasJiraCredentials())) {
     return { skipped: true, reason: "jira not configured" };
   }
+  // Admin-disabled projects keep their cached data frozen, webhooks included.
+  const syncDisabled = await listSyncDisabledProjectKeys();
+  const isSyncDisabled = (issueKey: string) => syncDisabled.has(issueKey.split("-")[0].toUpperCase());
+  if (isSyncDisabled(key)) return { skipped: true, reason: "sync_disabled" };
 
   if (eventName === "jira:issue_deleted") {
     const deleted = await markIssuesDeleted([key]);
@@ -170,7 +175,7 @@ export async function handleJiraWebhook(
     const text = `${item.fromString ?? ""} ${item.toString ?? ""} ${item.from ?? ""} ${item.to ?? ""}`;
     const matches = text.match(/[A-Z][A-Z0-9]+-\d+/g) ?? [];
     for (const otherKey of matches) {
-      if (otherKey !== key && !otherRefreshed.includes(otherKey)) {
+      if (otherKey !== key && !otherRefreshed.includes(otherKey) && !isSyncDisabled(otherKey)) {
         otherRefreshed.push(otherKey);
         await refreshIssue(otherKey).catch(() => null);
       }

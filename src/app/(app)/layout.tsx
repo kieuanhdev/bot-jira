@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/session";
+import { getSession, isAdmin } from "@/lib/session";
 import { userJiraAuth } from "@/lib/user-creds";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "./app-shell";
@@ -31,5 +31,5 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     redirect("/setup-jira");
   }
 
-  return <AppShell>{children}</AppShell>;
+  return <AppShell isAdmin={isAdmin(session)}>{children}</AppShell>;
 }

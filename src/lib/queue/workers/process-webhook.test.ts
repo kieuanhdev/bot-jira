@@ -61,6 +61,9 @@ vi.mock("@/lib/prisma", () => ({
     ciBuildStatus: {
       upsert: vi.fn().mockResolvedValue({}),
     },
+    jiraProject: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   },
 }));
 
@@ -307,6 +310,19 @@ describe("process-webhook for Jira", () => {
 
     expect(result.ok).toBe(true);
     expect(result.stats).toEqual(expect.objectContaining({ refreshed: "EPM-42" }));
+  });
+
+  it("ignores events for an admin-disabled project", async () => {
+    vi.mocked(prisma.jiraProject.findMany).mockResolvedValueOnce([{ key: "EPM" }] as never);
+    vi.mocked(prisma.integrationEvent.findUnique).mockResolvedValue(
+      eventRow({ webhookEvent: "jira:issue_updated", issue: { key: "EPM-42" } }, "jira")
+    );
+
+    const result = await runProcessWebhook({ source: "jira", eventId: "ev-1" });
+
+    expect(result.ok).toBe(true);
+    expect(result.stats).toEqual(expect.objectContaining({ skipped: true, reason: "sync_disabled" }));
+    expect(jira.getIssue).not.toHaveBeenCalled();
   });
 
   it("notifies new comments discovered by an issue update without a comment payload", async () => {

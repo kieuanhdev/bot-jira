@@ -5,11 +5,14 @@ import { notifyWatchersOfComment, notifyWatchersOfIssueChange } from "@/lib/issu
 import type { WorkerLog } from "../guard";
 import { isJiraNotFound, markIssuesDeleted } from "@/lib/issues/deleted";
 import { jiraIssueFieldsForProject } from "@/lib/jira/people-fields";
+import { listSyncDisabledProjectKeys } from "@/lib/jira/project-catalog";
 
 /** Direct reads keep watches fresh even without an inbound webhook. */
 export async function runPollWatchedIssues(): Promise<WorkerLog> {
   if (!(await hasJiraCredentials())) return { ok: true, skipped: true, reason: "Jira not configured" };
-  const watches = await prisma.watch.findMany({ select: { jiraKey: true }, distinct: ["jiraKey"] });
+  const syncDisabled = await listSyncDisabledProjectKeys();
+  const watches = (await prisma.watch.findMany({ select: { jiraKey: true }, distinct: ["jiraKey"] }))
+    .filter(({ jiraKey }) => !syncDisabled.has(jiraKey.split("-")[0].toUpperCase()));
   const errors: string[] = [];
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(4, watches.length) }, async () => {

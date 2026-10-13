@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   watches: vi.fn(), previous: vi.fn(), issue: vi.fn(), comments: vi.fn(),
   upsert: vi.fn(), syncComments: vi.fn(), notifyIssue: vi.fn(), notifyComment: vi.fn(),
+  disabledProjects: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: {
   watch: { findMany: mocks.watches }, issueCache: { findUnique: mocks.previous },
+  jiraProject: { findMany: mocks.disabledProjects },
 } }));
 vi.mock("@/lib/jira/client", () => ({
   jira: { getIssue: mocks.issue, getComments: mocks.comments }, jiraIssueFields: () => "summary,updated", hasJiraCredentials: async () => true,
@@ -22,6 +24,15 @@ describe("fast watch reconciliation", () => {
     mocks.upsert.mockResolvedValue({ applied: true, data: { status: "Done" } });
     mocks.comments.mockResolvedValue([]);
     mocks.syncComments.mockResolvedValue({ newComments: [{ id: "c1", author: "alice", body: "Done" }] });
+    mocks.disabledProjects.mockResolvedValue([]);
+  });
+  it("does not refresh watched tasks of admin-disabled projects", async () => {
+    mocks.watches.mockResolvedValue([{ jiraKey: "APP-1" }, { jiraKey: "OFF-2" }]);
+    mocks.disabledProjects.mockResolvedValue([{ key: "OFF" }]);
+    const result = await runPollWatchedIssues();
+    expect(result.stats).toEqual({ checked: 1 });
+    expect(mocks.issue).toHaveBeenCalledTimes(1);
+    expect(mocks.issue).toHaveBeenCalledWith("APP-1", expect.anything());
   });
   it("reads watched tasks directly and notifies metadata and comments in the same run", async () => {
     expect((await runPollWatchedIssues()).ok).toBe(true);

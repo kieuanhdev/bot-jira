@@ -1,5 +1,5 @@
 import { timeAgo } from "@/lib/utils";
-import { AlertTriangle, EyeOff } from "lucide-react";
+import { AlertTriangle, EyeOff, PauseCircle } from "lucide-react";
 import type { BoardColumn } from "./lib/board-columns";
 
 /** Warning shown when the last successful Jira sync is stale. */
@@ -12,6 +12,31 @@ export function StaleSyncBanner({ lastSuccessAt }: { lastSuccessAt: string | nul
         <p className="text-xs opacity-90">
           Đồng bộ thành công lần cuối: {lastSuccessAt ? timeAgo(lastSuccessAt) : "chưa từng"}.
           Hãy xếp hàng đồng bộ hoặc kiểm tra worker trước khi ra quyết định phát hành.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Shown instead of the stale banner when an admin turned off this project's sync. */
+export function SyncDisabledBanner({
+  projectKey,
+  lastSuccessAt,
+}: {
+  projectKey: string;
+  lastSuccessAt: string | null;
+}) {
+  return (
+    <div
+      role="status"
+      className="flex items-start gap-2 rounded-md border border-amber-300/50 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
+    >
+      <PauseCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      <div>
+        <p className="font-medium">Đồng bộ Jira cho {projectKey} đã bị tắt</p>
+        <p className="text-xs opacity-90">
+          Quản trị viên đã tạm dừng đồng bộ dự án này. Dữ liệu dưới đây được giữ nguyên từ lần đồng bộ cuối
+          ({lastSuccessAt ? timeAgo(lastSuccessAt) : "chưa từng"}) và có thể đã cũ.
         </p>
       </div>
     </div>

@@ -90,6 +90,25 @@ describe("/api/me/preferences", () => {
       );
     });
 
+    it("selects an admin-disabled project without queueing a sync", async () => {
+      mocks.listActiveProjects.mockResolvedValue([
+        { key: "EPM", active: true, syncEnabled: true },
+        { key: "CICM", active: true, syncEnabled: false },
+      ]);
+      mocks.getProject.mockResolvedValue({ key: "CICM" });
+
+      const res = await PUT(
+        new Request("http://localhost/api/me/preferences", {
+          method: "PUT",
+          body: JSON.stringify({ projects: ["EPM", "CICM"] }),
+        })
+      );
+
+      expect(res.status).toBe(200);
+      expect((await res.json()).projects).toEqual(["EPM", "CICM"]);
+      expect(mocks.enqueueJiraProjectSync).not.toHaveBeenCalled();
+    });
+
     it("rejects with 403 when user does not have permission on newly added project", async () => {
       const err = new Error("Forbidden") as Error & { status?: number };
       err.status = 403;

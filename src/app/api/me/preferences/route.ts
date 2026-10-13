@@ -115,8 +115,9 @@ export async function PUT(req: Request) {
     data: { boardProjects: cleaned },
   });
 
-  // Automatically enqueue sync for newly selected projects
-  for (const newKey of newProjects) {
+  // Automatically enqueue sync for newly selected projects (admin-disabled ones stay frozen)
+  const syncEnabledKeys = new Set(activeCatalog.filter((p) => p.syncEnabled).map((p) => p.key));
+  for (const newKey of newProjects.filter((key) => syncEnabledKeys.has(key))) {
     try {
       await enqueueJiraProjectSync({
         projectKey: newKey,

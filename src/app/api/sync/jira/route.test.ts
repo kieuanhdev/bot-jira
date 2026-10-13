@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   session: vi.fn(),
   enqueueJiraProjectSync: vi.fn(),
   enqueueJiraDispatch: vi.fn(),
+  isProjectSyncEnabled: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getSession: mocks.session }));
@@ -13,6 +14,10 @@ vi.mock("@/lib/env", async (importOriginal) => {
     ...actual,
     isKnownProject: (key: string) => ["EPM", "MR", "CICM"].includes(key),
   };
+});
+vi.mock("@/lib/jira/project-catalog", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/jira/project-catalog")>();
+  return { ...actual, isProjectSyncEnabled: mocks.isProjectSyncEnabled };
 });
 vi.mock("@/lib/queue/boss", () => ({
   enqueueJiraProjectSync: mocks.enqueueJiraProjectSync,
@@ -29,6 +34,21 @@ describe("POST /api/sync/jira", () => {
     });
     mocks.enqueueJiraProjectSync.mockResolvedValue("job-epm-1");
     mocks.enqueueJiraDispatch.mockResolvedValue("job-disp-1");
+    mocks.isProjectSyncEnabled.mockResolvedValue(true);
+  });
+
+  it.each(["member", "admin"])("returns 409 for an admin-disabled project (%s)", async (role) => {
+    mocks.session.mockResolvedValue({ user: { id: "user-1", role } });
+    mocks.isProjectSyncEnabled.mockResolvedValue(false);
+    const res = await POST(
+      new Request("http://localhost/api/sync/jira", {
+        method: "POST",
+        body: JSON.stringify({ projectKey: "EPM" }),
+      })
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual(expect.objectContaining({ error: "sync_disabled" }));
+    expect(mocks.enqueueJiraProjectSync).not.toHaveBeenCalled();
   });
 
   it("returns 401 when unauthenticated", async () => {
