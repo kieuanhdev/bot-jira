@@ -6,6 +6,7 @@ import {
   isUserAuthor,
   formatPrCommentNotification,
   formatCommitCommentNotification,
+  formatUnauthorizedMergeNotification,
   prCommentCandidates,
 } from "./branch-notification-policy";
 import { encrypt } from "@/lib/crypto";
@@ -223,6 +224,52 @@ describe("branch-notification-policy", () => {
 
       expect(result.title).toBe(`Bình luận mới trên commit [1234567890]: ${longFirstLine.slice(0, 80)} (PRJ/rep)`);
       expect(result.body).toBe(`bob (main.go): ${"Y".repeat(200)}`);
+    });
+  });
+
+  describe("formatUnauthorizedMergeNotification", () => {
+    it("formats unauthorized merge notification with title, repo, actor displayName and branches", () => {
+      const result = formatUnauthorizedMergeNotification({
+        repo: "PRJ/my-repo",
+        pr: {
+          id: 42,
+          title: "Fix authentication leak",
+          fromBranch: "feature/EPM-123",
+          toBranch: "master",
+          url: "https://git.example.com/pr/42",
+        },
+        actor: {
+          name: "dev1",
+          displayName: "Dev One",
+        },
+        jiraKeys: ["EPM-123"],
+      });
+
+      expect(result.type).toBe("pr");
+      expect(result.severity).toBe("warning");
+      expect(result.title).toBe("PR #42 vừa được merge bởi Dev One (không phải leader) — PRJ/my-repo");
+      expect(result.body).toBe("Fix authentication leak: feature/EPM-123 → master [EPM-123]");
+      expect(result.link).toBe("https://git.example.com/pr/42");
+      expect(result.eventKey).toBe("bb-pr-merged-nonleader:PRJ/my-repo:42");
+    });
+
+    it("falls back to actor name and /branches?q= when title and url are missing", () => {
+      const result = formatUnauthorizedMergeNotification({
+        repo: "PRJ/backend",
+        pr: {
+          id: 99,
+          fromBranch: "dev",
+          toBranch: "main",
+        },
+        actor: {
+          name: "stranger",
+        },
+      });
+
+      expect(result.title).toBe("PR #99 vừa được merge bởi stranger (không phải leader) — PRJ/backend");
+      expect(result.body).toBe("dev → main");
+      expect(result.link).toBe("/branches?q=main");
+      expect(result.eventKey).toBe("bb-pr-merged-nonleader:PRJ/backend:99");
     });
   });
 });

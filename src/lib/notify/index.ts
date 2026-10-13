@@ -15,7 +15,8 @@ export type NotifyType =
   | "ai"
   | "sentry"
   | "ci"
-  | "system";
+  | "system"
+  | "pr";
 
 export type NotifySeverity = "info" | "warning" | "danger" | "success";
 

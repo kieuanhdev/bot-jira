@@ -3,11 +3,11 @@ import { jiraUsernameAliases } from "@/lib/user-creds";
 import { safeDecrypt } from "@/lib/crypto";
 
 export type BranchNotificationMessage = {
-  type: "comment";
+  type: "comment" | "pr";
   title: string;
   body: string;
   link: string;
-  severity: "info";
+  severity: "info" | "warning";
   eventKey: string;
   /** Discord deliveries sharing this group are batched into one message. */
   chatDigestGroup?: string;
@@ -192,5 +192,47 @@ export function formatCommitCommentNotification(
     severity: "info",
     eventKey,
     chatDigestGroup,
+  };
+}
+
+export type FormatUnauthorizedMergeNotificationArgs = {
+  repo: string;
+  pr: {
+    id: number;
+    title?: string;
+    url?: string;
+    fromBranch?: string;
+    toBranch?: string;
+  };
+  actor: BbUser;
+  jiraKeys?: string[];
+};
+
+/** Format notification payload when a PR is merged by a non-leader. */
+export function formatUnauthorizedMergeNotification(
+  args: FormatUnauthorizedMergeNotificationArgs
+): BranchNotificationMessage {
+  const { repo, pr, actor, jiraKeys } = args;
+  const actorDisplayName = actor.displayName || actor.name || "người dùng";
+  const title = `PR #${pr.id} vừa được merge bởi ${actorDisplayName} (không phải leader) — ${repo}`;
+
+  const branchesPart = `${pr.fromBranch || "unknown"} → ${pr.toBranch || "unknown"}`;
+  const jiraPart = jiraKeys && jiraKeys.length > 0 ? ` [${jiraKeys.join(", ")}]` : "";
+  const prTitlePart = pr.title ? `${pr.title}: ` : "";
+  const bodyText = `${prTitlePart}${branchesPart}${jiraPart}`.slice(0, 200);
+
+  const link =
+    pr.url ||
+    (pr.toBranch ? `/branches?q=${encodeURIComponent(pr.toBranch)}` : "/branches");
+
+  const eventKey = `bb-pr-merged-nonleader:${repo}:${pr.id}`;
+
+  return {
+    type: "pr",
+    title,
+    body: bodyText,
+    link,
+    severity: "warning",
+    eventKey,
   };
 }

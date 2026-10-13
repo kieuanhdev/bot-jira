@@ -69,15 +69,28 @@ Cấp **Project** (áp dụng mọi repo trong project) hoặc cấp **Repositor
 - **Secret:** `<secret-bitbucket>`
 - **Events:**
   - Repository: Push
-  - Pull request: tick toàn bộ (opened, merged, declined, deleted, source branch updated, comment, reviewer/approval…)
+  - Pull request: tick toàn bộ, đặc biệt **Merged** (`pr:merged`) và **Comment** (added, edited, deleted).
 - Bấm **Test connection**: `200` là đúng, `401` là sai secret.
+
+> **Lưu ý tính năng Cảnh báo Merge trái phép:** Khi event `pr:merged` được gửi tới, bot sẽ kiểm tra người bấm merge với danh sách Leader của dự án tương ứng (cấu hình tại **Settings → Leader theo dự án**). Nếu người merge không phải Leader của dự án, bot sẽ gửi cảnh báo tức thì tới tất cả Leader của dự án đó.
 
 Có nhiều project thì tạo webhook ở từng project với cùng URL và cùng secret.
 
 ## 4. Kiểm tra nhanh bằng tay (giả lập Bitbucket)
 
+Test ping:
 ```bash
 BODY='{"eventKey":"diagnostics:ping"}'
+SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "<secret-bitbucket>" -hex | sed 's/^.* //')
+curl -i -X POST https://jira.kieuanhdev.id.vn/api/webhooks/bitbucket \
+  -H "Content-Type: application/json" \
+  -H "X-Hub-Signature: sha256=$SIG" \
+  -d "$BODY"
+```
+
+Test cảnh báo merge không phải leader (`pr:merged`):
+```bash
+BODY='{"eventKey":"pr:merged","actor":{"name":"dev_user","displayName":"Dev User"},"repository":{"slug":"core-repo","project":{"key":"EPM"}},"pullRequest":{"id":101,"title":"Refactor auth","fromRef":{"branch":"feature/EPM-123"},"toRef":{"branch":"master"}}}'
 SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "<secret-bitbucket>" -hex | sed 's/^.* //')
 curl -i -X POST https://jira.kieuanhdev.id.vn/api/webhooks/bitbucket \
   -H "Content-Type: application/json" \

@@ -6,6 +6,7 @@ import {
   Rocket,
   ShieldAlert,
   GitBranch,
+  GitPullRequest,
   Sparkles,
   RefreshCw,
   type LucideIcon,
@@ -144,6 +145,18 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
       text: "text-slate-600 dark:text-slate-400",
       border: "border-slate-500/30",
       badge: "outline",
+    },
+  },
+  {
+    id: "pr",
+    label: "Pull Request (pr)",
+    shortLabel: "PR & Merge",
+    icon: GitPullRequest,
+    color: {
+      bg: "bg-amber-500/10 dark:bg-amber-500/20",
+      text: "text-amber-600 dark:text-amber-400",
+      border: "border-amber-500/30",
+      badge: "warning",
     },
   },
 ];

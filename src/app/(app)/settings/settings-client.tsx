@@ -10,6 +10,7 @@ import { NotificationPreferences } from "./notification-preferences";
 import { ChatLinking } from "./chat-linking";
 import type { Role } from "@/lib/permissions";
 import { ProjectPeopleFieldsSettings } from "./project-people-fields-settings";
+import { ProjectLeadersSettings } from "./project-leaders-settings";
 import { useSettingsController } from "./lib/use-settings-controller";
 import { getServiceHealthBadge, type User } from "./lib/settings-model";
 
@@ -27,6 +28,7 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
       <MyIntegrations />
       <NotificationPreferences />
       <ChatLinking />
+      <ProjectLeadersSettings users={users} isAdmin={isAdmin} />
       {isAdmin && (
         <ProjectPeopleFieldsSettings />
       )}

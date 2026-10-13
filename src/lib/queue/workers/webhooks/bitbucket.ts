@@ -14,9 +14,10 @@ type PullRequest = {
   title?: string;
   url?: string;
   state?: string;
-  fromRef?: { branch?: string };
+  fromRef?: { branch?: string; displayId?: string };
   toRef?: {
     branch?: string;
+    displayId?: string;
     repository?: { slug?: string; project?: { key?: string } };
   };
   author?: { user?: BitbucketUser };
@@ -32,7 +33,9 @@ type Comment = {
 
 type BitbucketWebhookPayload = {
   eventKey?: string;
+  actor?: BitbucketUser;
   data?: {
+    actor?: BitbucketUser;
     repository?: { slug?: string; project?: { key?: string } };
     pullRequest?: PullRequest;
     comment?: Comment;
@@ -167,28 +170,88 @@ export async function handleBitbucketWebhook(
   }
 
   const updates: Record<string, unknown> = { repo };
-  if (pullRequest?.fromRef?.branch) {
+
+  const isPrMerged =
+    webhook.eventKey === "pr:merged" ||
+    (pullRequest?.id != null && pullRequest.state === "MERGED");
+
+  if (isPrMerged && pullRequest?.id != null) {
+    let actor = webhook.actor ?? webhook.data?.actor;
+    if (!actor) {
+      try {
+        const { bitbucket, getSystemBitbucketCreds } = await import("@/lib/bitbucket/client");
+        const creds = await getSystemBitbucketCreds();
+        const activities = await bitbucket.listPullRequestActivities(
+          repo,
+          pullRequest.id,
+          creds ?? undefined
+        );
+        const mergeActivity = activities.find(
+          (a) => a.action === "MERGED" && a.user
+        );
+        if (mergeActivity?.user) {
+          actor = mergeActivity.user;
+        }
+      } catch {
+        // Fallback activity lookup failed or unconfigured
+      }
+    }
+
+    if (actor) {
+      const { notifyUnauthorizedMerge } = await import("@/lib/bitbucket/notify-pr-merged");
+      const fromBranch =
+        pullRequest.fromRef?.branch ??
+        (pullRequest.fromRef as { displayId?: string })?.displayId;
+      const toBranch =
+        pullRequest.toRef?.branch ??
+        (pullRequest.toRef as { displayId?: string })?.displayId;
+      const mergeAlertResult = await notifyUnauthorizedMerge({
+        repo,
+        pr: {
+          id: pullRequest.id,
+          title: pullRequest.title,
+          url: pullRequest.url,
+          fromBranch,
+          toBranch,
+        },
+        actor,
+      });
+      updates.mergeAlert = mergeAlertResult;
+    }
+  }
+
+  const fromBranch =
+    pullRequest?.fromRef?.branch ??
+    (pullRequest?.fromRef as { displayId?: string })?.displayId;
+  const toBranch =
+    pullRequest?.toRef?.branch ??
+    (pullRequest?.toRef as { displayId?: string })?.displayId;
+
+  if (fromBranch) {
+    const isMergedState =
+      pullRequest?.state === "MERGED" || webhook.eventKey === "pr:merged";
     await prisma.branchInfo.upsert({
-      where: { repo_branch: { repo, branch: pullRequest.fromRef.branch } },
+      where: { repo_branch: { repo, branch: fromBranch } },
       create: {
         repo,
-        branch: pullRequest.fromRef.branch,
-        prId: pullRequest.id ?? null,
-        prState: pullRequest.state ?? null,
-        prDestinationBranch: pullRequest.toRef?.branch ?? null,
-        merged: pullRequest.state === "MERGED",
+        branch: fromBranch,
+        prId: pullRequest?.id ?? null,
+        prState: pullRequest?.state ?? (isMergedState ? "MERGED" : null),
+        prDestinationBranch: toBranch ?? null,
+        merged: isMergedState,
         checkedAt: new Date(),
       },
       update: {
-        prId: pullRequest.id ?? null,
-        prState: pullRequest.state ?? null,
-        prDestinationBranch: pullRequest.toRef?.branch ?? null,
-        merged: pullRequest.state === "MERGED",
+        prId: pullRequest?.id ?? null,
+        prState: pullRequest?.state ?? (isMergedState ? "MERGED" : null),
+        prDestinationBranch: toBranch ?? null,
+        merged: isMergedState,
         checkedAt: new Date(),
       },
     });
-    updates.branch = pullRequest.fromRef.branch;
-    updates.prState = pullRequest.state;
+    updates.branch = fromBranch;
+    updates.prState =
+      pullRequest?.state ?? (isMergedState ? "MERGED" : undefined);
   }
   if (webhook.data?.branches) {
     for (const branch of webhook.data.branches) {

@@ -55,6 +55,7 @@ model User {
   boardPreferences UserBoardPreference[]
   boardMembershipSnapshots JiraBoardMembershipSnapshot[]
   discoveredProjects JiraProject[] @relation("DiscoveredProjects")
+  projectMembers ProjectMember[]
 
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -935,4 +936,23 @@ model ProjectPeopleField {
 
   @@id([projectKey, role])
   @@index([projectKey])
+}
+
+enum ProjectRole {
+  leader
+  member
+}
+
+model ProjectMember {
+  projectKey   String
+  userId       String
+  role         ProjectRole @default(leader)
+  assignedById String?
+  createdAt    DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectKey, userId])
+  @@index([projectKey, role])
+  @@index([userId])
 }

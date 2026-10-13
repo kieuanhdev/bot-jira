@@ -48,12 +48,13 @@ export type Permission =
   | "report.view"
   | "report.export"
   | "report.configure"
+  | "project.roles.manage"
   | "board.team";
 
 /**
  * Permission policy: every signed-in user shares one effective role for
  * release, branch, board and report actions. Only the admin-level actions
- * (user management, integrations, report configuration) remain admin-only.
+ * (user management, integrations, report configuration, project roles) remain admin-only.
  */
 export function can(session: { user?: { role?: string } } | null | undefined, perm: Permission): boolean {
   const r = roleOf(session);
@@ -74,6 +75,7 @@ export function can(session: { user?: { role?: string } } | null | undefined, pe
     case "admin.users":
     case "admin.integrations":
     case "report.configure":
+    case "project.roles.manage":
       return r === "admin";
     default:
       return false;
