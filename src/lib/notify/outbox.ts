@@ -61,6 +61,8 @@ export async function deliverNotification(
     eventId?: string;
     /** When set, the push is scheduled for this time instead of immediately. */
     scheduledAt?: Date;
+    /** Batch the Discord delivery with others in this group (see deliverToChat). */
+    chatDigestGroup?: string;
   }
 ): Promise<DeliverResult> {
   const user = await prisma.user.findUnique({
@@ -157,11 +159,16 @@ export async function deliverNotification(
     link: data.link,
     eventId: eventKey,
     scheduledAt: data.scheduledAt,
-  }).catch(() => ({ delivered: false as const }));
+    digestGroup: data.chatDigestGroup,
+  }).catch(() => ({ delivered: false as const, scheduledAt: undefined }));
+  const chatScheduledAt = chatDelivery.scheduledAt ?? data.scheduledAt;
 
   if (!pushOptedIn) {
-    if (chatDelivery.delivered) await wakeDeliveryWorker(data.scheduledAt);
+    if (chatDelivery.delivered) await wakeDeliveryWorker(chatScheduledAt);
     return { delivered: true, notificationId: notification.id };
+  }
+  if (chatDelivery.delivered && chatDelivery.scheduledAt) {
+    await wakeDeliveryWorker(chatDelivery.scheduledAt);
   }
 
   const key = dedupeKeyFor({ userId, type: data.type, eventId: eventKey });

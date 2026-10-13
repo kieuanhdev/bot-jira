@@ -2,6 +2,8 @@ import type { BbUser } from "./client";
 import {
   isSameUser,
   formatPrCommentNotification,
+  prCommentCandidates,
+  type PrCommentThread,
 } from "./branch-notification-policy";
 import {
   discoverPrJiraKeys,
@@ -30,13 +32,13 @@ export type NotifyPrCommentArgs = {
     text: string;
     author: BbUser;
   };
+  thread?: PrCommentThread;
 };
 
 /**
- * Notify the PR author, reviewers, and any Jira task assignee/watchers
- * linked to the PR branch about a new comment.
- * Excludes the comment author.
- * Sends both in-app/push notification and chat (Discord) delivery.
+ * Notify the people a PR comment concerns (see `prCommentCandidates`) plus any
+ * Jira task assignee/watchers linked to the PR branch. Excludes the comment author.
+ * Sends an in-app/push notification per comment; Discord is batched per PR.
  */
 export async function notifyPrComment(args: NotifyPrCommentArgs): Promise<{
   notifiedCount: number;
@@ -44,16 +46,13 @@ export async function notifyPrComment(args: NotifyPrCommentArgs): Promise<{
 }> {
   const { repo, pr, comment } = args;
 
-  // 1. Gather candidate recipients from PR metadata: author + reviewers
-  const candidates: BbUser[] = [];
-  if (pr.author?.user) {
-    candidates.push(pr.author.user);
-  }
-  if (pr.reviewers) {
-    for (const r of pr.reviewers) {
-      if (r.user) candidates.push(r.user);
-    }
-  }
+  // 1. Gather candidate recipients from PR metadata and the comment thread
+  const candidates = prCommentCandidates({
+    prAuthor: pr.author?.user,
+    reviewers: pr.reviewers?.flatMap((r) => (r.user ? [r.user] : [])),
+    commentAuthor: comment.author,
+    thread: args.thread,
+  });
 
   // 2. Discover related Jira tasks from PR branch name, PR title, and BranchInfo
   const jiraKeys = await discoverPrJiraKeys(repo, pr);

@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { sendPush } from "@/lib/notify/push";
 import { backoffMs } from "@/lib/notify/outbox";
-import { sendChatOutbox } from "@/lib/notify/chat-delivery";
+import {
+  buildChatDigest,
+  chatDigestGroupPrefix,
+  sendChatOutbox,
+} from "@/lib/notify/chat-delivery";
 import {
   getDeliveryAdapter,
   computeOutboxTransition,
@@ -10,6 +14,59 @@ import { env } from "../guard";
 import type { WorkerLog } from "../guard";
 
 const BATCH_SIZE = 100;
+const LEASE_MS = 120_000;
+const OUTBOX_SELECT = {
+  id: true,
+  userId: true,
+  channel: true,
+  title: true,
+  body: true,
+  link: true,
+  attemptCount: true,
+  dedupeKey: true,
+} as const;
+
+type DueRow = {
+  id: string;
+  userId: string;
+  channel: string;
+  title: string;
+  body: string;
+  link: string | null;
+  attemptCount: number;
+  dedupeKey: string | null;
+};
+
+/** Lease every other due row of a Discord digest group so it goes out as one message. */
+async function claimDigestSiblings(row: DueRow, now: Date): Promise<DueRow[]> {
+  const prefix = row.channel === "discord" ? chatDigestGroupPrefix(row.dedupeKey) : null;
+  if (!prefix) return [];
+  const candidates = await prisma.notificationOutbox.findMany({
+    where: {
+      id: { not: row.id },
+      userId: row.userId,
+      channel: "discord",
+      state: "pending",
+      dedupeKey: { startsWith: prefix },
+      OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }],
+    },
+    orderBy: { createdAt: "asc" },
+    select: OUTBOX_SELECT,
+  });
+  const claimed: DueRow[] = [];
+  for (const c of candidates) {
+    const res = await prisma.notificationOutbox.updateMany({
+      where: {
+        id: c.id,
+        state: "pending",
+        OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }],
+      },
+      data: { scheduledAt: new Date(Date.now() + LEASE_MS) },
+    });
+    if (res.count > 0) claimed.push(c);
+  }
+  return claimed;
+}
 
 /**
  * M5-04 — Notification outbox delivery.
@@ -28,7 +85,7 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
     },
     orderBy: { createdAt: "asc" },
     take: BATCH_SIZE,
-    select: { id: true, userId: true, channel: true, title: true, body: true, link: true, attemptCount: true },
+    select: OUTBOX_SELECT,
   });
 
   let sent = 0;
@@ -46,17 +103,21 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
         state: "pending",
         OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }],
       },
-      data: { scheduledAt: new Date(Date.now() + 120_000) },
+      data: { scheduledAt: new Date(Date.now() + LEASE_MS) },
     });
     if (claimed.count === 0) continue;
 
     try {
+      const siblings = await claimDigestSiblings(row, now);
+      const group = [row, ...siblings];
+      const message = siblings.length > 0 ? { ...row, ...buildChatDigest(group) } : row;
+
       const adapter = getDeliveryAdapter(row.channel, {
         push: { prisma, sendPush },
         discord: { sendChatOutbox },
       });
 
-      const outcome = await adapter.deliver(row);
+      const outcome = await adapter.deliver(message);
       const transition = computeOutboxTransition({
         item: row,
         outcome,
@@ -72,21 +133,25 @@ export async function runDeliverNotifications(): Promise<WorkerLog> {
         }).catch(() => null);
       }
 
-      await prisma.notificationOutbox.update({
-        where: { id: row.id },
-        data: {
-          state: transition.state,
-          deliveredAt: transition.deliveredAt,
-          lastError: transition.lastError,
-          ...(transition.attemptCount !== undefined ? { attemptCount: transition.attemptCount } : {}),
-          ...(transition.state === "pending" || transition.state === "failed"
-            ? { scheduledAt: transition.scheduledAt }
-            : {}),
-        },
-      });
+      const outcomeData = {
+        state: transition.state,
+        deliveredAt: transition.deliveredAt,
+        lastError: transition.lastError,
+        ...(transition.attemptCount !== undefined ? { attemptCount: transition.attemptCount } : {}),
+        ...(transition.state === "pending" || transition.state === "failed"
+          ? { scheduledAt: transition.scheduledAt }
+          : {}),
+      };
+      await prisma.notificationOutbox.update({ where: { id: row.id }, data: outcomeData });
+      if (siblings.length > 0) {
+        await prisma.notificationOutbox.updateMany({
+          where: { id: { in: siblings.map((r) => r.id) } },
+          data: outcomeData,
+        });
+      }
 
       if (transition.isTerminalSuccess) {
-        sent++;
+        sent += group.length;
       } else if (transition.isTerminalSkipped) {
         skipped++;
       } else if (transition.isExhaustedFailure) {

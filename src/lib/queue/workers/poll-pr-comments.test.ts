@@ -189,6 +189,7 @@ describe("runPollPrComments", () => {
       repo: "EPM/easy_pos",
       pr: expect.objectContaining({ id: 21 }),
       comment: expect.objectContaining({ id: 352967, text: "." }),
+      thread: { isReply: false, participants: [{ name: "duclm" }] },
     });
 
     expect(prisma.integrationCursor.upsert).toHaveBeenCalledWith({

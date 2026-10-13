@@ -9,7 +9,40 @@ export type BranchNotificationMessage = {
   link: string;
   severity: "info";
   eventKey: string;
+  /** Discord deliveries sharing this group are batched into one message. */
+  chatDigestGroup?: string;
 };
+
+/** Thread context of a PR comment; omitted when it could not be determined. */
+export type PrCommentThread = {
+  isReply: boolean;
+  /** Everyone who wrote in the thread; required to target a reply precisely. */
+  participants?: BbUser[];
+};
+
+/**
+ * Bitbucket users to notify about a PR comment (the comment author is removed later):
+ * - reply: the PR author plus everyone who wrote in that thread;
+ * - new comment by someone else: the PR author;
+ * - new comment by the PR author: the reviewers;
+ * - thread unknown: the PR author plus all reviewers.
+ */
+export function prCommentCandidates(args: {
+  prAuthor?: BbUser;
+  reviewers?: BbUser[];
+  commentAuthor: BbUser;
+  thread?: PrCommentThread;
+}): BbUser[] {
+  const { prAuthor, reviewers = [], commentAuthor, thread } = args;
+  const withAuthor = (users: BbUser[]) => (prAuthor ? [prAuthor, ...users] : users);
+
+  if (thread?.isReply && thread.participants) return withAuthor(thread.participants);
+  if (thread && !thread.isReply) {
+    if (prAuthor && isSameUser(prAuthor, commentAuthor)) return reviewers;
+    return withAuthor([]);
+  }
+  return withAuthor(reviewers);
+}
 
 /** Normalize username or email for safe comparison. */
 export function norm(str?: string | null): string {
@@ -91,7 +124,8 @@ export function formatPrCommentNotification(
   const title = `Bình luận mới trên PR #${pr.id}${prTitle ? `: ${prTitle.trim()}` : ` (${repo})`}`;
   const bodyText = `${authorDisplayName}: ${comment.text.slice(0, 200)}`;
   const link = pr.url || (pr.branch ? `/branches?q=${encodeURIComponent(pr.branch)}` : "/branches");
-  const eventKey = `bb-pr-comment:${repo}:${pr.id}:${comment.id}`;
+  const chatDigestGroup = `bb-pr-comment:${repo}:${pr.id}`;
+  const eventKey = `${chatDigestGroup}:${comment.id}`;
 
   return {
     type: "comment",
@@ -100,6 +134,7 @@ export function formatPrCommentNotification(
     link,
     severity: "info",
     eventKey,
+    chatDigestGroup,
   };
 }
 
@@ -146,7 +181,8 @@ export function formatCommitCommentNotification(
         }`
       : "/branches";
 
-  const eventKey = `bb-commit-comment:${repo}:${commit.id}:${comment.id}`;
+  const chatDigestGroup = `bb-commit-comment:${repo}:${commit.id}`;
+  const eventKey = `${chatDigestGroup}:${comment.id}`;
 
   return {
     type: "comment",
@@ -155,5 +191,6 @@ export function formatCommitCommentNotification(
     link,
     severity: "info",
     eventKey,
+    chatDigestGroup,
   };
 }

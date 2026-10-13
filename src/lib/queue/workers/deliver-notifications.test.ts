@@ -24,7 +24,10 @@ vi.mock("@/lib/prisma", () => ({
     },
   },
 }));
-vi.mock("@/lib/notify/chat-delivery", () => ({ sendChatOutbox: mocks.send }));
+vi.mock("@/lib/notify/chat-delivery", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/notify/chat-delivery")>()),
+  sendChatOutbox: mocks.send,
+}));
 vi.mock("@/lib/notify/outbox", () => ({ backoffMs: () => 1000 }));
 vi.mock("@/lib/queue/enqueue", () => ({ enqueueNotificationDelivery: mocks.enqueue }));
 vi.mock("@/lib/notify/push", () => ({ sendPush: mocks.sendPush }));
@@ -179,5 +182,35 @@ describe("notification delivery", () => {
         }),
       })
     );
+  });
+
+  it("sends due rows of one digest group as a single Discord message", async () => {
+    const key = (id: number) =>
+      `user-1:discord:comment:digest:bb-pr-comment:CICB/app:901|bb-pr-comment:CICB/app:901:${id}`;
+    const first = { ...row, id: "d-1", title: "Bình luận mới trên PR #901", body: "lead: a", dedupeKey: key(1) };
+    const second = { ...row, id: "d-2", title: "Bình luận mới trên PR #901", body: "lead: b", dedupeKey: key(2) };
+    mocks.findMany
+      .mockResolvedValueOnce([first, second]) // due rows
+      .mockResolvedValueOnce([second]); // siblings of d-1
+    // d-1 lease, d-2 sibling lease, then d-2's own lease attempt finds it taken
+    mocks.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+
+    const result = await runDeliverNotifications();
+
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+    const sentMsg = mocks.send.mock.calls[0][0];
+    expect(sentMsg.title).toBe("Bình luận mới trên PR #901 (2 bình luận)");
+    expect(sentMsg.body).toBe("• lead: a\n• lead: b");
+    expect(mocks.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: { in: ["d-2"] } },
+        data: expect.objectContaining({ state: "sent" }),
+      })
+    );
+    expect(result.stats?.sent).toBe(2);
   });
 });

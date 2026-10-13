@@ -128,6 +128,7 @@ describe("notifyPrComment", () => {
         link: "https://git.local/epm/easy_pos/pull-requests/42",
         severity: "info",
         eventKey: "bb-pr-comment:EPM/easy_pos:42:101",
+        chatDigestGroup: "bb-pr-comment:EPM/easy_pos:42",
       });
 
       expect(result.notifiedCount).toBe(1);

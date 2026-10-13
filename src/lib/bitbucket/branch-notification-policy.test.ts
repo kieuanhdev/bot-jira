@@ -6,6 +6,7 @@ import {
   isUserAuthor,
   formatPrCommentNotification,
   formatCommitCommentNotification,
+  prCommentCandidates,
 } from "./branch-notification-policy";
 import { encrypt } from "@/lib/crypto";
 
@@ -118,6 +119,7 @@ describe("branch-notification-policy", () => {
         link: "https://bitbucket.corp/projects/PROJECT/repos/repo_slug/pull-requests/42",
         severity: "info",
         eventKey: "bb-pr-comment:PROJECT/repo_slug:42:101",
+        chatDigestGroup: "bb-pr-comment:PROJECT/repo_slug:42",
       });
     });
 
@@ -181,6 +183,7 @@ describe("branch-notification-policy", () => {
         link: "https://bitbucket.corp/projects/PROJECT/repos/repo_slug/commits/1234567890abcdef1234567890abcdef12345678#src%2Finvoice.ts",
         severity: "info",
         eventKey: "bb-commit-comment:PROJECT/repo_slug:1234567890abcdef1234567890abcdef12345678:555",
+        chatDigestGroup: "bb-commit-comment:PROJECT/repo_slug:1234567890abcdef1234567890abcdef12345678",
       });
     });
 
@@ -221,5 +224,43 @@ describe("branch-notification-policy", () => {
       expect(result.title).toBe(`Bình luận mới trên commit [1234567890]: ${longFirstLine.slice(0, 80)} (PRJ/rep)`);
       expect(result.body).toBe(`bob (main.go): ${"Y".repeat(200)}`);
     });
+  });
+});
+
+describe("prCommentCandidates", () => {
+  const author = { name: "ngocdv" };
+  const lead = { name: "vunt_mb" };
+  const other = { name: "hungtq_mb" };
+  const names = (users: Array<{ name: string }>) => users.map((u) => u.name);
+
+  it("notifies everyone in the thread on a reply, not uninvolved reviewers", () => {
+    expect(
+      names(prCommentCandidates({
+        prAuthor: author, reviewers: [lead, other], commentAuthor: author,
+        thread: { isReply: true, participants: [lead, author] },
+      }))
+    ).toEqual(["ngocdv", "vunt_mb", "ngocdv"]);
+  });
+
+  it("notifies the PR author about a new comment from a reviewer", () => {
+    expect(
+      names(prCommentCandidates({
+        prAuthor: author, reviewers: [lead, other], commentAuthor: lead, thread: { isReply: false },
+      }))
+    ).toEqual(["ngocdv"]);
+  });
+
+  it("notifies reviewers about a new comment from the PR author", () => {
+    expect(
+      names(prCommentCandidates({
+        prAuthor: author, reviewers: [lead, other], commentAuthor: author, thread: { isReply: false },
+      }))
+    ).toEqual(["vunt_mb", "hungtq_mb"]);
+  });
+
+  it("falls back to author plus reviewers when the thread is unknown", () => {
+    expect(
+      names(prCommentCandidates({ prAuthor: author, reviewers: [lead], commentAuthor: other }))
+    ).toEqual(["ngocdv", "vunt_mb"]);
   });
 });

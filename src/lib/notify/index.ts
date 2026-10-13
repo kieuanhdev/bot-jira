@@ -29,6 +29,8 @@ export type NotifyInput = {
   eventKey?: string;
   /** Backward-compatible alias for eventKey */
   eventId?: string;
+  /** Batch Discord deliveries sharing this group; eventKey must be `${group}:<id>`. */
+  chatDigestGroup?: string;
 };
 
 /**
@@ -47,6 +49,7 @@ export async function notifyUser(userId: string, data: NotifyInput) {
     severity: data.severity,
     eventKey: data.eventKey ?? data.eventId,
     eventId: data.eventId ?? data.eventKey,
+    chatDigestGroup: data.chatDigestGroup,
   });
 
   if (result.notificationId) {

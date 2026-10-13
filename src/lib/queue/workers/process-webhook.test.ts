@@ -72,7 +72,9 @@ vi.mock("@/lib/events/store", () => ({
 vi.mock("@/lib/bitbucket/client", () => ({
   bitbucket: {
     getPullRequest: vi.fn(),
+    listPullRequestActivities: vi.fn(),
   },
+  getSystemBitbucketCreds: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("@/lib/bitbucket/notify-pr-comment", () => ({
@@ -165,7 +167,31 @@ describe("process-webhook dispatcher", () => {
 describe("process-webhook for Bitbucket", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(guardModule, "hasBitbucketConfig").mockReturnValue(true);
+    // Webhooks only need the shared secret; no system Bitbucket token.
+    vi.spyOn(guardModule, "hasBitbucketConfig").mockReturnValue(false);
+  });
+
+  it("notifies on pr:comment:added without a system Bitbucket token", async () => {
+    vi.mocked(prisma.integrationEvent.findUnique).mockResolvedValue(
+      eventRow({
+        eventKey: "pr:comment:added",
+        pullRequest: {
+          id: 901,
+          title: "[CICM-911] Confirm screen",
+          author: { user: { name: "ngocdv" } },
+          reviewers: [{ user: { name: "vunt_mb" } }],
+          toRef: { repository: { slug: "mobile-cic-2021", project: { key: "CICB" } } },
+        },
+        comment: { id: 373546, text: "ok?", author: { name: "vunt_mb" } },
+      })
+    );
+
+    const result = await runProcessWebhook({ source: "bitbucket", eventId: "ev-1" });
+
+    expect(result.ok).toBe(true);
+    expect(result.stats).toMatchObject({ repo: "CICB/mobile-cic-2021", notifiedCount: 1 });
+    expect(result.stats).not.toHaveProperty("skipped");
+    expect(notifyPrComment).toHaveBeenCalledTimes(1);
   });
 
   it("handles pr:comment:added webhook event and notifies reviewers", async () => {
@@ -194,7 +220,46 @@ describe("process-webhook for Bitbucket", () => {
       repo: "EPM/app-core",
       pr: expect.objectContaining({ id: 99, title: "Optimize queries" }),
       comment: expect.objectContaining({ id: 888, text: "Can we use an index here?" }),
+      thread: { isReply: false },
     });
+  });
+
+  it("targets the thread participants when the comment is a reply", async () => {
+    const { bitbucket } = await import("@/lib/bitbucket/client");
+    vi.mocked(bitbucket.listPullRequestActivities).mockResolvedValue([
+      {
+        id: 1,
+        action: "COMMENTED",
+        comment: {
+          id: 500,
+          text: "check null here",
+          author: { name: "vunt_mb" },
+          comments: [{ id: 501, text: "fixed", author: { name: "ngocdv" } }],
+        },
+      },
+    ]);
+    vi.mocked(prisma.integrationEvent.findUnique).mockResolvedValue(
+      eventRow({
+        eventKey: "pr:comment:added",
+        commentParentId: 500,
+        pullRequest: {
+          id: 901,
+          author: { user: { name: "ngocdv" } },
+          reviewers: [{ user: { name: "vunt_mb" } }],
+          toRef: { repository: { slug: "mobile-cic-2021", project: { key: "CICB" } } },
+        },
+        comment: { id: 501, text: "fixed", author: { name: "ngocdv" } },
+      })
+    );
+
+    const result = await runProcessWebhook({ source: "bitbucket", eventId: "ev-1" });
+
+    expect(result.stats).toMatchObject({ isReply: true });
+    expect(notifyPrComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        thread: { isReply: true, participants: [{ name: "vunt_mb" }, { name: "ngocdv" }] },
+      })
+    );
   });
 
   it("handles repo:comment:added webhook event for commit comments and notifies commit author", async () => {

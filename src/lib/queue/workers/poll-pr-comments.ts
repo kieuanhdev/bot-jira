@@ -1,22 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { bitbucket, isBitbucketPermissionError, type BbPrActivity, type BbPrComment, type BbPullRequest } from "@/lib/bitbucket/client";
 import { notifyPrComment } from "@/lib/bitbucket/notify-pr-comment";
+import { findThreadRoot, flattenCommentTree, threadAuthors } from "@/lib/bitbucket/comment-thread";
 import { jiraUsernameAliases } from "@/lib/user-creds";
 import { safeDecrypt } from "@/lib/crypto";
 import { guard } from "../guard";
 import type { WorkerLog } from "../guard";
 
 function extractComments(activity: BbPrActivity): BbPrComment[] {
-  const result: BbPrComment[] = [];
-  if (activity.comment) {
-    result.push(activity.comment);
-    if (Array.isArray(activity.comment.comments)) {
-      for (const child of activity.comment.comments) {
-        result.push(child);
-      }
-    }
-  }
-  return result;
+  return activity.comment ? flattenCommentTree(activity.comment) : [];
 }
 
 import { extractJiraKeys } from "@/lib/bitbucket/branch-linker";
@@ -186,6 +178,7 @@ export async function runPollPrComments(): Promise<WorkerLog> {
               if (commentTime > baselineCursor) {
                 nextCursor = Math.max(nextCursor, commentTime);
                 if (!isInitialRun) {
+                  const root = findThreadRoot(activities, comment.id);
                   const res = await notifyPrComment({
                     repo,
                     pr: {
@@ -197,6 +190,9 @@ export async function runPollPrComments(): Promise<WorkerLog> {
                       reviewers: pr.reviewers,
                     },
                     comment,
+                    thread: root
+                      ? { isReply: root.id !== comment.id, participants: threadAuthors(root) }
+                      : undefined,
                   });
                   newCommentsNotified += res.notifiedCount;
                 }
