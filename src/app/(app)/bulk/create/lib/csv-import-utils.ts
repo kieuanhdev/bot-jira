@@ -3,6 +3,7 @@ import {
   type BulkCreateProjectMetadata,
   type BulkCreateRowInput,
 } from "@/lib/bulk/create-types";
+import { extractIdFromDropdownValue } from "@/lib/bulk/excel-schema";
 
 export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 export const ALLOWED_EXTENSIONS = [".xlsx", ".csv", ".tsv", ".txt"] as const;
@@ -67,11 +68,14 @@ export function resolveCsvNamesToIds(
   if (!metadata) return items;
   const resolve = (value: string | undefined, options: Array<{ id: string; name: string }>) => {
     if (!value) return value;
-    const v = value.trim().toLowerCase();
+    // Accept the template's "Name [ID]" dropdown format as well as bare IDs/names.
+    const { name, id } = extractIdFromDropdownValue(value);
+    const v = name.toLowerCase();
     return (
+      (id ? options.find((o) => o.id === id)?.id : undefined) ??
       options.find((o) => o.id === value.trim())?.id ??
       options.find((o) => o.name.trim().toLowerCase() === v)?.id ??
-      value
+      (id ?? value)
     );
   };
   return items.map((item) => ({
