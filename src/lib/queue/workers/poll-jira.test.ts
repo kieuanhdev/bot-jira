@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   notifyComment: vi.fn(),
   getSystemJiraAuth: vi.fn(),
   projectFindUnique: vi.fn(),
+  projectFindMany: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -44,6 +45,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     jiraProject: {
       findUnique: mocks.projectFindUnique,
+      findMany: mocks.projectFindMany,
     },
   },
 }));
@@ -106,6 +108,9 @@ describe("syncProject", () => {
     });
     mocks.issueFindUnique.mockResolvedValue(null);
     mocks.issueFindMany.mockResolvedValue([]);
+    mocks.projectFindMany.mockResolvedValue([
+      { key: "EPM", active: true, syncEnabled: true, syncFeatures: {} },
+    ]);
     mocks.getProjectStatuses.mockResolvedValue([]);
     mocks.issueUpdateMany.mockResolvedValue({ count: 2 });
     mocks.upsertJiraIssue.mockResolvedValue({ applied: true, data: { status: "In Progress" } });

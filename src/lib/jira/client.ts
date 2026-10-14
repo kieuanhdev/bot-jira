@@ -73,8 +73,14 @@ function knownPointFieldIds(): string[] {
   return [...configuredPointField(), ...knownPointFields].map((field) => field.id);
 }
 
-export function jiraIssueFields(extraFields: string[] = []): string {
-  return [...BASE_ISSUE_FIELDS, ...extraFields, ...knownPointFieldIds(), ...getEpicLinkFieldIds()]
+export function jiraIssueFields(
+  extraFields: string[] = [],
+  options?: { includeComments?: boolean }
+): string {
+  const base = options?.includeComments === false
+    ? BASE_ISSUE_FIELDS.filter((f) => f !== "comment")
+    : BASE_ISSUE_FIELDS;
+  return [...base, ...extraFields, ...knownPointFieldIds(), ...getEpicLinkFieldIds()]
     .filter(Boolean)
     .filter((field, index, fields) => fields.indexOf(field) === index)
     .join(",");

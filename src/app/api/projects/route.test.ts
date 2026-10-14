@@ -94,6 +94,17 @@ describe("/api/projects", () => {
         openCount: 5,
         dataState: "ready",
         syncEnabled: true,
+        features: {
+          comments: true,
+          workflow: true,
+          peopleFields: true,
+          deletions: true,
+          devStatus: true,
+          aiScore: true,
+          staleDetect: true,
+          reportSnapshots: true,
+          notifications: true,
+        },
       });
       expect(data.items[1]).toEqual({
         key: "NEW",
@@ -102,6 +113,17 @@ describe("/api/projects", () => {
         openCount: 0,
         dataState: "syncing_issues",
         syncEnabled: true,
+        features: {
+          comments: true,
+          workflow: true,
+          peopleFields: true,
+          deletions: true,
+          devStatus: true,
+          aiScore: true,
+          staleDetect: true,
+          reportSnapshots: true,
+          notifications: true,
+        },
       });
     });
   });

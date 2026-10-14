@@ -1,3 +1,4 @@
+import type { SyncFeature } from "@/lib/jira/sync-features";
 import type { JiraSyncClient, JiraSyncDependencies, LoadedJiraSync } from "./types";
 import { safeError } from "./types";
 
@@ -49,6 +50,7 @@ export async function finalizeSync(
     exhaustedAllPages: boolean;
     seenKeys: Set<string>;
     signal?: AbortSignal;
+    features?: Record<SyncFeature, boolean>;
   },
   dependencies: Pick<
     JiraSyncDependencies,
@@ -77,13 +79,16 @@ export async function finalizeSync(
   loaded.stats.cursorAdvanced = cursorAdvanced;
   loaded.stats.exhaustedAllPages = input.exhaustedAllPages;
 
-  await refreshWorkflow(
-    input.projectKey,
-    input.jira,
-    loaded.stats,
-    dependencies,
-    renewAndAssert
-  );
+  const syncWorkflow = input.features?.workflow ?? true;
+  if (syncWorkflow) {
+    await refreshWorkflow(
+      input.projectKey,
+      input.jira,
+      loaded.stats,
+      dependencies,
+      renewAndAssert
+    );
+  }
   await renewAndAssert();
 
   const finalized = await dependencies.finalizeRun({

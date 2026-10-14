@@ -6,6 +6,7 @@ export type ProjectCatalogItem = {
   name: string;
   active: boolean;
   syncEnabled: boolean;
+  syncFeatures?: unknown;
   bootstrapState?: string | null;
   lastBootstrapAt?: Date | null;
   lastBootstrapError?: string | null;
@@ -57,6 +58,7 @@ export async function listActiveProjects(): Promise<ProjectCatalogItem[]> {
         name: true,
         active: true,
         syncEnabled: true,
+        syncFeatures: true,
         bootstrapState: true,
         lastBootstrapAt: true,
         lastBootstrapError: true,

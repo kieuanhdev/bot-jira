@@ -121,12 +121,17 @@ export async function parseCommentsForBranches(): Promise<{ scanned: number; par
     orderBy: { createdAt: "asc" },
   });
 
+  const { loadSyncPolicy } = await import("@/lib/jira/sync-features");
+  const policy = await loadSyncPolicy();
+
   let parsed = 0;
   let upserted = 0;
 
   for (const comment of comments) {
     const state = parseCommentForBranch(comment.body, comment.jiraKey);
     if (!state) continue;
+    const projectKey = state.jiraKey.split("-")[0].toUpperCase();
+    if (!policy.isEnabled(projectKey, "devStatus")) continue;
     parsed++;
 
     // Determine the repo: use a placeholder since we don't know the repo

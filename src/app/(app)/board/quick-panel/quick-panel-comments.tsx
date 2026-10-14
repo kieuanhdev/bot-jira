@@ -26,12 +26,14 @@ interface QuickPanelCommentsProps {
   description?: string | null;
   comments?: CommentItem[];
   onAddComment: (body: string) => Promise<void>;
+  commentsDisabled?: boolean;
 }
 
 export function QuickPanelComments({
   description,
   comments = [],
   onAddComment,
+  commentsDisabled = false,
 }: QuickPanelCommentsProps) {
   const [commentDraft, setCommentDraft] = useState("");
   const [commenting, setCommenting] = useState(false);
@@ -64,6 +66,11 @@ export function QuickPanelComments({
       </Section>
 
       <Section title={`Comments (${commentCount})`}>
+        {commentsDisabled && (
+          <div className="mb-2 rounded-md border border-amber-300/40 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-300">
+            Bình luận không được đồng bộ cho dự án này.
+          </div>
+        )}
         <div className="flex gap-2">
           <textarea
             value={commentDraft}

@@ -19,13 +19,20 @@ export type ProjectPeopleFieldsMap = {
   tester?: string | null;
 };
 
-export async function jiraIssueFieldsForProject(projectKey: string): Promise<string> {
-  const fields = await getProjectPeopleFields(projectKey).catch(() => ({
-    reporter: DEFAULT_PEOPLE_FIELDS.reporter,
-    approver: DEFAULT_PEOPLE_FIELDS.approver,
-    tester: DEFAULT_PEOPLE_FIELDS.tester,
-  }));
-  return jiraIssueFields(Object.values(fields).filter((value): value is string => Boolean(value)));
+export async function jiraIssueFieldsForProject(
+  projectKey: string,
+  options?: { includeComments?: boolean; includePeople?: boolean }
+): Promise<string> {
+  let extraFields: string[] = [];
+  if (options?.includePeople !== false) {
+    const fields = await getProjectPeopleFields(projectKey).catch(() => ({
+      reporter: DEFAULT_PEOPLE_FIELDS.reporter,
+      approver: DEFAULT_PEOPLE_FIELDS.approver,
+      tester: DEFAULT_PEOPLE_FIELDS.tester,
+    }));
+    extraFields = Object.values(fields).filter((value): value is string => Boolean(value));
+  }
+  return jiraIssueFields(extraFields, options);
 }
 
 /**

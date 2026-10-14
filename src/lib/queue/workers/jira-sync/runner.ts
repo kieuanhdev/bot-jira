@@ -1,3 +1,4 @@
+import type { SyncFeature } from "@/lib/jira/sync-features";
 import { JiraSyncAbortedError, SyncAlreadyRunningError, SyncLeaseLostError } from "../../jira-sync-lease";
 import { fetchPage } from "./fetch-page";
 import { finalizeSync } from "./finalize-sync";
@@ -20,6 +21,8 @@ export async function runJiraSyncPipeline(
     leaseTtlSeconds: number;
     jira: JiraSyncClient;
     signal?: AbortSignal;
+    features?: Record<SyncFeature, boolean>;
+    suppressNotifications?: boolean;
   },
   dependencies: JiraSyncDependencies
 ): Promise<ProjectStats> {
@@ -45,7 +48,11 @@ export async function runJiraSyncPipeline(
   const seenKeys = new Set<string>();
 
   try {
-    const peopleFields = await dependencies.loadPeopleFields(input.projectKey).catch(() => null);
+    const includePeople = input.features?.peopleFields ?? true;
+    const includeComments = input.features?.comments ?? true;
+    const peopleFields = includePeople
+      ? await dependencies.loadPeopleFields(input.projectKey).catch(() => null)
+      : null;
     const extraPeopleFields = peopleFields
       ? Object.values(peopleFields).filter((value): value is string => Boolean(value))
       : [];
@@ -58,7 +65,8 @@ export async function runJiraSyncPipeline(
         JIRA_SYNC_PAGE_SIZE,
         extraPeopleFields,
         input.signal,
-        renewAndAssert
+        renewAndAssert,
+        { includeComments }
       );
       loaded.stats.pages++;
       const persisted = await persistPage(
@@ -69,6 +77,8 @@ export async function runJiraSyncPipeline(
           seenKeys,
           newestUpdatedAt,
           signal: input.signal,
+          features: input.features,
+          suppressNotifications: input.suppressNotifications,
         },
         dependencies,
         renewAndAssert
@@ -104,6 +114,7 @@ export async function runJiraSyncPipeline(
         exhaustedAllPages,
         seenKeys,
         signal: input.signal,
+        features: input.features,
       },
       dependencies,
       renewAndAssert

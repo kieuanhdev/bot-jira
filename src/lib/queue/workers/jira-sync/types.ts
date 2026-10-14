@@ -14,6 +14,7 @@ export type PollJiraProjectJobData = {
   source: JiraSyncSource;
   requestedBy?: string;
   requestedAt: string;
+  suppressNotifications?: boolean;
 };
 
 export type PollJiraJobData = {

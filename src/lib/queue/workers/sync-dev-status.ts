@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { env, jiraProjectList } from "@/lib/env";
-import { listSyncDisabledProjectKeys } from "@/lib/jira/project-catalog";
 import { getSystemJiraAuth } from "@/lib/jira/client";
 import { syncJiraDevStatusForIssue } from "@/lib/jira/dev-status";
 import type { WorkerLog } from "../guard";
@@ -36,7 +35,9 @@ export async function runSyncDevStatus(): Promise<WorkerLog> {
   });
   const after = cursorRow?.cursor ?? "";
 
-  const syncDisabled = [...(await listSyncDisabledProjectKeys())];
+  const { loadSyncPolicy } = await import("@/lib/jira/sync-features");
+  const policy = await loadSyncPolicy();
+  const syncDisabled = policy.disabledKeys("devStatus");
   const inScope = {
     deletedAt: null,
     ...(jiraProjectList.length > 0 ? { projectKey: { in: jiraProjectList } } : {}),

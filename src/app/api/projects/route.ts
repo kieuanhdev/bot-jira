@@ -56,6 +56,8 @@ export async function GET() {
 
   const counts = new Map(grouped.map((row) => [row.projectKey, row._count._all]));
 
+  const { resolveSyncFeatures } = await import("@/lib/jira/sync-features");
+
   const items = activeCatalog.map((project) => ({
     key: project.key,
     name: project.name || project.key,
@@ -63,6 +65,7 @@ export async function GET() {
     openCount: counts.get(project.key) ?? 0,
     dataState: project.bootstrapState ?? "ready",
     syncEnabled: project.syncEnabled,
+    features: resolveSyncFeatures(project.syncFeatures),
   }));
 
   const dur = Date.now() - reqStart;

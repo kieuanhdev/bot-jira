@@ -865,6 +865,7 @@ model JiraProject {
   active             Boolean   @default(true)
   source             String    // bootstrap | user_added | admin | migration
   syncEnabled        Boolean   @default(true)
+  syncFeatures       Json      @default("{}")
   discoveredById     String?
   lastValidatedAt    DateTime?
   lastValidationCode String?

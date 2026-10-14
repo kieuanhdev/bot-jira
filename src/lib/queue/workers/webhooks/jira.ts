@@ -34,34 +34,52 @@ type JiraWebhookPayload = {
       };
 };
 
+import { loadSyncPolicy, type SyncPolicy } from "@/lib/jira/sync-features";
+
 /** Refresh a single Jira issue and its comments into the shared cache. */
-async function refreshIssue(key: string, authorName?: string | null): Promise<string[]> {
+async function refreshIssue(
+  key: string,
+  authorName?: string | null,
+  policy?: SyncPolicy
+): Promise<string[]> {
+  const projectKey = key.split("-")[0].toUpperCase();
+  const effectivePolicy = policy ?? (await loadSyncPolicy());
+  const syncComments = effectivePolicy.isEnabled(projectKey, "comments");
+  const shouldNotify = effectivePolicy.isEnabled(projectKey, "notifications");
+
   const previous = await prisma.issueCache.findUnique({ where: { jiraKey: key } });
   const issue = await jira.getIssue(
     key,
-    await jiraIssueFieldsForProject(key.split("-")[0])
+    await jiraIssueFieldsForProject(projectKey, { includeComments: syncComments })
   );
   const { applied, data: current } = await upsertJiraIssue(issue);
-  if (applied) {
+  if (applied && shouldNotify) {
     await notifyWatchersOfIssueChange(
       previous,
       { jiraKey: key, ...current },
       { authorName }
     ).catch(() => null);
   }
-  const { newComments } = await upsertJiraCommentsWithNew(
-    key,
-    await jira.getComments(key)
-  );
-  for (const comment of newComments) {
-    await notifyWatchersOfComment(
+
+  if (syncComments) {
+    const { newComments } = await upsertJiraCommentsWithNew(
       key,
-      comment.author,
-      comment.body,
-      comment.id
+      await jira.getComments(key)
     );
+    if (shouldNotify) {
+      for (const comment of newComments) {
+        await notifyWatchersOfComment(
+          key,
+          comment.author,
+          comment.body,
+          comment.id
+        );
+      }
+    }
+    return newComments.map((comment) => comment.id);
   }
-  return newComments.map((comment) => comment.id);
+
+  return [];
 }
 
 export async function handleJiraWebhook(
@@ -89,8 +107,11 @@ export async function handleJiraWebhook(
   }
   // Admin-disabled projects keep their cached data frozen, webhooks included.
   const syncDisabled = await listSyncDisabledProjectKeys();
+  const projectKey = key.split("-")[0].toUpperCase();
   const isSyncDisabled = (issueKey: string) => syncDisabled.has(issueKey.split("-")[0].toUpperCase());
   if (isSyncDisabled(key)) return { skipped: true, reason: "sync_disabled" };
+
+  const policy = await loadSyncPolicy();
 
   if (eventName === "jira:issue_deleted") {
     const deleted = await markIssuesDeleted([key]);
@@ -98,13 +119,18 @@ export async function handleJiraWebhook(
   }
 
   if (eventName === "jira:issue_commented" || Boolean(webhook.comment?.id)) {
+    if (!policy.isEnabled(projectKey, "comments")) {
+      return { skipped: true, reason: "comments_sync_disabled" };
+    }
+
+    const shouldNotify = policy.isEnabled(projectKey, "notifications");
     const previous = await prisma.issueCache.findUnique({ where: { jiraKey: key } });
     const issue = await jira.getIssue(
       key,
-      await jiraIssueFieldsForProject(key.split("-")[0])
+      await jiraIssueFieldsForProject(projectKey, { includeComments: true })
     );
     const { applied, data: current } = await upsertJiraIssue(issue);
-    if (applied) {
+    if (applied && shouldNotify) {
       await notifyWatchersOfIssueChange(
         previous,
         { jiraKey: key, ...current },
@@ -115,19 +141,21 @@ export async function handleJiraWebhook(
       key,
       await jira.getComments(key)
     );
-    for (const comment of newComments) {
-      await notifyWatchersOfComment(
-        comment.jiraKey,
-        comment.author,
-        comment.body,
-        comment.id
-      ).catch(() => null);
+    if (shouldNotify) {
+      for (const comment of newComments) {
+        await notifyWatchersOfComment(
+          comment.jiraKey,
+          comment.author,
+          comment.body,
+          comment.id
+        ).catch(() => null);
+      }
     }
     return { refreshed: key, newComments: newComments.length };
   }
 
   try {
-    await refreshIssue(key, authorName);
+    await refreshIssue(key, authorName, policy);
   } catch (error) {
     if (isJiraNotFound(error)) {
       return { deleted: key, rows: await markIssuesDeleted([key]) };

@@ -2,6 +2,14 @@ import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
 import { normalizeProjectKey, setProjectSyncEnabled } from "@/lib/jira/project-catalog";
 import { enqueueJiraDispatch, enqueueJiraProjectSync } from "@/lib/queue/boss";
+import {
+  ALL_SYNC_FEATURES,
+  derivePreset,
+  requiresBackfill,
+  resolveSyncFeatures,
+  type SyncFeature,
+  type SyncPreset,
+} from "@/lib/jira/sync-features";
 
 export type AdminSyncState = "disabled" | "running" | "failed" | "ok" | "never";
 
@@ -10,6 +18,8 @@ export type AdminProjectSyncRow = {
   name: string;
   source: string;
   syncEnabled: boolean;
+  features: Record<SyncFeature, boolean>;
+  preset: SyncPreset;
   bootstrapState: string | null;
   issueCount: number;
   state: AdminSyncState;
@@ -53,7 +63,14 @@ export async function listAdminProjectSync(): Promise<AdminProjectSyncRow[]> {
   const projects = await prisma.jiraProject.findMany({
     where: { active: true },
     orderBy: [{ key: "asc" }],
-    select: { key: true, name: true, source: true, syncEnabled: true, bootstrapState: true },
+    select: {
+      key: true,
+      name: true,
+      source: true,
+      syncEnabled: true,
+      syncFeatures: true,
+      bootstrapState: true,
+    },
   });
   const keys = projects.map((p) => p.key);
   const [cursors, counts] = await Promise.all([
@@ -80,11 +97,15 @@ export async function listAdminProjectSync(): Promise<AdminProjectSyncRow[]> {
 
   return projects.map((p) => {
     const cursor = cursorByKey.get(p.key) ?? null;
+    const features = resolveSyncFeatures(p.syncFeatures);
+    const preset = derivePreset(features);
     return {
       key: p.key,
       name: p.name || p.key,
       source: p.source,
       syncEnabled: p.syncEnabled,
+      features,
+      preset,
       bootstrapState: p.bootstrapState,
       issueCount: countByKey.get(p.key) ?? 0,
       state: deriveSyncState(p.syncEnabled, cursor),
@@ -155,4 +176,131 @@ export async function toggleAllProjectSync(enabled: boolean, actor: Actor) {
     await enqueueJiraDispatch({ source: "admin", requestedBy: actor.id }).catch(() => null);
   }
   return { changed: keys };
+}
+
+/** Update granular sync features for one project. */
+export async function updateProjectSyncFeatures(
+  key: string,
+  featureUpdates: Partial<Record<SyncFeature, boolean>>,
+  actor: Actor
+): Promise<{
+  key: string;
+  syncEnabled: boolean;
+  features: Record<SyncFeature, boolean>;
+  preset: SyncPreset;
+  backfillJobId: string | null;
+} | null> {
+  const projectKey = normalizeProjectKey(key);
+  const existing = await prisma.jiraProject.findUnique({
+    where: { key: projectKey },
+    select: { key: true, syncEnabled: true, syncFeatures: true },
+  });
+  if (!existing) return null;
+
+  const beforeFeatures = resolveSyncFeatures(existing.syncFeatures);
+  const afterFeatures: Record<SyncFeature, boolean> = {
+    ...beforeFeatures,
+    ...featureUpdates,
+  };
+  const preset = derivePreset(afterFeatures);
+
+  await prisma.jiraProject.update({
+    where: { key: projectKey },
+    data: { syncFeatures: afterFeatures },
+  });
+
+  const diff: Record<string, { before: boolean; after: boolean }> = {};
+  for (const f of ALL_SYNC_FEATURES) {
+    if (beforeFeatures[f] !== afterFeatures[f]) {
+      diff[f] = { before: beforeFeatures[f], after: afterFeatures[f] };
+    }
+  }
+
+  if (Object.keys(diff).length > 0) {
+    await audit({
+      actorId: actor.id,
+      actorEmail: actor.email ?? null,
+      action: "project.sync_features_update",
+      source: "web",
+      target: projectKey,
+      before: { features: beforeFeatures },
+      after: { features: afterFeatures, diff },
+    });
+  }
+
+  let backfillJobId: string | null = null;
+  if (requiresBackfill(beforeFeatures, afterFeatures) && existing.syncEnabled) {
+    backfillJobId = await enqueueJiraProjectSync({
+      projectKey,
+      full: true,
+      source: "admin",
+      requestedBy: actor.id,
+      suppressNotifications: true,
+    }).catch(() => null);
+  }
+
+  return {
+    key: projectKey,
+    syncEnabled: existing.syncEnabled,
+    features: afterFeatures,
+    preset,
+    backfillJobId,
+  };
+}
+
+/** Update sync features or apply preset for multiple projects at once. */
+export async function bulkUpdateProjectSyncFeatures(
+  keys: string[],
+  featureUpdates: Partial<Record<SyncFeature, boolean>>,
+  actor: Actor
+): Promise<{
+  changed: string[];
+  backfillJobCount: number;
+}> {
+  const cleanKeys = keys.map(normalizeProjectKey).filter(Boolean);
+  if (cleanKeys.length === 0) return { changed: [], backfillJobCount: 0 };
+
+  const existingProjects = await prisma.jiraProject.findMany({
+    where: { key: { in: cleanKeys }, active: true },
+    select: { key: true, syncEnabled: true, syncFeatures: true },
+  });
+
+  const changed: string[] = [];
+  let backfillJobCount = 0;
+
+  for (const p of existingProjects) {
+    const beforeFeatures = resolveSyncFeatures(p.syncFeatures);
+    const afterFeatures = { ...beforeFeatures, ...featureUpdates };
+
+    await prisma.jiraProject.update({
+      where: { key: p.key },
+      data: { syncFeatures: afterFeatures },
+    });
+    changed.push(p.key);
+
+    if (requiresBackfill(beforeFeatures, afterFeatures) && p.syncEnabled) {
+      const jobId = await enqueueJiraProjectSync({
+        projectKey: p.key,
+        full: true,
+        source: "admin",
+        requestedBy: actor.id,
+        suppressNotifications: true,
+      }).catch(() => null);
+      if (jobId) backfillJobCount++;
+    }
+  }
+
+  if (changed.length > 0) {
+    await audit({
+      actorId: actor.id,
+      actorEmail: actor.email ?? null,
+      action: "project.sync_features_bulk_update",
+      source: "web",
+      target: changed.join(","),
+      before: { projects: changed },
+      after: { projects: changed, features: featureUpdates },
+    });
+  }
+
+  return { changed, backfillJobCount };
 }

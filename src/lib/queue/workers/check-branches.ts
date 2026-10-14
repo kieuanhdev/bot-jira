@@ -20,8 +20,15 @@ export async function runCheckBranches(): Promise<WorkerLog> {
   let skippedUnauthorized = 0;
   const runStartedAt = new Date();
 
+  const { loadSyncPolicy } = await import("@/lib/jira/sync-features");
+  const policy = await loadSyncPolicy();
+  const disabledProjects = policy.disabledKeys("devStatus");
+
   // Load known active issues for candidate resolution
   const activeIssues = await prisma.issueCache.findMany({
+    where: {
+      ...(disabledProjects.length > 0 ? { NOT: { projectKey: { in: disabledProjects } } } : {}),
+    },
     select: { jiraKey: true },
   });
   const validKeys = new Set(activeIssues.map((i) => i.jiraKey));

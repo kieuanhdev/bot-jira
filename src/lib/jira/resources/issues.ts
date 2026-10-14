@@ -22,7 +22,7 @@ type IssueResourceDependencies = {
   request: JiraRequest;
   getPointFields: () => Promise<JiraFieldDefinition[]>;
   configuredPointFields: () => JiraFieldDefinition[];
-  issueFields: (extraFields?: string[]) => string;
+  issueFields: (extraFields?: string[], options?: { includeComments?: boolean }) => string;
   knownPointFieldIds: () => string[];
   epicLinkFieldIds: () => string[];
   isPointField: (field: Pick<JiraFieldDefinition, "name" | "schema">) => boolean;
@@ -55,12 +55,13 @@ export function createIssueResource({
       maxResults = 50,
       startAt = 0,
       signal?: AbortSignal,
-      extraFields: string[] = []
+      extraFields: string[] = [],
+      options?: { includeComments?: boolean }
     ) => {
       await getPointFields().catch(() => configuredPointFields());
       const params = new URLSearchParams({
         jql,
-        fields: issueFields(extraFields),
+        fields: issueFields(extraFields, options),
         maxResults: String(maxResults),
         startAt: String(startAt),
       });

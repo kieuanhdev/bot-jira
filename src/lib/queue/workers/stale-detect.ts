@@ -24,12 +24,17 @@ export async function runStaleDetect(): Promise<WorkerLog> {
   );
   const preCutoff = new Date(now.getTime() - minSlaDays * MS_PER_DAY);
 
+  const { loadSyncPolicy } = await import("@/lib/jira/sync-features");
+  const policy = await loadSyncPolicy();
+  const disabledProjects = policy.disabledKeys("staleDetect");
+
   const openIssues = await prisma.issueCache.findMany({
     where: {
       updatedAt: { not: null, lt: preCutoff },
       status: { notIn: DONE_STATUSES },
       statusCategory: { not: "done" },
       deletedAt: null,
+      ...(disabledProjects.length > 0 ? { NOT: { projectKey: { in: disabledProjects } } } : {}),
     },
   });
 

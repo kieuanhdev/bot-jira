@@ -12,6 +12,7 @@ import {
   transitionsKeys,
   branchesForKeys,
   watchKeys,
+  boardKeys,
 } from "@/lib/query-keys";
 import { getDefaultLogStartedAt, validateWorklog } from "@/lib/worklogs/schema";
 import type { IssueItem } from "@/hooks/use-issues";
@@ -127,6 +128,23 @@ export function QuickPanel({
     queryFn: () => api<{ items: { id: string; name: string }[] }>(`/api/issues/${issue.jiraKey}/versions`),
     staleTime: 60_000,
   });
+
+  const { data: projectsData } = useQuery({
+    queryKey: boardKeys.projects,
+    queryFn: () =>
+      api<{
+        items: Array<{
+          key: string;
+          features?: Record<string, boolean>;
+          syncEnabled?: boolean;
+        }>;
+      }>("/api/projects"),
+    staleTime: 60_000,
+  });
+
+  const issueProjectKey = (issue.projectKey || issue.jiraKey.split("-")[0]).toUpperCase();
+  const currentProject = projectsData?.items?.find((p) => p.key === issueProjectKey);
+  const commentsDisabled = currentProject?.features?.comments === false;
 
   const d = detail?.issue ?? cachedDetail?.issue;
   const summary = (optimisticOverrides.summary as string | undefined) ?? d?.summary ?? issue.summary ?? "(no summary)";
@@ -568,6 +586,7 @@ export function QuickPanel({
             description={description}
             comments={d?.comments}
             onAddComment={addComment}
+            commentsDisabled={commentsDisabled}
           />
         </div>
 

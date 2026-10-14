@@ -38,10 +38,21 @@ export type { JiraSyncSource, PollJiraJobData, PollJiraProjectJobData, ProjectSt
 export async function syncProject(
   projectKey: string,
   full: boolean,
-  options?: { signal?: AbortSignal; runToken?: string }
+  options?: {
+    signal?: AbortSignal;
+    runToken?: string;
+    features?: Record<import("@/lib/jira/sync-features").SyncFeature, boolean>;
+    suppressNotifications?: boolean;
+  }
 ): Promise<ProjectStats> {
   const runToken = options?.runToken ?? randomUUID();
   const jira = await jiraClientForProject(projectKey);
+  let features = options?.features;
+  if (!features) {
+    const { loadSyncPolicy } = await import("@/lib/jira/sync-features");
+    const policy = await loadSyncPolicy();
+    features = policy.getFeatures(projectKey);
+  }
   return runJiraSyncPipeline(
     {
       projectKey,
@@ -50,6 +61,8 @@ export async function syncProject(
       leaseTtlSeconds: computeLeaseTtlSeconds(full),
       jira,
       signal: options?.signal,
+      features,
+      suppressNotifications: options?.suppressNotifications,
     },
     jiraSyncDependencies
   );
@@ -75,12 +88,20 @@ export async function runPollJiraProject(
     return { ok: true, skipped: true, reason: "sync_disabled" };
   }
 
+  const { loadSyncPolicy } = await import("@/lib/jira/sync-features");
+  const policy = await loadSyncPolicy();
+  const features = policy.getFeatures(projectKey);
+
   const requestedAtMs = data.requestedAt ? new Date(data.requestedAt).getTime() : Date.now();
   const queueLagMs = Math.max(0, Date.now() - (Number.isNaN(requestedAtMs) ? Date.now() : requestedAtMs));
   const startedAt = Date.now();
 
   try {
-    const stats = await syncProject(projectKey, Boolean(data.full), { signal: options?.signal });
+    const stats = await syncProject(projectKey, Boolean(data.full), {
+      signal: options?.signal,
+      features,
+      suppressNotifications: data.suppressNotifications,
+    });
     const durationMs = Date.now() - startedAt;
     const ok = stats.errors.length === 0;
 

@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   toggleAll: vi.fn(),
   toggleOne: vi.fn(),
+  updateFeatures: vi.fn(),
+  bulkUpdateFeatures: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({
@@ -15,6 +17,8 @@ vi.mock("@/lib/admin/project-sync", () => ({
   listAdminProjectSync: mocks.list,
   toggleAllProjectSync: mocks.toggleAll,
   toggleProjectSync: mocks.toggleOne,
+  updateProjectSyncFeatures: mocks.updateFeatures,
+  bulkUpdateProjectSyncFeatures: mocks.bulkUpdateFeatures,
 }));
 
 import { GET, PATCH } from "./route";
@@ -75,5 +79,50 @@ describe("/api/admin/projects", () => {
 
     mocks.toggleOne.mockResolvedValueOnce(null);
     expect((await PATCH_ONE(patch({ syncEnabled: false }), ctx("NOPE"))).status).toBe(404);
+  });
+
+  it("updates granular features on one project", async () => {
+    mocks.updateFeatures.mockResolvedValueOnce({
+      key: "EPM",
+      syncEnabled: true,
+      features: { comments: false },
+      preset: "custom",
+      backfillJobId: null,
+    });
+    const res = await PATCH_ONE(patch({ features: { comments: false } }), ctx("EPM"));
+    expect(res.status).toBe(200);
+    expect(mocks.updateFeatures).toHaveBeenCalledWith(
+      "EPM",
+      { comments: false },
+      { id: "admin-1", email: "a@x" }
+    );
+  });
+
+  it("updates preset on one project", async () => {
+    mocks.updateFeatures.mockResolvedValueOnce({
+      key: "EPM",
+      syncEnabled: true,
+      features: { comments: false, workflow: true },
+      preset: "issues_only",
+      backfillJobId: null,
+    });
+    const res = await PATCH_ONE(patch({ preset: "issues_only" }), ctx("EPM"));
+    expect(res.status).toBe(200);
+    expect(mocks.updateFeatures).toHaveBeenCalled();
+  });
+
+  it("rejects invalid features or preset", async () => {
+    const badFeature = await PATCH_ONE(patch({ features: { invalidFeature: true } }), ctx("EPM"));
+    expect(badFeature.status).toBe(400);
+
+    const badPreset = await PATCH_ONE(patch({ preset: "invalid_preset" }), ctx("EPM"));
+    expect(badPreset.status).toBe(400);
+  });
+
+  it("bulk updates features for multiple projects", async () => {
+    mocks.bulkUpdateFeatures.mockResolvedValueOnce({ changed: ["EPM", "ABC"], backfillJobCount: 0 });
+    const res = await PATCH(patch({ keys: ["EPM", "ABC"], preset: "issues_only" }));
+    expect(res.status).toBe(200);
+    expect(mocks.bulkUpdateFeatures).toHaveBeenCalled();
   });
 });

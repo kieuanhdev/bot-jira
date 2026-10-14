@@ -19,16 +19,24 @@ export async function captureProjectReportSnapshots(
   const snapshotDate = getMidnightDate(options.targetDate ?? new Date(), timezone);
   const now = new Date();
 
+  const { loadSyncPolicy } = await import("@/lib/jira/sync-features");
+  const policy = await loadSyncPolicy();
+
   // Find target project keys
   let targetKeys: string[] = [];
   if (options.projectKey) {
-    targetKeys = [options.projectKey.toUpperCase()];
+    const key = options.projectKey.toUpperCase();
+    if (policy.isEnabled(key, "reportSnapshots")) {
+      targetKeys = [key];
+    }
   } else {
     const activeProjects = await prisma.jiraProject.findMany({
-      where: { active: true },
+      where: { active: true, syncEnabled: true },
       select: { key: true },
     });
-    targetKeys = activeProjects.map((p) => p.key.toUpperCase());
+    targetKeys = activeProjects
+      .map((p) => p.key.toUpperCase())
+      .filter((k) => policy.isEnabled(k, "reportSnapshots"));
   }
 
   const results: SnapshotProjectResult[] = [];

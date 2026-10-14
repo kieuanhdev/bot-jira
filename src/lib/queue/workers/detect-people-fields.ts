@@ -3,7 +3,10 @@ import { detectPeopleFields } from "@/lib/jira/people-fields";
 import type { WorkerLog } from "../guard";
 
 export async function runDetectPeopleFields(): Promise<WorkerLog> {
-  const projects = await listSyncEnabledProjectKeys();
+  const { loadSyncPolicy } = await import("@/lib/jira/sync-features");
+  const policy = await loadSyncPolicy();
+  const allProjects = await listSyncEnabledProjectKeys();
+  const projects = allProjects.filter((key) => policy.isEnabled(key, "peopleFields"));
   const errors: string[] = [];
   let detected = 0;
   for (const projectKey of projects) {

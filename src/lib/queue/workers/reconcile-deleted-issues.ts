@@ -32,7 +32,10 @@ export async function runReconcileDeletedIssues(): Promise<WorkerLog> {
   if (!(await hasJiraCredentials())) {
     return { ok: true, skipped: true, reason: "Jira not configured" };
   }
-  const projects = await listSyncEnabledProjectKeys();
+  const { loadSyncPolicy } = await import("@/lib/jira/sync-features");
+  const policy = await loadSyncPolicy();
+  const allProjects = await listSyncEnabledProjectKeys();
+  const projects = allProjects.filter((key) => policy.isEnabled(key, "deletions"));
   const errors: string[] = [];
   let deleted = 0;
   let checked = 0;

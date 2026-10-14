@@ -13,6 +13,7 @@ export type JiraProjectSyncRequest = {
   source?: JiraSyncSource;
   requestedBy?: string;
   requestedAt?: string;
+  suppressNotifications?: boolean;
 };
 
 export type PollJiraDispatchJobData = {
@@ -45,6 +46,7 @@ export async function enqueueJiraProjectSync(
       source,
       requestedBy: data.requestedBy,
       requestedAt,
+      suppressNotifications: Boolean(data.suppressNotifications),
     },
     {
       singletonKey: normalizedKey,

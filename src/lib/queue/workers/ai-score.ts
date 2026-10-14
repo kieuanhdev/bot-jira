@@ -12,11 +12,16 @@ export async function runAiScore(): Promise<WorkerLog> {
   if (!env.aiAutoScore) return guard(true, "AI auto-score disabled (AI_AUTO_SCORE=false)");
   if (!hasLLMConfig()) return guard(hasLLMConfig(), `LLM provider "${env.llmProvider}" not configured`);
 
+  const { loadSyncPolicy } = await import("@/lib/jira/sync-features");
+  const policy = await loadSyncPolicy();
+  const disabledProjects = policy.disabledKeys("aiScore");
+
   // Issues that have no AI estimate yet and are not in Done.
   const candidates = await prisma.issueCache.findMany({
     where: {
       aiScore: null,
       status: { not: "Done" },
+      ...(disabledProjects.length > 0 ? { NOT: { projectKey: { in: disabledProjects } } } : {}),
     },
     orderBy: { updatedAt: "desc" },
     take: BATCH,
