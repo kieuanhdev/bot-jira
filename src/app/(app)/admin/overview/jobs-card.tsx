@@ -28,6 +28,7 @@ import { api, getErrorMessage } from "@/lib/api-client";
 import { adminKeys } from "@/lib/query-keys";
 import { maskSecrets } from "@/lib/admin/mask-secrets";
 import { cn, timeAgo } from "@/lib/utils";
+import { useNow } from "@/hooks/use-now";
 import { CopyButton } from "./error-sheet";
 import { formatDuration, parseStats } from "./format-stats";
 import { Sparkline } from "./sparkline";
@@ -206,14 +207,7 @@ export function JobsCard({
     return sortedJobs;
   }, [jobFilter, failingJobs, runningJobsList, stuckJobsList, neverRanJobs, sortedJobs]);
 
-  const now = React.useSyncExternalStore(
-    (cb) => {
-      const id = setInterval(cb, 15_000);
-      return () => clearInterval(id);
-    },
-    () => Date.now(),
-    () => 0
-  );
+  const now = useNow();
 
   const renderBadge = (j: ExtendedJobState) => {
     const isStuck = stuckJobs.includes(j.job) || j.isStuck;

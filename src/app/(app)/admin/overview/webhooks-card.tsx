@@ -15,6 +15,7 @@ import {
 import { EmptyState } from "@/components/shared/empty-state";
 import { ListSkeleton } from "@/components/shared/skeleton";
 import { timeAgo, cn } from "@/lib/utils";
+import { useNow } from "@/hooks/use-now";
 
 export type WebhookSourceMetric = {
   source: string;
@@ -40,14 +41,7 @@ export function WebhooksCard({
 }) {
   const sources = Object.values(webhooks);
 
-  const now = React.useSyncExternalStore(
-    (cb) => {
-      const id = setInterval(cb, 15_000);
-      return () => clearInterval(id);
-    },
-    () => Date.now(),
-    () => 0
-  );
+  const now = useNow();
 
   return (
     <Card id="webhooks">

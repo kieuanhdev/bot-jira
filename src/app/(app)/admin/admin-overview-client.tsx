@@ -29,6 +29,7 @@ import { ListSkeleton } from "@/components/shared/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useNow } from "@/hooks/use-now";
 
 import { JobsCard, type ExtendedJobState } from "./overview/jobs-card";
 import { QueuesCard } from "./overview/queues-card";
@@ -164,14 +165,7 @@ export function AdminOverviewClient() {
   const isRefreshing = health.isFetching || metrics.isFetching;
   const lastUpdated = health.dataUpdatedAt || null;
 
-  const now = React.useSyncExternalStore(
-    (cb) => {
-      const id = setInterval(cb, 15_000);
-      return () => clearInterval(id);
-    },
-    () => Date.now(),
-    () => 0
-  );
+  const now = useNow();
 
   const isStale = Boolean(lastUpdated && now > 0 && now - lastUpdated > 90_000);
 
