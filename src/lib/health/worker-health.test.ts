@@ -246,4 +246,33 @@ describe("getWorkerHealth with per-project Jira cursors", () => {
     expect(h.databaseError).toContain("Connection refused");
     expect(isJiraFresh(h)).toBe(false);
   });
+
+  it("tracks running jobs and degrades status when a job is stuck", async () => {
+    rows([
+      { scope: "liveness", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+      {
+        scope: "poll-jira",
+        lastStartedAt: ago(10 * 60_000),
+        lastSuccessAt: ago(15 * 60_000),
+        lastErrorAt: null,
+        lastError: null,
+        stats: { durationMs: 1200 },
+      },
+      {
+        scope: "check-branches",
+        lastStartedAt: ago(10_000),
+        lastSuccessAt: ago(60_000),
+        lastErrorAt: null,
+        lastError: null,
+        stats: { finishedAt: ago(60_000).toISOString() },
+      },
+    ]);
+
+    const h = await getWorkerHealth();
+    expect(h.runningJobs).toContain("poll-jira");
+    expect(h.runningJobs).toContain("check-branches");
+    expect(h.stuckJobs).toEqual(["poll-jira"]);
+    expect(h.status).toBe("degraded");
+  });
 });
+

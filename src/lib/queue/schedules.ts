@@ -33,6 +33,46 @@ export function buildScheduleDefinitions(pollIntervalMs: number): ScheduleDefini
   ];
 }
 
+export function formatCronSchedule(cron: string): string {
+  const trimmed = cron.trim();
+  if (trimmed === "* * * * *") {
+    return "Mỗi phút";
+  }
+  const stepMatch = trimmed.match(/^\*\/(\d+)\s+\*\s+\*\s+\*\s+\*$/);
+  if (stepMatch) {
+    return `${stepMatch[1]} phút/lần`;
+  }
+  const dailyMatch = trimmed.match(/^(\d+)\s+(\d+)\s+\*\s+\*\s+\*$/);
+  if (dailyMatch) {
+    const min = dailyMatch[1].padStart(2, "0");
+    const hour = dailyMatch[2].padStart(2, "0");
+    return `Hằng ngày ${hour}:${min}`;
+  }
+  return trimmed;
+}
+
+export function getJobSchedules(pollIntervalMs: number): Record<string, { cron: string; label: string }> {
+  const map: Record<string, { cron: string; label: string }> = {};
+  for (const def of buildScheduleDefinitions(pollIntervalMs)) {
+    map[def.name] = {
+      cron: def.cron,
+      label: formatCronSchedule(def.cron),
+    };
+  }
+  // Jobs without recurring cron schedules
+  const eventJobs = [
+    "poll-watched-issues",
+    "poll-jira-project",
+    "process-webhook",
+    "bulk-op",
+    "refresh-board-membership",
+  ];
+  for (const j of eventJobs) {
+    map[j] = { cron: "", label: "Theo sự kiện" };
+  }
+  return map;
+}
+
 export async function registerSchedules(
   boss: Pick<PgBoss, "schedule" | "unschedule">,
   pollIntervalMs: number

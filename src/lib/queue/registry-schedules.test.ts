@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildQueueDefinitions, JOB_NAMES } from "./job-names";
-import { buildScheduleDefinitions, pollCron, registerSchedules } from "./schedules";
+import { buildScheduleDefinitions, formatCronSchedule, getJobSchedules, pollCron, registerSchedules } from "./schedules";
 
 describe("queue registry contract", () => {
   it("keeps the complete ordered job catalog and queue options", () => {
@@ -76,5 +76,24 @@ describe("queue schedule contract", () => {
       null,
       { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 2, retryDelay: 5 }
     );
+  });
+
+  it("formats cron expressions into readable Vietnamese text", () => {
+    expect(formatCronSchedule("* * * * *")).toBe("Mỗi phút");
+    expect(formatCronSchedule("*/5 * * * *")).toBe("5 phút/lần");
+    expect(formatCronSchedule("*/20 * * * *")).toBe("20 phút/lần");
+    expect(formatCronSchedule("15 0 * * *")).toBe("Hằng ngày 00:15");
+    expect(formatCronSchedule("30 1 * * *")).toBe("Hằng ngày 01:30");
+    expect(formatCronSchedule("20 17 * * *")).toBe("Hằng ngày 17:20");
+    expect(formatCronSchedule("0 12 * * 1-5")).toBe("0 12 * * 1-5");
+  });
+
+  it("generates schedule map including event-based jobs", () => {
+    const map = getJobSchedules(60_000);
+    expect(map["poll-jira-dispatch"]).toEqual({ cron: "* * * * *", label: "Mỗi phút" });
+    expect(map["check-branches"]).toEqual({ cron: "*/5 * * * *", label: "5 phút/lần" });
+    expect(map["notify-unmerged-prs"]).toEqual({ cron: "20 17 * * *", label: "Hằng ngày 17:20" });
+    expect(map["poll-watched-issues"]).toEqual({ cron: "", label: "Theo sự kiện" });
+    expect(map["process-webhook"]).toEqual({ cron: "", label: "Theo sự kiện" });
   });
 });

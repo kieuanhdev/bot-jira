@@ -49,7 +49,13 @@ export async function recordRun(name: string, run: () => Promise<WorkerLog>): Pr
         lastSuccessAt: (result.ok && !result.skipped) ? new Date() : cursor.lastSuccessAt,
         lastErrorAt: result.ok ? null : new Date(),
         lastError: errorText,
-        stats: { ...(result.stats ?? {}), skipped: Boolean(result.skipped), reason: result.reason ?? null },
+        stats: {
+          ...(result.stats ?? {}),
+          skipped: Boolean(result.skipped),
+          reason: result.reason ?? null,
+          durationMs,
+          finishedAt: new Date().toISOString(),
+        },
       },
     });
     if (!result.ok) {
@@ -80,9 +86,20 @@ export async function recordRun(name: string, run: () => Promise<WorkerLog>): Pr
       message: `job ${name} failed`,
       error: message
     });
+    const existingStats = (cursor.stats && typeof cursor.stats === "object" && !Array.isArray(cursor.stats))
+      ? (cursor.stats as Record<string, unknown>)
+      : {};
     await prisma.integrationCursor.update({
       where: { id: cursor.id },
-      data: { lastErrorAt: new Date(), lastError: message },
+      data: {
+        lastErrorAt: new Date(),
+        lastError: message,
+        stats: {
+          ...existingStats,
+          durationMs,
+          finishedAt: new Date().toISOString(),
+        },
+      },
     }).catch(() => null);
     throw error;
   }

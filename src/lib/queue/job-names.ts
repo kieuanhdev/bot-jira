@@ -31,7 +31,7 @@ export type QueueDefinition = {
   updateOptions: UpdateQueueOptions;
 };
 
-const QUEUE_EXPIRE_SECONDS: Record<JobName, number | "jira-sync"> = {
+export const QUEUE_EXPIRE_SECONDS: Record<JobName, number | "jira-sync"> = {
   "poll-jira-dispatch": 60,
   "poll-jira-project": "jira-sync",
   "poll-jira": 300,
@@ -53,6 +53,19 @@ const QUEUE_EXPIRE_SECONDS: Record<JobName, number | "jira-sync"> = {
   "reconcile-deleted-issues": 900,
   "notify-unmerged-prs": 300,
 };
+
+export function getJobExpireSeconds(scope: string, defaultSeconds = 300): number {
+  if (scope.startsWith("poll-jira-project")) {
+    return 900;
+  }
+  if (scope.startsWith("refresh-board-membership")) {
+    return 180;
+  }
+  const val = QUEUE_EXPIRE_SECONDS[scope as JobName];
+  if (typeof val === "number") return val;
+  if (val === "jira-sync") return 900;
+  return defaultSeconds;
+}
 
 const QUEUE_POLICIES: Partial<Record<JobName, Queue["policy"]>> = {
   "poll-jira-dispatch": "singleton",

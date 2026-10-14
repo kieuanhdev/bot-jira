@@ -6,6 +6,7 @@ import { bitbucket } from "@/lib/bitbucket/client";
 import { sentry } from "@/lib/sentry/client";
 import { env, hasBitbucketConfig, hasSentryConfig, hasOllamaConfig, hasOpenAiConfig } from "@/lib/env";
 import { getWorkerHealth, isJiraFresh } from "@/lib/health/worker-health";
+import { getJobSchedules } from "@/lib/queue/schedules";
 
 async function ping(name: string, fn: () => Promise<unknown>): Promise<{ ok: boolean; ms: number; error?: string }> {
   const started = Date.now();
@@ -78,7 +79,10 @@ export async function GET() {
       failingProjects: workerHealth.failingProjects ?? [],
       jiraSyncPaused: Boolean(workerHealth.jiraSyncPaused),
       failingJobs: workerHealth.failingJobs ?? [],
+      runningJobs: workerHealth.runningJobs ?? [],
+      stuckJobs: workerHealth.stuckJobs ?? [],
     },
     workers: workerHealth.jobs,
+    schedules: getJobSchedules(env.pollIntervalMs),
   });
 }

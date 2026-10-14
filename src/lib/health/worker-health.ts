@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { env, jiraProjectList } from "@/lib/env";
+import { getJobExpireSeconds } from "@/lib/queue/job-names";
 
 // OPS-01 / OPS-03 — Worker + job liveness/freshness.
 //
@@ -21,6 +22,11 @@ export type JobState = {
   lastErrorAt: string | null;
   lastError: string | null;
   stats: Record<string, unknown> | null;
+  durationMs?: number | null;
+  finishedAt?: string | null;
+  isRunning?: boolean;
+  isStuck?: boolean;
+  expireInSeconds?: number;
 };
 
 export type WorkerHealth = {
@@ -40,6 +46,10 @@ export type WorkerHealth = {
   jiraSyncPaused?: boolean;
   /** Worker job scopes whose last error is newer than their last success. */
   failingJobs?: string[];
+  /** Worker job scopes currently running. */
+  runningJobs?: string[];
+  /** Worker job scopes currently running longer than expireInSeconds. */
+  stuckJobs?: string[];
   databaseError?: string | null;
 };
 
@@ -187,10 +197,33 @@ export async function getWorkerHealth(customProjects?: string[]): Promise<Worker
   let hasErrors = Boolean(dbError);
   let anyErrorRecent = false;
   const failingJobs: string[] = [];
-  for (const r of jobs) {
+  const runningJobs: string[] = [];
+  const stuckJobs: string[] = [];
+
+  const parsedJobs: JobState[] = jobs.map((r) => {
+    const stats = (r.stats && typeof r.stats === "object" && !Array.isArray(r.stats))
+      ? (r.stats as Record<string, unknown>)
+      : null;
+    const durationMs = typeof stats?.durationMs === "number" ? stats.durationMs : null;
+    const finishedAt = typeof stats?.finishedAt === "string" ? stats.finishedAt : null;
+    const expireInSeconds = getJobExpireSeconds(r.scope);
+
+    const startedTime = r.lastStartedAt instanceof Date ? r.lastStartedAt.getTime() : (r.lastStartedAt ? new Date(r.lastStartedAt).getTime() : 0);
+    const finishedTime = finishedAt ? new Date(finishedAt).getTime() : 0;
+    const succTime = r.lastSuccessAt instanceof Date ? r.lastSuccessAt.getTime() : (r.lastSuccessAt ? new Date(r.lastSuccessAt).getTime() : 0);
+    const errTime = r.lastErrorAt instanceof Date ? r.lastErrorAt.getTime() : (r.lastErrorAt ? new Date(r.lastErrorAt).getTime() : 0);
+
+    const isRunning = startedTime > 0 && (
+      finishedTime > 0 ? startedTime > finishedTime : (startedTime > succTime && startedTime > errTime)
+    );
+    const isStuck = isRunning && (now - startedTime > expireInSeconds * 1000);
+
+    if (isRunning) runningJobs.push(r.scope);
+    if (isStuck) stuckJobs.push(r.scope);
+
     if (r.lastErrorAt && r.lastSuccessAt) {
-      const e = r.lastErrorAt instanceof Date ? r.lastErrorAt.getTime() : new Date(r.lastErrorAt).getTime();
-      const s = r.lastSuccessAt instanceof Date ? r.lastSuccessAt.getTime() : new Date(r.lastSuccessAt).getTime();
+      const e = errTime;
+      const s = succTime;
       if (!Number.isNaN(e) && e > s) {
         anyErrorRecent = true;
         failingJobs.push(r.scope);
@@ -200,7 +233,21 @@ export async function getWorkerHealth(customProjects?: string[]): Promise<Worker
       failingJobs.push(r.scope);
     }
     if (r.lastError) hasErrors = true;
-  }
+
+    return {
+      job: r.scope,
+      lastStartedAt: toIso(r.lastStartedAt),
+      lastSuccessAt: toIso(r.lastSuccessAt),
+      lastErrorAt: toIso(r.lastErrorAt),
+      lastError: r.lastError,
+      stats,
+      durationMs,
+      finishedAt,
+      isRunning,
+      isStuck,
+      expireInSeconds,
+    };
+  });
 
   if (failingProjects.length > 0) {
     hasErrors = true;
@@ -218,7 +265,7 @@ export async function getWorkerHealth(customProjects?: string[]): Promise<Worker
     status = "unknown";
   } else if (workerDown) {
     status = "down";
-  } else if (jiraStale || anyErrorRecent) {
+  } else if (jiraStale || anyErrorRecent || stuckJobs.length > 0) {
     status = "degraded";
   } else {
     status = "healthy";
@@ -233,15 +280,10 @@ export async function getWorkerHealth(customProjects?: string[]): Promise<Worker
     failingProjects,
     jiraSyncPaused,
     failingJobs,
+    runningJobs,
+    stuckJobs,
     databaseError: dbError,
-    jobs: jobs.map((r) => ({
-      job: r.scope,
-      lastStartedAt: toIso(r.lastStartedAt),
-      lastSuccessAt: toIso(r.lastSuccessAt),
-      lastErrorAt: toIso(r.lastErrorAt),
-      lastError: r.lastError,
-      stats: (r.stats as Record<string, unknown> | null) ?? null,
-    })),
+    jobs: parsedJobs,
     checkedAt: new Date(now).toISOString(),
   };
 }
