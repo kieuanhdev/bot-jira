@@ -29,7 +29,7 @@ import {
   requiresBackfill,
   type SyncFeature,
   type SyncPreset,
-} from "@/lib/jira/sync-features";
+} from "@/lib/jira/sync-features-shared";
 import { PageHeader } from "@/components/shared/page-header";
 import { MetricCard } from "@/components/shared/metric-card";
 import { MetricGrid } from "@/components/shared/metric-grid";
