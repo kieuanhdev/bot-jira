@@ -15,6 +15,12 @@ const LIVENESS_SCOPE = "liveness";
 
 export const HEARTBEAT_INTEGRATION = "worker";
 
+export type JobRunHistoryItem = {
+  durationMs: number;
+  ok: boolean;
+  finishedAt: string;
+};
+
 export type JobState = {
   job: string;
   lastStartedAt: string | null;
@@ -27,6 +33,7 @@ export type JobState = {
   isRunning?: boolean;
   isStuck?: boolean;
   expireInSeconds?: number;
+  recentRuns?: JobRunHistoryItem[];
 };
 
 export type WorkerHealth = {
@@ -234,6 +241,10 @@ export async function getWorkerHealth(customProjects?: string[]): Promise<Worker
     }
     if (r.lastError) hasErrors = true;
 
+    const recentRuns = Array.isArray(stats?.recentRuns)
+      ? (stats.recentRuns as JobRunHistoryItem[])
+      : undefined;
+
     return {
       job: r.scope,
       lastStartedAt: toIso(r.lastStartedAt),
@@ -246,6 +257,7 @@ export async function getWorkerHealth(customProjects?: string[]): Promise<Worker
       isRunning,
       isStuck,
       expireInSeconds,
+      recentRuns,
     };
   });
 

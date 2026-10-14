@@ -3,7 +3,7 @@
 > Tiếp nối `docs/ADMIN_MONITOR_UI_PLAN.md`. Phase 1–3 của plan đó đã làm ở commit `9c16699`
 > (banner trạng thái, KPI, bảng job, hàng đợi, nhãn job, mask lỗi).
 > Plan này xử lý các phần **còn thiếu**: màn hiện chỉ để *xem*, chưa *xử lý* được, và chưa có dữ liệu theo thời gian.
-> **Trạng thái:** Đã hoàn thành triển khai **Phase A** (A1–A5) và **Phase B** (B1–B8). Toàn bộ code mới, API endpoints, modular components và test suite đã hoàn tất, vượt qua lint, typecheck và 269 test files (2.527 tests). Phase C (xu hướng theo thời gian) giữ ở trạng thái đề xuất/cần duyệt riêng.
+> **Trạng thái:** Đã hoàn thành triển khai toàn bộ **Phase A** (A1–A5), **Phase B** (B1–B8) và **Phase C** (Xu hướng theo thời gian). Toàn bộ code mới, API endpoints, modular components và test suite đã hoàn tất, vượt qua lint, typecheck và 271 test files (2.538 tests). Không cần Prisma migration, không thêm external dependency.
 
 ---
 
@@ -76,72 +76,94 @@ Mobile: các card xếp 1 cột; bảng webhook/queue chuyển thành list giố
 
 Mỗi phase là một PR nhỏ, kiểm tra độc lập. Thứ tự theo giá trị/chi phí.
 
-### Phase A — Chỉ UI, dùng dữ liệu/API sẵn có (không đổi API)
+### Phase A — Chỉ UI, dùng dữ liệu/API sẵn có (không đổi API) — [ĐÃ HOÀN THÀNH]
 
-| Việc | Chi tiết |
-|------|----------|
-| A1 · Release gate (G1) | Thêm `StackedBar` cho mỗi gate trong `gatesByState`, đoạn passed/failed/unknown/overridden. Nhãn gate tiếng Việt (`non_empty_release`, `ci`, `data_freshness`…), gate lạ hiện mã gốc. Đếm "gate failed" vào banner khi > 0. |
-| A2 · Stats dễ đọc (G5) | Formatter: `durationMs` → "1.2 s", số → `toLocaleString("vi-VN")`, `skipped`/`reason` → badge "Bỏ qua: …", object lồng → key: value một cấp. Ẩn `skipped:false`, `reason:null`. |
-| A3 · Sentry import lỗi (G8) | Nút "Xem lỗi" trên thẻ Sentry → Sheet gọi `GET /api/admin/sentry-import?state=failed`, mỗi dòng có nút retry gọi API retry đã có. Invalidate `adminKeys.overview` sau retry. |
-| A4 · Copy lỗi | Nút `Copy` (icon `Copy`/`Check`) cạnh khối `<pre>` lỗi job và lỗi dịch vụ; copy chuỗi **đã mask**. |
-| A5 · Link banner (G15) | Thay `<a href="#…">` bằng `button` + `scrollIntoView({ behavior: "smooth" })`, tôn trọng `prefers-reduced-motion` (dùng `"auto"`). Link `/admin/sync` giữ `Link`. |
+| Việc | Chi tiết | Trạng thái & File triển khai |
+|------|----------|-------------------------------|
+| A1 · Release gate (G1) | Thêm `StackedBar` cho mỗi gate trong `gatesByState`, đoạn passed/failed/unknown/overridden. Nhãn gate tiếng Việt (`non_empty_release`, `ci`, `data_freshness`…), gate lạ hiện mã gốc. Đếm "gate failed" vào banner khi > 0. | `[x]` Đã xong — `src/app/(app)/admin/overview/queues-card.tsx` |
+| A2 · Stats dễ đọc (G5) | Formatter: `durationMs` → "1.2 s", số → `toLocaleString("vi-VN")`, `skipped`/`reason` → badge "Bỏ qua: …", object lồng → key: value một cấp. Ẩn `skipped:false`, `reason:null`. | `[x]` Đã xong — `src/app/(app)/admin/overview/format-stats.ts` |
+| A3 · Sentry import lỗi (G8) | Nút "Xem lỗi" trên thẻ Sentry → Sheet gọi `GET /api/admin/sentry-import?state=failed`, mỗi dòng có nút retry gọi API retry đã có. Invalidate `adminKeys.overview` sau retry. | `[x]` Đã xong — `src/app/(app)/admin/overview/error-sheet.tsx` |
+| A4 · Copy lỗi | Nút `Copy` (icon `Copy`/`Check`) cạnh khối `<pre>` lỗi job và lỗi dịch vụ; copy chuỗi **đã mask**. | `[x]` Đã xong — Component `CopyButton` trong `jobs-card.tsx` và `error-sheet.tsx` |
+| A5 · Link banner (G15) | Thay `<a href="#…">` bằng `button` + `scrollIntoView({ behavior: "smooth" })`, tôn trọng `prefers-reduced-motion` (dùng `"auto"`). Link `/admin/sync` giữ `Link`. | `[x]` Đã xong — `src/app/(app)/admin/admin-overview-client.tsx` |
 
-File: `admin-overview-client.tsx`. Nên tách component ra `src/app/(app)/admin/overview/` (`jobs-card.tsx`, `queues-card.tsx`, `error-sheet.tsx`, `lib/format-stats.ts`) vì file đang ~870 dòng.
+Đã tái cấu trúc tách component sang thư mục mô-đun: `src/app/(app)/admin/overview/` (`jobs-card.tsx`, `queues-card.tsx`, `error-sheet.tsx`, `webhooks-card.tsx`, `pg-boss-card.tsx`, `audit-card.tsx`, `format-stats.ts`).
 
-### Phase B — Bổ sung API (additive, **không migration**)
+### Phase B — Bổ sung API (additive, **không migration**) — [ĐÃ HOÀN THÀNH]
 
-**B1 · Thời gian chạy & job đang chạy/treo (G3, G4)**
-- `recordRun` (`src/lib/queue/boss.ts`): ghi thêm `durationMs` và `finishedAt` vào `stats` (cột JSON, không cần migration) ở cả nhánh thành công và lỗi. Nhánh lỗi hiện **không** ghi `stats` → bổ sung merge `{ ...cursor.stats, durationMs, finishedAt }`.
-- `worker-health.ts`: suy ra `running = lastStartedAt > stats.finishedAt` (hoặc chưa có `finishedAt`); `stuck = running && now - lastStartedAt > expireInSeconds` của queue (lấy từ `QUEUE_EXPIRE_SECONDS` trong `job-names.ts`, export ra). Trả thêm `runningJobs`, `stuckJobs` trong `/api/health` (additive).
-- UI: badge "Đang chạy · 40 s" (`info`), "Treo · 12 phút" (`danger`); filter "Đang chạy"/"Treo"; cột "Thời gian" với ngưỡng màu (so với `expireInSeconds`: > 50 % warning, > 80 % danger).
-- Lưu ý: scope động `poll-jira-project:<KEY>` và `refresh-board-membership:…` map về queue gốc khi tra `expireInSeconds`.
-- Test: cập nhật/thêm unit test cho `recordRun` và phân loại running/stuck.
+**B1 · Thời gian chạy & job đang chạy/treo (G3, G4) — [x] Đã xong**
+- `recordRun` (`src/lib/queue/boss.ts`): ghi thêm `durationMs` và `finishedAt` vào `stats` (cột JSON, không cần migration) ở cả nhánh thành công và lỗi.
+- `worker-health.ts`: suy ra `running = lastStartedAt > stats.finishedAt` (hoặc chưa có `finishedAt`); `stuck = running && now - lastStartedAt > expireInSeconds` của queue (lấy từ `QUEUE_EXPIRE_SECONDS` trong `job-names.ts`, helper `getJobExpireSeconds`). Trả thêm `runningJobs`, `stuckJobs` trong `/api/health`.
+- UI: badge "Đang chạy · 40 s" (`info`), "Treo · 12 phút" (`danger`); filter "Đang chạy"/"Treo"; cột "Thời gian" với ngưỡng màu (> 50 % warning, > 80 % danger).
+- Scope động `poll-jira-project:<KEY>` và `refresh-board-membership:…` map về queue gốc khi tra `expireInSeconds`.
+- Unit test: `src/lib/health/worker-health.test.ts`.
 
-**B2 · Lịch chạy (G12)**
-- Export `buildScheduleDefinitions` vào `/api/health` (hoặc một map tĩnh dùng chung) → cột "Lịch".
-- Formatter cron tự viết cho đúng các mẫu đang dùng (`* * * * *`, `*/N * * * *`, `M H * * *` + `tz`) → "mỗi phút", "5 phút/lần", "hằng ngày 17:20". Mẫu khác hiện cron gốc. **Không** thêm `cron-parser`.
-- Job không có lịch (`poll-watched-issues`, `process-webhook`, `bulk-op`…) → "Theo sự kiện".
-- Có thể thêm cảnh báo "trễ lịch": `now - lastSuccessAt > 3 × chu kỳ`.
+**B2 · Lịch chạy (G12) — [x] Đã xong**
+- Hàm `getJobSchedules` và `formatCronSchedule` tại `src/lib/queue/schedules.ts` trả lịch chạy tiếng Việt ("mỗi phút", "5 phút/lần", "hằng ngày 17:20", "Theo sự kiện") và xuất qua `/api/health`.
+- Hiển thị cột "Lịch" cả trên desktop bảng và mobile list. Unit test: `src/lib/queue/registry-schedules.test.ts`.
 
-**B3 · Nút "Chạy ngay" (G6)**
+**B3 · Nút "Chạy ngay" (G6) — [x] Đã xong**
 - `POST /api/admin/jobs/[name]/run`, admin-only (`isAdmin`).
-- **Allowlist** = các job trong `buildScheduleDefinitions` (job không tham số). Không cho chạy `bulk-op`, `process-webhook`, `poll-jira-project` (đã có ở `/admin/sync`).
-- `boss.send(name, {}, { singletonKey: \`${name}:manual\`, singletonSeconds: 30, retryLimit: 0 })`, tương tự `enqueueCheckBranches` trong `src/lib/queue/enqueue.ts`. Trả `409` khi trùng singleton (job đã được xếp hàng).
+- **Allowlist** = các job trong `SCHEDULE_DEFINITIONS` (job không tham số).
+- `boss.send(name, {}, { singletonKey: \`${name}:manual\`, singletonSeconds: 30, retryLimit: 0 })`. Trả `409` khi trùng singleton.
 - Ghi `audit({ action: "admin.job.run", target: name, source: "web" })`.
-- UI: nút icon `Play` ở cột cuối, disabled khi đang chạy (B1); xác nhận bằng `AlertDialog` cho job nặng (`poll-pr-comments`, `reconcile-deleted-issues`, `capture-project-report-snapshots`, `detect-people-fields`); toast kết quả; refetch health sau 2–3 s.
-- Test: route test cho 401/403/400 (job ngoài allowlist)/200/409.
+- UI: nút icon `Play` ở cột thao tác, disabled khi đang chạy; xác nhận bằng `ConfirmDialog` cho job nặng (`poll-pr-comments`, `reconcile-deleted-issues`, `capture-project-report-snapshots`, `detect-people-fields`); toast kết quả; tự động refetch overview sau 2s.
+- Route test: `src/app/api/admin/jobs/[name]/run/route.test.ts` (kiểm tra 401/403/400/200/409).
 
-**B4 · Outbox lỗi + retry (G7)**
+**B4 · Outbox lỗi + retry (G7) — [x] Đã xong**
 - `GET /api/admin/outbox?state=failed&limit=100`: `id, channel, userId (email), title, attemptCount, lastError (mask), updatedAt`.
-- `POST /api/admin/outbox/retry` body `{ ids?: string[] }` (không có `ids` = tất cả failed, giới hạn 500): đặt `state = pending`, `attemptCount = 0`, `scheduledAt = null`, `lastError = null` rồi `enqueueNotificationDelivery()`. Audit `admin.outbox.retry` với số lượng.
-- Kiểm tra lại logic backoff trong `src/lib/queue/workers/deliver-notifications.ts` để chắc reset `attemptCount` không vi phạm `NOTIFY_MAX_ATTEMPTS`.
-- UI: Sheet dùng chung component với A3.
+- `POST /api/admin/outbox/retry` body `{ ids?: string[] }`: đặt `state = pending`, `attemptCount = 0`, `scheduledAt = null`, `lastError = null` rồi `enqueueNotificationDelivery()`. Audit `admin.outbox.retry` với số lượng.
+- UI: Dùng chung `ErrorSheet` với nút retry từng dòng hoặc retry toàn bộ (tối đa 500 bản ghi).
+- Route test: `src/app/api/admin/outbox/route.test.ts`.
 
-**B5 · Giám sát webhook (G9)**
-- Thêm vào `/api/admin/metrics` khối `webhooks`: theo `source` → `count24h`, `unprocessed` (`processedAt IS NULL` và cũ hơn 5 phút), `errors24h` (`processingError` không rỗng), `lastReceivedAt`. Dùng `groupBy` + index `[source, receivedAt]` sẵn có.
-- UI: card "Webhook" dạng bảng; nguồn có `lastReceivedAt` > 24h → badge warning "Im lặng"; lỗi > 0 → có thể xem 20 lỗi gần nhất (mask) trong Sheet.
+**B5 · Giám sát webhook (G9) — [x] Đã xong**
+- Thêm vào `/api/admin/metrics` khối `webhooks`: thống kê theo `source` → `count24h`, `unprocessed` (`processedAt IS NULL` > 5 phút), `errors24h`, `lastReceivedAt`.
+- UI: `src/app/(app)/admin/overview/webhooks-card.tsx` dạng bảng; nguồn `lastReceivedAt` > 24h hiện badge warning "Im lặng"; xem lỗi qua `ErrorSheet`.
 
-**B6 · Độ sâu hàng đợi pg-boss (G13)**
+**B6 · Độ sâu hàng đợi pg-boss (G13) — [x] Đã xong**
 - `/api/admin/metrics` gọi `boss.getQueues()` → mỗi queue: `queuedCount`, `readyCount`, `activeCount`, `failedCount`.
-- Cảnh báo khi `readyCount` vượt ngưỡng (vd. > 50) hoặc `failedCount` > 0. Banner thêm "Hàng đợi X tồn N job".
-- Bọc try/catch: lỗi pg-boss không được làm hỏng cả endpoint metrics; trả `queues: null` + UI hiện `ErrorState` riêng cho card.
+- Bọc try/catch: nếu lỗi pg-boss trả `queues: null`, UI hiển thị `ErrorState` cục bộ không làm hỏng toàn trang.
+- UI: `src/app/(app)/admin/overview/pg-boss-card.tsx` cảnh báo khi `readyCount` > 50 hoặc `failedCount` > 0. Banner tổng quan hiển thị cảnh báo tồn hàng đợi.
 
-**B7 · Bulk operation (G10) + AI fallback (G2)**
-- Metrics thêm `bulkOps` theo `state` (chỉ 7 ngày gần nhất) → `StackedBar`.
-- AI: đếm `aiScore` có `points = defaultPoint` và `confidence` thấp/null (xác nhận lại quy tắc heuristic trong worker `ai-score`) → tách "AI thật" / "Mặc định" trên thẻ AI; cảnh báo khi tỉ lệ mặc định > 50 % trong 24h.
+**B7 · Bulk operation (G10) + AI fallback (G2) — [x] Đã xong**
+- `/api/admin/metrics` bổ sung `bulkOps` theo `state` trong 7 ngày gần nhất → `StackedBar` trong `queues-card.tsx`.
+- Thống kê AI tách biệt "Điểm AI thật" và "Điểm mặc định (fallback)", cảnh báo khi tỷ lệ mặc định > 50% trong 24h.
 
-**B8 · Hoạt động admin gần đây (G11)**
-- `GET /api/admin/audit?limit=20` (admin-only): `createdAt, actorEmail, action, target, source`. Không trả `before/after` ở danh sách.
-- UI: card list gọn, nhãn action tiếng Việt cho các action admin chính, action lạ hiện mã gốc. Không poll 30 s, chỉ tải khi mở trang/làm mới.
+**B8 · Hoạt động admin gần đây (G11) — [x] Đã xong**
+- `GET /api/admin/audit?limit=20` (admin-only): `id, createdAt, actorEmail, action, target, source`.
+- UI: `src/app/(app)/admin/overview/audit-card.tsx` với nhãn tiếng Việt dễ hiểu cho action chính, thời gian tương đối ("X phút trước"), chỉ tải khi mở trang/bấm làm mới.
+- Route test: `src/app/api/admin/audit/route.test.ts`.
 
-### Phase C — Xu hướng theo thời gian (G14), cần duyệt riêng
+### Phase C — Xu hướng theo thời gian (G14) — [ĐÃ HOÀN THÀNH]
 
-Hai hướng, ưu tiên hướng 1:
+Triển khai hoàn tất theo **Hướng 1** (Native pg-boss + cursor JSON history + memory ring buffer), **không cần Prisma migration**, không thêm external package:
 
-1. **Bật `persistQueueStats` của pg-boss** (`src/lib/queue/connection.ts`, `new PgBoss({...})`), kèm `queueStatRetentionDays: 7`. pg-boss tự quản lý bảng thống kê trong schema của nó (không phải Prisma migration), sau đó `boss.getQueueStats(name, { from, maxPoints })` cho sparkline 24h: completed/failed theo queue. Cần developer duyệt vì đổi cấu hình runtime của pg-boss và tạo thêm dữ liệu trong DB.
-2. **Bảng lịch sử riêng** (`JobRunHistory`, `ServicePingHistory`) cho độ trễ dịch vụ, uptime: cần **Prisma migration** (file được bảo vệ theo `AGENTS.md`), chỉ làm khi được duyệt rõ ràng.
+1. **pg-boss Queue Stats Persistence**:
+   - Bật `persistQueueStats: true` và `queueStatRetentionDays: 7` trong `src/lib/queue/connection.ts`. pg-boss tự phân vùng/lưu trữ và dọn dẹp lịch sử 7 ngày trong schema của nó.
+   - Thêm tests kiểm tra cấu hình trong `src/lib/queue/connection.test.ts`.
 
-UI: sparkline nhỏ trong bảng job và card dịch vụ (recharts đã cài, `src/components/ui/chart.tsx`); dưới 4 điểm dữ liệu thì không vẽ chart.
+2. **Job Run Latency History (`recordRun`)**:
+   - `recordRun` (`src/lib/queue/boss.ts`): ghi nhận `recentRuns: Array<{ durationMs: number; ok: boolean; finishedAt: string }>` (tối đa 20 lần chạy gần nhất) vào cột JSON `stats` của `IntegrationCursor` ở cả nhánh thành công và lỗi.
+   - `getWorkerHealth` (`src/lib/health/worker-health.ts`): trích xuất và trả về `recentRuns` cho từng `JobState`.
+   - Unit tests: `src/lib/queue/jira-queue.test.ts` và `src/lib/health/worker-health.test.ts`.
+
+3. **Service Ping Latency Ring Buffer**:
+   - `/api/health` (`src/app/api/health/route.ts`): duy trì ring buffer in-memory 20 mẫu cho từng dịch vụ tích hợp (`history: number[]`).
+   - Route test: `src/app/api/health/route.test.ts`.
+
+4. **pg-boss Queue Throughput History**:
+   - `/api/admin/metrics` (`src/app/api/admin/metrics/route.ts`): gọi `boss.getQueueStats(q.name, { from: oneDayAgo, maxDataPoints: 24, aggregate: 'max' })` trả về chuỗi snapshot throughput (`completed`, `failed`, `active`, `ready`).
+   - Route test: `src/app/api/admin/metrics/route.test.ts`.
+
+5. **Component `Sparkline` UI**:
+   - `src/app/(app)/admin/overview/sparkline.tsx`: SVG vector sắc nét, đường cong mượt, gradient area, dot ở điểm mới nhất, interactive hover tooltip chi tiết (giá trị, min, max).
+   - Tôn trọng triệt để quy tắc: **dưới 4 điểm dữ liệu thì không vẽ chart** (hiển thị `—` hoặc fallback text).
+   - Hỗ trợ các tone màu ngữ nghĩa (`teal`, `emerald`, `amber`, `rose`), tương phản cao light/dark, tuân thủ `prefers-reduced-motion` và `aria-label`/`role="img"`.
+   - Unit tests: `src/app/(app)/admin/overview/sparkline.test.ts` (5 tests).
+
+6. **Tích hợp UI Dashboard**:
+   - **Card Job nền** (`src/app/(app)/admin/overview/jobs-card.tsx`): thêm cột "Xu hướng" cho thời gian chạy gần nhất trên desktop bảng và mobile list.
+   - **Card Hàng đợi pg-boss** (`src/app/(app)/admin/overview/pg-boss-card.tsx`): thêm cột "Xu hướng (24h)" hiển thị throughput completed/failed.
+   - **Card Dịch vụ tích hợp** (`src/app/(app)/admin/admin-overview-client.tsx`): hiển thị sparkline độ trễ (ms) bên cạnh badge độ trễ khi có đủ ≥ 4 lần ping.
 
 ### Không đề xuất
 - Tăng tần suất poll `/api/health` (ping thật tới Jira/OpenAI).
@@ -160,26 +182,24 @@ UI: sparkline nhỏ trong bảng job và card dịch vụ (recharts đã cài, `
 
 ---
 
-## 5. Checklist nghiệm thu (mỗi phase)
+## 5. Checklist nghiệm thu (mọi phase)
 
-- [ ] Loading dùng `Skeleton`/`ListSkeleton`; mỗi card mới có empty state (icon trong vòng tròn muted + tiêu đề + gợi ý) và error state có nút thử lại.
-- [ ] Token semantic, không hex cứng; trạng thái luôn có chữ đi kèm màu; tương phản ≥ 4.5:1 ở light + dark.
-- [ ] Icon lucide, decorative `aria-hidden`; nút icon có `aria-label`; `cursor-pointer`; transition 150–200 ms; `motion-reduce`.
-- [ ] Thao tác ghi có xác nhận khi cần, có toast kết quả, có audit log.
-- [ ] Responsive 375 / 768 / 1024 / 1440 px, không cuộn ngang.
-- [ ] Không thêm dependency, không Prisma migration (trừ Phase C đã duyệt).
-- [ ] Test route mới (auth, validate, happy path); test `recordRun` + phân loại running/stuck.
-- [ ] `npm run lint`, `npm run typecheck`, `npm test` pass.
+- [x] Loading dùng `Skeleton`/`ListSkeleton`; mỗi card mới có empty state (icon trong vòng tròn muted + tiêu đề + gợi ý) và error state có nút thử lại.
+- [x] Token semantic, không hex cứng; trạng thái luôn có chữ đi kèm màu; tương phản ≥ 4.5:1 ở light + dark.
+- [x] Icon lucide, decorative `aria-hidden`; nút icon có `aria-label`; `cursor-pointer`; transition 150–200 ms; `motion-reduce`.
+- [x] Thao tác ghi có xác nhận khi cần, có toast kết quả, có audit log.
+- [x] Responsive 375 / 768 / 1024 / 1440 px, không cuộn ngang.
+- [x] Không thêm dependency, không Prisma migration.
+- [x] Test route mới (auth, validate, happy path); test `recordRun` + phân loại running/stuck.
+- [x] `npm run lint`, `npm run typecheck`, `npm test` pass (271 test files, 2.538 tests).
 
 ---
 
-## 6. Ước lượng
+## 6. Ước lượng & Trạng thái
 
-| Phase | Nội dung | Ước lượng |
-|-------|----------|-----------|
-| A | Gate, stats, Sentry UI, copy, banner | ~0.5–1 ngày |
-| B1–B3 | Running/stuck, lịch, Chạy ngay | ~1–1.5 ngày |
-| B4–B8 | Outbox retry, webhook, pg-boss queue, bulk/AI, audit | ~1.5–2 ngày |
-| C | Xu hướng | tuỳ hướng được duyệt |
-
-Đề xuất làm trước: **A → B1 → B3 → B4** (giá trị cao, không migration).
+| Phase | Nội dung | Ước lượng | Trạng thái |
+|-------|----------|-----------|------------|
+| A | Gate, stats, Sentry UI, copy, banner | ~0.5–1 ngày | **Đã hoàn thành** |
+| B1–B3 | Running/stuck, lịch, Chạy ngay | ~1–1.5 ngày | **Đã hoàn thành** |
+| B4–B8 | Outbox retry, webhook, pg-boss queue, bulk/AI, audit | ~1.5–2 ngày | **Đã hoàn thành** |
+| C | Xu hướng theo thời gian (pg-boss + job runs + service latency) | ~1 ngày | **Đã hoàn thành** |

@@ -2,7 +2,7 @@
 
 > Phạm vi: trang **Tổng quan hệ thống** (`/admin`) là trọng tâm; trang **Đồng bộ dự án** (`/admin/sync`) là phần phụ.
 > Nguồn thiết kế: `design-system/team-task-web/MASTER.md` + tra cứu skill `ui-ux-pro-max` (xem mục 2).
-> Tài liệu này chỉ là kế hoạch — chưa sửa code.
+> **Trạng thái:** Đã hoàn thành triển khai **Phase 1–3** ở commit `9c16699` (banner trạng thái, KPI, bảng job, hàng đợi, nhãn job, mask lỗi).
 
 ---
 
@@ -238,14 +238,14 @@ Nếu muốn lưu thành `design-system/team-task-web/pages/admin.md`, nội dun
 
 ## 7. Checklist nghiệm thu (mỗi phase)
 
-- [ ] Loading dùng `Skeleton`/`ListSkeleton` đúng hình dạng nội dung, không spinner chữ.
-- [ ] Mọi khối có empty state (icon trong vòng tròn muted + tiêu đề + gợi ý một dòng) và error state có nút thử lại — không có vùng trống.
-- [ ] Chỉ dùng token semantic (`bg-muted`, `text-muted-foreground`, `border-border`…), không hex cứng.
-- [ ] Icon lucide-react, decorative có `aria-hidden`; không emoji.
-- [ ] Phần tử bấm được có `cursor-pointer`, focus ring nhìn thấy, transition 150–200 ms, `motion-reduce` được tôn trọng.
-- [ ] Trạng thái luôn có chữ đi kèm màu; tương phản chữ ≥ 4.5:1 ở **cả light và dark mode**.
-- [ ] Lỗi mới được announce (`role="alert"`) nhưng không announce lặp mỗi lần poll.
-- [ ] Mọi thông báo lỗi hiển thị đều đã qua `maskSecrets`.
-- [ ] Responsive: 375 / 768 / 1024 / 1440 px, không cuộn ngang trên mobile.
-- [ ] Không thêm dependency, không migration (trừ Phase 4 đã được duyệt).
-- [ ] `npm run lint`, `npm run typecheck`, `npm test` pass.
+- [x] Loading dùng `Skeleton`/`ListSkeleton` đúng hình dạng nội dung, không spinner chữ.
+- [x] Mọi khối có empty state (icon trong vòng tròn muted + tiêu đề + gợi ý một dòng) và error state có nút thử lại — không có vùng trống.
+- [x] Chỉ dùng token semantic (`bg-muted`, `text-muted-foreground`, `border-border`…), không hex cứng.
+- [x] Icon lucide-react, decorative có `aria-hidden`; không emoji.
+- [x] Phần tử bấm được có `cursor-pointer`, focus ring nhìn thấy, transition 150–200 ms, `motion-reduce` được tôn trọng.
+- [x] Trạng thái luôn có chữ đi kèm màu; tương phản chữ ≥ 4.5:1 ở **cả light và dark mode**.
+- [x] Lỗi mới được announce (`role="alert"`) nhưng không announce lặp mỗi lần poll.
+- [x] Mọi thông báo lỗi hiển thị đều đã qua `maskSecrets`.
+- [x] Responsive: 375 / 768 / 1024 / 1440 px, không cuộn ngang trên mobile.
+- [x] Không thêm dependency, không migration (trừ Phase 4 đã được duyệt).
+- [x] `npm run lint`, `npm run typecheck`, `npm test` pass.

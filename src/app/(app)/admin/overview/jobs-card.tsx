@@ -30,6 +30,7 @@ import { maskSecrets } from "@/lib/admin/mask-secrets";
 import { cn, timeAgo } from "@/lib/utils";
 import { CopyButton } from "./error-sheet";
 import { formatDuration, parseStats } from "./format-stats";
+import { Sparkline } from "./sparkline";
 
 export type ExtendedJobState = {
   job: string;
@@ -43,6 +44,11 @@ export type ExtendedJobState = {
   isRunning?: boolean;
   isStuck?: boolean;
   expireInSeconds?: number;
+  recentRuns?: Array<{
+    durationMs: number;
+    ok: boolean;
+    finishedAt: string;
+  }>;
 };
 
 const JOB_LABELS: Record<string, string> = {
@@ -328,6 +334,7 @@ export function JobsCard({
                     <TableHead className="w-28">Trạng thái</TableHead>
                     <TableHead className="w-28">Lịch</TableHead>
                     <TableHead className="w-24">Thời gian</TableHead>
+                    <TableHead className="w-28">Xu hướng</TableHead>
                     <TableHead className="w-28">Thành công</TableHead>
                     <TableHead className="w-28">Lỗi gần nhất</TableHead>
                     <TableHead className="w-24 text-right">Thao tác</TableHead>
@@ -344,6 +351,8 @@ export function JobsCard({
                     const scheduleInfo = schedules[j.job] ?? { cron: "", label: "Theo sự kiện" };
                     const canTrigger = !NON_TRIGGERABLE_JOBS.has(j.job);
                     const isTriggerPending = runMutation.isPending && runMutation.variables === j.job;
+                    const runs = j.recentRuns ?? (Array.isArray(j.stats?.recentRuns) ? (j.stats.recentRuns as Array<{ durationMs: number; ok: boolean }>) : []);
+                    const hasFailedRun = runs.some((r) => !r.ok);
 
                     return (
                       <React.Fragment key={j.job}>
@@ -365,6 +374,17 @@ export function JobsCard({
                             <span title={scheduleInfo.cron || undefined}>{scheduleInfo.label}</span>
                           </TableCell>
                           <TableCell className="py-2.5">{renderDuration(j)}</TableCell>
+                          <TableCell className="py-2.5">
+                            <Sparkline
+                              data={runs.map((r) => r.durationMs)}
+                              width={76}
+                              height={20}
+                              minPoints={4}
+                              unit="ms"
+                              tone={hasFailedRun ? "rose" : "teal"}
+                              ariaLabel={`Xu hướng thời gian chạy của ${label}`}
+                            />
+                          </TableCell>
                           <TableCell className="py-2.5 text-xs text-muted-foreground">
                             {j.lastSuccessAt ? timeAgo(j.lastSuccessAt) : "chưa từng"}
                           </TableCell>
@@ -418,7 +438,7 @@ export function JobsCard({
                         </TableRow>
                         {isExpanded && hasDetails && (
                           <TableRow className="bg-muted/20 hover:bg-muted/20">
-                            <TableCell colSpan={7} className="px-4 py-2.5">
+                            <TableCell colSpan={8} className="px-4 py-2.5">
                               <div className="flex flex-col gap-2.5">
                                 {j.lastError && (
                                   <div>
@@ -530,6 +550,26 @@ export function JobsCard({
                         </>
                       )}
                     </div>
+
+                    {(() => {
+                      const runs = j.recentRuns ?? (Array.isArray(j.stats?.recentRuns) ? (j.stats.recentRuns as Array<{ durationMs: number; ok: boolean }>) : []);
+                      if (runs.length < 4) return null;
+                      const hasFailed = runs.some((r) => !r.ok);
+                      return (
+                        <div className="flex items-center gap-2 pt-0.5 text-xs text-muted-foreground">
+                          <span className="text-[11px]">Xu hướng:</span>
+                          <Sparkline
+                            data={runs.map((r) => r.durationMs)}
+                            width={80}
+                            height={18}
+                            minPoints={4}
+                            unit="ms"
+                            tone={hasFailed ? "rose" : "teal"}
+                            ariaLabel={`Xu hướng thời gian chạy của ${label}`}
+                          />
+                        </div>
+                      );
+                    })()}
 
                     {hasDetails && (
                       <div className="mt-1">

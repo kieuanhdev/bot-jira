@@ -356,4 +356,47 @@ describe("recordRun execution behavior", () => {
       })
     );
   });
+
+  it("appends to recentRuns in stats on each run", async () => {
+    const { recordRun } = await import("./boss");
+
+    mocks.cursorUpsert.mockResolvedValueOnce({
+      id: "cur-3",
+      integration: "worker",
+      scope: "poll-pr-comments",
+      cursor: null,
+      lastStartedAt: new Date(),
+      lastSuccessAt: new Date(),
+      lastErrorAt: null,
+      lastError: null,
+      stats: {
+        recentRuns: [
+          { durationMs: 200, ok: true, finishedAt: "2026-09-30T06:00:00.000Z" },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await recordRun("poll-pr-comments", async () => ({
+      ok: true,
+      stats: { comments: 5 },
+    }));
+
+    expect(mocks.cursorUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "cur-3" },
+        data: expect.objectContaining({
+          stats: expect.objectContaining({
+            comments: 5,
+            durationMs: expect.any(Number),
+            recentRuns: expect.arrayContaining([
+              expect.objectContaining({ durationMs: 200, ok: true }),
+              expect.objectContaining({ durationMs: expect.any(Number), ok: true }),
+            ]),
+          }),
+        }),
+      })
+    );
+  });
 });

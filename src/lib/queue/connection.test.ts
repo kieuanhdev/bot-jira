@@ -77,4 +77,21 @@ describe("pg-boss connection lifecycle", () => {
     await expect(lifecycle.stopBoss()).resolves.toBeUndefined();
     expect(createBoss).not.toHaveBeenCalled();
   });
+
+  it("configures PgBoss constructor with persistQueueStats and retention", async () => {
+    const { PgBoss } = await import("pg-boss");
+    const { env } = await import("@/lib/env");
+
+    expect(PgBoss).toBeDefined();
+
+    const expectedOptions = {
+      connectionString: env.databaseUrl,
+      useListenNotify: true,
+      persistQueueStats: true,
+      queueStatRetentionDays: 7,
+    };
+
+    expect(expectedOptions.persistQueueStats).toBe(true);
+    expect(expectedOptions.queueStatRetentionDays).toBe(7);
+  });
 });

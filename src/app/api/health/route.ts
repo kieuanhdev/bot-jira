@@ -8,13 +8,34 @@ import { env, hasBitbucketConfig, hasSentryConfig, hasOllamaConfig, hasOpenAiCon
 import { getWorkerHealth, isJiraFresh } from "@/lib/health/worker-health";
 import { getJobSchedules } from "@/lib/queue/schedules";
 
-async function ping(name: string, fn: () => Promise<unknown>): Promise<{ ok: boolean; ms: number; error?: string }> {
+export type PingResult = {
+  ok: boolean;
+  ms: number;
+  error?: string;
+  history?: number[];
+};
+
+const servicePingHistory: Record<string, number[]> = {};
+
+function recordServiceLatency(name: string, ms: number): number[] {
+  const history = servicePingHistory[name] ?? [];
+  history.push(ms);
+  if (history.length > 20) history.shift();
+  servicePingHistory[name] = history;
+  return [...history];
+}
+
+async function ping(name: string, fn: () => Promise<unknown>): Promise<PingResult> {
   const started = Date.now();
   try {
     await fn();
-    return { ok: true, ms: Date.now() - started };
+    const ms = Date.now() - started;
+    const history = recordServiceLatency(name, ms);
+    return { ok: true, ms, history };
   } catch (e) {
-    return { ok: false, ms: Date.now() - started, error: (e as Error).message.slice(0, 200) };
+    const ms = Date.now() - started;
+    const history = recordServiceLatency(name, ms);
+    return { ok: false, ms, error: (e as Error).message.slice(0, 200), history };
   }
 }
 

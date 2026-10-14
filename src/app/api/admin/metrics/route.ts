@@ -98,18 +98,55 @@ export async function GET() {
     readyCount: number;
     activeCount: number;
     failedCount: number;
+    history?: Array<{
+      time: string;
+      completed: number;
+      failed: number;
+      active: number;
+      ready: number;
+    }>;
   }> | null = null;
   try {
     const { startBoss } = await import("@/lib/queue/boss");
     const boss = await startBoss();
     const qList = await boss.getQueues();
-    queues = qList.map((q) => ({
-      name: q.name,
-      queuedCount: q.queuedCount,
-      readyCount: q.readyCount,
-      activeCount: q.activeCount,
-      failedCount: q.failedCount,
-    }));
+    queues = await Promise.all(
+      qList.map(async (q) => {
+        let history: Array<{
+          time: string;
+          completed: number;
+          failed: number;
+          active: number;
+          ready: number;
+        }> = [];
+        try {
+          const stats = await boss.getQueueStats(q.name, {
+            from: oneDayAgo,
+            maxDataPoints: 24,
+            aggregate: "max",
+          });
+          if (Array.isArray(stats)) {
+            history = stats.map((s) => ({
+              time: (s.deltaOn ?? s.capturedOn ?? new Date()).toISOString(),
+              completed: s.completedDelta ?? 0,
+              failed: s.failedDelta ?? 0,
+              active: s.activeCount ?? 0,
+              ready: s.readyCount ?? 0,
+            }));
+          }
+        } catch {
+          history = [];
+        }
+        return {
+          name: q.name,
+          queuedCount: q.queuedCount,
+          readyCount: q.readyCount,
+          activeCount: q.activeCount,
+          failedCount: q.failedCount,
+          history,
+        };
+      })
+    );
   } catch {
     queues = null;
   }

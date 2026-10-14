@@ -2,7 +2,7 @@
 
 > Mục tiêu: trên trang `/admin/sync`, admin chọn được **dự án nào đồng bộ những phần nào** (issue, comment, workflow, dev status, AI…), thay vì chỉ một công tắc bật/tắt toàn bộ như hiện nay.
 > Liên quan: `docs/ADMIN_MONITOR_UI_PLAN.md` (mục 4, S1–S6 — nâng cấp UI trang sync). Hai kế hoạch làm song song được; kế hoạch này thay đổi phần dữ liệu + worker.
-> Tài liệu này chỉ là kế hoạch — chưa sửa code.
+> **Trạng thái:** Đã hoàn thành triển khai toàn bộ **Phase 0–6** (commit `459f298` và `78e00dd`).
 
 ---
 
@@ -224,17 +224,17 @@ Tự động hoá & báo cáo
 
 ## 7. Lộ trình triển khai
 
-| Phase | Nội dung | Cần duyệt |
-|-------|----------|-----------|
-| **0** | Duyệt danh sách hạng mục, preset và mô hình dữ liệu ở tài liệu này | Developer |
-| **1** | Migration thêm `syncFeatures`; `sync-features.ts` (registry, `resolveSyncFeatures`, `loadSyncPolicy`) + unit test | **Migration (file bảo vệ)** |
-| **2** | Worker W1–W5 (pipeline + webhook) + `suppressNotifications` cho backfill | — |
-| **3** | Worker W6–W9 (các job nền) | — |
-| **4** | API GET/PATCH + validate phụ thuộc + audit + backfill khi bật lại | — |
-| **5** | UI: badge preset, Sheet cấu hình, bulk preset, KPI "Tuỳ chỉnh" | — |
-| **6** | Ghi chú trên board cho hạng mục bị tắt | — |
+| Phase | Nội dung | Trạng thái |
+|-------|----------|------------|
+| **0** | Duyệt danh sách hạng mục, preset và mô hình dữ liệu ở tài liệu này | **Đã hoàn thành** |
+| **1** | Migration thêm `syncFeatures`; `sync-features.ts` (registry, `resolveSyncFeatures`, `loadSyncPolicy`) + unit test | **Đã hoàn thành** |
+| **2** | Worker W1–W5 (pipeline + webhook) + `suppressNotifications` cho backfill | **Đã hoàn thành** |
+| **3** | Worker W6–W9 (các job nền) | **Đã hoàn thành** |
+| **4** | API GET/PATCH + validate phụ thuộc + audit + backfill khi bật lại | **Đã hoàn thành** |
+| **5** | UI: badge preset, Sheet cấu hình, bulk preset, KPI "Tuỳ chỉnh" | **Đã hoàn thành** |
+| **6** | Ghi chú trên board cho hạng mục bị tắt | **Đã hoàn thành** |
 
-Phase 2–3 có thể merge trước UI: khi chưa có UI, mọi dự án vẫn `{}` = bật hết → không đổi hành vi.
+Toàn bộ các phase đã được commit ở `459f298` và tái cấu trúc mô-đun dùng chung ở `78e00dd`.
 
 ---
 

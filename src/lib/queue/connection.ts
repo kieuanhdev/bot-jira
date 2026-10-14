@@ -71,6 +71,8 @@ const lifecycle = createBossLifecycle(
     new PgBoss({
       connectionString: env.databaseUrl,
       useListenNotify: true,
+      persistQueueStats: true,
+      queueStatRetentionDays: 7,
     }),
   globalForBoss
 );

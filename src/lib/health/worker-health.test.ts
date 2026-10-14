@@ -274,5 +274,30 @@ describe("getWorkerHealth with per-project Jira cursors", () => {
     expect(h.stuckJobs).toEqual(["poll-jira"]);
     expect(h.status).toBe("degraded");
   });
+
+  it("extracts and returns recentRuns from stats for job trend analysis", async () => {
+    const history = [
+      { durationMs: 120, ok: true, finishedAt: ago(300_000).toISOString() },
+      { durationMs: 140, ok: true, finishedAt: ago(240_000).toISOString() },
+      { durationMs: 500, ok: false, finishedAt: ago(180_000).toISOString() },
+      { durationMs: 110, ok: true, finishedAt: ago(120_000).toISOString() },
+    ];
+    rows([
+      { scope: "liveness", lastStartedAt: ago(1000), lastSuccessAt: ago(1000), lastErrorAt: null, lastError: null, stats: null },
+      {
+        scope: "sentry-import",
+        lastStartedAt: ago(60_000),
+        lastSuccessAt: ago(60_000),
+        lastErrorAt: null,
+        lastError: null,
+        stats: { durationMs: 110, recentRuns: history },
+      },
+    ]);
+
+    const h = await getWorkerHealth();
+    const sentryJob = h.jobs.find((j) => j.job === "sentry-import");
+    expect(sentryJob).toBeDefined();
+    expect(sentryJob?.recentRuns).toEqual(history);
+  });
 });
 

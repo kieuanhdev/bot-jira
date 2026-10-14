@@ -36,8 +36,9 @@ import { WebhooksCard, type WebhookSourceMetric } from "./overview/webhooks-card
 import { PgBossCard, type QueueMetric } from "./overview/pg-boss-card";
 import { AuditCard } from "./overview/audit-card";
 import { ErrorSheet, CopyButton } from "./overview/error-sheet";
+import { Sparkline } from "./overview/sparkline";
 
-type Ping = { ok: boolean; ms: number; error?: string };
+type Ping = { ok: boolean; ms: number; error?: string; history?: number[] };
 
 type Health = {
   status: string;
@@ -468,7 +469,20 @@ export function AdminOverviewClient() {
                             {SERVICE_LABEL[k]}
                           </span>
                         </div>
-                        {serviceBadge(ping)}
+                        <div className="flex items-center gap-2">
+                          {ping.history && ping.history.length >= 4 && (
+                            <Sparkline
+                              data={ping.history}
+                              width={60}
+                              height={18}
+                              minPoints={4}
+                              unit="ms"
+                              tone={!ping.ok ? "rose" : ping.ms > 1000 ? "amber" : "emerald"}
+                              ariaLabel={`Xu hướng độ trễ của ${SERVICE_LABEL[k]}`}
+                            />
+                          )}
+                          {serviceBadge(ping)}
+                        </div>
                       </div>
                       {hasInlineError && (
                         <div className="mt-1 flex items-start justify-between gap-2 rounded bg-destructive/10 p-2 text-xs text-destructive">

@@ -43,6 +43,22 @@ export async function recordRun(name: string, run: () => Promise<WorkerLog>): Pr
     const result = await run();
     const durationMs = Date.now() - startedAt;
     const errorText = result.ok ? null : (result.errors ?? [result.reason ?? "Worker failed"]).join("; ").slice(0, 2000);
+    const existingStats = (cursor.stats && typeof cursor.stats === "object" && !Array.isArray(cursor.stats))
+      ? (cursor.stats as Record<string, unknown>)
+      : {};
+    const existingRuns = Array.isArray(existingStats.recentRuns)
+      ? (existingStats.recentRuns as Array<{ durationMs: number; ok: boolean; finishedAt: string }>)
+      : [];
+    const finishedAtIso = new Date().toISOString();
+    const recentRuns = [
+      ...existingRuns.slice(-19),
+      {
+        durationMs,
+        ok: Boolean(result.ok),
+        finishedAt: finishedAtIso,
+      },
+    ];
+
     await prisma.integrationCursor.update({
       where: { id: cursor.id },
       data: {
@@ -54,7 +70,8 @@ export async function recordRun(name: string, run: () => Promise<WorkerLog>): Pr
           skipped: Boolean(result.skipped),
           reason: result.reason ?? null,
           durationMs,
-          finishedAt: new Date().toISOString(),
+          finishedAt: finishedAtIso,
+          recentRuns,
         },
       },
     });
@@ -89,6 +106,19 @@ export async function recordRun(name: string, run: () => Promise<WorkerLog>): Pr
     const existingStats = (cursor.stats && typeof cursor.stats === "object" && !Array.isArray(cursor.stats))
       ? (cursor.stats as Record<string, unknown>)
       : {};
+    const existingRuns = Array.isArray(existingStats.recentRuns)
+      ? (existingStats.recentRuns as Array<{ durationMs: number; ok: boolean; finishedAt: string }>)
+      : [];
+    const finishedAtIso = new Date().toISOString();
+    const recentRuns = [
+      ...existingRuns.slice(-19),
+      {
+        durationMs,
+        ok: false,
+        finishedAt: finishedAtIso,
+      },
+    ];
+
     await prisma.integrationCursor.update({
       where: { id: cursor.id },
       data: {
@@ -97,7 +127,8 @@ export async function recordRun(name: string, run: () => Promise<WorkerLog>): Pr
         stats: {
           ...existingStats,
           durationMs,
-          finishedAt: new Date().toISOString(),
+          finishedAt: finishedAtIso,
+          recentRuns,
         },
       },
     }).catch(() => null);

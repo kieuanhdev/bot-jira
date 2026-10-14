@@ -16,6 +16,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ListSkeleton } from "@/components/shared/skeleton";
 import { ErrorState } from "@/components/shared/async-state";
 import { cn } from "@/lib/utils";
+import { Sparkline } from "./sparkline";
 
 export type QueueMetric = {
   name: string;
@@ -23,6 +24,13 @@ export type QueueMetric = {
   readyCount: number;
   activeCount: number;
   failedCount: number;
+  history?: Array<{
+    time: string;
+    completed: number;
+    failed: number;
+    active: number;
+    ready: number;
+  }>;
 };
 
 export function PgBossCard({
@@ -64,12 +72,15 @@ export function PgBossCard({
                   <TableHead className="w-24 text-center">Đang chạy</TableHead>
                   <TableHead className="w-20 text-center">Tồn</TableHead>
                   <TableHead className="w-20 text-right">Lỗi</TableHead>
+                  <TableHead className="w-24 text-center">Xu hướng (24h)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {queues.map((q) => {
                   const isHighPending = q.readyCount > 50;
                   const hasFailed = q.failedCount > 0;
+                  const history = q.history ?? [];
+                  const hasFailedHistory = history.some((h) => h.failed > 0);
 
                   return (
                     <TableRow
@@ -107,6 +118,17 @@ export function PgBossCard({
                         ) : (
                           <span className="text-muted-foreground">0</span>
                         )}
+                      </TableCell>
+                      <TableCell className="py-2 text-center text-xs">
+                        <Sparkline
+                          data={history.map((h) => h.completed)}
+                          width={72}
+                          height={18}
+                          minPoints={4}
+                          unit="xong"
+                          tone={hasFailedHistory ? "amber" : "teal"}
+                          ariaLabel={`Xu hướng hoàn thành 24h của hàng đợi ${q.name}`}
+                        />
                       </TableCell>
                     </TableRow>
                   );

@@ -105,7 +105,42 @@ describe("GET /api/admin/metrics", () => {
     expect(data.webhooks.jira.source).toBe("jira");
     expect(data.queues).toHaveLength(1);
     expect(data.queues[0].name).toBe("deliver-notifications");
+    expect(data.queues[0].history).toEqual([]);
     expect(data.ai.scores).toBe(10);
+  });
+
+  it("populates queue history when boss.getQueueStats returns snapshots", async () => {
+    const mockSnapshots = [
+      {
+        deltaOn: new Date("2026-10-14T08:00:00Z"),
+        completedDelta: 12,
+        failedDelta: 0,
+        activeCount: 1,
+        readyCount: 0,
+      },
+      {
+        deltaOn: new Date("2026-10-14T09:00:00Z"),
+        completedDelta: 15,
+        failedDelta: 1,
+        activeCount: 2,
+        readyCount: 3,
+      },
+    ];
+
+    mocks.startBoss.mockResolvedValue({
+      getQueues: vi.fn().mockResolvedValue([
+        { name: "deliver-notifications", queuedCount: 0, readyCount: 3, activeCount: 2, failedCount: 1 },
+      ]),
+      getQueueStats: vi.fn().mockResolvedValue(mockSnapshots),
+    });
+
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.queues[0].history).toEqual([
+      { time: "2026-10-14T08:00:00.000Z", completed: 12, failed: 0, active: 1, ready: 0 },
+      { time: "2026-10-14T09:00:00.000Z", completed: 15, failed: 1, active: 2, ready: 3 },
+    ]);
   });
 
   it("gracefully falls back to queues: null if pg-boss getQueues throws", async () => {
