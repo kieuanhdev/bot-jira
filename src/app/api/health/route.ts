@@ -74,6 +74,10 @@ export async function GET() {
       workerAgeMs: workerHealth.workerAgeMs,
       jiraSyncAgeMs: workerHealth.jiraSyncAgeMs,
       hasErrors: workerHealth.hasErrors,
+      staleProjects: workerHealth.staleProjects ?? [],
+      failingProjects: workerHealth.failingProjects ?? [],
+      jiraSyncPaused: Boolean(workerHealth.jiraSyncPaused),
+      failingJobs: workerHealth.failingJobs ?? [],
     },
     workers: workerHealth.jobs,
   });

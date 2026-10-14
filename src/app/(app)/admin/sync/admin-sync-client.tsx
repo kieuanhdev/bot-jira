@@ -5,15 +5,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
   DatabaseZap,
   FolderSync,
   Loader2,
+  MoreHorizontal,
   PauseCircle,
   Play,
   RefreshCw,
 } from "lucide-react";
 import { api, getErrorMessage } from "@/lib/api-client";
 import { adminKeys, boardKeys } from "@/lib/query-keys";
+import { maskSecrets } from "@/lib/admin/mask-secrets";
 import { cn, timeAgo } from "@/lib/utils";
 import type { AdminProjectSyncRow, AdminSyncState } from "@/lib/admin/project-sync";
 import { PageHeader } from "@/components/shared/page-header";
@@ -28,6 +31,12 @@ import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const STATE_BADGE: Record<AdminSyncState, { label: string; variant: "success" | "warning" | "danger" | "info" | "secondary" }> = {
   ok: { label: "Ổn định", variant: "success" },
@@ -81,11 +90,30 @@ function SyncSwitch({
   );
 }
 
+const STATE_PRIORITY: Record<AdminSyncState, number> = {
+  failed: 1,
+  running: 2,
+  never: 3,
+  ok: 4,
+  disabled: 5,
+};
+
 export function AdminSyncClient() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [filterState, setFilterState] = useState<"all" | "enabled" | "disabled" | "failed">("all");
+  const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<Pending>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
+
+  const toggleError = (key: string) => {
+    setExpandedErrors((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: adminKeys.projects,
@@ -96,9 +124,26 @@ export function AdminSyncClient() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((p) => p.key.toLowerCase().includes(q) || p.name.toLowerCase().includes(q));
-  }, [items, search]);
+    let result = items;
+    if (filterState === "enabled") {
+      result = result.filter((p) => p.syncEnabled);
+    } else if (filterState === "disabled") {
+      result = result.filter((p) => !p.syncEnabled);
+    } else if (filterState === "failed") {
+      result = result.filter((p) => p.state === "failed");
+    }
+
+    if (q) {
+      result = result.filter((p) => p.key.toLowerCase().includes(q) || p.name.toLowerCase().includes(q));
+    }
+
+    return [...result].sort((a, b) => {
+      const aPri = !a.syncEnabled ? 5 : (STATE_PRIORITY[a.state] ?? 4);
+      const bPri = !b.syncEnabled ? 5 : (STATE_PRIORITY[b.state] ?? 4);
+      if (aPri !== bPri) return aPri - bPri;
+      return a.key.localeCompare(b.key);
+    });
+  }, [items, search, filterState]);
 
   const counts = useMemo(
     () => ({
@@ -244,10 +289,41 @@ export function AdminSyncClient() {
       />
 
       <MetricGrid columns={4}>
-        <MetricCard label="Dự án" value={counts.total} icon={FolderSync} loading={isLoading} />
-        <MetricCard label="Đang bật" value={counts.enabled} icon={CheckCircle2} tone="success" loading={isLoading} />
-        <MetricCard label="Đã tắt" value={counts.disabled} icon={PauseCircle} tone="warning" loading={isLoading} />
-        <MetricCard label="Đang lỗi" value={counts.failed} icon={AlertTriangle} tone="danger" loading={isLoading} />
+        <MetricCard
+          label="Dự án"
+          value={counts.total}
+          icon={FolderSync}
+          loading={isLoading}
+          onClick={() => setFilterState("all")}
+          selected={filterState === "all"}
+        />
+        <MetricCard
+          label="Đang bật"
+          value={counts.enabled}
+          icon={CheckCircle2}
+          tone="success"
+          loading={isLoading}
+          onClick={() => setFilterState((prev) => (prev === "enabled" ? "all" : "enabled"))}
+          selected={filterState === "enabled"}
+        />
+        <MetricCard
+          label="Đã tắt"
+          value={counts.disabled}
+          icon={PauseCircle}
+          tone="warning"
+          loading={isLoading}
+          onClick={() => setFilterState((prev) => (prev === "disabled" ? "all" : "disabled"))}
+          selected={filterState === "disabled"}
+        />
+        <MetricCard
+          label="Đang lỗi"
+          value={counts.failed}
+          icon={AlertTriangle}
+          tone="danger"
+          loading={isLoading}
+          onClick={() => setFilterState((prev) => (prev === "failed" ? "all" : "failed"))}
+          selected={filterState === "failed"}
+        />
       </MetricGrid>
 
       {feedback && <FeedbackBanner tone={feedback.tone}>{feedback.text}</FeedbackBanner>}
@@ -280,7 +356,13 @@ export function AdminSyncClient() {
           <EmptyState
             icon={DatabaseZap}
             title={items.length === 0 ? "Chưa có dự án nào" : "Không có dự án phù hợp"}
-            hint={items.length === 0 ? "Dự án sẽ xuất hiện khi được thêm vào catalog Jira." : "Thử từ khoá khác."}
+            hint={
+              items.length === 0
+                ? "Dự án sẽ xuất hiện khi được thêm vào catalog Jira."
+                : filterState !== "all"
+                  ? "Thử xoá bộ lọc hoặc đổi từ khoá."
+                  : "Thử từ khoá khác."
+            }
           />
         }
       >
@@ -289,6 +371,7 @@ export function AdminSyncClient() {
             {filtered.map((p) => {
               const badge = STATE_BADGE[p.state];
               const rowBusy = busyKey === p.key;
+              const hasExpandedError = expandedErrors.has(p.key);
               return (
                 <li
                   key={p.key}
@@ -309,40 +392,102 @@ export function AdminSyncClient() {
                       {p.lastStartedAt && <span>· chạy gần nhất {timeAgo(p.lastStartedAt)}</span>}
                     </div>
                     {p.state === "failed" && p.lastError && (
-                      <p className="line-clamp-2 text-xs text-destructive" title={p.lastError}>
-                        {p.lastError}
-                      </p>
+                      <div className="mt-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleError(p.key)}
+                          className="inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-destructive transition-colors hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          aria-expanded={hasExpandedError}
+                        >
+                          <ChevronRight
+                            className={cn(
+                              "h-3.5 w-3.5 transition-transform duration-150 motion-reduce:transition-none",
+                              hasExpandedError && "rotate-90"
+                            )}
+                            aria-hidden="true"
+                          />
+                          <span>{hasExpandedError ? "Ẩn chi tiết lỗi" : "Xem chi tiết lỗi"}</span>
+                        </button>
+                        {hasExpandedError && (
+                          <pre className="mt-1.5 max-h-48 overflow-x-auto whitespace-pre-wrap rounded bg-destructive/10 p-2 font-mono text-xs text-destructive">
+                            {maskSecrets(p.lastError)}
+                          </pre>
+                        )}
+                      </div>
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="cursor-pointer gap-1.5"
-                      disabled={!p.syncEnabled || anyBusy}
-                      onClick={() => {
-                        setFeedback(null);
-                        syncNow.mutate({ key: p.key });
-                      }}
-                    >
-                      <RefreshCw
-                        className={cn("h-4 w-4", rowBusy && syncNow.isPending && "animate-spin motion-reduce:animate-none")}
-                        aria-hidden="true"
-                      />
-                      Đồng bộ
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="cursor-pointer"
-                      disabled={!p.syncEnabled || anyBusy}
-                      onClick={() => {
-                        setFeedback(null);
-                        setPending({ kind: "full", key: p.key });
-                      }}
-                    >
-                      Toàn bộ
-                    </Button>
+                    {/* Desktop direct action buttons */}
+                    <div className="hidden items-center gap-2 sm:flex">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="cursor-pointer gap-1.5"
+                        disabled={!p.syncEnabled || anyBusy}
+                        onClick={() => {
+                          setFeedback(null);
+                          syncNow.mutate({ key: p.key });
+                        }}
+                      >
+                        <RefreshCw
+                          className={cn("h-4 w-4", rowBusy && syncNow.isPending && "animate-spin motion-reduce:animate-none")}
+                          aria-hidden="true"
+                        />
+                        Đồng bộ
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="cursor-pointer"
+                        disabled={!p.syncEnabled || anyBusy}
+                        onClick={() => {
+                          setFeedback(null);
+                          setPending({ kind: "full", key: p.key });
+                        }}
+                      >
+                        Toàn bộ
+                      </Button>
+                    </div>
+
+                    {/* Mobile dropdown menu */}
+                    <div className="sm:hidden">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 cursor-pointer p-0"
+                            disabled={!p.syncEnabled || anyBusy}
+                          >
+                            <span className="sr-only">Thao tác cho {p.key}</span>
+                            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            className="cursor-pointer gap-2"
+                            onClick={() => {
+                              setFeedback(null);
+                              syncNow.mutate({ key: p.key });
+                            }}
+                          >
+                            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                            Đồng bộ
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="cursor-pointer gap-2"
+                            onClick={() => {
+                              setFeedback(null);
+                              setPending({ kind: "full", key: p.key });
+                            }}
+                          >
+                            <FolderSync className="h-4 w-4" aria-hidden="true" />
+                            Đồng bộ toàn bộ
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+
                     <SyncSwitch
                       checked={p.syncEnabled}
                       disabled={anyBusy}

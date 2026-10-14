@@ -113,7 +113,7 @@ describe("runJiraSyncPipeline", () => {
 
   it("does not throw when page limit is reached without exhausting all pages and finalizes with cursor advanced", async () => {
     const { dependencies, events, jira } = createHarness();
-    dependencies.upsertIssue = vi.fn(async () => ({ applied: true, data: {} as any }));
+    dependencies.upsertIssue = vi.fn(async () => ({ applied: true, data: {} as unknown as Awaited<ReturnType<JiraSyncDependencies["upsertIssue"]>>["data"] }));
     jira.search = vi.fn(async () => ({
       startAt: 0,
       maxResults: 50,
@@ -125,7 +125,7 @@ describe("runJiraSyncPipeline", () => {
           updated: "2026-10-09T01:00:00.000Z",
           comment: { total: 0, comments: [] },
         },
-      })) as any,
+      })) as unknown as Awaited<ReturnType<JiraSyncClient["search"]>>["issues"],
     }));
 
     const result = await runJiraSyncPipeline(
