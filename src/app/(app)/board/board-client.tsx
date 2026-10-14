@@ -53,10 +53,6 @@ const BoardListView = dynamic(
   () => import("./board-list-view").then((m) => m.BoardListView),
   { ssr: false, loading: () => <Skeleton className="h-96 w-full" /> }
 );
-const BoardTeamView = dynamic(
-  () => import("./board-team-view").then((m) => m.BoardTeamView),
-  { ssr: false, loading: () => <Skeleton className="h-96 w-full" /> }
-);
 const QuickPanel = dynamic(
   () => import("./board-quick-panel").then((m) => m.QuickPanel),
   { ssr: false }
@@ -836,20 +832,6 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
           title="Không có task nào để hiển thị"
           hint="Hãy thử điều chỉnh bộ lọc, hoặc làm mới dữ liệu để cập nhật bảng."
           className="flex-1"
-        />
-      ) : effectiveView === "board" && teamMode ? (
-        <BoardTeamView
-          issues={issues}
-          columns={visibleColumns}
-          findColumn={findColumnForIssue}
-          onOpen={setQuickPanel}
-          onSelectAssignee={(assignee) => setFilters((current) => ({
-            ...current,
-            assigneeScope: assignee
-              ? { mode: "roster", roster: [assignee], view: "all-selected" }
-              : { mode: "roster", roster: ["unassigned"], view: "all-selected" },
-          }))}
-          projectKey={selectedProject}
         />
       ) : effectiveView === "board" ? (
         <BoardKanbanView
