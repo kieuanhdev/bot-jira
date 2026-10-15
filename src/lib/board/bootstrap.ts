@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentUserGate } from "@/lib/user-gate";
 import {
   listActiveProjects,
   normalizeProjectKey,
@@ -53,20 +54,7 @@ export async function getBoardBootstrap(
   initialProjectFromUrl?: string
 ): Promise<BoardBootstrap | null> {
   const [user, activeCatalog] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        jiraUserEnc: true,
-        jiraTokenEnc: true,
-        jiraAuth: true,
-        jiraVerifiedAt: true,
-        jiraUsername: true,
-        onboarded: true,
-        role: true,
-        boardProjects: true,
-      },
-    }),
+    getCurrentUserGate(userId),
     listActiveProjects(),
   ]);
 

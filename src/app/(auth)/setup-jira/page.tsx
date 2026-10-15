@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSession } from "@/lib/session";
 import { userJiraAuth } from "@/lib/user-creds";
-import { prisma } from "@/lib/prisma";
+import { getCurrentUserGate } from "@/lib/user-gate";
 import { listActiveProjects } from "@/lib/jira/project-catalog";
 import { SetupJiraClient } from "./setup-jira-client";
 
@@ -14,17 +14,7 @@ export default async function SetupJiraPage() {
   const session = await getSession();
   if (!session?.user?.id) redirect("/login");
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: {
-      jiraUserEnc: true,
-      jiraTokenEnc: true,
-      jiraAuth: true,
-      jiraVerifiedAt: true,
-      onboarded: true,
-      boardProjects: true,
-    },
-  });
+  const user = await getCurrentUserGate(session.user.id);
 
   const jiraReady = Boolean(userJiraAuth(user) && user?.jiraVerifiedAt);
   if (jiraReady && user?.onboarded) redirect("/board");

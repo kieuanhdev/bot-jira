@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { getCurrentUserGate } from "@/lib/user-gate";
 import { getSession } from "@/lib/session";
 import { userJiraAuth } from "@/lib/user-creds";
 import { getSystemJiraAuth } from "@/lib/jira/client";
@@ -23,10 +23,7 @@ export default async function IssuePage({ params }: { params: Promise<{ key: str
   // Never synced locally: fall back to the blocking live read.
   const session = await getSession();
   const user = session?.user?.id
-    ? await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true },
-      })
+    ? await getCurrentUserGate(session.user.id)
     : null;
   const auth = userJiraAuth(user) || (await getSystemJiraAuth());
   const view = await getIssueView(key, auth);
