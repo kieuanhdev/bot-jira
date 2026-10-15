@@ -32,9 +32,9 @@ Baseline verified: 2026-10-15
 | REF-006 | SKIPPED | — | — | CLOSED by decision D2 (UI filter only) |
 | REF-008 | SKIPPED | — | — | CLOSED by decision D8 (accepted risk) |
 | REF-021 | DONE | `30b1591` | `npm run build` (pass, 74/74 routes, 2.1s), chunk analysis script | Measured bundle baseline and First Load JS across 4 routes: `/board` 1056.21 kB (shared 543.47 kB, route 512.74 kB, dnd-kit 60.34 kB), `/bulk` 1498.20 kB (shared 543.47 kB, route 954.72 kB), `/reports/projects/[projectKey]` 926.19 kB (recharts dynamically loaded, 0 kB in initial load), `/admin/sync` 892.16 kB. Disproved P5 exceljs hypothesis (server-only, 0 kB client). Discovered 463.24 kB node crypto polyfill in `/bulk` from pure duration helper imports in `worklogs/schema.ts`. Output documented in `docs/audit/bundle-baseline.md`. |
-| REF-022 | TODO | — | — | Bundle fixes (CONDITIONAL on REF-021) |
-| REF-023 | TODO | — | — | `/watch` prefetch (CONDITIONAL) |
-| REF-024 | TODO | — | — | Split `admin-sync-client.tsx` |
+| REF-022 | SKIPPED | — | Measured bundle analysis (REF-021) | CONDITIONAL: REF-021 disproved P5 hypotheses (exceljs is 0 kB in client; recharts already dynamic-imported; dnd-kit is needed at first paint for default Kanban view). No bundle changes proven beneficial without degrading default UX. |
+| REF-023 | SKIPPED | — | Evaluation of /watch prefetch | CONDITIONAL: Plan default decision ("no change") upheld. `listWatchedItems` runs fast indexed parallel Prisma queries; streaming with Suspense deferred to avoid hydration mismatches with pending queries. |
+| REF-024 | DONE | `cafd4a0` | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (306 files / 2776 tests pass), `npm run build` (pass, 74/74 routes, 13.6s), `test:db` (not run: no DB) | Split `admin-sync-client.tsx` from 1034 lines to 393 lines (< 400 lines target). Extracted components in same directory: `project-sync-row.tsx` (owns local expanded error state), `project-features-sheet.tsx` (lazy-loaded via `next/dynamic`), `sync-switch.tsx`, `sync-bulk-bar.tsx`, `sync-metrics.tsx`, `sync-header.tsx`, and `sync-confirm-dialog.tsx`. Added `[content-visibility:auto]` to project list. Added unit tests in `project-sync-row.test.ts` (2 tests). Zero new useEffects added. |
 | REF-025 | TODO | — | — | `board-client.tsx` effects cleanup |
 
 ## Classification of 38 `req.json()` Sites (REF-005)
