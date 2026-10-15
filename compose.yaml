@@ -18,7 +18,7 @@ services:
       POSTGRES_PASSWORD: teamweb
       POSTGRES_DB: teamweb
     ports:
-      - "${DB_PORT:-5433}:5432"
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -27,12 +27,26 @@ services:
       timeout: 5s
       retries: 12
 
+  migrate:
+    build: .
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://teamweb:teamweb@db:5432/teamweb
+    command: ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node scripts/seed-admin.mjs"]
+
   web:
     build: .
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     env_file:
       - .env
     environment:
@@ -54,6 +68,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     env_file:
       - .env
     environment:

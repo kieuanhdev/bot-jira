@@ -18,6 +18,33 @@ function bool(name: string, fallback = false): boolean {
   return ["1", "true", "yes", "on"].includes(v.toLowerCase());
 }
 
+/**
+ * Fail-fast validation of required production secrets (REF-017).
+ * Enforces NEXTAUTH_SECRET and CRED_ENCRYPTION_KEY when NODE_ENV is production,
+ * but allows build-time phase (phase-production-build) and dev/test to proceed.
+ */
+export function validateProductionSecrets(): void {
+  if (process.env.NODE_ENV !== "production") return;
+  if (process.env.NEXT_PHASE === "phase-production-build") return;
+
+  const missing: string[] = [];
+  if (!process.env.NEXTAUTH_SECRET || process.env.NEXTAUTH_SECRET.trim() === "") {
+    missing.push("NEXTAUTH_SECRET");
+  }
+  if (!process.env.CRED_ENCRYPTION_KEY || process.env.CRED_ENCRYPTION_KEY.trim() === "") {
+    missing.push("CRED_ENCRYPTION_KEY");
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `[FATAL] Missing required production secret(s): ${missing.join(", ")}. In production runtime, NEXTAUTH_SECRET and CRED_ENCRYPTION_KEY must be configured.`
+    );
+  }
+}
+
+// Run boot validation immediately on module evaluation
+validateProductionSecrets();
+
 export const env = {
   nodeEnv: str("NODE_ENV", "development"),
   databaseUrl: str("DATABASE_URL"),

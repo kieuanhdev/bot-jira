@@ -25,7 +25,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build args are optional; real values come from the runtime env.
-ARG DATABASE_URL=postgresql://teamweb:teamweb@db:5432/teamweb
+ARG DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder
 ENV DATABASE_URL=$DATABASE_URL
 # Prisma generate needs the schema + config; it does not connect here.
 RUN npx prisma generate
@@ -50,7 +50,7 @@ COPY --from=build --chown=node:node /app/scripts ./scripts
 COPY --from=build --chown=node:node /app/tsconfig.json ./tsconfig.json
 COPY --from=build --chown=node:node /app/package.json ./package.json
 USER node
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && exec npm run worker"]
+CMD ["npm", "run", "worker"]
 
 # ── Runtime ───────────────────────────────────────────────────────────
 FROM base AS runner
@@ -77,5 +77,5 @@ USER node
 EXPOSE 3100
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD node -e "require('net').connect(process.env.PORT||3100,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"
-# Apply migrations, seed the admin, then start the server.
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node scripts/seed-admin.mjs && exec node server.js"]
+# Start the standalone server (migrations & admin seed run in dedicated migrate service).
+CMD ["node", "server.js"]
