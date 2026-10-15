@@ -2,7 +2,9 @@ import { prisma } from "@/lib/prisma";
 import type { GateResult } from "./gates/types";
 import { buildGatePersistencePayload } from "./summary-builder";
 
-export const NON_OVERRIDABLE_GATES = new Set(["non_empty_release", "ci"]);
+import { NON_OVERRIDABLE_GATES } from "./gates/non-overridable";
+
+export { NON_OVERRIDABLE_GATES, NON_OVERRIDABLE } from "./gates/non-overridable";
 
 export type ReleaseCheckPersistenceInput = {
   status: string;

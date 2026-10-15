@@ -6,8 +6,8 @@ import {
   findReleaseById,
   createReleaseGateOverride,
   revokeReleaseGateOverride,
-  NON_OVERRIDABLE_GATES,
 } from "@/lib/releases/repository";
+import { NON_OVERRIDABLE_GATES } from "@/lib/releases/gates/non-overridable";
 
 // REL-03 — gate overrides. POST adds an override (must name a gate + reason);
 // DELETE revokes by override id. `non_empty_release` and `ci` can never be

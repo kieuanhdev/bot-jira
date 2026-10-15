@@ -11,17 +11,20 @@ import { ciGate } from "./ci";
 import { dependencyVersionConsistencyGate } from "./dependency-version-consistency";
 import { dependencyGraphIntegrityGate } from "./dependency-graph-integrity";
 
+import {
+  GATE_NON_EMPTY,
+  NON_OVERRIDABLE,
+} from "./non-overridable";
+
+export {
+  GATE_NON_EMPTY,
+  GATE_CI,
+  NON_OVERRIDABLE,
+  NON_OVERRIDABLE_GATES,
+} from "./non-overridable";
+
 /** Gates that determine release readiness. `ai_advisory` is never mandatory. */
 export const GATE_AI_ADVISORY = "ai_advisory";
-export const GATE_NON_EMPTY = "non_empty_release";
-export const GATE_CI = "ci";
-
-/**
- * Gates that may NOT be overridden (REL-03). `non_empty_release` must always be
- * evaluated from data; `ci` is a mandatory source-of-truth gate that an override
- * would let us ship a broken build.
- */
-export const NON_OVERRIDABLE = new Set<string>([GATE_NON_EMPTY, GATE_CI]);
 
 export function nonEmptyGate(ctx: ReleaseContext): GateResult {
   if (ctx.tasks.length === 0) {

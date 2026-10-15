@@ -34,6 +34,7 @@ export {
   GATE_NON_EMPTY,
   GATE_CI,
   NON_OVERRIDABLE,
+  NON_OVERRIDABLE_GATES,
   nonEmptyGate,
   type ReleaseCheckFn,
   type GateOverrideRow,
