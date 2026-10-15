@@ -311,4 +311,12 @@ describe("Jira HTTP transport", () => {
     expect(jql).toContain('key = "CICM-123"');
     expect(jql).not.toContain("~");
   });
+
+  it("returns undefined on status 204 No Content", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(jiraWith(bearerAuth).transition("TEST-1", "31")).resolves.toBeUndefined();
+  });
 });
+
