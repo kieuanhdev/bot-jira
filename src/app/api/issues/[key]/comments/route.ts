@@ -6,6 +6,11 @@ import { userJiraAuth } from "@/lib/user-creds";
 import { notifyWatchersOfComment } from "@/lib/issues/notify-watchers";
 import { upsertJiraComments } from "@/lib/issues/cache";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
+import { readJsonBody } from "@/lib/api/json-body";
+
+function isCommentPayload(v: unknown): v is { body?: unknown } {
+  return typeof v === "object" && v !== null;
+}
 
 export async function POST(
   req: Request,
@@ -16,8 +21,12 @@ export async function POST(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { key } = await ctx.params;
-  const { body } = (await req.json()) as { body?: string };
-  if (!body?.trim()) {
+
+  const bodyResult = await readJsonBody(req, isCommentPayload);
+  if (!bodyResult.ok) return bodyResult.response;
+
+  const body = typeof bodyResult.data.body === "string" ? bodyResult.data.body.trim() : "";
+  if (!body) {
     return NextResponse.json({ error: "body required" }, { status: 400 });
   }
 

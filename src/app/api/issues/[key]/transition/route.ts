@@ -5,6 +5,11 @@ import { getSession } from "@/lib/session";
 import { userJiraAuth } from "@/lib/user-creds";
 import { refreshJiraIssueCache } from "@/lib/issues/cache";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
+import { readJsonBody } from "@/lib/api/json-body";
+
+function isTransitionPayload(v: unknown): v is { transitionId?: unknown } {
+  return typeof v === "object" && v !== null;
+}
 
 export async function POST(
   req: Request,
@@ -13,7 +18,11 @@ export async function POST(
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { key } = await ctx.params;
-  const { transitionId } = (await req.json()) as { transitionId: string };
+
+  const bodyResult = await readJsonBody(req, isTransitionPayload);
+  if (!bodyResult.ok) return bodyResult.response;
+
+  const transitionId = typeof bodyResult.data.transitionId === "string" ? bodyResult.data.transitionId.trim() : "";
   if (!transitionId) return NextResponse.json({ error: "transitionId required" }, { status: 400 });
 
   const user = await prisma.user.findUnique({

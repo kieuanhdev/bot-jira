@@ -3,6 +3,11 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { hasJiraConfig } from "@/lib/env";
+import { readJsonBody } from "@/lib/api/json-body";
+
+function isRegisterPayload(v: unknown): v is { displayName?: unknown; email?: unknown; password?: unknown } {
+  return typeof v === "object" && v !== null;
+}
 
 /**
  * Self-service registration.
@@ -27,21 +32,21 @@ export async function POST(req: Request) {
     }
   }
 
-  const { displayName, email, password } = (await req.json()) as {
-    displayName?: string;
-    email?: string;
-    password?: string;
-  };
+  const bodyResult = await readJsonBody(req, isRegisterPayload);
+  if (!bodyResult.ok) return bodyResult.response;
 
-  const name = (displayName ?? "").trim();
-  const mail = (email ?? "").trim().toLowerCase();
-  if (!name || !mail || !password) {
+  const { displayName, email, password } = bodyResult.data;
+
+  const name = (typeof displayName === "string" ? displayName : "").trim();
+  const mail = (typeof email === "string" ? email : "").trim().toLowerCase();
+  const pass = typeof password === "string" ? password : "";
+  if (!name || !mail || !pass) {
     return NextResponse.json(
       { error: "displayName, email and password are required" },
       { status: 400 }
     );
   }
-  if (password.length < 6) {
+  if (pass.length < 6) {
     return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
   }
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) {
@@ -53,7 +58,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "An account with that email already exists" }, { status: 409 });
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  const passwordHash = await bcrypt.hash(pass, 10);
   const user = await prisma.user.create({
     data: { email: mail, displayName: name, passwordHash },
     select: { id: true, email: true, displayName: true, role: true },

@@ -10,7 +10,7 @@ Baseline verified: 2026-10-15
 | Task | Status | Commit | Commands run + real result | Notes/deviations |
 |---|---|---|---|---|
 | REF-001 | DONE | `4dc56ad` | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (275 files / 2566 tests pass), `npm run build` (pass), `test:db` (not run: no DB) | Lock down avatar proxy: require session (401), rateLimit 120/min, `isJiraOrigin` origin check, Gravatar allowlist, 512KB response cap, 500 entries cache cap. Updated `07-api-contract-inventory.md` and `route.test.ts` for intentional behaviour change. |
-| REF-005 | TODO | — | — | `readJsonBody` helper + unguarded routes |
+| REF-005 | DONE | `2efd686` | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (280 files / 2590 tests pass), `npm run build` (pass), `test:db` (not run: no DB) | Added `readJsonBody` helper (`src/lib/api/json-body.ts`) with stream/length bounds and runtime type guards. Applied to unguarded routes: `issues/[key]/transition`, `issues/[key]/comments`, `push/subscribe` (4KB cap + push schema), and `register`. Added 4 colocated route test suites (18 tests). Classified all 38 `req.json()` sites. |
 | REF-004 | TODO | — | — | Harden `users/[id]/role` |
 | REF-018 | TODO | — | — | De-duplicate `NON_OVERRIDABLE` release gates |
 | REF-019 | TODO | — | — | Layout/board waterfalls; cached user gate |
@@ -36,6 +36,52 @@ Baseline verified: 2026-10-15
 | REF-023 | TODO | — | — | `/watch` prefetch (CONDITIONAL) |
 | REF-024 | TODO | — | — | Split `admin-sync-client.tsx` |
 | REF-025 | TODO | — | — | `board-client.tsx` effects cleanup |
+
+## Classification of 38 `req.json()` Sites (REF-005)
+
+### Unguarded (handled in REF-005 & REF-004)
+1. `src/app/api/issues/[key]/transition/route.ts` -> guarded via `readJsonBody` (REF-005)
+2. `src/app/api/issues/[key]/comments/route.ts` -> guarded via `readJsonBody` (REF-005)
+3. `src/app/api/push/subscribe/route.ts` -> guarded via `readJsonBody` (4KB + schema) (REF-005)
+4. `src/app/api/register/route.ts` -> guarded via `readJsonBody` (REF-005)
+5. `src/app/api/users/[id]/role/route.ts` -> will be guarded in REF-004
+6. `src/app/api/admin/sentry-import/route.ts` -> admin-only retry action
+
+### Guarded (try/catch returning 400)
+7. `src/app/api/board/membership/refresh/route.ts`
+8. `src/app/api/me/board-preferences/route.ts`
+9. `src/app/api/admin/sentry-import/review/route.ts`
+
+### Lenient (catch returning `{}` or optional body by contract)
+10. `src/app/api/issues/bulk/route.ts`
+11. `src/app/api/issues/[key]/ai-score/decision/route.ts`
+12. `src/app/api/issues/[key]/links/route.ts`
+13. `src/app/api/issues/[key]/clone/route.ts`
+14. `src/app/api/issues/[key]/branches/route.ts`
+15. `src/app/api/chat/identity/unlink/route.ts`
+16. `src/app/api/chat/identity/link/route.ts`
+17. `src/app/api/reports/projects/snapshot/route.ts`
+18. `src/app/api/projects/validate/route.ts`
+19. `src/app/api/projects/route.ts`
+20. `src/app/api/projects/[key]/members/route.ts`
+21. `src/app/api/projects/[key]/people-fields/route.ts`
+22. `src/app/api/bulk/operations/[id]/retry/route.ts`
+23. `src/app/api/bulk/operations/[id]/retry-branch/route.ts`
+24. `src/app/api/bulk/create/route.ts`
+25. `src/app/api/me/preferences/route.ts`
+26. `src/app/api/discord/integration/route.ts`
+27. `src/app/api/releases/[id]/approvals/route.ts`
+28. `src/app/api/releases/[id]/overrides/route.ts`
+29. `src/app/api/releases/[id]/route.ts`
+30. `src/app/api/notify/route.ts`
+31. `src/app/api/notify/mark-read/route.ts`
+32. `src/app/api/notify/preferences/route.ts`
+33. `src/app/api/branches/[id]/link/route.ts`
+34. `src/app/api/branches/pull-requests/route.ts`
+35. `src/app/api/admin/outbox/retry/route.ts`
+36. `src/app/api/admin/projects/route.ts`
+37. `src/app/api/admin/projects/[key]/route.ts`
+38. `src/app/api/sync/jira/route.ts`
 
 ## Discovered Issues Outside Task Scope
 
