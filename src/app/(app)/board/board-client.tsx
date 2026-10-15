@@ -38,6 +38,7 @@ import {
 import { patchIssueLists } from "./lib/board-optimistic";
 import { sortIssues, columnKeyForIssue } from "./lib/board-utils";
 import { HiddenColumnsBanner, StaleSyncBanner, SyncDisabledBanner } from "./board-banners";
+import { useBoardPerfMarks } from "./hooks/use-board-perf-marks";
 import { BoardNoProjectsState } from "./board-empty-projects";
 import { BoardHeader } from "./board-header";
 import dynamic from "next/dynamic";
@@ -295,13 +296,16 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
   const [sortMode, setSortMode] = useState<SortMode>(() => {
     return loadStoredSortMode() ?? "updated";
   });
-  useEffect(() => {
-    saveStoredSortMode(sortMode);
-  }, [sortMode]);
 
-  useEffect(() => {
-    saveStoredViewMode(view);
-  }, [view]);
+  function handleViewChange(nextView: ViewMode) {
+    setView(nextView);
+    saveStoredViewMode(nextView);
+  }
+
+  function handleSortModeChange(nextSort: SortMode) {
+    setSortMode(nextSort);
+    saveStoredSortMode(nextSort);
+  }
 
   const [quickPanel, setQuickPanel] = useState<IssueItem | null>(null);
   const hoverPrefetch = useIssueHoverPrefetch();
@@ -354,29 +358,7 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
   const selectedProjectSyncDisabled =
     allProjects.find((p) => p.key === selectedProject)?.syncEnabled === false;
 
-  useEffect(() => {
-    if (typeof performance !== "undefined" && performance.mark) {
-      performance.mark("board:start");
-      if (initialBootstrap) {
-        performance.mark("board:bootstrap-ready");
-      }
-    }
-  }, [initialBootstrap]);
 
-  const markedIssuesRef = useRef(false);
-  useEffect(() => {
-    if (issueData && !markedIssuesRef.current) {
-      markedIssuesRef.current = true;
-      if (typeof performance !== "undefined" && performance.mark) {
-        performance.mark("board:issues-ready");
-        try {
-          performance.measure("board:load-to-issues", "board:start", "board:issues-ready");
-        } catch {
-          // ignore
-        }
-      }
-    }
-  }, [issueData]);
 
   const { data: optData } = useQuery({
     queryKey: issuesKeys.filters(selectedProject),
@@ -571,20 +553,14 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
     cardRefs.current.set(key, el);
   }, []);
 
-  const markedContentRef = useRef(false);
-  useEffect(() => {
-    if ((columns.length > 0 || issues.length > 0) && !markedContentRef.current) {
-      markedContentRef.current = true;
-      if (typeof performance !== "undefined" && performance.mark) {
-        performance.mark("board:content-rendered");
-        try {
-          performance.measure("board:load-to-content", "board:start", "board:content-rendered");
-        } catch {
-          // ignore
-        }
-      }
-    }
-  }, [columns.length, issues.length]);
+  useBoardPerfMarks({
+    initialBootstrap,
+    hasIssueData: Boolean(issueData),
+    columnsCount: columns.length,
+    issuesCount: issues.length,
+  });
+
+
 
   const colResetSig = useMemo(
     () => `${selectedProject}|${sortMode}|${filterSig}|${issues.length}`,
@@ -723,7 +699,7 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
         isFetching={isFetching}
         onSync={syncJira}
         effectiveView={effectiveView}
-        onViewChange={setView}
+        onViewChange={handleViewChange}
         width={width}
         canUseTeamMode={canUseTeamMode}
         teamMode={teamMode}
@@ -743,7 +719,7 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
         onToggleTableColumn={toggleTableColumn}
         onResetTableColumns={() => setHiddenTableCols(new Set())}
         sortMode={sortMode}
-        onSortModeChange={setSortMode}
+        onSortModeChange={handleSortModeChange}
       />
 
       {selectedProjectSyncDisabled ? (
