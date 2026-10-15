@@ -85,6 +85,21 @@ export async function canUserManageProjectLeaders(
   return isProjectLeader(projectKey, sessionUser.id);
 }
 
+/**
+ * Check whether a user is authorized to manage leaders for at least one project.
+ * Authorized if:
+ * 1. User has "admin" role, OR
+ * 2. User is currently an active leader of at least one project.
+ */
+export async function canUserManageAnyProjectLeaders(
+  sessionUser: { id?: string; role?: string } | null | undefined
+): Promise<boolean> {
+  if (!sessionUser?.id) return false;
+  if (sessionUser.role === "admin") return true;
+  const projects = await listProjectsLedBy(sessionUser.id);
+  return projects.length > 0;
+}
+
 export type SetProjectLeadersResult = {
   projectKey: string;
   leaders: User[];

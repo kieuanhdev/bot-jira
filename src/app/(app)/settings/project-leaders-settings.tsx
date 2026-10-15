@@ -11,7 +11,15 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { settingsKeys } from "@/lib/query-keys";
 import type { User } from "./lib/settings-model";
+
+type LeaderCandidate = {
+  id: string;
+  displayName: string;
+  email?: string | null;
+  jiraUsername?: string | null;
+};
 
 type ProjectLeader = {
   id: string;
@@ -84,6 +92,13 @@ export function ProjectLeadersSettings({
 
   const canManage = membersData?.canManage ?? isAdmin;
 
+  const { data: candidatesData } = useQuery({
+    queryKey: settingsKeys.leaderCandidates,
+    enabled: !isAdmin && canManage,
+    queryFn: () =>
+      api<{ users: LeaderCandidate[] }>("/api/projects/leader-candidates"),
+  });
+
   const toggleLeader = (userId: string) => {
     if (!canManage) return;
     const current = selectedLeaderIds;
@@ -94,15 +109,18 @@ export function ProjectLeadersSettings({
   };
 
   const filteredUsers = useMemo(() => {
-    if (!searchQuery.trim()) return users;
+    const candidateUsers: LeaderCandidate[] = isAdmin
+      ? users
+      : candidatesData?.users ?? [];
+    if (!searchQuery.trim()) return candidateUsers;
     const q = searchQuery.toLowerCase().trim();
-    return users.filter(
+    return candidateUsers.filter(
       (u) =>
         u.displayName.toLowerCase().includes(q) ||
         (u.email && u.email.toLowerCase().includes(q)) ||
         (u.jiraUsername && u.jiraUsername.toLowerCase().includes(q))
     );
-  }, [users, searchQuery]);
+  }, [isAdmin, users, candidatesData?.users, searchQuery]);
 
   return (
     <Card>
@@ -260,9 +278,11 @@ export function ProjectLeadersSettings({
                         />
                         <div>
                           <div className="font-medium">{user.displayName}</div>
-                          <div className="text-[11px] text-muted-foreground">
-                            {user.email || "Không có email"}
-                          </div>
+                          {user.email ? (
+                            <div className="text-[11px] text-muted-foreground">
+                              {user.email}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">

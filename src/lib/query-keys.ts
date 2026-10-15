@@ -116,6 +116,7 @@ export const syncKeys = {
 
 export const settingsKeys = {
   users: ["settings", "users"] as const,
+  leaderCandidates: ["settings", "leader-candidates"] as const,
 };
 
 export const notifyKeys = {

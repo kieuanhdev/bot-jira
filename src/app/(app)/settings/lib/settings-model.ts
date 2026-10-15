@@ -2,11 +2,11 @@ import type { Role } from "@/lib/permissions";
 
 export type User = {
   id: string;
-  email: string;
+  email: string | null;
   displayName: string;
   jiraUsername: string | null;
   role: Role;
-  createdAt: string;
+  createdAt: Date | string;
 };
 
 export type Health = {

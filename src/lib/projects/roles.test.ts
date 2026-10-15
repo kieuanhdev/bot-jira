@@ -4,6 +4,7 @@ import {
   isProjectLeader,
   listProjectsLedBy,
   canUserManageProjectLeaders,
+  canUserManageAnyProjectLeaders,
   setProjectLeaders,
 } from "./roles";
 
@@ -31,6 +32,10 @@ vi.mock("@/lib/prisma", () => ({
 
 describe("project roles service", () => {
   beforeEach(() => {
+    mockProjectMember.findMany.mockReset();
+    mockProjectMember.findFirst.mockReset();
+    mockProjectMember.deleteMany.mockReset();
+    mockProjectMember.upsert.mockReset();
     vi.clearAllMocks();
   });
 
@@ -126,6 +131,31 @@ describe("project roles service", () => {
         { id: "user-2", role: "lead" },
         "EPM"
       );
+      expect(result).toBe(false);
+    });
+  });
+
+  describe("canUserManageAnyProjectLeaders", () => {
+    it("returns false when session user is missing or has no id", async () => {
+      expect(await canUserManageAnyProjectLeaders(null)).toBe(false);
+      expect(await canUserManageAnyProjectLeaders({})).toBe(false);
+    });
+
+    it("returns true for admin users without querying leader table", async () => {
+      const result = await canUserManageAnyProjectLeaders({ id: "admin-1", role: "admin" });
+      expect(result).toBe(true);
+      expect(mockProjectMember.findMany).not.toHaveBeenCalled();
+    });
+
+    it("returns true for a user who leads at least one project", async () => {
+      mockProjectMember.findMany.mockResolvedValueOnce([{ projectKey: "EPM" }]);
+      const result = await canUserManageAnyProjectLeaders({ id: "lead-1", role: "member" });
+      expect(result).toBe(true);
+    });
+
+    it("returns false for a non-admin who leads no projects", async () => {
+      mockProjectMember.findMany.mockResolvedValueOnce([]);
+      const result = await canUserManageAnyProjectLeaders({ id: "member-1", role: "member" });
       expect(result).toBe(false);
     });
   });

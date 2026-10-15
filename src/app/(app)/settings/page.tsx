@@ -8,9 +8,12 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const session = await getSession();
-  const users = await prisma.user.findMany({
-    orderBy: { createdAt: "asc" },
-    select: { id: true, email: true, displayName: true, jiraUsername: true, role: true, createdAt: true },
-  });
-  return <SettingsClient users={JSON.parse(JSON.stringify(users))} isAdmin={isAdmin(session)} />;
+  const admin = isAdmin(session);
+  const users = admin
+    ? await prisma.user.findMany({
+        orderBy: { createdAt: "asc" },
+        select: { id: true, email: true, displayName: true, jiraUsername: true, role: true, createdAt: true },
+      })
+    : [];
+  return <SettingsClient users={users} isAdmin={admin} />;
 }
