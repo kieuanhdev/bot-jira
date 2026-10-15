@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { ingestEvent, type Source } from "@/lib/events/store";
-import { logSwallowed } from "@/lib/logger";
-import { rateLimit, readAndVerifyWebhook } from "../_shared";
+import { handleWebhook } from "../_shared";
 
 export const dynamic = "force-dynamic";
 
@@ -65,55 +63,32 @@ function bbExternalId(json: unknown): string {
 }
 
 export async function POST(req: Request) {
-  const source: Source = "bitbucket";
-  const parsed = await readAndVerifyWebhook(source, req);
-  if (!parsed.ok) return parsed.response;
-
-  const rl = rateLimit(source, 100, 10_000);
-  if (!rl.allowed) {
-    const res = NextResponse.json({ error: "rate limited" }, { status: 429 });
-    if (rl.retryAfterMs) res.headers.set("Retry-After", String(Math.ceil(rl.retryAfterMs / 1000)));
-    return res;
-  }
-
-  const j = parsed.json as {
-    eventKey?: string;
-    data?: {
+  return handleWebhook("bitbucket", req, (json) => {
+    const j = json as {
+      eventKey?: string;
+      data?: {
+        repository?: { slug?: string; project?: { key?: string } };
+        pullRequest?: { id?: number };
+      };
       repository?: { slug?: string; project?: { key?: string } };
-      pullRequest?: { id?: number };
+      pullRequest?: {
+        id?: number;
+        toRef?: { repository?: { slug?: string; project?: { key?: string } } };
+      };
     };
-    repository?: { slug?: string; project?: { key?: string } };
-    pullRequest?: {
-      id?: number;
-      toRef?: { repository?: { slug?: string; project?: { key?: string } } };
+    const repoObj =
+      j.data?.repository ??
+      j.pullRequest?.toRef?.repository ??
+      j.repository;
+
+    return {
+      externalId: bbExternalId(json),
+      type: j.eventKey ?? "bitbucket-event",
+      subject: repoObj
+        ? `${repoObj.project?.key ?? "?"}/${repoObj.slug ?? "?"}`
+        : null,
     };
-  };
-  const repoObj =
-    j.data?.repository ??
-    j.pullRequest?.toRef?.repository ??
-    j.repository;
-  const externalId = bbExternalId(parsed.json);
-  const result = await ingestEvent({
-    source,
-    externalId,
-    type: j.eventKey ?? "bitbucket-event",
-    subject: repoObj
-      ? `${repoObj.project?.key ?? "?"}/${repoObj.slug ?? "?"}`
-      : null,
-    payload: parsed.json,
   });
-  if (result.duplicate) return NextResponse.json({ ok: true, duplicate: true });
-  if (!result.stored || !result.eventId) {
-    return NextResponse.json({ error: "failed to store event" }, { status: 500 });
-  }
-  try {
-    const { enqueueWebhookEvent } = await import("@/lib/queue/boss");
-    await enqueueWebhookEvent({ source, eventId: result.eventId });
-  } catch (err) {
-    /* ack anyway — event is stored */
-    logSwallowed("bitbucket_webhook_enqueue", err, { eventId: result.eventId });
-  }
-  return NextResponse.json({ ok: true });
 }
 
 export async function GET() {

@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
 import { verifyWebhookSignature } from "@/lib/events/signatures";
-import type { Source } from "@/lib/events/store";
+import { ingestEvent, type Source } from "@/lib/events/store";
+import { logSwallowed } from "@/lib/logger";
 
 export type WebhookHeaders = Headers;
+
+export type WebhookExtracted = {
+  externalId: string;
+  type: string;
+  subject?: string | null;
+};
 
 /**
  * Read the raw body of a webhook request, verify the signature, and return the
@@ -57,4 +64,59 @@ export function rateLimit(
 export function _resetWebhookRateLimits(): void {
   const g = globalThis as unknown as { __webhookRateLimit?: Map<string, number[]> };
   g.__webhookRateLimit?.clear();
+}
+
+/**
+  * Shared webhook pipeline:
+  * 1. Reads raw body & verifies HMAC signature (or fail closed in production)
+  * 2. Enforces per-source rate limit (100 req / 10s)
+  * 3. Extracts event metadata (externalId, type, subject)
+  * 4. Ingests into event store with deduplication
+  * 5. Enqueues event for background processing worker
+  * 6. Returns standard response (200, 400, 401, 429, 500)
+  */
+export async function handleWebhook(
+  source: Source,
+  req: Request,
+  extract: (json: unknown) => WebhookExtracted | null
+): Promise<Response> {
+  const parsed = await readAndVerifyWebhook(source, req);
+  if (!parsed.ok) return parsed.response;
+
+  const rl = rateLimit(source, 100, 10_000);
+  if (!rl.allowed) {
+    const res = NextResponse.json({ error: "rate limited" }, { status: 429 });
+    if (rl.retryAfterMs) res.headers.set("Retry-After", String(Math.ceil(rl.retryAfterMs / 1000)));
+    return res;
+  }
+
+  const extracted = extract(parsed.json);
+  if (!extracted) {
+    return NextResponse.json({ error: "invalid payload" }, { status: 400 });
+  }
+
+  const result = await ingestEvent({
+    source,
+    externalId: extracted.externalId,
+    type: extracted.type,
+    subject: extracted.subject ?? null,
+    payload: parsed.json,
+  });
+
+  if (result.duplicate) {
+    return NextResponse.json({ ok: true, duplicate: true });
+  }
+
+  if (!result.stored || !result.eventId) {
+    return NextResponse.json({ error: "failed to store event" }, { status: 500 });
+  }
+
+  try {
+    const { enqueueWebhookEvent } = await import("@/lib/queue/boss");
+    await enqueueWebhookEvent({ source, eventId: result.eventId });
+  } catch (err) {
+    logSwallowed(`${source}_webhook_enqueue`, err, { eventId: result.eventId });
+  }
+
+  return NextResponse.json({ ok: true });
 }

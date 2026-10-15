@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-import { ingestEvent, type Source } from "@/lib/events/store";
-import { rateLimit, readAndVerifyWebhook } from "../_shared";
-
-import { logSwallowed } from "@/lib/logger";
+import { handleWebhook } from "../_shared";
 
 export const dynamic = "force-dynamic";
 
@@ -34,38 +31,14 @@ function ciExternalId(json: unknown): string {
 }
 
 export async function POST(req: Request) {
-  const source: Source = "ci";
-  const parsed = await readAndVerifyWebhook(source, req);
-  if (!parsed.ok) return parsed.response;
-
-  const rl = rateLimit(source, 100, 10_000);
-  if (!rl.allowed) {
-    const res = NextResponse.json({ error: "rate limited" }, { status: 429 });
-    if (rl.retryAfterMs) res.headers.set("Retry-After", String(Math.ceil(rl.retryAfterMs / 1000)));
-    return res;
-  }
-
-  const j = parsed.json as { status?: string; repo?: string; branch?: string };
-  const externalId = ciExternalId(parsed.json);
-  const result = await ingestEvent({
-    source,
-    externalId,
-    type: `ci:${j.status ?? "unknown"}`,
-    subject: j.repo ?? null,
-    payload: parsed.json,
+  return handleWebhook("ci", req, (json) => {
+    const j = json as { status?: string; repo?: string; branch?: string };
+    return {
+      externalId: ciExternalId(json),
+      type: `ci:${j.status ?? "unknown"}`,
+      subject: j.repo ?? null,
+    };
   });
-  if (result.duplicate) return NextResponse.json({ ok: true, duplicate: true });
-  if (!result.stored || !result.eventId) {
-    return NextResponse.json({ error: "failed to store event" }, { status: 500 });
-  }
-  try {
-    const { enqueueWebhookEvent } = await import("@/lib/queue/boss");
-    await enqueueWebhookEvent({ source, eventId: result.eventId });
-  } catch (err) {
-    /* ack anyway — event is stored */
-    logSwallowed("ci_webhook_enqueue", err, { eventId: result.eventId });
-  }
-  return NextResponse.json({ ok: true });
 }
 
 export async function GET() {

@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { ingestEvent, type Source } from "@/lib/events/store";
-import { logSwallowed } from "@/lib/logger";
-import { rateLimit, readAndVerifyWebhook } from "../_shared";
+import { handleWebhook } from "../_shared";
 
 export const dynamic = "force-dynamic";
 
@@ -59,43 +57,11 @@ export function jiraSubject(json: unknown): string | null {
 }
 
 export async function POST(req: Request) {
-  const source: Source = "jira";
-  const parsed = await readAndVerifyWebhook(source, req);
-  if (!parsed.ok) return parsed.response;
-
-  const rl = rateLimit(source, 100, 10_000);
-  if (!rl.allowed) {
-    const res = NextResponse.json({ error: "rate limited" }, { status: 429 });
-    if (rl.retryAfterMs) res.headers.set("Retry-After", String(Math.ceil(rl.retryAfterMs / 1000)));
-    return res;
-  }
-
-  const externalId = jiraExternalId(parsed.json);
-  const result = await ingestEvent({
-    source,
-    externalId,
-    type: jiraType(parsed.json),
-    subject: jiraSubject(parsed.json),
-    payload: parsed.json,
-  });
-  if (result.duplicate) {
-    // Already processed (or in-flight) — ack so Jira doesn't retry forever.
-    return NextResponse.json({ ok: true, duplicate: true });
-  }
-  if (!result.stored || !result.eventId) {
-    return NextResponse.json({ error: "failed to store event" }, { status: 500 });
-  }
-  // Enqueue processing on the worker. The webhook acks immediately so Jira
-  // doesn't treat us as slow.
-  try {
-    const { enqueueWebhookEvent } = await import("@/lib/queue/boss");
-    await enqueueWebhookEvent({ source, eventId: result.eventId });
-  } catch (err) {
-    // Worker enqueue failure must not fail the ack — the event is already
-    // stored and a later reconciliation pass can pick it up.
-    logSwallowed("jira_webhook_enqueue", err, { eventId: result.eventId });
-  }
-  return NextResponse.json({ ok: true });
+  return handleWebhook("jira", req, (json) => ({
+    externalId: jiraExternalId(json),
+    type: jiraType(json),
+    subject: jiraSubject(json),
+  }));
 }
 
 /** Health check so Jira admins can verify the endpoint is reachable. */
