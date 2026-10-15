@@ -4,6 +4,8 @@ import { writeWorkerHeartbeat } from "@/lib/health/worker-health";
 import { validateWorkerStartup } from "@/lib/health/config-validation";
 import { logger } from "@/lib/logger";
 
+import { withTimeout } from "@/lib/async/with-timeout";
+
 let stopping = false;
 let heartbeat: NodeJS.Timeout | null = null;
 
@@ -11,6 +13,7 @@ let heartbeat: NodeJS.Timeout | null = null;
 // threshold (2 min) so a wedged process is distinguishable from a crashed one
 // even when every individual job is idle/skipped.
 const HEARTBEAT_INTERVAL_MS = 30_000;
+const SHUTDOWN_TIMEOUT_MS = 25_000;
 
 function startHeartbeat() {
   heartbeat = setInterval(() => {
@@ -25,15 +28,42 @@ async function shutdown(signal: string) {
   stopping = true;
   logger.info({ message: "worker stopping", signal });
   if (heartbeat) clearInterval(heartbeat);
-  await stopBoss().catch((error) => {
-    logger.error({ message: "pg-boss stop failed", error: String(error) });
-  });
+  const stopResult = await withTimeout(
+    stopBoss().catch((error) => {
+      logger.error({ message: "pg-boss stop failed", error: String(error) });
+    }),
+    SHUTDOWN_TIMEOUT_MS
+  );
+  if (stopResult === "timeout") {
+    logger.error({
+      message: "pg-boss stop timed out, forcing exit",
+      timeoutMs: SHUTDOWN_TIMEOUT_MS,
+    });
+  }
   await prisma.$disconnect().catch(() => null);
   process.exit(0);
 }
 
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
+
+process.on("unhandledRejection", (reason) => {
+  logger.error({
+    message: "worker unhandled rejection",
+    error: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
+  process.exit(1);
+});
+
+process.on("uncaughtException", (error) => {
+  logger.error({
+    message: "worker uncaught exception",
+    error: error.message,
+    stack: error.stack,
+  });
+  process.exit(1);
+});
 
 // OPS-02 — fail fast when the worker's required config or Jira timing config is
 // invalid/missing. We log only the names of the missing variables / error messages,
