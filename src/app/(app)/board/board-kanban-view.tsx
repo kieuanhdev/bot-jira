@@ -126,14 +126,17 @@ export function BoardKanbanView({
   );
 
   // Drop keys that left the board (filtered out / moved away after refetch).
-  useEffect(() => {
-    setSelectedKeys((prev) => {
-      if (prev.size === 0) return prev;
+  const [prevIssues, setPrevIssues] = useState(issues);
+  if (prevIssues !== issues) {
+    setPrevIssues(issues);
+    if (selectedKeys.size > 0) {
       const present = new Set(issues.map((i) => i.jiraKey));
-      const next = new Set([...prev].filter((k) => present.has(k)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [issues]);
+      const next = new Set([...selectedKeys].filter((k) => present.has(k)));
+      if (next.size !== selectedKeys.size) {
+        setSelectedKeys(next);
+      }
+    }
+  }
 
   const dnd = useBoardDnD({
     boardScrollRef,

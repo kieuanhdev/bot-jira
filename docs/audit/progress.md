@@ -85,4 +85,4 @@ Baseline verified: 2026-10-15
 
 ## Discovered Issues Outside Task Scope
 
-*(None discovered yet)*
+1. `src/app/(app)/board/board-kanban-view.tsx`: `react-hooks/set-state-in-effect` error from synchronous `setSelectedKeys` inside `useEffect` on `issues` (commit `b2e5249`). Fixed by adjusting `selectedKeys` during render when `issues` prop reference changes per React 19 guidelines.
