@@ -26,6 +26,9 @@ interface BoardDnDOptions {
   fetchTransitions: (key: string) => Promise<Transition[]>;
   findColumnForIssue: (issue: IssueItem) => string;
   onTransition: (key: string, target: string) => void;
+  /** Cards multi-selected via Ctrl/Cmd/Shift+click; dragging one of them moves the whole set. */
+  selectedKeys?: ReadonlySet<string>;
+  onDropComplete?: () => void;
 }
 
 export function useBoardDnD({
@@ -37,6 +40,8 @@ export function useBoardDnD({
   fetchTransitions,
   findColumnForIssue,
   onTransition,
+  selectedKeys,
+  onDropComplete,
 }: BoardDnDOptions) {
   const issueByKey = useMemo(() => new Map(issues.map((i) => [i.jiraKey, i])), [issues]);
   const [activeDrag, setActiveDrag] = useState<IssueItem | null>(null);
@@ -93,7 +98,16 @@ export function useBoardDnD({
       issueByKey,
       findColumnForIssue,
     });
-    if (drop) onTransition(drop.key, drop.targetColumn);
+    if (!drop) return;
+    if (selectedKeys && selectedKeys.size > 1 && selectedKeys.has(drop.key)) {
+      for (const key of selectedKeys) {
+        const issue = issueByKey.get(key);
+        if (issue && findColumnForIssue(issue) !== drop.targetColumn) onTransition(key, drop.targetColumn);
+      }
+      onDropComplete?.();
+    } else {
+      onTransition(drop.key, drop.targetColumn);
+    }
   }
 
   function onDragCancel() {

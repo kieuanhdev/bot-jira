@@ -46,6 +46,8 @@ export const BoardColumn = memo(function BoardColumn({
   assignees,
   registerRef,
   focusKey,
+  selectedKeys,
+  onToggleSelect,
 }: {
   id: string;
   label: string;
@@ -75,6 +77,8 @@ export const BoardColumn = memo(function BoardColumn({
   assignees: string[];
   registerRef: (key: string, el: HTMLElement | null) => void;
   focusKey: string | null;
+  selectedKeys?: ReadonlySet<string>;
+  onToggleSelect?: (key: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const text = statusText(category);
@@ -236,6 +240,8 @@ export const BoardColumn = memo(function BoardColumn({
                       assignees={assignees}
                       registerRef={registerRef}
                       focused={focusKey === issue.jiraKey}
+                      selected={selectedKeys?.has(issue.jiraKey)}
+                      onToggleSelect={onToggleSelect}
                     />
                   </div>
                 );

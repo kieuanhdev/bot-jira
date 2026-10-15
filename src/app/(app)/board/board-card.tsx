@@ -268,6 +268,8 @@ export const DraggableCard = memo(function DraggableCard({
   assignees,
   registerRef,
   focused,
+  selected,
+  onToggleSelect,
 }: {
   issue: IssueItem;
   done: boolean;
@@ -282,6 +284,8 @@ export const DraggableCard = memo(function DraggableCard({
   assignees?: string[];
   registerRef?: (key: string, el: HTMLElement | null) => void;
   focused?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (key: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: issue.jiraKey,
@@ -306,13 +310,22 @@ export const DraggableCard = memo(function DraggableCard({
         "relative rounded-lg outline-none transition-shadow duration-150",
         !dndDisabled && !isDragging && "cursor-grab active:cursor-grabbing",
         isDragging && "z-10 opacity-40",
-        focused && "ring-2 ring-ring/70 ring-offset-1 ring-offset-background"
+        focused && "ring-2 ring-ring/70 ring-offset-1 ring-offset-background",
+        selected && "ring-2 ring-primary ring-offset-1 ring-offset-background"
       )}
     >
       <div
         role="button"
         tabIndex={0}
-        onClick={() => onOpen?.(issue)}
+        aria-pressed={selected || undefined}
+        onClick={(e) => {
+          if (onToggleSelect && (e.ctrlKey || e.metaKey || e.shiftKey)) {
+            e.preventDefault();
+            onToggleSelect(issue.jiraKey);
+            return;
+          }
+          onOpen?.(issue);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
