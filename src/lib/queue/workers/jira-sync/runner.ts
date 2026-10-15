@@ -13,6 +13,8 @@ import {
   type ProjectStats,
 } from "./types";
 
+import { logSwallowed } from "@/lib/logger";
+
 export async function runJiraSyncPipeline(
   input: {
     projectKey: string;
@@ -51,7 +53,10 @@ export async function runJiraSyncPipeline(
     const includePeople = input.features?.peopleFields ?? true;
     const includeComments = input.features?.comments ?? true;
     const peopleFields = includePeople
-      ? await dependencies.loadPeopleFields(input.projectKey).catch(() => null)
+      ? await dependencies.loadPeopleFields(input.projectKey).catch((err) => {
+          logSwallowed("jira_sync_load_people_fields", err, { projectKey: input.projectKey });
+          return null;
+        })
       : null;
     const extraPeopleFields = peopleFields
       ? Object.values(peopleFields).filter((value): value is string => Boolean(value))

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ingestEvent, type Source } from "@/lib/events/store";
+import { logSwallowed } from "@/lib/logger";
 import { rateLimit, readAndVerifyWebhook } from "../_shared";
 
 export const dynamic = "force-dynamic";
@@ -89,9 +90,10 @@ export async function POST(req: Request) {
   try {
     const { enqueueWebhookEvent } = await import("@/lib/queue/boss");
     await enqueueWebhookEvent({ source, eventId: result.eventId });
-  } catch {
+  } catch (err) {
     // Worker enqueue failure must not fail the ack — the event is already
     // stored and a later reconciliation pass can pick it up.
+    logSwallowed("jira_webhook_enqueue", err, { eventId: result.eventId });
   }
   return NextResponse.json({ ok: true });
 }

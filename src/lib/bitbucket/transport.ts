@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { logSwallowed } from "@/lib/logger";
 import type { BbCreds, Paged } from "./types";
 
 export async function getSystemBitbucketCreds(): Promise<BbCreds | null> {
@@ -31,8 +32,9 @@ export async function getAllBitbucketCreds(): Promise<BbCreds[]> {
         }
       }
     }
-  } catch {
+  } catch (err) {
     // DB not available
+    logSwallowed("bitbucket_get_all_creds_db", err);
   }
   return list;
 }

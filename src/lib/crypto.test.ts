@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll } from "vitest";
-import { encrypt, decrypt, safeDecrypt } from "./crypto";
+import { describe, it, expect, beforeAll, vi } from "vitest";
+import { encrypt, decrypt, safeDecrypt, _resetDecryptionFailureLoggedForTesting } from "./crypto";
 
 // The crypto helper reads CRED_ENCRYPTION_KEY from env via the `env` singleton.
 beforeAll(() => {
@@ -26,10 +26,26 @@ describe("crypto (AES-256-GCM)", () => {
     expect(safeDecrypt("not-valid-base64!!!")).toBeNull();
   });
 
-  it("fails to decrypt with a different key", () => {
+  it("fails to decrypt with a different key and logs once per process without leaking ciphertext", () => {
+    _resetDecryptionFailureLoggedForTesting();
     const enc = encrypt("secret");
     process.env.CRED_ENCRYPTION_KEY = "1".repeat(64);
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    // Call safeDecrypt multiple times with bad key
     expect(safeDecrypt(enc)).toBeNull();
+    expect(safeDecrypt(enc)).toBeNull();
+
+    // Must log only once per process
+    expect(spy).toHaveBeenCalledTimes(1);
+    const logged = JSON.parse(spy.mock.calls[0][0]);
+    expect(logged.message).toBe("swallowed error: crypto_safe_decrypt");
+    expect(logged.errorName).toBeDefined();
+    // Invariant: ciphertext or plaintext must NEVER appear in the log
+    expect(spy.mock.calls[0][0]).not.toContain("secret");
+    expect(spy.mock.calls[0][0]).not.toContain(enc);
+
     process.env.CRED_ENCRYPTION_KEY = "0".repeat(64);
+    spy.mockRestore();
   });
 });

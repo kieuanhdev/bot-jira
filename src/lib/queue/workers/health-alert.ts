@@ -3,7 +3,7 @@ import { env } from "@/lib/env";
 import { getWorkerHealth } from "@/lib/health/worker-health";
 import type { WorkerLog } from "../guard";
 import { enqueueJiraRecoveries } from "../jira-recovery";
-import { logger } from "@/lib/logger";
+import { logger, logSwallowed } from "@/lib/logger";
 
 const ALERT_KEY = "worker";
 export type HealthAlertOptions = {
@@ -100,7 +100,10 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
   const backlog = await prisma.notificationOutbox.findFirst({
     where: { state: "pending", createdAt: { lt: new Date(now.getTime() - OUTBOX_BACKLOG_MINUTES * 60_000) } },
     select: { id: true },
-  }).catch(() => null);
+  }).catch((err) => {
+    logSwallowed("health_alert_backlog_check", err);
+    return null;
+  });
   if (backlog) {
     conditions.push({
       key: "outbox-backlog",
@@ -134,7 +137,10 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
         body: c.body,
         severity: "warning",
         eventKey: `health:${c.key}:${now.toISOString().slice(0, 10)}:alert`,
-      }).catch(() => null);
+      }).catch((err) => {
+        logSwallowed("health_alert_notify_alert", err, { key: c.key });
+        return null;
+      });
       alerted++;
     }
   }
@@ -151,7 +157,10 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
         body: `Dự án ${projectKey} đã đồng bộ thành công trở lại.`,
         severity: "success",
         eventKey: `health:${key}:${now.toISOString().slice(0, 10)}:recovered`,
-      }).catch(() => null);
+      }).catch((err) => {
+        logSwallowed("health_alert_notify_recovery", err, { key });
+        return null;
+      });
       recovered++;
     } else if (key.startsWith("jira-failed:")) {
       const projectKey = key.slice("jira-failed:".length);
@@ -161,7 +170,10 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
         body: `Dự án ${projectKey} đã đồng bộ thành công và không còn lỗi.`,
         severity: "success",
         eventKey: `health:${key}:${now.toISOString().slice(0, 10)}:recovered`,
-      }).catch(() => null);
+      }).catch((err) => {
+        logSwallowed("health_alert_notify_recovery", err, { key });
+        return null;
+      });
       recovered++;
     } else if (key === "worker-down") {
       await notifyAll({
@@ -170,7 +182,10 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
         body: "Tiến trình worker nền đã ghi nhận liveness heartbeat.",
         severity: "success",
         eventKey: `health:worker-down:${now.toISOString().slice(0, 10)}:recovered`,
-      }).catch(() => null);
+      }).catch((err) => {
+        logSwallowed("health_alert_notify_recovery", err, { key });
+        return null;
+      });
       recovered++;
     }
   }
@@ -184,7 +199,10 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
       body: "Worker nền và đồng bộ Jira đã phục hồi.",
       severity: "success",
       eventKey: `health:system:${now.toISOString().slice(0, 10)}:recovered`,
-    }).catch(() => null);
+    }).catch((err) => {
+      logSwallowed("health_alert_notify_system_recovery", err);
+      return null;
+    });
     recovered++;
   }
 
@@ -204,7 +222,10 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
       lastError: null,
       stats: { activeKeys } as object,
     },
-  }).catch(() => null);
+  }).catch((err) => {
+    logSwallowed("health_alert_cursor_upsert", err);
+    return null;
+  });
 
   logger[recovery.failed > 0 ? "warn" : "info"]({
     message: "health-alert run completed",

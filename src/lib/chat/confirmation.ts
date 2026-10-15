@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { jiraWith } from "@/lib/jira/client";
 import { refreshJiraIssueCache } from "@/lib/issues/cache";
+import { logSwallowed } from "@/lib/logger";
 import type { ChatBlock } from "./index";
 import type { ExecContext, CommandResult } from "./types";
 
@@ -129,7 +130,10 @@ export async function handleConfirm(ctx: ExecContext): Promise<CommandResult> {
           continue;
         }
         await jira.transition(key, t.id);
-        await refreshJiraIssueCache(jira, key).catch(() => null);
+        await refreshJiraIssueCache(jira, key).catch((err) => {
+          logSwallowed("chat_confirmation_refresh_cache", err, { key, kind: pending.kind });
+          return null;
+        });
         results.push(`${key} → ${t.to?.name ?? payload.status}`);
       } catch (e) {
         results.push(`${key}: ${e instanceof Error ? e.message.slice(0, 120) : "error"}`);
@@ -140,7 +144,10 @@ export async function handleConfirm(ctx: ExecContext): Promise<CommandResult> {
     for (const key of payload.keys) {
       try {
         await jira.updateIssue(key, { assignee: who });
-        await refreshJiraIssueCache(jira, key).catch(() => null);
+        await refreshJiraIssueCache(jira, key).catch((err) => {
+          logSwallowed("chat_confirmation_refresh_cache", err, { key, kind: pending.kind });
+          return null;
+        });
         results.push(`${key} assigned to ${who}`);
       } catch (e) {
         results.push(`${key}: ${e instanceof Error ? e.message.slice(0, 120) : "error"}`);

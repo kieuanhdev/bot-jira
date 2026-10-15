@@ -9,6 +9,7 @@ import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 import { audit } from "@/lib/audit";
 import { markIssuesDeleted } from "@/lib/issues/deleted";
 import { getProjectPeopleFields } from "@/lib/jira/people-fields";
+import { logSwallowed } from "@/lib/logger";
 
 export async function handleIssueDetailRequest(req: Request, ctx: { params: Promise<{ key: string }> }) {
   const session = await getSession();
@@ -192,7 +193,10 @@ export async function handleIssueUpdateRequest(
     // Keep the local release membership (ReleaseTask) and cached fix versions in
     // step with Jira so the release page reflects the change immediately.
     if (patch.addFixVersion || patch.removeFixVersion) {
-      await syncLocalFixVersion(key, patch.addFixVersion?.trim(), patch.removeFixVersion?.trim()).catch(() => null);
+      await syncLocalFixVersion(key, patch.addFixVersion?.trim(), patch.removeFixVersion?.trim()).catch((err) => {
+        logSwallowed("issue_detail_sync_fix_version", err, { key });
+        return null;
+      });
     }
 
     if (Object.keys(directUpdate).length > 1) {
@@ -201,7 +205,10 @@ export async function handleIssueUpdateRequest(
           where: { jiraKey: key },
           data: directUpdate,
         })
-        .catch(() => null);
+        .catch((err) => {
+          logSwallowed("issue_detail_update_cache", err, { key });
+          return null;
+        });
     }
   } catch (e) {
     return NextResponse.json({ error: `Jira update failed: ${(e as Error).message}` }, { status: 502 });

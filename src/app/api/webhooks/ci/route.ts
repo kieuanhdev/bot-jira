@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { ingestEvent, type Source } from "@/lib/events/store";
 import { rateLimit, readAndVerifyWebhook } from "../_shared";
 
+import { logSwallowed } from "@/lib/logger";
+
 export const dynamic = "force-dynamic";
 
 /**
@@ -59,8 +61,9 @@ export async function POST(req: Request) {
   try {
     const { enqueueWebhookEvent } = await import("@/lib/queue/boss");
     await enqueueWebhookEvent({ source, eventId: result.eventId });
-  } catch {
+  } catch (err) {
     /* ack anyway — event is stored */
+    logSwallowed("ci_webhook_enqueue", err, { eventId: result.eventId });
   }
   return NextResponse.json({ ok: true });
 }

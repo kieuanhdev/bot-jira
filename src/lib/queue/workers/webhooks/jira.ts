@@ -9,6 +9,7 @@ import {
 import { normalizeStatusToGroup } from "@/lib/reports/status";
 import { isJiraNotFound, markIssuesDeleted } from "@/lib/issues/deleted";
 import { listSyncDisabledProjectKeys } from "@/lib/jira/project-catalog";
+import { logSwallowed } from "@/lib/logger";
 
 type JiraChangelogItem = {
   field?: string;
@@ -58,7 +59,10 @@ async function refreshIssue(
       previous,
       { jiraKey: key, ...current },
       { authorName }
-    ).catch(() => null);
+    ).catch((err) => {
+      logSwallowed("jira_webhook_notify_issue_change", err, { key });
+      return null;
+    });
   }
 
   if (syncComments) {
@@ -135,7 +139,10 @@ export async function handleJiraWebhook(
         previous,
         { jiraKey: key, ...current },
         { authorName }
-      ).catch(() => null);
+      ).catch((err) => {
+        logSwallowed("jira_webhook_legacy_notify_issue_change", err, { key });
+        return null;
+      });
     }
     const { newComments } = await upsertJiraCommentsWithNew(
       key,
@@ -148,7 +155,10 @@ export async function handleJiraWebhook(
           comment.author,
           comment.body,
           comment.id
-        ).catch(() => null);
+        ).catch((err) => {
+          logSwallowed("jira_webhook_notify_comment", err, { key, commentId: comment.id });
+          return null;
+        });
       }
     }
     return { refreshed: key, newComments: newComments.length };
@@ -190,7 +200,10 @@ export async function handleJiraWebhook(
           source: "jira_webhook",
         },
         update: {},
-      }).catch(() => null);
+      }).catch((err) => {
+        logSwallowed("jira_webhook_transition_upsert", err, { key });
+        return null;
+      });
     }
   }
 
@@ -205,7 +218,10 @@ export async function handleJiraWebhook(
     for (const otherKey of matches) {
       if (otherKey !== key && !otherRefreshed.includes(otherKey) && !isSyncDisabled(otherKey)) {
         otherRefreshed.push(otherKey);
-        await refreshIssue(otherKey).catch(() => null);
+        await refreshIssue(otherKey).catch((err) => {
+          logSwallowed("jira_webhook_linked_issue_refresh", err, { key, otherKey });
+          return null;
+        });
       }
     }
   }

@@ -5,6 +5,8 @@ import { dispatchWebhook } from "./webhooks/dispatcher";
 import { safeWebhookError } from "./webhooks/types";
 import type { ProcessWebhookJobData } from "./webhooks/types";
 
+import { logSwallowed } from "@/lib/logger";
+
 export type { ProcessWebhookJobData } from "./webhooks/types";
 
 /** Event lifecycle facade retained for queue registry and enqueue compatibility. */
@@ -21,7 +23,8 @@ export async function runProcessWebhook(
   let payload: unknown;
   try {
     payload = event.payload;
-  } catch {
+  } catch (err) {
+    logSwallowed("process_webhook_read_payload", err, { eventId });
     payload = {};
   }
 
@@ -31,7 +34,10 @@ export async function runProcessWebhook(
     return { ok: true, stats: { source, eventId, ...result } };
   } catch (error) {
     const message = safeWebhookError(error);
-    await markEventFailed(eventId, message).catch(() => null);
+    await markEventFailed(eventId, message).catch((err) => {
+      logSwallowed("process_webhook_mark_event_failed", err, { eventId });
+      return null;
+    });
     return { ok: false, errors: [message], stats: { source, eventId } };
   }
 }

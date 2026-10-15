@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
+import { logSwallowed } from "@/lib/logger";
 
 /**
  * AES-256-GCM encryption for per-user Jira/Bitbucket credentials.
@@ -50,14 +51,25 @@ export function decrypt(ciphertext: string): string {
   return Buffer.concat([decipher.update(data), decipher.final()]).toString("utf8");
 }
 
+let hasLoggedDecryptionFailure = false;
+
 /** Decrypt a stored credential blob, returning null on failure (bad key / corrupt). */
 export function safeDecrypt(ciphertext: string | null | undefined): string | null {
   if (!ciphertext) return null;
   try {
     return decrypt(ciphertext);
-  } catch {
+  } catch (error) {
+    if (!hasLoggedDecryptionFailure) {
+      hasLoggedDecryptionFailure = true;
+      logSwallowed("crypto_safe_decrypt", error);
+    }
     return null;
   }
+}
+
+/** Reset decryption failure log flag (for tests). */
+export function _resetDecryptionFailureLoggedForTesting(): void {
+  hasLoggedDecryptionFailure = false;
 }
 
 /** Generate a fresh 64-char hex key (for `npx tsx -e` setup helpers). */
