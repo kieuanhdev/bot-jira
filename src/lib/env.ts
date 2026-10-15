@@ -84,6 +84,7 @@ export const env = {
   bitbucketBaseUrl: str("BITBUCKET_BASE_URL"),
   bitbucketUser: str("BITBUCKET_USER"),
   bitbucketToken: str("BITBUCKET_TOKEN"),
+  bitbucketRequestTimeoutMs: int("BITBUCKET_REQUEST_TIMEOUT_MS", 15000),
   // Comma-separated project/repo slugs, e.g. "team/app1,team/app2"
   bitbucketRepos: str("BITBUCKET_REPOS"),
   // Also scan every repo that any stored Bitbucket account can read.

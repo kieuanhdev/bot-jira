@@ -5,6 +5,7 @@ const envMock = vi.hoisted(() => ({
     bitbucketBaseUrl: "http://bitbucket.test",
     bitbucketUser: "system-user",
     bitbucketToken: "system-token",
+    bitbucketRequestTimeoutMs: 15000,
   },
 }));
 
@@ -246,6 +247,63 @@ describe("Bitbucket Transport", () => {
       await expect(request("PROJ/repo", "branches")).rejects.toThrow(
         `Bitbucket branches -> 500: ${"x".repeat(300)}`
       );
+
+      vi.unstubAllGlobals();
+    });
+
+    it("aborts and rejects within timeout for a hanging fetch", async () => {
+      envMock.env.bitbucketRequestTimeoutMs = 50;
+      const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted", "AbortError"));
+          });
+        });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(request("PROJ/repo", "branches")).rejects.toThrow(/timed out/i);
+      vi.unstubAllGlobals();
+    });
+
+    it("retries GET on 503 and succeeds on subsequent 200", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 503,
+          text: async () => "Service Unavailable",
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true }),
+        });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const res = await request("PROJ/repo", "branches");
+      expect(res).toEqual({ ok: true });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      vi.unstubAllGlobals();
+    });
+
+    it("does NOT retry mutating requests (e.g. POST) on 503", async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        text: async () => "Service Unavailable",
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(
+        request("PROJ/repo", "branches", {
+          method: "POST",
+          body: JSON.stringify({ name: "feature" }),
+        })
+      ).rejects.toThrow("Bitbucket branches -> 503: Service Unavailable");
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
 
       vi.unstubAllGlobals();
     });

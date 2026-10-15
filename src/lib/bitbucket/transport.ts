@@ -1,5 +1,11 @@
 import { env } from "@/lib/env";
 import { logSwallowed } from "@/lib/logger";
+import {
+  fetchWithTimeout,
+  HttpTimeoutError,
+  shouldRetryStatus,
+  withRetry,
+} from "@/lib/http/fetch-with-timeout";
 import type { BbCreds, Paged } from "./types";
 
 export async function getSystemBitbucketCreds(): Promise<BbCreds | null> {
@@ -61,7 +67,7 @@ export function isBitbucketPermissionError(err: unknown): boolean {
 export async function request<T>(
   repo: string,
   path: string,
-  init: { method?: string; body?: string } = {},
+  init: { method?: string; body?: string; signal?: AbortSignal } = {},
   creds?: BbCreds
 ): Promise<T> {
   const base = env.bitbucketBaseUrl.replace(/\/$/, "");
@@ -83,6 +89,10 @@ export async function request<T>(
     throw new Error("Chưa cấu hình tài khoản Bitbucket trong hệ thống hoặc thiết lập người dùng");
   }
 
+  const method = (init.method ?? "GET").toUpperCase();
+  const isGet = method === "GET";
+  const timeoutMs = env.bitbucketRequestTimeoutMs ?? 15000;
+
   let lastError: Error | null = null;
   for (let i = 0; i < candidateCreds.length; i++) {
     const currentCred = candidateCreds[i];
@@ -91,16 +101,31 @@ export async function request<T>(
       repo.split("/")[0] ?? repo
     )}/repos/${encodeURIComponent(repo.split("/")[1] ?? repo)}/${path}`;
 
-    try {
-      const res = await fetch(url, {
-        method: init.method ?? "GET",
+    const execute = () =>
+      fetchWithTimeout(url, {
+        method,
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
           Authorization: `Basic ${basic}`,
         },
         ...(init.body !== undefined ? { body: init.body } : {}),
+        timeoutMs,
+        signal: init.signal,
       });
+
+    try {
+      const res = isGet
+        ? await withRetry(execute, {
+            retries: 2,
+            baseDelayMs: 200,
+            retryOn: (err, response) => {
+              if (err instanceof HttpTimeoutError) return true;
+              if (response && shouldRetryStatus(response.status)) return true;
+              return false;
+            },
+          })
+        : await execute();
 
       if (!res.ok) {
         const text = await res.text().catch(() => "");

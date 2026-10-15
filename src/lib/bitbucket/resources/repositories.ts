@@ -1,4 +1,5 @@
 import { env, bitbucketRepoList } from "@/lib/env";
+import { fetchWithTimeout } from "@/lib/http/fetch-with-timeout";
 import type { BbCreds, BitbucketRepoResponse, Paged } from "../types";
 import { getAllBitbucketCreds, repoCredCache } from "../transport";
 
@@ -17,8 +18,10 @@ export async function listReposForCred(cred: BbCreds): Promise<string[]> {
   try {
     let start = 0;
     for (let page = 0; page < 50; page++) {
-      const res = await fetch(`${base}/rest/api/1.0/repos?limit=100&start=${start}`, {
+      const res = await fetchWithTimeout(`${base}/rest/api/1.0/repos?limit=100&start=${start}`, {
+        method: "GET",
         headers: { Accept: "application/json", Authorization: `Basic ${basic}` },
+        timeoutMs: env.bitbucketRequestTimeoutMs ?? 15000,
       });
       if (!res.ok) break; // this account is rejected; others may still work
       const body = (await res.json()) as Paged<BitbucketRepoResponse>;
@@ -70,8 +73,10 @@ export function createRepositoriesResource() {
     async verifyCreds(creds: BbCreds): Promise<void> {
       const base = env.bitbucketBaseUrl.replace(/\/$/, "");
       const basic = Buffer.from(`${creds.user}:${creds.token}`).toString("base64");
-      const res = await fetch(`${base}/rest/api/1.0/projects?limit=1`, {
+      const res = await fetchWithTimeout(`${base}/rest/api/1.0/projects?limit=1`, {
+        method: "GET",
         headers: { Accept: "application/json", Authorization: `Basic ${basic}` },
+        timeoutMs: env.bitbucketRequestTimeoutMs ?? 15000,
       });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
