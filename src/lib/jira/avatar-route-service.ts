@@ -5,11 +5,25 @@ import { prisma } from "@/lib/prisma";
 import { userJiraAuth } from "@/lib/user-creds";
 import { getSystemJiraAuth, type JiraAuth } from "@/lib/jira/client";
 import { env } from "@/lib/env";
+import { logger } from "@/lib/logger";
+import { checkAuthRateLimit } from "@/lib/rate-limit";
 
 // Cache in-memory: 60 minutes for avatar images
 const AVATAR_CACHE_TTL_MS = 60 * 60 * 1000;
 // Cache in-memory: 60 minutes for resolved avatar URLs
 const USER_URLS_CACHE_TTL_MS = 60 * 60 * 1000;
+// Maximum entries in avatar cache to prevent unbounded memory growth
+const MAX_AVATAR_CACHE_ENTRIES = 500;
+// Maximum image size allowed to be proxied (512 KB)
+const MAX_AVATAR_BYTES = 512 * 1024;
+
+// Allowlist of external hosts for avatars (never receive Authorization)
+const ALLOWED_AVATAR_HOSTS = new Set([
+  "secure.gravatar.com",
+  "www.gravatar.com",
+  "gravatar.com",
+  "avatar-management--avatars.us-west-2.prod.public.atl-paas.net",
+]);
 
 type CachedAvatar = {
   data: Buffer;
@@ -21,6 +35,46 @@ const avatarCache = new Map<string, CachedAvatar>();
 const userAvatarUrlCache = new Map<string, { urls: Record<string, string>; expiresAt: number }>();
 const inFlightUserLookups = new Map<string, Promise<Record<string, string> | null>>();
 const inFlightImageFetches = new Map<string, Promise<{ data: Buffer; contentType: string } | null>>();
+
+function setAvatarCache(key: string, value: CachedAvatar) {
+  if (avatarCache.has(key)) {
+    avatarCache.delete(key);
+  } else if (avatarCache.size >= MAX_AVATAR_CACHE_ENTRIES) {
+    const oldestKey = avatarCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      avatarCache.delete(oldestKey);
+    }
+  }
+  avatarCache.set(key, value);
+}
+
+export function _clearAvatarCache(): void {
+  avatarCache.clear();
+  userAvatarUrlCache.clear();
+}
+
+export function _getAvatarCacheSize(): number {
+  return avatarCache.size;
+}
+
+/**
+ * Pure check to verify if a rawUrl has the exact same origin as the configured jiraBaseUrl.
+ */
+export function isJiraOrigin(rawUrl: string, jiraBaseUrl: string): boolean {
+  try {
+    const base = new URL(jiraBaseUrl);
+    if (base.protocol !== "http:" && base.protocol !== "https:") {
+      return false;
+    }
+    const target = new URL(rawUrl, base);
+    if (target.protocol !== "http:" && target.protocol !== "https:") {
+      return false;
+    }
+    return target.origin === base.origin;
+  } catch {
+    return false;
+  }
+}
 
 // Periodic cleanup every 10 minutes to prevent memory leak
 if (typeof setInterval !== "undefined") {
@@ -201,7 +255,7 @@ async function fetchImageWithDedup(
       fetchUrl = `${base}${fetchUrl.startsWith("/") ? "" : "/"}${fetchUrl}`;
     }
 
-    const isInternalJira = fetchUrl.startsWith(base);
+    const isInternalJira = isJiraOrigin(fetchUrl, base);
     const headers: Record<string, string> = {
       Accept: "image/*, */*",
     };
@@ -213,16 +267,27 @@ async function fetchImageWithDedup(
       const res = await fetch(fetchUrl, {
         headers,
         signal: AbortSignal.timeout(10000),
+        redirect: "manual",
       });
 
       if (!res.ok) return null;
 
-      const contentType = res.headers.get("content-type") || "image/png";
-      if (contentType.includes("text/html") || contentType.includes("application/json")) {
+      const rawContentType = res.headers.get("content-type") || "";
+      const contentType = rawContentType.split(";")[0].trim().toLowerCase();
+      if (!contentType.startsWith("image/")) {
+        return null;
+      }
+
+      const contentLength = res.headers.get("content-length");
+      if (contentLength && parseInt(contentLength, 10) > MAX_AVATAR_BYTES) {
         return null;
       }
 
       const arrayBuffer = await res.arrayBuffer();
+      if (arrayBuffer.byteLength > MAX_AVATAR_BYTES) {
+        return null;
+      }
+
       const buffer = Buffer.from(arrayBuffer);
       return { data: buffer, contentType };
     } catch {
@@ -239,6 +304,17 @@ async function fetchImageWithDedup(
 }
 
 export async function handleAvatarRequest(req: Request) {
+  // 1. Session required: refuse anonymous requests immediately
+  const session = await getSession();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  // 2. Per-user rate limiting
+  if (!checkAuthRateLimit(`avatar:${session.user.id}`, 120, 60 * 1000)) {
+    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
+  }
+
   const url = new URL(req.url);
   const username = url.searchParams.get("username")?.trim();
   const rawAvatarUrl = url.searchParams.get("url")?.trim();
@@ -248,8 +324,51 @@ export async function handleAvatarRequest(req: Request) {
     return NextResponse.json({ error: "Missing username or url parameter" }, { status: 400 });
   }
 
+  const base = env.jiraBaseUrl.replace(/\/$/, "");
+
+  // 3. Origin check for rawAvatarUrl
+  let validatedTargetUrl: string | null = null;
+  if (rawAvatarUrl) {
+    let parsed: URL;
+    try {
+      parsed = new URL(rawAvatarUrl, base);
+    } catch {
+      logger.warn({
+        message: "Refused malformed avatar URL",
+        url: rawAvatarUrl,
+        userId: session.user.id,
+      });
+      return NextResponse.json({ error: "invalid_avatar_url" }, { status: 400 });
+    }
+
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      logger.warn({
+        message: "Refused avatar URL with non-http protocol",
+        url: rawAvatarUrl,
+        userId: session.user.id,
+      });
+      return NextResponse.json({ error: "invalid_avatar_url" }, { status: 400 });
+    }
+
+    const isSameOrigin = isJiraOrigin(rawAvatarUrl, base);
+    const isAllowlisted = ALLOWED_AVATAR_HOSTS.has(parsed.hostname.toLowerCase());
+
+    if (!isSameOrigin && !isAllowlisted) {
+      logger.warn({
+        message: "Refused avatar proxy request for non-allowlisted origin",
+        url: rawAvatarUrl,
+        userId: session.user.id,
+      });
+      return NextResponse.json({ error: "invalid_avatar_origin" }, { status: 400 });
+    }
+
+    validatedTargetUrl = rawAvatarUrl;
+  }
+
   // Determine cache key
-  const cacheKey = rawAvatarUrl ? `url:${rawAvatarUrl}` : `user:${username?.toLowerCase()}:${size}`;
+  const cacheKey = validatedTargetUrl
+    ? `url:${validatedTargetUrl}`
+    : `user:${username?.toLowerCase()}:${size}`;
   const cached = avatarCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     const cleanContentType = (cached.contentType.split(";")[0] || "image/png").trim();
@@ -276,14 +395,11 @@ export async function handleAvatarRequest(req: Request) {
 
   // Resolve auth: current user's Jira token first, then system Jira auth fallback
   let auth: JiraAuth | null = null;
-  const session = await getSession();
-  if (session?.user?.id) {
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true, jiraUsername: true },
-    });
-    auth = userJiraAuth(user);
-  }
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { jiraUserEnc: true, jiraTokenEnc: true, jiraAuth: true, jiraUsername: true },
+  });
+  auth = userJiraAuth(user);
 
   if (!auth) {
     auth = await getSystemJiraAuth();
@@ -298,17 +414,32 @@ export async function handleAvatarRequest(req: Request) {
       ? `Basic ${Buffer.from(`${auth.user}:${auth.token}`).toString("base64")}`
       : `Bearer ${auth.token}`;
 
-  const base = env.jiraBaseUrl.replace(/\/$/, "");
+  let targetUrl: string | null = validatedTargetUrl;
 
-  let targetUrl: string | null = null;
-
-  if (rawAvatarUrl) {
-    targetUrl = rawAvatarUrl;
-  } else if (username) {
+  if (!targetUrl && username) {
     // 1. Resolve actual avatarUrls dictionary (from memory / IssueCache / Jira /rest/api/2/user)
     const avatarUrls = await lookupUserAvatarUrls(username, authHeaderValue, base);
     if (avatarUrls) {
-      targetUrl = selectAvatarUrl(avatarUrls, size);
+      const selected = selectAvatarUrl(avatarUrls, size);
+      if (selected) {
+        try {
+          const parsed = new URL(selected, base);
+          const isSameOrigin = isJiraOrigin(selected, base);
+          const isAllowlisted = ALLOWED_AVATAR_HOSTS.has(parsed.hostname.toLowerCase());
+          if (isSameOrigin || isAllowlisted) {
+            targetUrl = selected;
+          } else {
+            logger.warn({
+              message: "Resolved avatar URL has disallowed origin",
+              url: selected,
+              username,
+              userId: session.user.id,
+            });
+          }
+        } catch {
+          // ignore malformed selected url
+        }
+      }
     }
 
     // 2. Fallback to Jira's direct endpoint if not resolved
@@ -330,7 +461,7 @@ export async function handleAvatarRequest(req: Request) {
       if (fallbackUrl !== targetUrl) {
         const fallbackResult = await fetchImageWithDedup(fallbackUrl, authHeaderValue, base);
         if (fallbackResult) {
-          avatarCache.set(cacheKey, {
+          setAvatarCache(cacheKey, {
             data: fallbackResult.data,
             contentType: fallbackResult.contentType,
             expiresAt: Date.now() + AVATAR_CACHE_TTL_MS,
@@ -352,7 +483,7 @@ export async function handleAvatarRequest(req: Request) {
     return NextResponse.json({ error: "Avatar not found on Jira" }, { status: 404 });
   }
 
-  avatarCache.set(cacheKey, {
+  setAvatarCache(cacheKey, {
     data: imgResult.data,
     contentType: imgResult.contentType,
     expiresAt: Date.now() + AVATAR_CACHE_TTL_MS,
@@ -380,3 +511,4 @@ export async function handleAvatarRequest(req: Request) {
     },
   });
 }
+

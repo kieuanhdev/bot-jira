@@ -23,9 +23,21 @@ import { GET } from "./route";
 describe("GET /api/jira/avatar", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.session.mockResolvedValue(null);
+    mocks.session.mockResolvedValue({ user: { id: "test-user-id" } });
     mocks.systemAuth.mockResolvedValue(null);
     mocks.userAuth.mockReturnValue(null);
+  });
+
+  it("returns 401 when session is not authenticated", async () => {
+    mocks.session.mockResolvedValue(null);
+    const response = await GET(
+      new Request("http://localhost/api/jira/avatar?url=https://jira.example.test/avatar.png")
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "unauthorized",
+    });
   });
 
   it("returns 400 when neither username nor url is provided", async () => {
@@ -39,7 +51,7 @@ describe("GET /api/jira/avatar", () => {
 
   it("returns 401 when Jira authentication is unavailable", async () => {
     const response = await GET(
-      new Request("http://localhost/api/jira/avatar?url=https://cdn.example.test/avatar.png")
+      new Request("http://localhost/api/jira/avatar?url=https://jira.example.test/avatar.png")
     );
 
     expect(response.status).toBe(401);
@@ -62,7 +74,7 @@ describe("GET /api/jira/avatar", () => {
     );
 
     const response = await GET(
-      new Request("http://localhost/api/jira/avatar?url=https://cdn.example.test/avatar.png")
+      new Request("http://localhost/api/jira/avatar?url=https://jira.example.test/avatar.png")
     );
 
     expect(response.status).toBe(200);

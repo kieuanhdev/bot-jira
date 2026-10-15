@@ -25,6 +25,13 @@
 
 Contract tests: cả 3 route files có test. `ActiveJiraSyncResponse` hiện được export từ route và import bởi client; đây là đầu vào trực tiếp cho batch 1.2.
 
+### 2.1 Jira Avatar Proxy (REF-001)
+
+| Method + route | Request DTO | Success response DTO | Status contract | Consumer |
+|---|---|---|---|---|
+| `GET /api/jira/avatar` | Query `{ username?: string; url?: string; size?: string }` | Binary image (`image/*`), headers `Content-Type`, `Cache-Control`, `ETag` | `200`; `304`; `400 missing_params/invalid_avatar_origin`; `401 unauthorized/jira_auth_unavailable` (BEHAVIOUR CHANGE: anonymous yêu cầu session trả 401); `404 not_found`; `429 rate_limited` | `components/jira-avatar.tsx` |
+
+
 ## 3. Bulk Create
 
 ### 3.1 Contract chính
