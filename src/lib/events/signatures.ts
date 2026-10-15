@@ -1,5 +1,15 @@
 import crypto from "node:crypto";
 import { env } from "@/lib/env";
+import { logger } from "@/lib/logger";
+
+const warnedMissingSecrets = new Set<string>();
+
+/**
+ * Reset warned missing secrets cache (used for test isolation).
+ */
+export function _resetWarnedMissingSecretsForTest(): void {
+  warnedMissingSecrets.clear();
+}
 
 function timingSafeEqualHex(a: string, b: string): boolean {
   const bufA = Buffer.from(a, "utf8");
@@ -16,7 +26,8 @@ function sha256HmacHex(secret: string, body: string): string {
  * Verify a webhook signature for a given source. Each source supports a
  * different scheme (documented inline). When the source has no secret
  * configured the endpoint treats the request as unauthenticated and rejects
- * it — a webhook should never be accepted without a shared secret.
+ * it in production (fails closed). In non-production environments, it logs
+ * a warning once and accepts the request.
  *
  * Returns true when the request is authentic.
  */
@@ -34,7 +45,21 @@ export function verifyWebhookSignature(
           ? env.bitbucketWebhookSecret
           : env.ciWebhookSecret;
 
-  if (!secret) return true;
+  if (!secret) {
+    const isProduction = (env.nodeEnv ?? process.env.NODE_ENV) === "production";
+    if (isProduction) {
+      return false;
+    }
+
+    if (!warnedMissingSecrets.has(source)) {
+      warnedMissingSecrets.add(source);
+      logger.warn({
+        message: `webhook secret is not configured for source "${source}"; allowing request in non-production environment`,
+        source,
+      });
+    }
+    return true;
+  }
 
   if (source === "ci") {
     // Generic CI: `X-Webhook-Signature` = HMAC-SHA256 hex of raw body.

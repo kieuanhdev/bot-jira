@@ -31,6 +31,12 @@ Contract tests: cả 3 route files có test. `ActiveJiraSyncResponse` hiện đ�
 |---|---|---|---|---|
 | `GET /api/jira/avatar` | Query `{ username?: string; url?: string; size?: string }` | Binary image (`image/*`), headers `Content-Type`, `Cache-Control`, `ETag` | `200`; `304`; `400 missing_params/invalid_avatar_origin`; `401 unauthorized/jira_auth_unavailable` (BEHAVIOUR CHANGE: anonymous yêu cầu session trả 401); `404 not_found`; `429 rate_limited` | `components/jira-avatar.tsx` |
 
+### 2.2 Webhooks (REF-002)
+
+| Method + route | Request DTO | Success response DTO | Status contract | Consumer |
+|---|---|---|---|---|
+| `POST /api/webhooks/{jira,bitbucket,sentry,ci}` | Headers signature (`x-atlassian-token`, `x-hub-signature`, `x-sentry-hook-signature`, `x-webhook-signature`); raw JSON body | `{ ok: true }` (hoặc ack response) | `200`; `400 missing_event_id/invalid_payload`; `401 invalid_signature` (BEHAVIOUR CHANGE: production thiếu secret sẽ trả 401 fail-closed); `429 rate_limited` | Webhook dispatchers (Jira, Bitbucket, Sentry, CI) |
+
 
 ## 3. Bulk Create
 

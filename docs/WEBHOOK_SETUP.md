@@ -22,7 +22,7 @@ JIRA_WEBHOOK_SECRET=<secret-jira>
 BITBUCKET_WEBHOOK_SECRET=<secret-bitbucket>
 ```
 
-> Nếu để trống secret, app sẽ chấp nhận mọi request không cần xác thực. Luôn đặt secret trước khi mở endpoint ra ngoài.
+> **Bảo mật:** Trong môi trường production (`NODE_ENV=production`), app sẽ từ chối (`401`) mọi request webhook nếu chưa cấu hình secret tương ứng. Trong môi trường development/test, request được chấp nhận kèm log warning một lần. Luôn đặt secret trước khi mở endpoint ra ngoài.
 
 ## 2. Cấu hình Jira (Server / Data Center)
 

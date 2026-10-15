@@ -1,9 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import crypto from "node:crypto";
 
-// Stub env before importing the module under test.
-vi.mock("@/lib/env", () => ({
-  env: {
+const { mockEnv } = vi.hoisted(() => ({
+  mockEnv: {
+    nodeEnv: "test",
     jiraWebhookSecret: "jira-secret",
     sentryWebhookSecret: "sentry-secret",
     bitbucketWebhookSecret: "bb-secret",
@@ -11,7 +11,13 @@ vi.mock("@/lib/env", () => ({
   },
 }));
 
-import { verifyWebhookSignature } from "./signatures";
+// Stub env before importing the module under test.
+vi.mock("@/lib/env", () => ({
+  env: mockEnv,
+}));
+
+import { logger } from "@/lib/logger";
+import { verifyWebhookSignature, _resetWarnedMissingSecretsForTest } from "./signatures";
 
 function hmacHex(secret: string, body: string): string {
   return crypto.createHmac("sha256", secret).update(body, "utf8").digest("hex");
@@ -19,7 +25,13 @@ function hmacHex(secret: string, body: string): string {
 
 describe("verifyWebhookSignature", () => {
   beforeEach(() => {
-    /* env is mocked at module level */
+    mockEnv.nodeEnv = "test";
+    mockEnv.jiraWebhookSecret = "jira-secret";
+    mockEnv.sentryWebhookSecret = "sentry-secret";
+    mockEnv.bitbucketWebhookSecret = "bb-secret";
+    mockEnv.ciWebhookSecret = "ci-secret";
+    _resetWarnedMissingSecretsForTest?.();
+    vi.restoreAllMocks();
   });
 
   it("accepts a valid CI HMAC-SHA256 signature", () => {
@@ -100,5 +112,49 @@ describe("verifyWebhookSignature", () => {
     const body = "{}";
     const headers = new Headers({ "x-webhook-signature": "short" });
     expect(verifyWebhookSignature("ci", headers, body)).toBe(false);
+  });
+
+  describe("when secret is missing", () => {
+    it("rejects request in production environment", () => {
+      mockEnv.nodeEnv = "production";
+      mockEnv.jiraWebhookSecret = "";
+      const body = '{"event":"jira:issue_updated"}';
+      const headers = new Headers({ "x-atlassian-token": "any-token" });
+
+      expect(verifyWebhookSignature("jira", headers, body)).toBe(false);
+    });
+
+    it("accepts request and logs a warning once in non-production environment", () => {
+      mockEnv.nodeEnv = "development";
+      mockEnv.jiraWebhookSecret = "";
+      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      const body = '{"event":"jira:issue_updated"}';
+      const headers = new Headers();
+
+      // First call: returns true and logs warn
+      expect(verifyWebhookSignature("jira", headers, body)).toBe(true);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: "jira",
+          message: expect.stringContaining("not configured"),
+        })
+      );
+
+      // Second call for same source: returns true and does NOT log again
+      expect(verifyWebhookSignature("jira", headers, body)).toBe(true);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+
+      // Call for different source with missing secret: logs for that source
+      mockEnv.bitbucketWebhookSecret = "";
+      expect(verifyWebhookSignature("bitbucket", headers, body)).toBe(true);
+      expect(warnSpy).toHaveBeenCalledTimes(2);
+      expect(warnSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          source: "bitbucket",
+        })
+      );
+    });
   });
 });
