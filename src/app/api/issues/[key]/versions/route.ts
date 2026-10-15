@@ -4,6 +4,8 @@ import { getSession } from "@/lib/session";
 import { getSystemJiraAuth, jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 
+import { logger } from "@/lib/logger";
+
 export async function GET(_req: Request, ctx: { params: Promise<{ key: string }> }) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -23,6 +25,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ key: string }>
     const versions = await client.getVersions(projectKey);
     return NextResponse.json({ items: versions });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
+    logger.error({ message: "Failed to fetch Jira versions", key, projectKey, error: (e as Error).message });
+    return NextResponse.json({ error: "Không thể tải danh sách phiên bản Jira" }, { status: 502 });
   }
 }

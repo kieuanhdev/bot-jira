@@ -4,6 +4,8 @@ import { getSession } from "@/lib/session";
 import { getSystemJiraAuth, jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 
+import { logger } from "@/lib/logger";
+
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ key: string }> }
@@ -26,6 +28,7 @@ export async function GET(
     const transitions = await client.getTransitions(key);
     return NextResponse.json({ transitions });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
+    logger.error({ message: "Failed to fetch Jira transitions", key, error: (e as Error).message });
+    return NextResponse.json({ error: "Không thể tải danh sách luồng trạng thái Jira" }, { status: 502 });
   }
 }

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   previewBulk: vi.fn(),
   confirmBulk: vi.fn(),
   resolveFilterKeys: vi.fn(),
+  loggerError: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getSession: mocks.session }));
@@ -16,6 +17,13 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: { findUnique: mocks.user },
     bulkOperation: { findUnique: mocks.bulkOperation },
+  },
+}));
+vi.mock("@/lib/logger", () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: mocks.loggerError,
   },
 }));
 vi.mock("@/lib/user-creds", () => ({
@@ -184,6 +192,58 @@ describe("POST /api/issues/bulk", () => {
           },
         },
       }
+    );
+  });
+
+  it("does not leak raw error message on preview failure and logs it (REF-010)", async () => {
+    const sentinel = "UPSTREAM_DB_CONNECTION_LEAK_IN_PREVIEW";
+    mocks.previewBulk.mockRejectedValueOnce(new Error(sentinel));
+
+    const res = await POST(new Request("http://localhost/api/issues/bulk", {
+      method: "POST",
+      body: JSON.stringify({
+        keys: ["EPM-1"],
+        action: { kind: "assign", value: "alice" },
+      }),
+    }));
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBeDefined();
+    expect(body.error).not.toContain(sentinel);
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.stringContaining(sentinel),
+      })
+    );
+  });
+
+  it("does not leak raw error message on confirm failure and logs it (REF-010)", async () => {
+    const sentinel = "UPSTREAM_PRISMA_CONFIRM_CRASH_LEAK";
+    mocks.bulkOperation.mockResolvedValueOnce({
+      id: "op-1",
+      requestedBy: "user-1",
+      state: "preview",
+      type: "update-fields",
+    });
+    mocks.confirmBulk.mockRejectedValueOnce(new Error(sentinel));
+
+    const res = await POST(new Request("http://localhost/api/issues/bulk", {
+      method: "POST",
+      body: JSON.stringify({
+        confirm: true,
+        operationId: "op-1",
+      }),
+    }));
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBeDefined();
+    expect(body.error).not.toContain(sentinel);
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.stringContaining(sentinel),
+      })
     );
   });
 });

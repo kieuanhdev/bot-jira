@@ -6,6 +6,7 @@ import { jiraWith, probeJiraAuth, JiraRequestError } from "@/lib/jira/client";
 import { enqueueBulkOperation } from "@/lib/queue/boss";
 import { previewBulkCreate, confirmBulkCreate } from "@/lib/bulk/create-ops";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
+import { logger } from "@/lib/logger";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -56,8 +57,15 @@ export async function POST(req: Request) {
       });
     } catch (err) {
       const msg = (err as Error).message;
+      const isKnown =
+        msg.includes("không tìm thấy") ||
+        msg.includes("đã được xác nhận") ||
+        msg.includes("Thao tác không phải là");
       const status = msg.includes("không tìm thấy") ? 404 : msg.includes("đã được xác nhận") ? 409 : 400;
-      return NextResponse.json({ error: msg }, { status });
+      if (!isKnown) {
+        logger.error({ message: "Failed to confirm bulk create", operationId: rawBody.operationId, error: msg });
+      }
+      return NextResponse.json({ error: isKnown ? msg : "Không thể xác nhận thao tác tạo task hàng loạt" }, { status });
     }
   }
 
@@ -67,9 +75,11 @@ export async function POST(req: Request) {
     const preview = await previewBulkCreate(session.user.id, jira, auth, rawBody);
     return NextResponse.json(preview);
   } catch (err) {
-    if (err instanceof JiraRequestError) {
-      return NextResponse.json({ error: err.message }, { status: err.status || 400 });
+    if (err instanceof JiraRequestError && err.status !== null && err.status < 500) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
-    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+    const status = err instanceof JiraRequestError && err.status !== null ? err.status : 400;
+    logger.error({ message: "Bulk create preview failed", error: (err as Error).message });
+    return NextResponse.json({ error: "Không thể tạo bản xem trước cho danh sách task" }, { status });
   }
 }

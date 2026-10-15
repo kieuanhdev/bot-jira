@@ -8,6 +8,7 @@ import { fetchBulkCreateMetadata } from "@/lib/bulk/create-ops";
 import { parseBulkCreateExcel } from "@/lib/bulk/excel-parser";
 import { MAX_FILE_SIZE_BYTES } from "@/lib/bulk/excel-schema";
 import { type BulkCreateProjectMetadata } from "@/lib/bulk/create-types";
+import { logger } from "@/lib/logger";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -127,9 +128,18 @@ export async function POST(req: Request) {
       warnings: result.warnings,
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: (err as Error).message || "Đã xảy ra lỗi khi đọc file Excel." },
-      { status: 422 }
-    );
+    logger.error({ message: "Failed to parse bulk create Excel file", projectKey, error: (err as Error).message });
+    const rawMsg = (err as Error).message || "";
+    let safeMessage = "Đã xảy ra lỗi khi đọc file Excel.";
+    if (
+      rawMsg.includes("vượt quá giới hạn") ||
+      rawMsg.includes("không được hỗ trợ") ||
+      rawMsg.includes("Không tìm thấy trang tính")
+    ) {
+      safeMessage = rawMsg;
+    } else if (rawMsg.includes("Không thể đọc file Excel")) {
+      safeMessage = "Không thể đọc file Excel (.xlsx). Vui lòng đảm bảo file không bị hỏng hoặc có mật khẩu bảo vệ.";
+    }
+    return NextResponse.json({ error: safeMessage }, { status: 422 });
   }
 }

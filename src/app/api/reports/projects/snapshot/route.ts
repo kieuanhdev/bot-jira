@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { captureProjectReportSnapshots } from "@/lib/reports/snapshot-service";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +36,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, data: result });
   } catch (err) {
-    console.error("Manual snapshot capture failed:", err);
+    logger.error({ message: "Manual snapshot capture failed", error: (err as Error).message });
     return NextResponse.json(
-      { error: "Snapshot capture failed", details: String(err) },
+      { error: "Snapshot capture failed" },
       { status: 500 }
     );
   }

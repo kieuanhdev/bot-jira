@@ -5,6 +5,7 @@ import { userJiraAuth } from "@/lib/user-creds";
 import { jiraWith, JiraRequestError } from "@/lib/jira/client";
 import { recordSearchMetrics } from "@/lib/bulk/create-metrics";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
+import { logger } from "@/lib/logger";
 
 const USER_SEARCH_CACHE_TTL_MS = 60_000;
 const userSearchCache = new Map<
@@ -70,9 +71,11 @@ export async function GET(req: Request) {
     userSearchCache.set(cacheKey, { users, expiresAt: Date.now() + USER_SEARCH_CACHE_TTL_MS });
     return NextResponse.json({ users });
   } catch (err) {
-    if (err instanceof JiraRequestError) {
-      return NextResponse.json({ error: err.message }, { status: err.status || 500 });
+    if (err instanceof JiraRequestError && err.status !== null && err.status < 500) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    const status = err instanceof JiraRequestError && err.status !== null ? err.status : 500;
+    logger.error({ message: "Failed to search assignable users in Jira", project, query, error: (err as Error).message });
+    return NextResponse.json({ error: "Không thể tìm kiếm người thực hiện từ Jira" }, { status });
   }
 }

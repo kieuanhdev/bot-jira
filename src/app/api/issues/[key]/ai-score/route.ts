@@ -6,6 +6,7 @@ import { AiUnavailableError } from "@/lib/ai/provider";
 import { buildEstimateInput } from "@/lib/ai/estimation-input";
 import { hasLLMConfig, env } from "@/lib/env";
 import { notifyAiEstimateReady } from "@/lib/ai/notify";
+import { logger } from "@/lib/logger";
 
 /**
  * M7 — Compute a fresh AI estimate for a task and persist it. The estimate is
@@ -40,13 +41,17 @@ export async function POST(_req: Request, ctx: { params: Promise<{ key: string }
     });
     result = await aiProvider.estimate(input);
   } catch (e) {
+    logger.error({ message: "AI estimate failed", key, error: (e as Error).message });
     if (e instanceof AiUnavailableError) {
       return NextResponse.json(
-        { error: "unavailable", message: `AI estimate unavailable: ${e.message}` },
+        { error: "unavailable", message: "AI estimate unavailable. Please try again later." },
         { status: 503 }
       );
     }
-    throw e;
+    return NextResponse.json(
+      { error: "Không thể tính điểm AI cho task này" },
+      { status: 500 }
+    );
   }
 
   const scoredAt = new Date();

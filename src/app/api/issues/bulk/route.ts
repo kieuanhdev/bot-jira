@@ -13,6 +13,7 @@ import {
 import { enqueueBulkOperation } from "@/lib/queue/boss";
 import { probeJiraAuth } from "@/lib/jira/client";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
+import { logger } from "@/lib/logger";
 
 /**
  * M4-02 — Preview + confirm a bulk operation.
@@ -83,7 +84,13 @@ export async function POST(req: Request) {
         queued: Boolean(jobId),
       });
     } catch (e) {
-      return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+      logger.error({ message: "Failed to confirm bulk operation", operationId: rawBody.operationId, error: (e as Error).message });
+      const msg = (e as Error).message;
+      const isKnown = ["no_keys", "bulk_field_update_requires_single_project", "bitbucket_credentials_required"].includes(msg);
+      return NextResponse.json(
+        { error: isKnown ? msg : "Không thể xác nhận thao tác hàng loạt" },
+        { status: 400 }
+      );
     }
   }
 
@@ -158,6 +165,12 @@ export async function POST(req: Request) {
     );
     return NextResponse.json(preview);
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    logger.error({ message: "Failed to preview bulk operation", error: (e as Error).message });
+    const msg = (e as Error).message;
+    const isKnown = ["no_keys", "bulk_field_update_requires_single_project", "bitbucket_credentials_required"].includes(msg);
+    return NextResponse.json(
+      { error: isKnown ? msg : "Không thể xem trước thao tác hàng loạt" },
+      { status: 400 }
+    );
   }
 }

@@ -5,6 +5,7 @@ import { userJiraAuth } from "@/lib/user-creds";
 import { jiraWith, JiraRequestError } from "@/lib/jira/client";
 import { fetchBulkCreateMetadata } from "@/lib/bulk/create-ops";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
+import { logger } from "@/lib/logger";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -39,9 +40,11 @@ export async function GET(req: Request) {
     const meta = await fetchBulkCreateMetadata(jira, project, auth);
     return NextResponse.json(meta);
   } catch (err) {
-    if (err instanceof JiraRequestError) {
-      return NextResponse.json({ error: err.message }, { status: err.status || 500 });
+    if (err instanceof JiraRequestError && err.status !== null && err.status < 500) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    const status = err instanceof JiraRequestError && err.status !== null ? err.status : 500;
+    logger.error({ message: "Failed to fetch project metadata from Jira", project, error: (err as Error).message });
+    return NextResponse.json({ error: "Không thể tải thông tin cấu hình dự án từ Jira" }, { status });
   }
 }

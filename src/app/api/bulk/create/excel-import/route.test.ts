@@ -7,12 +7,21 @@ const mocks = vi.hoisted(() => ({
   user: vi.fn(),
   userJiraAuth: vi.fn(),
   fetchBulkCreateMetadata: vi.fn(),
+  loggerError: vi.fn(),
+  parseBulkCreateExcel: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getSession: mocks.session }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: { findUnique: mocks.user },
+  },
+}));
+vi.mock("@/lib/logger", () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: mocks.loggerError,
   },
 }));
 vi.mock("@/lib/user-creds", () => ({
@@ -24,6 +33,13 @@ vi.mock("@/lib/jira/client", () => ({
 vi.mock("@/lib/bulk/create-ops", () => ({
   fetchBulkCreateMetadata: mocks.fetchBulkCreateMetadata,
 }));
+vi.mock("@/lib/bulk/excel-parser", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/bulk/excel-parser")>();
+  return {
+    ...actual,
+    parseBulkCreateExcel: (...args: unknown[]) => mocks.parseBulkCreateExcel(...args),
+  };
+});
 
 import { POST } from "./route";
 
@@ -54,12 +70,14 @@ describe("POST /api/bulk/create/excel-import", () => {
     fingerprint: "sha256:current-fp",
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     mocks.session.mockResolvedValue({ user: { id: "user-1" } });
     mocks.user.mockResolvedValue({ jiraTokenEnc: "enc" });
     mocks.userJiraAuth.mockReturnValue({ user: "alice", token: "tok" });
     mocks.fetchBulkCreateMetadata.mockResolvedValue(mockMetadata);
+    const actualParser = await vi.importActual<typeof import("@/lib/bulk/excel-parser")>("@/lib/bulk/excel-parser");
+    mocks.parseBulkCreateExcel.mockImplementation(actualParser.parseBulkCreateExcel);
   });
 
   it("returns 401 when session is missing", async () => {
@@ -128,5 +146,33 @@ describe("POST /api/bulk/create/excel-import", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toContain("OTHER");
+  });
+
+  it("does not leak raw parser crash message and logs it (REF-010)", async () => {
+    const sentinel = "UPSTREAM_EXCELJS_ZIP_CORRUPTION_STACK_LEAK";
+    mocks.parseBulkCreateExcel.mockRejectedValueOnce(new Error(sentinel));
+
+    const file = new File([new Uint8Array([1, 2, 3])], "test.xlsx", {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("project", "EPM");
+
+    const req = new Request("http://localhost/api/bulk/create/excel-import", {
+      method: "POST",
+      body: formData,
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.error).toBeDefined();
+    expect(body.error).not.toContain(sentinel);
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.stringContaining(sentinel),
+      })
+    );
   });
 });

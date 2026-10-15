@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { jiraWith } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 import { refreshJiraIssueCache } from "@/lib/issues/cache";
+import { logger } from "@/lib/logger";
 
 export type EstimateDecision = "accepted" | "edited" | "rejected";
 
@@ -58,9 +59,10 @@ export async function recordEstimateDecision(opts: {
       await refreshJiraIssueCache(client, key);
       jiraWritten = true;
     } catch (e) {
+      logger.error({ message: "Jira update failed in recordEstimateDecision", key, error: (e as Error).message });
       return {
         ok: false,
-        error: `Jira update failed: ${(e as Error).message}`,
+        error: "Không thể cập nhật điểm lên Jira",
         status: 502,
       };
     }
