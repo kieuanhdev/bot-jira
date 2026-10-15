@@ -5,9 +5,9 @@ import { jiraWith, JiraRequestError } from "@/lib/jira/client";
 import { userJiraAuth } from "@/lib/user-creds";
 import { refreshJiraIssueCache } from "@/lib/issues/cache";
 import { audit } from "@/lib/audit";
+import { computeWorklogRequestHash } from "@/lib/worklogs/request-hash";
 import {
   validateCreateWorklogInput,
-  computeWorklogRequestHash,
   formatJiraStartedAt,
   parseJiraDuration,
   type CreateWorklogResult,

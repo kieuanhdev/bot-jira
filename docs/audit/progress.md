@@ -35,7 +35,7 @@ Baseline verified: 2026-10-15
 | REF-022 | SKIPPED | — | Measured bundle analysis (REF-021) | CONDITIONAL: REF-021 disproved P5 hypotheses (exceljs is 0 kB in client; recharts already dynamic-imported; dnd-kit is needed at first paint for default Kanban view). No bundle changes proven beneficial without degrading default UX. |
 | REF-023 | SKIPPED | — | Evaluation of /watch prefetch | CONDITIONAL: Plan default decision ("no change") upheld. `listWatchedItems` runs fast indexed parallel Prisma queries; streaming with Suspense deferred to avoid hydration mismatches with pending queries. |
 | REF-024 | DONE | `ff1565a` | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (306 files / 2776 tests pass), `npm run build` (pass, 74/74 routes, 13.6s), `test:db` (not run: no DB) | Split `admin-sync-client.tsx` from 1034 lines to 393 lines (< 400 lines target). Extracted components in same directory: `project-sync-row.tsx` (owns local expanded error state), `project-features-sheet.tsx` (lazy-loaded via `next/dynamic`), `sync-switch.tsx`, `sync-bulk-bar.tsx`, `sync-metrics.tsx`, `sync-header.tsx`, and `sync-confirm-dialog.tsx`. Added `[content-visibility:auto]` to project list. Added unit tests in `project-sync-row.test.ts` (2 tests). Zero new useEffects added. |
-| REF-025 | DONE | `3f78e3a` | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (307 files / 2778 tests pass), `npm run build` (pass, 74/74 routes, 10.8s), `test:db` (not run: no DB) | Extracted `useBoardPerfMarks` hook (`src/app/(app)/board/hooks/use-board-perf-marks.ts`) preserving exact performance mark & measure names (`board:start`, `board:bootstrap-ready`, `board:issues-ready`, `board:content-rendered`, `board:load-to-issues`, `board:load-to-content`). Converted `view` and `sortMode` storage persistence from `useEffect` to event handlers (`handleViewChange`, `handleSortModeChange`), avoiding `useEffect` cascades and satisfying React Compiler memoization rules. Left DnD, bootstrap, and URL sync effects intact. Added unit tests in `use-board-perf-marks.test.ts` (2 tests). |
+| REF-025 | DONE | `e366c73` | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (307 files / 2778 tests pass), `npm run build` (pass, 74/74 routes, 10.8s), `test:db` (not run: no DB) | Extracted `useBoardPerfMarks` hook (`src/app/(app)/board/hooks/use-board-perf-marks.ts`) preserving exact performance mark & measure names (`board:start`, `board:bootstrap-ready`, `board:issues-ready`, `board:content-rendered`, `board:load-to-issues`, `board:load-to-content`). Converted `view` and `sortMode` storage persistence from `useEffect` to event handlers (`handleViewChange`, `handleSortModeChange`), avoiding `useEffect` cascades and satisfying React Compiler memoization rules. Left DnD, bootstrap, and URL sync effects intact. Added unit tests in `use-board-perf-marks.test.ts` (2 tests). |
 
 ## Classification of 38 `req.json()` Sites (REF-005)
 
@@ -44,7 +44,7 @@ Baseline verified: 2026-10-15
 2. `src/app/api/issues/[key]/comments/route.ts` -> guarded via `readJsonBody` (REF-005)
 3. `src/app/api/push/subscribe/route.ts` -> guarded via `readJsonBody` (4KB + schema) (REF-005)
 4. `src/app/api/register/route.ts` -> guarded via `readJsonBody` (REF-005)
-5. `src/app/api/users/[id]/role/route.ts` -> will be guarded in REF-004
+5. `src/app/api/users/[id]/role/route.ts` -> guarded via `readJsonBody` (REF-004)
 6. `src/app/api/admin/sentry-import/route.ts` -> admin-only retry action
 
 ### Guarded (try/catch returning 400)
@@ -86,4 +86,4 @@ Baseline verified: 2026-10-15
 ## Discovered Issues Outside Task Scope
 
 1. `src/app/(app)/board/board-kanban-view.tsx`: `react-hooks/set-state-in-effect` error from synchronous `setSelectedKeys` inside `useEffect` on `issues` (commit `b2e5249`). Fixed by adjusting `selectedKeys` during render when `issues` prop reference changes per React 19 guidelines.
-2. `src/app/(app)/bulk`: Bundle baseline (REF-021) discovered 463.24 kB of node crypto polyfills bundled into client JS because pure duration formatting helpers (`formatJiraDuration`, `parseJiraDuration`) are imported from `src/lib/worklogs/schema.ts`, which imports `crypto` for `computeWorklogRequestHash`. Splitting pure duration helpers into a leaf client-safe module would save 463 kB on `/bulk`.
+2. `src/app/(app)/bulk`: Bundle baseline (REF-021) discovered 463.24 kB of node crypto polyfills bundled into client JS because pure duration formatting helpers (`formatJiraDuration`, `parseJiraDuration`) are imported from `src/lib/worklogs/schema.ts`, which imports `crypto` for `computeWorklogRequestHash`. **Resolved:** moved `computeWorklogRequestHash` into server-only `src/lib/worklogs/request-hash.ts`, so `schema.ts` no longer imports `crypto` and is client-safe.

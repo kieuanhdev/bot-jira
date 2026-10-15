@@ -4,9 +4,9 @@ import {
   formatJiraDuration,
   formatJiraStartedAt,
   validateCreateWorklogInput,
-  computeWorklogRequestHash,
   isSafeReturnUrl,
 } from "./schema";
+import { computeWorklogRequestHash } from "./request-hash";
 
 describe("Worklog Schema & Utilities", () => {
   describe("parseJiraDuration", () => {

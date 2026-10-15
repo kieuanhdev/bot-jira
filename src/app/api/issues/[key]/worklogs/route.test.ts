@@ -126,7 +126,7 @@ describe("POST /api/issues/[key]/worklogs", () => {
   });
 
   it("returns 200 duplicate replay when same idempotency key and payload already succeeded", async () => {
-    const { computeWorklogRequestHash } = await import("@/lib/worklogs/schema");
+    const { computeWorklogRequestHash } = await import("@/lib/worklogs/request-hash");
     const hash = computeWorklogRequestHash(validBody);
     mocks.worklogIdempotencyFindUnique.mockResolvedValue({
       key: validBody.idempotencyKey,
