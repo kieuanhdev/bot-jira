@@ -11,7 +11,7 @@ Baseline verified: 2026-10-15
 |---|---|---|---|---|
 | REF-001 | DONE | `4dc56ad` | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (275 files / 2566 tests pass), `npm run build` (pass), `test:db` (not run: no DB) | Lock down avatar proxy: require session (401), rateLimit 120/min, `isJiraOrigin` origin check, Gravatar allowlist, 512KB response cap, 500 entries cache cap. Updated `07-api-contract-inventory.md` and `route.test.ts` for intentional behaviour change. |
 | REF-005 | DONE | `2efd686` | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (280 files / 2590 tests pass), `npm run build` (pass), `test:db` (not run: no DB) | Added `readJsonBody` helper (`src/lib/api/json-body.ts`) with stream/length bounds and runtime type guards. Applied to unguarded routes: `issues/[key]/transition`, `issues/[key]/comments`, `push/subscribe` (4KB cap + push schema), and `register`. Added 4 colocated route test suites (18 tests). Classified all 38 `req.json()` sites. |
-| REF-004 | TODO | — | — | Harden `users/[id]/role` |
+| REF-004 | DONE | `6524560` | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (281 files / 2597 tests pass), `npm run build` (pass), `test:db` (not run: no DB) | Hardened `users/[id]/role`: `readJsonBody`, 404 on missing user/P2025, 409 `last_admin` when demoting last remaining admin (transaction-based count), `audit()` called on success. Added 7 unit tests. |
 | REF-018 | TODO | — | — | De-duplicate `NON_OVERRIDABLE` release gates |
 | REF-019 | TODO | — | — | Layout/board waterfalls; cached user gate |
 | REF-020 | TODO | — | — | Add missing `loading.tsx` / `error.tsx` |
