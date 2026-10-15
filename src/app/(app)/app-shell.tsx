@@ -42,31 +42,38 @@ const baseNav = [
 
 const adminNavItem = { href: "/admin", label: "Quản trị", icon: ShieldCheck };
 
-export function AppShell({ children, isAdmin = false }: { children: React.ReactNode; isAdmin?: boolean }) {
+export function AppShell({
+  children,
+  isAdmin = false,
+  defaultCollapsed = false,
+}: {
+  children: React.ReactNode;
+  isAdmin?: boolean;
+  defaultCollapsed?: boolean;
+}) {
   const pathname = usePathname();
   const nav = isAdmin ? [...baseNav, adminNavItem] : baseNav;
   const unreadCount = useUnreadCount();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
+  // Sync cookie if only localStorage had legacy state (one-time migration)
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      try {
-        const saved = localStorage.getItem("sidebar_collapsed");
-        if (saved !== null) {
-          setCollapsed(saved === "true");
-        }
-      } catch {
-        // ignore
+    try {
+      const saved = localStorage.getItem("sidebar_collapsed");
+      if (saved !== null && !document.cookie.includes("sidebar_collapsed=")) {
+        document.cookie = `sidebar_collapsed=${saved}; path=/; max-age=31536000; SameSite=Lax`;
       }
-    });
-    return () => window.cancelAnimationFrame(frame);
+    } catch {
+      // ignore
+    }
   }, []);
 
   const toggleSidebar = () => {
     setCollapsed((prev) => {
       const next = !prev;
       try {
+        document.cookie = `sidebar_collapsed=${next}; path=/; max-age=31536000; SameSite=Lax`;
         localStorage.setItem("sidebar_collapsed", String(next));
       } catch {
         // ignore

@@ -81,11 +81,11 @@ export async function GET(req: Request) {
   const items = [...byName.values()]
     .map((item) => ({
       ...item,
-      projects: item.projects.sort(),
-      releasedProjects: item.releasedProjects.sort(),
-      archivedProjects: item.archivedProjects.sort(),
+      projects: item.projects.toSorted(),
+      releasedProjects: item.releasedProjects.toSorted(),
+      archivedProjects: item.archivedProjects.toSorted(),
     }))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    .toSorted((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
   return NextResponse.json({
     items,

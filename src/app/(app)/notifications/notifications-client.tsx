@@ -72,7 +72,8 @@ export function NotificationsClient() {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    refetchInterval: 5000,
+    // SSE provides immediate invalidation; 60s interval is a fallback
+    refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   });
 

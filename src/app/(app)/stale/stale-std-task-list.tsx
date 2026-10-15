@@ -49,7 +49,7 @@ function StdTaskMobileCard({ task, isSelected, allStdTasks, onToggleSelect }: St
   return (
     <div
       className={cn(
-        "p-4 transition-colors duration-150 hover:bg-muted/40",
+        "p-4 transition-colors duration-150 hover:bg-muted/40 [content-visibility:auto] [contain-intrinsic-size:auto_96px]",
         isSelected && "bg-primary/[0.04]"
       )}
     >
@@ -422,7 +422,19 @@ export function StandardizationTaskList({
 }) {
   const router = useRouter();
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const keys = useMemo(() => filteredStdTasks.map((t) => t.jiraKey), [filteredStdTasks]);
+  const [visibleCount, setVisibleCount] = useState(50);
+  const [prevTaskCount, setPrevTaskCount] = useState(filteredStdTasks.length);
+
+  if (prevTaskCount !== filteredStdTasks.length) {
+    setPrevTaskCount(filteredStdTasks.length);
+    setVisibleCount(50);
+  }
+
+  const visibleTasks = useMemo(
+    () => filteredStdTasks.slice(0, visibleCount),
+    [filteredStdTasks, visibleCount]
+  );
+  const keys = useMemo(() => visibleTasks.map((t) => t.jiraKey), [visibleTasks]);
 
   const move = useCallback(
     (delta: number) => {
@@ -551,7 +563,7 @@ export function StandardizationTaskList({
           <>
             {/* Mobile View: Cards */}
             <div className="divide-y lg:hidden">
-              {filteredStdTasks.map((task) => (
+              {visibleTasks.map((task) => (
                 <StdTaskMobileCard
                   key={task.jiraKey}
                   task={task}
@@ -585,7 +597,7 @@ export function StandardizationTaskList({
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {filteredStdTasks.map((task) => (
+                  {visibleTasks.map((task) => (
                     <StdTaskRow
                       key={task.jiraKey}
                       task={task}
@@ -607,6 +619,22 @@ export function StandardizationTaskList({
                 </span>
               </p>
             </div>
+
+            {visibleCount < filteredStdTasks.length && (
+              <div className="flex flex-col items-center gap-2 border-t px-6 py-4">
+                <p className="text-xs text-muted-foreground">
+                  Đang hiển thị {Math.min(visibleCount, filteredStdTasks.length)} trên {filteredStdTasks.length} task
+                </p>
+                <Button
+                  className="cursor-pointer"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setVisibleCount((prev) => prev + 50)}
+                >
+                  Xem thêm 50 task
+                </Button>
+              </div>
+            )}
           </>
         )}
       </CardContent>

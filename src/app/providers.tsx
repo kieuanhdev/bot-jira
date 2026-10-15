@@ -4,7 +4,6 @@ import { SessionProvider, useSession } from "next-auth/react";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
-import { NotificationEvents } from "@/components/notification-events";
 import { queryPolicy } from "@/lib/query-policy";
 
 function SessionCacheBoundary() {
@@ -41,7 +40,6 @@ export function Providers({ children }: { children: ReactNode }) {
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
         <SessionCacheBoundary />
-        <NotificationEvents />
         {children}
       </QueryClientProvider>
     </SessionProvider>

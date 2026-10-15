@@ -21,9 +21,14 @@ import { BranchToolbar } from "./branch-toolbar";
 import { TaskDeliveryList } from "./task-delivery-list";
 import { ReviewInboxView } from "./review-inbox-view";
 import { UnlinkedBranchView } from "./unlinked-branch-view";
+import dynamic from "next/dynamic";
 import { BranchTable } from "./branch-table";
 import { BranchCardList } from "./branch-card-list";
-import { BranchDetailSheet } from "./branch-detail-sheet";
+
+const BranchDetailSheet = dynamic(
+  () => import("./branch-detail-sheet").then((m) => m.BranchDetailSheet),
+  { ssr: false }
+);
 import { BranchLinkDialog } from "./branch-link-dialog";
 import { TaskBranchLinkDialog } from "./task-branch-link-dialog";
 import { TaskPrCreateDialog } from "./task-pr-create-dialog";

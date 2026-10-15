@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { IssueItem } from "@/hooks/use-issues";
 import type { ViewMode } from "./board-types";
 
@@ -37,6 +37,7 @@ export function nextBoardFocusKey(
 
 /**
  * Handles arrow keys, Home/End, and Enter navigation across cards on the Kanban board.
+ * Uses a stable ref to avoid re-binding window keydown listeners on every render or focus change.
  */
 export function useBoardKeyboardNav({
   effectiveView,
@@ -47,9 +48,42 @@ export function useBoardKeyboardNav({
   setFocusKey,
   onOpenQuickPanel,
 }: BoardKeyboardNavOptions) {
+  const latestRef = useRef({
+    effectiveView,
+    focusOrder,
+    issues,
+    cardRefs,
+    focusKey,
+    setFocusKey,
+    onOpenQuickPanel,
+  });
+
   useEffect(() => {
-    if (effectiveView !== "board" || focusOrder.length === 0) return;
+    latestRef.current = {
+      effectiveView,
+      focusOrder,
+      issues,
+      cardRefs,
+      focusKey,
+      setFocusKey,
+      onOpenQuickPanel,
+    };
+  });
+
+  useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      const {
+        effectiveView: currentView,
+        focusOrder: currentOrder,
+        issues: currentIssues,
+        cardRefs: currentCardRefs,
+        focusKey: currentFocusKey,
+        setFocusKey: currentSetFocusKey,
+        onOpenQuickPanel: currentOnOpenQuickPanel,
+      } = latestRef.current;
+
+      if (currentView !== "board" || currentOrder.length === 0) return;
+
       const target = e.target as HTMLElement | null;
       const typing =
         target &&
@@ -60,21 +94,21 @@ export function useBoardKeyboardNav({
       const keys = ["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"];
       if (!keys.includes(e.key) && e.key !== "Enter" && e.key !== "Home" && e.key !== "End") return;
 
-      const idx = focusKey ? focusOrder.indexOf(focusKey) : -1;
+      const idx = currentFocusKey ? currentOrder.indexOf(currentFocusKey) : -1;
       if (e.key === "Enter") {
         if (idx === -1) return;
-        const issue = issues.find((i) => i.jiraKey === focusOrder[idx]);
+        const issue = currentIssues.find((i) => i.jiraKey === currentOrder[idx]);
         if (issue) {
           e.preventDefault();
-          onOpenQuickPanel(issue);
+          currentOnOpenQuickPanel(issue);
         }
         return;
       }
       e.preventDefault();
-      const key = nextBoardFocusKey(focusOrder, focusKey, e.key as BoardNavigationKey);
+      const key = nextBoardFocusKey(currentOrder, currentFocusKey, e.key as BoardNavigationKey);
       if (!key) return;
-      setFocusKey(key);
-      const node = cardRefs.current.get(key);
+      currentSetFocusKey(key);
+      const node = currentCardRefs.current.get(key);
       if (node) {
         node.focus({ preventScroll: true });
         node.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -82,5 +116,5 @@ export function useBoardKeyboardNav({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [effectiveView, focusOrder, focusKey, issues, cardRefs, onOpenQuickPanel, setFocusKey]);
+  }, []);
 }

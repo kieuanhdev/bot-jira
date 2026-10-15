@@ -29,9 +29,9 @@ export function useUnreadCount() {
   const { data } = useQuery({
     queryKey: notificationsKeys.unreadCount,
     queryFn: () => api<{ unread: number }>("/api/notify/unread-count"),
-    // Cross-process notifications are persisted in PostgreSQL; a modest poll
-    // keeps the badge near-real-time without relying on in-memory events.
-    refetchInterval: 20_000,
+    // Cross-process notifications are persisted in PostgreSQL; SSE provides real-time updates.
+    // A 60-second fallback poll keeps the badge consistent even if SSE reconnects or drops.
+    refetchInterval: 60_000,
     refetchOnWindowFocus: true,
     retry: 0,
   });

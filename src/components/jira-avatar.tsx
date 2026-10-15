@@ -31,6 +31,14 @@ const JIRA_SIZE_MAP = {
   xl: "large",
 };
 
+const DIMENSION_MAP: Record<"xs" | "sm" | "md" | "lg" | "xl", number> = {
+  xs: 16,
+  sm: 20,
+  md: 24,
+  lg: 32,
+  xl: 48,
+};
+
 export function JiraAvatar({
   username,
   displayName,
@@ -46,6 +54,7 @@ export function JiraAvatar({
   const identifier = username || displayName || "";
   const effectiveTitle = title ?? (displayName || username || "User");
   const sizeClasses = SIZE_MAP[size] || SIZE_MAP.sm;
+  const pixelSize = DIMENSION_MAP[size] || 20;
 
   if (!identifier && !avatarUrl) {
     return (
@@ -85,6 +94,10 @@ export function JiraAvatar({
         <img
           src={imageSrc}
           alt={displayName || username || ""}
+          width={pixelSize}
+          height={pixelSize}
+          loading="lazy"
+          decoding="async"
           className="h-full w-full rounded-full object-cover"
           onError={() => setLoadError(true)}
         />

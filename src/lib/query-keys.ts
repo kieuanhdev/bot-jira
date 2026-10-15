@@ -139,8 +139,10 @@ export const releasesKeys = {
 };
 
 export const branchesKeys = {
+  all: ["branches"] as const,
   /** `["branches", <filters>]`. */
   list: (filters: unknown) => ["branches", filters] as const,
+  tasksAll: ["branches-tasks"] as const,
   /** `["branches-tasks", <filters>]`. */
   tasks: (filters: unknown) => ["branches-tasks", filters] as const,
   facets: ["branches-facets"] as const,

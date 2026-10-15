@@ -7,12 +7,21 @@ import {
   type BulkCreateProjectMetadata,
   MAX_BULK_CREATE_ITEMS,
 } from "@/lib/bulk/create-types";
+import dynamic from "next/dynamic";
 import { BulkCreateEditorTopbar } from "./bulk-create-editor-topbar";
 import { BulkCreateCommandBar } from "./bulk-create-command-bar";
 import { BulkCreateDataGrid } from "./bulk-create-data-grid";
 import { BulkCreateStatusBar } from "./bulk-create-status-bar";
-import { CsvImportDialog } from "./csv-import-dialog";
-import { JiraTemplateDialog } from "./jira-template-dialog";
+
+const CsvImportDialog = dynamic(
+  () => import("./csv-import-dialog").then((m) => m.CsvImportDialog),
+  { ssr: false }
+);
+
+const JiraTemplateDialog = dynamic(
+  () => import("./jira-template-dialog").then((m) => m.JiraTemplateDialog),
+  { ssr: false }
+);
 import {
   getDefaultVisibleColumnIds,
   getAvailableToggleableColumns,
@@ -353,22 +362,26 @@ export function BulkCreateEditorShell({
       />
 
       {/* Dialogs */}
-      <CsvImportDialog
-        open={importDialogOpen}
-        onOpenChange={setImportDialogOpen}
-        onImport={handleImportItems}
-        existingFilledCount={filledCount}
-        projectKey={projectKey}
-        metadata={metadata}
-      />
+      {importDialogOpen && (
+        <CsvImportDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          onImport={handleImportItems}
+          existingFilledCount={filledCount}
+          projectKey={projectKey}
+          metadata={metadata}
+        />
+      )}
 
-      <JiraTemplateDialog
-        open={templateDialogOpen}
-        onOpenChange={setTemplateDialogOpen}
-        projectKey={projectKey}
-        metadata={metadata}
-        onAddRow={handleTemplateItem}
-      />
+      {templateDialogOpen && (
+        <JiraTemplateDialog
+          open={templateDialogOpen}
+          onOpenChange={setTemplateDialogOpen}
+          projectKey={projectKey}
+          metadata={metadata}
+          onAddRow={handleTemplateItem}
+        />
+      )}
     </div>
   );
 

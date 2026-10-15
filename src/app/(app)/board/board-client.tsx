@@ -431,6 +431,11 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
     staleTime: 5 * 60_000,
   });
 
+  const quickPanelRef = useRef(quickPanel);
+  useEffect(() => {
+    quickPanelRef.current = quickPanel;
+  }, [quickPanel]);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
@@ -440,13 +445,13 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
           target.tagName === "TEXTAREA" ||
           target.isContentEditable);
       if (typing) return;
-      if (e.key === "Escape" && quickPanel) {
+      if (e.key === "Escape" && quickPanelRef.current) {
         setQuickPanel(null);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [quickPanel]);
+  }, []);
 
   const { data: statusesData, isLoading: isLoadingStatuses } = useQuery({
     queryKey: boardKeys.statuses(selectedProject),

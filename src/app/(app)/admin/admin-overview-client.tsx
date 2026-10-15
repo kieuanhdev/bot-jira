@@ -1,6 +1,7 @@
 "use client";
 
-import * as React from "react";
+import { useState, useMemo } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -36,8 +37,13 @@ import { QueuesCard } from "./overview/queues-card";
 import { WebhooksCard, type WebhookSourceMetric } from "./overview/webhooks-card";
 import { PgBossCard, type QueueMetric } from "./overview/pg-boss-card";
 import { AuditCard } from "./overview/audit-card";
-import { ErrorSheet, CopyButton } from "./overview/error-sheet";
+import { CopyButton } from "./overview/error-sheet";
 import { Sparkline } from "./overview/sparkline";
+
+const ErrorSheet = dynamic(
+  () => import("./overview/error-sheet").then((m) => m.ErrorSheet),
+  { ssr: false }
+);
 
 type Ping = { ok: boolean; ms: number; error?: string; history?: number[] };
 
@@ -128,7 +134,7 @@ function formatAge(ms: number | null): string {
 }
 
 export function AdminOverviewClient() {
-  const [errorSheetType, setErrorSheetType] = React.useState<"sentry" | "outbox" | null>(null);
+  const [errorSheetType, setErrorSheetType] = useState<"sentry" | "outbox" | null>(null);
 
   const health = useQuery({
     queryKey: [...adminKeys.overview, "health"],
@@ -147,19 +153,19 @@ export function AdminOverviewClient() {
   const h = health.data;
   const m = metrics.data;
   const worker = h ? WORKER_STATUS[h.worker.status] : null;
-  const jobs = React.useMemo(() => h?.workers ?? [], [h?.workers]);
+  const jobs = useMemo(() => h?.workers ?? [], [h?.workers]);
 
-  const failingJobs = React.useMemo(
+  const failingJobs = useMemo(
     () => jobs.filter((j) => j.lastErrorAt && (!j.lastSuccessAt || j.lastErrorAt > j.lastSuccessAt)),
     [jobs]
   );
 
-  const runningJobs = React.useMemo(() => h?.worker.runningJobs ?? [], [h?.worker.runningJobs]);
-  const stuckJobs = React.useMemo(() => h?.worker.stuckJobs ?? [], [h?.worker.stuckJobs]);
+  const runningJobs = useMemo(() => h?.worker.runningJobs ?? [], [h?.worker.runningJobs]);
+  const stuckJobs = useMemo(() => h?.worker.stuckJobs ?? [], [h?.worker.stuckJobs]);
 
-  const outbox = React.useMemo(() => m?.outbox ?? {}, [m?.outbox]);
-  const sentry = React.useMemo(() => m?.sentryImport ?? {}, [m?.sentryImport]);
-  const webhooks = React.useMemo(() => m?.webhooks ?? {}, [m?.webhooks]);
+  const outbox = useMemo(() => m?.outbox ?? {}, [m?.outbox]);
+  const sentry = useMemo(() => m?.sentryImport ?? {}, [m?.sentryImport]);
+  const webhooks = useMemo(() => m?.webhooks ?? {}, [m?.webhooks]);
   const pgBossQueues = m?.queues;
 
   const isRefreshing = health.isFetching || metrics.isFetching;
@@ -180,7 +186,7 @@ export function AdminOverviewClient() {
     el.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth" });
   };
 
-  const systemStatus = React.useMemo(() => {
+  const systemStatus = useMemo(() => {
     if (!h) return null;
     const issues: Array<{ text: string; sectionId?: string; href?: string }> = [];
 

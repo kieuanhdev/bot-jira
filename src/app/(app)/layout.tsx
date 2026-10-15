@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { getSession, isAdmin } from "@/lib/session";
 import { userJiraAuth } from "@/lib/user-creds";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "./app-shell";
+import { SessionHydrator } from "./session-hydrator";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
@@ -31,5 +33,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     redirect("/setup-jira");
   }
 
-  return <AppShell isAdmin={isAdmin(session)}>{children}</AppShell>;
+  const cookieStore = await cookies();
+  const defaultCollapsed = cookieStore.get("sidebar_collapsed")?.value === "true";
+
+  return (
+    <SessionHydrator session={session}>
+      <AppShell isAdmin={isAdmin(session)} defaultCollapsed={defaultCollapsed}>
+        {children}
+      </AppShell>
+    </SessionHydrator>
+  );
 }
