@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/session";
+import { requireSession } from "@/lib/api/guards";
 import { readJsonBody } from "@/lib/api/json-body";
 
 type PushPayload = {
@@ -25,8 +25,9 @@ function isValidPushSubscription(sub: unknown): sub is { endpoint: string; keys:
 }
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const session = guard.session;
 
   const bodyResult = await readJsonBody(req, isPushPayload, { maxBytes: 4 * 1024 });
   if (!bodyResult.ok) return bodyResult.response;

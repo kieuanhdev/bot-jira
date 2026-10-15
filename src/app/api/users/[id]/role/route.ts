@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getSession, isAdmin } from "@/lib/session";
+import { requireAdmin } from "@/lib/api/guards";
 import { ROLES, type Role } from "@/lib/permissions";
 import { readJsonBody } from "@/lib/api/json-body";
 import { audit } from "@/lib/audit";
@@ -20,9 +20,8 @@ export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (!isAdmin(session)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth.response;
 
   const { id } = await ctx.params;
 
@@ -59,8 +58,8 @@ export async function PATCH(
     });
 
     await audit({
-      actorId: session.user.id,
-      actorEmail: session.user.email,
+      actorId: auth.session.user.id,
+      actorEmail: auth.session.user.email,
       action: "user.role_change",
       target: id,
       before: { role: targetUser.role },

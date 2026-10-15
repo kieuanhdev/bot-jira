@@ -12,7 +12,7 @@ const PUBLIC_ROUTES = new Map<string, string>([
 ]);
 
 const AUTH_PATTERN =
-  /getSession|requireUser|getServerSession|guardProjectReport|verifyWebhook|verifySignature|timingSafeEqual|checkWebhook|webhookSecret|WEBHOOK_SECRET|CRON_SECRET/;
+  /getSession|requireSession|requireAdmin|getServerSession|guardProjectReport|verifyWebhook|verifySignature|timingSafeEqual|checkWebhook|webhookSecret|WEBHOOK_SECRET|CRON_SECRET/;
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
