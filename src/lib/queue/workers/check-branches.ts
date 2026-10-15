@@ -7,6 +7,7 @@ import {
   discoverBranchLinks,
 } from "@/lib/bitbucket/branch-linker";
 import { recomputePrimaryLink, upsertBranchLink } from "@/lib/bitbucket/branch-links";
+import { mapWithConcurrency } from "@/lib/async/concurrency";
 import { guard } from "../guard";
 import type { WorkerLog } from "../guard";
 
@@ -33,16 +34,28 @@ export async function runCheckBranches(): Promise<WorkerLog> {
   });
   const validKeys = new Set(activeIssues.map((i) => i.jiraKey));
 
-  for (const repo of await bitbucket.allRepos()) {
+  const repos = await bitbucket.allRepos();
+  const repoResults = await mapWithConcurrency(repos, 3, async (repo) => {
+    let repoChecked = 0;
+    let repoDeleted = 0;
+    let repoSkippedUnauthorized = 0;
+    let repoError: string | null = null;
     const syncStartedAt = new Date();
     let repoSuccess = false;
+
     try {
       const status = await bitbucket.branchStatus(repo);
+      const branchNames = status.map((s) => s.branch.name);
+      const existingRows = branchNames.length > 0
+        ? await prisma.branchInfo.findMany({
+            where: { repo, branch: { in: branchNames } },
+            select: { branch: true, jiraKey: true, linkSource: true, linkState: true },
+          })
+        : [];
+      const existingByBranch = new Map(existingRows.map((r) => [r.branch, r]));
+
       for (const s of status) {
-        const existing = await prisma.branchInfo.findUnique({
-          where: { repo_branch: { repo, branch: s.branch.name } },
-          select: { jiraKey: true, linkSource: true, linkState: true },
-        });
+        const existing = existingByBranch.get(s.branch.name);
 
         let commitMessages: string[] | undefined = undefined;
         const branchKeys = extractJiraKeys(s.branch.name);
@@ -174,15 +187,15 @@ export async function runCheckBranches(): Promise<WorkerLog> {
           }
           await recomputePrimaryLink(row.id);
         }
-        checked++;
+        repoChecked++;
       }
       repoSuccess = true;
     } catch (e) {
       if (isBitbucketPermissionError(e)) {
-        skippedUnauthorized++;
+        repoSkippedUnauthorized++;
         console.warn(`[check-branches] Bỏ qua repo ${repo}: không có quyền truy cập (401/403)`);
       } else {
-        errors.push(`${repo}: ${(e as Error).message}`);
+        repoError = `${repo}: ${(e as Error).message}`;
       }
     }
 
@@ -199,8 +212,22 @@ export async function runCheckBranches(): Promise<WorkerLog> {
         },
         data: { deletedAt: syncStartedAt },
       });
-      deleted += deleteResult.count;
+      repoDeleted += deleteResult.count;
     }
+
+    return {
+      checked: repoChecked,
+      deleted: repoDeleted,
+      skippedUnauthorized: repoSkippedUnauthorized,
+      error: repoError,
+    };
+  });
+
+  for (const r of repoResults) {
+    checked += r.checked;
+    deleted += r.deleted;
+    skippedUnauthorized += r.skippedUnauthorized;
+    if (r.error) errors.push(r.error);
   }
 
   // Update integration cursor
