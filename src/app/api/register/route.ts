@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { hasJiraConfig } from "@/lib/env";
 import { readJsonBody } from "@/lib/api/json-body";
+import { checkAuthRateLimit } from "@/lib/rate-limit";
 
 function isRegisterPayload(v: unknown): v is { displayName?: unknown; email?: unknown; password?: unknown } {
   return typeof v === "object" && v !== null;
@@ -46,8 +47,17 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  if (pass.length < 6) {
-    return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
+
+  const identifier = mail ? `register:${mail}` : "register:unknown";
+  if (!checkAuthRateLimit(identifier)) {
+    return NextResponse.json(
+      { error: "Quá nhiều yêu cầu đăng ký. Vui lòng thử lại sau ít phút." },
+      { status: 429 }
+    );
+  }
+
+  if (pass.length < 8) {
+    return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
   }
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) {
     return NextResponse.json({ error: "Enter a valid email" }, { status: 400 });

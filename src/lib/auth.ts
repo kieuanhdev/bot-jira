@@ -14,7 +14,7 @@ const providers: NextAuthOptions["providers"] = [
       token: { label: "Jira Token", type: "password" },
       username: { label: "Username", type: "text" },
     },
-    async authorize(credentials, req) {
+    async authorize(credentials) {
       const token = credentials?.token?.trim() || "";
       const { cleanString } = await import("@/lib/jira/auth-service");
       const cleanUsername = cleanString(credentials?.username) || undefined;
@@ -24,14 +24,10 @@ const providers: NextAuthOptions["providers"] = [
         throw new Error("Vui lòng nhập Jira API token.");
       }
 
-      // Rate limit check by client IP
-      const rawIp =
-        (req.headers?.["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
-        (req.headers?.["x-real-ip"] as string) ||
-        "unknown";
-
-      if (!checkAuthRateLimit(rawIp)) {
-        console.warn(`[AUTH] Rate limited IP: ${rawIp}`);
+      // Rate limit check by account identifier (D5: no proxy, ignore x-forwarded-for)
+      const identifier = cleanUsername ? `jira:${cleanUsername}` : "jira:unknown";
+      if (!checkAuthRateLimit(identifier)) {
+        console.warn(`[AUTH] Rate limited login for: ${identifier}`);
         throw new Error("Quá nhiều yêu cầu đăng nhập. Vui lòng thử lại sau ít phút.");
       }
 
@@ -75,8 +71,15 @@ if (process.env.LEGACY_PASSWORD_LOGIN === "1") {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
+        const email = credentials.email.toLowerCase().trim();
+        const identifier = email ? `legacy:${email}` : "legacy:unknown";
+        if (!checkAuthRateLimit(identifier)) {
+          console.warn(`[AUTH] Rate limited legacy login for: ${identifier}`);
+          throw new Error("Quá nhiều yêu cầu đăng nhập. Vui lòng thử lại sau ít phút.");
+        }
+
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email.toLowerCase().trim() },
+          where: { email },
         });
         if (!user || !user.passwordHash) return null;
         const ok = await bcrypt.compare(credentials.password, user.passwordHash);

@@ -29,29 +29,44 @@ function cleanupStale(windowMs: number) {
 }
 
 /**
- * Check if an IP has exceeded the allowed number of auth attempts.
+ * Check if an identifier (account or IP) has exceeded the allowed number of auth attempts.
  * Returns true if allowed, false if rate limited.
+ * Unknown or empty identifiers fall back to a dedicated unknown bucket instead of bypassing.
+ * In addition, requests are checked against a coarse global bucket to protect against spray attacks.
  */
 export function checkAuthRateLimit(
-  ip: string,
+  key: string,
   maxAttempts: number = 10,
-  windowMs: number = 60 * 1000
+  windowMs: number = 60 * 1000,
+  globalMaxAttempts: number = maxAttempts * 5
 ): boolean {
-  if (!ip || ip === "unknown") return true;
-
   cleanupStale(windowMs);
 
   const now = Date.now();
-  const record = attempts.get(ip) ?? { timestamps: [] };
-  // Keep only timestamps within window
-  record.timestamps = record.timestamps.filter((t) => now - t < windowMs);
+  const normalizedKey = key && key !== "unknown" ? key.trim().toLowerCase() : null;
 
+  // 1. Check coarse global bucket
+  const globalRecord = attempts.get("__global__") ?? { timestamps: [] };
+  globalRecord.timestamps = globalRecord.timestamps.filter((t) => now - t < windowMs);
+  if (globalRecord.timestamps.length >= globalMaxAttempts) {
+    return false;
+  }
+
+  // 2. Check identifier-specific bucket (or __unknown__ if absent)
+  const targetKey = normalizedKey ?? "__unknown__";
+  const record = attempts.get(targetKey) ?? { timestamps: [] };
+  record.timestamps = record.timestamps.filter((t) => now - t < windowMs);
   if (record.timestamps.length >= maxAttempts) {
     return false;
   }
 
+  // Record successful token consumption in both specific and global buckets
   record.timestamps.push(now);
-  attempts.set(ip, record);
+  attempts.set(targetKey, record);
+
+  globalRecord.timestamps.push(now);
+  attempts.set("__global__", globalRecord);
+
   return true;
 }
 

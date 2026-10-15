@@ -52,3 +52,9 @@ export function rateLimit(
   m.set(key, hits);
   return { allowed: true };
 }
+
+/** Reset in-memory webhook rate limits for tests */
+export function _resetWebhookRateLimits(): void {
+  const g = globalThis as unknown as { __webhookRateLimit?: Map<string, number[]> };
+  g.__webhookRateLimit?.clear();
+}

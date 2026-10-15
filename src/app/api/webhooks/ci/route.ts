@@ -35,15 +35,15 @@ function ciExternalId(json: unknown): string {
 
 export async function POST(req: Request) {
   const source: Source = "ci";
+  const parsed = await readAndVerifyWebhook(source, req);
+  if (!parsed.ok) return parsed.response;
+
   const rl = rateLimit(source, 100, 10_000);
   if (!rl.allowed) {
     const res = NextResponse.json({ error: "rate limited" }, { status: 429 });
     if (rl.retryAfterMs) res.headers.set("Retry-After", String(Math.ceil(rl.retryAfterMs / 1000)));
     return res;
   }
-
-  const parsed = await readAndVerifyWebhook(source, req);
-  if (!parsed.ok) return parsed.response;
 
   const j = parsed.json as { status?: string; repo?: string; branch?: string };
   const externalId = ciExternalId(parsed.json);

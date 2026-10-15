@@ -27,8 +27,24 @@ describe("checkAuthRateLimit", () => {
     expect(checkAuthRateLimit("10.0.0.2", 3, 1000)).toBe(true);
   });
 
-  it("allows unknown or empty IP without blocking", () => {
-    expect(checkAuthRateLimit("unknown")).toBe(true);
-    expect(checkAuthRateLimit("")).toBe(true);
+  it("limits unknown or empty identifiers instead of bypassing", () => {
+    for (let i = 0; i < 5; i++) {
+      expect(checkAuthRateLimit("unknown", 5, 1000)).toBe(true);
+    }
+    expect(checkAuthRateLimit("unknown", 5, 1000)).toBe(false);
+
+    _resetRateLimits();
+    for (let i = 0; i < 5; i++) {
+      expect(checkAuthRateLimit("", 5, 1000)).toBe(true);
+    }
+    expect(checkAuthRateLimit("", 5, 1000)).toBe(false);
+  });
+
+  it("enforces coarse global rate limit across different identifiers", () => {
+    for (let i = 0; i < 15; i++) {
+      expect(checkAuthRateLimit(`user-${i}`, 10, 1000, 15)).toBe(true);
+    }
+    // 16th attempt with a brand new user should be blocked by global bucket
+    expect(checkAuthRateLimit("user-new", 10, 1000, 15)).toBe(false);
   });
 });

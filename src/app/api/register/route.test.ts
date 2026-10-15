@@ -24,6 +24,7 @@ vi.mock("@/lib/env", () => ({
   hasJiraConfig: vi.fn().mockReturnValue(true),
 }));
 
+import { _resetRateLimits } from "@/lib/rate-limit";
 import { POST } from "./route";
 
 describe("POST /api/register", () => {
@@ -31,6 +32,7 @@ describe("POST /api/register", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    _resetRateLimits();
     process.env.LEGACY_PASSWORD_LOGIN = "1";
     mocks.session.mockResolvedValue(null);
     mocks.userFindUnique.mockResolvedValue(null);
@@ -105,5 +107,52 @@ describe("POST /api/register", () => {
       },
       jiraConfigured: true,
     });
+  });
+
+  it("returns 400 when password is shorter than 8 characters", async () => {
+    const req = new Request("http://localhost/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        displayName: "Test User",
+        email: "test@example.com",
+        password: "short",
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "Password must be at least 8 characters",
+    });
+  });
+
+  it("enforces rate limiting on repeated registration requests", async () => {
+    for (let i = 0; i < 10; i++) {
+      const req = new Request("http://localhost/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          displayName: "Test User",
+          email: "spam@example.com",
+          password: "password123",
+        }),
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+    }
+
+    // 11th registration attempt for the same email
+    const req11 = new Request("http://localhost/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        displayName: "Test User",
+        email: "spam@example.com",
+        password: "password123",
+      }),
+    });
+    const res11 = await POST(req11);
+    expect(res11.status).toBe(429);
   });
 });
