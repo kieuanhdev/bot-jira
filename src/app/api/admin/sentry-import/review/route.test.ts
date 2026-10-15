@@ -1,0 +1,77 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  session: vi.fn(),
+  updateMany: vi.fn(),
+  enqueue: vi.fn(),
+  audit: vi.fn(),
+}));
+
+vi.mock("@/lib/session", () => ({
+  getSession: mocks.session,
+  isAdmin: (s: { user?: { role?: string } } | null) => s?.user?.role === "admin",
+}));
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: { sentryIssueImported: { updateMany: mocks.updateMany } },
+}));
+
+vi.mock("@/lib/queue/boss", () => ({ enqueueSentryImport: mocks.enqueue }));
+vi.mock("@/lib/audit", () => ({ audit: mocks.audit }));
+
+import { POST } from "./route";
+
+const post = (body: unknown) =>
+  POST(new Request("http://localhost", { method: "POST", body: JSON.stringify(body) }));
+
+describe("POST /api/admin/sentry-import/review", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.session.mockResolvedValue({ user: { id: "admin-1", email: "admin@example.com", role: "admin" } });
+    mocks.updateMany.mockResolvedValue({ count: 2 });
+    mocks.enqueue.mockResolvedValue("job-1");
+  });
+
+  it("rejects non-admins", async () => {
+    mocks.session.mockResolvedValue({ user: { id: "u", role: "member" } });
+    const res = await post({ ids: ["a"], decision: "approve" });
+    expect(res.status).toBe(403);
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("validates ids and decision", async () => {
+    expect((await post({ ids: [], decision: "approve" })).status).toBe(400);
+    expect((await post({ ids: ["a"], decision: "delete" })).status).toBe(400);
+  });
+
+  it("approves only rows still waiting for review and triggers the import", async () => {
+    const res = await post({ ids: ["a", "b"], decision: "approve" });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json).toMatchObject({ updated: 2, state: "approved", queued: true });
+    expect(mocks.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["a", "b"] }, state: { in: ["review", "pending", "rejected"] } },
+      data: expect.objectContaining({ state: "approved", reviewedBy: "admin@example.com", attemptCount: 0 }),
+    });
+    expect(mocks.enqueue).toHaveBeenCalledOnce();
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "admin.sentry.approve" }));
+  });
+
+  it("rejects without triggering the import", async () => {
+    const res = await post({ ids: ["a"], decision: "reject" });
+
+    expect(res.status).toBe(200);
+    expect(mocks.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ["a"] }, state: { in: ["review", "pending"] } } })
+    );
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 when another reviewer already decided", async () => {
+    mocks.updateMany.mockResolvedValue({ count: 0 });
+    const res = await post({ ids: ["a"], decision: "approve" });
+    expect(res.status).toBe(409);
+    expect(mocks.audit).not.toHaveBeenCalled();
+  });
+});

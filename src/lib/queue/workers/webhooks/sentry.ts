@@ -1,10 +1,10 @@
-import { prisma } from "@/lib/prisma";
 import { env, hasSentryConfig } from "../../guard";
 import {
   sentryIdKey,
   sentryProjectSlug,
   buildSentryEventKey,
 } from "@/lib/sentry/idempotency";
+import { seedSentryIssue } from "@/lib/sentry/review-queue";
 
 type SentryWebhookPayload = {
   action?: string;
@@ -31,13 +31,7 @@ export async function handleSentryWebhook(
   const issueId = sentryIdKey(issue);
   const sentryProject = sentryProjectSlug(issue, env.sentryProject);
   if (webhook.action === "created" && issueId) {
-    await prisma.sentryIssueImported.upsert({
-      where: {
-        sentryProject_sentryIssueId: { sentryProject, sentryIssueId: issueId },
-      },
-      create: { sentryProject, sentryIssueId: issueId, state: "pending" },
-      update: {},
-    });
+    await seedSentryIssue(issue);
   }
 
   const blocking = env.sentryBlockingLevels.includes(

@@ -214,12 +214,18 @@ export function QueuesCard({
                   ) : null
                 }
                 segments={[
-                  { label: "Chờ", count: sentry.pending ?? 0, color: "bg-sky-500", dotColor: "bg-sky-500" },
+                  {
+                    label: "Chờ duyệt",
+                    count: (sentry.review ?? 0) + (sentry.pending ?? 0),
+                    color: "bg-amber-500",
+                    dotColor: "bg-amber-500",
+                  },
+                  { label: "Đang tạo", count: sentry.approved ?? 0, color: "bg-sky-500", dotColor: "bg-sky-500" },
                   { label: "Đã tạo", count: sentry.created ?? 0, color: "bg-emerald-500", dotColor: "bg-emerald-500" },
                   { label: "Lỗi", count: sentry.failed ?? 0, color: "bg-rose-500", dotColor: "bg-rose-500" },
                   {
                     label: "Bỏ qua",
-                    count: sentry.ignored ?? 0,
+                    count: (sentry.ignored ?? 0) + (sentry.rejected ?? 0),
                     color: "bg-muted-foreground/40",
                     dotColor: "bg-muted-foreground/40",
                   },

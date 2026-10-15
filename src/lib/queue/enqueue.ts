@@ -159,3 +159,13 @@ export async function enqueueBoardMembershipRefresh(
   void data;
   return null;
 }
+
+/** Run sentry-import now so a freshly approved Sentry issue is filed promptly. */
+export async function enqueueSentryImport(): Promise<string | null> {
+  const boss = await startBoss();
+  return boss.send("sentry-import", {}, {
+    singletonKey: "sentry-import:review",
+    singletonSeconds: 10,
+    retryLimit: 0,
+  });
+}

@@ -101,6 +101,9 @@ export const env = {
   //   "mobile-app:EPM,employee-app:MHRM". When empty, imported issues are
   //   filed into the first entry of JIRA_PROJECT_KEYS (single-project mode).
   sentryProjectMappings: str("SENTRY_PROJECT_MAPPINGS"),
+  // New Sentry issues wait in the admin review queue until someone approves
+  // them; false restores the old behaviour of filing every issue automatically.
+  sentryImportRequireApproval: bool("SENTRY_IMPORT_REQUIRE_APPROVAL", true),
 
   // AI / LLM. LLM_PROVIDER selects the active provider: "openai" (default)
   // or "ollama".

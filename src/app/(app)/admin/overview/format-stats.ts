@@ -31,6 +31,9 @@ export const RELEASE_GATE_LABELS: Record<string, string> = {
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "admin.job.run": "Chạy job thủ công",
   "admin.outbox.retry": "Thử lại thông báo",
+  "admin.sentry.approve": "Duyệt tạo task từ Sentry",
+  "admin.sentry.reject": "Bỏ qua issue Sentry",
+  "admin.sentry.reopen": "Mở lại issue Sentry",
   "project.sync_enable": "Bật đồng bộ dự án",
   "project.sync_disable": "Tắt đồng bộ dự án",
   "project.sync_features_update": "Cập nhật hạng mục đồng bộ",

@@ -464,6 +464,9 @@ enum ImportState {
   created
   failed
   ignored
+  review
+  approved
+  rejected
 }
 
 model SentryIssueImported {
@@ -476,6 +479,18 @@ model SentryIssueImported {
   lastError     String?
   lastAttemptAt DateTime?
   importedAt    DateTime?
+  // Snapshot of the Sentry issue, shown in the review queue and used to file
+  // the Jira task once approved.
+  shortId       String?
+  title         String?
+  level         String?
+  permalinkUrl  String?
+  eventCount    Int?
+  firstSeen     DateTime?
+  lastSeen      DateTime?
+  targetProject String?
+  reviewedBy    String?
+  reviewedAt    DateTime?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 

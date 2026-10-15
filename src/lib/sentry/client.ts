@@ -8,8 +8,10 @@ export type SentryIssue = {
   level?: string;
   status?: string;
   firstSeen?: string;
+  lastSeen?: string;
   latestEvent?: string;
-  count?: number;
+  // Sentry's issue list returns the event count as a string.
+  count?: number | string;
   userReportCount?: number;
   project?: { id?: number; slug?: string; name?: string };
 };

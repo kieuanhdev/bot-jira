@@ -369,8 +369,13 @@ describe("process-webhook for Sentry and CI", () => {
           sentryIssueId: "42",
         },
       },
-      create: { sentryProject: "app", sentryIssueId: "42", state: "pending" },
-      update: {},
+      create: expect.objectContaining({
+        sentryProject: "app",
+        sentryIssueId: "42",
+        shortId: "APP-42",
+        title: "Unhandled error",
+      }),
+      update: expect.objectContaining({ shortId: "APP-42", title: "Unhandled error" }),
     });
     expect(markEventProcessed).toHaveBeenCalledWith("ev-1");
   });

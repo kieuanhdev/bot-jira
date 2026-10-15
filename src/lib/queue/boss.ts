@@ -25,6 +25,7 @@ export {
   enqueueJiraSync,
   enqueueNotificationDelivery,
   enqueuePollPrComments,
+  enqueueSentryImport,
   enqueueWebhookEvent,
   type JiraProjectSyncRequest,
 } from "./enqueue";
