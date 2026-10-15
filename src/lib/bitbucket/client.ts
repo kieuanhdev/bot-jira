@@ -11,6 +11,7 @@ import type {
   BranchStatusItem,
 } from "./types";
 import {
+  clearBitbucketCredsCache,
   defaultTransport,
   getAllBitbucketCreds,
   getSystemBitbucketCreds,
@@ -40,6 +41,7 @@ export type {
 
 // Re-export transport and credential helpers
 export {
+  clearBitbucketCredsCache,
   getAllBitbucketCreds,
   getSystemBitbucketCreds,
   isBitbucketPermissionError,

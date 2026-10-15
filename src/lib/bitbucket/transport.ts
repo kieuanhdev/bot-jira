@@ -8,12 +8,29 @@ import {
 } from "@/lib/http/fetch-with-timeout";
 import type { BbCreds, Paged } from "./types";
 
+interface BitbucketCredsCache {
+  creds: BbCreds[];
+  expiresAt: number;
+}
+
+let bitbucketCredsCache: BitbucketCredsCache | null = null;
+export const BITBUCKET_CREDS_TTL_MS = 60_000;
+
+export function clearBitbucketCredsCache(): void {
+  bitbucketCredsCache = null;
+}
+
 export async function getSystemBitbucketCreds(): Promise<BbCreds | null> {
   const all = await getAllBitbucketCreds();
   return all[0] ?? null;
 }
 
 export async function getAllBitbucketCreds(): Promise<BbCreds[]> {
+  const now = Date.now();
+  if (bitbucketCredsCache && bitbucketCredsCache.expiresAt > now) {
+    return bitbucketCredsCache.creds;
+  }
+
   const list: BbCreds[] = [];
   if (env.bitbucketToken && env.bitbucketUser) {
     list.push({
@@ -42,6 +59,7 @@ export async function getAllBitbucketCreds(): Promise<BbCreds[]> {
     // DB not available
     logSwallowed("bitbucket_get_all_creds_db", err);
   }
+  bitbucketCredsCache = { creds: list, expiresAt: now + BITBUCKET_CREDS_TTL_MS };
   return list;
 }
 

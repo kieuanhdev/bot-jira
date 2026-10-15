@@ -5,6 +5,7 @@ import { encrypt } from "@/lib/crypto";
 import { jiraWith } from "@/lib/jira/client";
 import { env } from "@/lib/env";
 import { bitbucket as bb } from "@/lib/bitbucket/client";
+import { clearBitbucketCredsCache } from "@/lib/bitbucket/transport";
 
 /** Strip HTML/JSON noise from an upstream error so the UI shows one clean line. */
 function cleanError(msg: string): string {
@@ -155,6 +156,10 @@ export async function handleCredentialsUpdateRequest(req: Request) {
       bitbucketTokenEnc: true,
     },
   });
+
+  if (body.disconnectBitbucket || bbToken) {
+    clearBitbucketCredsCache();
+  }
 
   // Verify the freshly-saved creds right away.
   const verify = await verifyCreds(user);

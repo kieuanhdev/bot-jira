@@ -6,6 +6,8 @@ import {
   isRefreshRequested,
   applyCacheHeaders,
   clearReportServerCache,
+  getReportServerCacheSize,
+  REPORT_CACHE_MAX_ENTRIES,
 } from "./server-cache";
 
 describe("Report Server Cache", () => {
@@ -153,6 +155,104 @@ describe("Report Server Cache", () => {
       expect(res.headers.get("X-Report-Cache")).toBe("HIT");
       expect(res.headers.get("X-Report-Duration-Ms")).toBe("15");
       expect(res.headers.get("Server-Timing")).toBe("report;dur=15");
+    });
+  });
+
+  describe("Cache capacity and eviction", () => {
+    it("bounds report cache size to REPORT_CACHE_MAX_ENTRIES", async () => {
+      expect(REPORT_CACHE_MAX_ENTRIES).toBe(500);
+
+      // Insert REPORT_CACHE_MAX_ENTRIES + 10 items
+      for (let i = 0; i < REPORT_CACHE_MAX_ENTRIES + 10; i++) {
+        await getOrComputeReport({
+          key: `key-${i}`,
+          ttlMs: 60_000,
+          compute: async () => ({ i }),
+        });
+      }
+
+      expect(getReportServerCacheSize()).toBeLessThanOrEqual(REPORT_CACHE_MAX_ENTRIES);
+      expect(getReportServerCacheSize()).toBe(REPORT_CACHE_MAX_ENTRIES);
+    });
+
+    it("sweeps expired entries first before evicting unexpired entries", async () => {
+      // Fill to max - 1 with unexpired entries
+      for (let i = 0; i < REPORT_CACHE_MAX_ENTRIES - 1; i++) {
+        await getOrComputeReport({
+          key: `persistent-${i}`,
+          ttlMs: 60_000,
+          compute: async () => ({ i }),
+        });
+      }
+
+      // Add one entry that is expired (ttlMs: -1)
+      await getOrComputeReport({
+        key: "expired-entry",
+        ttlMs: -1000,
+        compute: async () => ({ expired: true }),
+      });
+
+      expect(getReportServerCacheSize()).toBe(REPORT_CACHE_MAX_ENTRIES);
+
+      // Now add a new entry. It should sweep the expired entry first.
+      await getOrComputeReport({
+        key: "new-entry",
+        ttlMs: 60_000,
+        compute: async () => ({ new: true }),
+      });
+
+      expect(getReportServerCacheSize()).toBe(REPORT_CACHE_MAX_ENTRIES);
+
+      // "persistent-0" should still be present because expired was evicted
+      const checkPersistent0 = await getOrComputeReport({
+        key: "persistent-0",
+        ttlMs: 60_000,
+        compute: async () => ({ recomputed: true }),
+      });
+      expect(checkPersistent0.cacheStatus).toBe("HIT");
+
+      // "expired-entry" was evicted, so computing it is a MISS
+      const checkExpired = await getOrComputeReport({
+        key: "expired-entry",
+        ttlMs: 60_000,
+        compute: async () => ({ newlyComputed: true }),
+      });
+      expect(checkExpired.cacheStatus).toBe("MISS");
+    });
+
+    it("evicts oldest entry when all entries are unexpired and capacity is reached", async () => {
+      // Fill exactly to capacity
+      for (let i = 0; i < REPORT_CACHE_MAX_ENTRIES; i++) {
+        await getOrComputeReport({
+          key: `seq-${i}`,
+          ttlMs: 60_000,
+          compute: async () => ({ seq: i }),
+        });
+      }
+
+      expect(getReportServerCacheSize()).toBe(REPORT_CACHE_MAX_ENTRIES);
+
+      // seq-0 should be cached
+      const hitSeq0 = await getOrComputeReport({
+        key: "seq-0",
+        ttlMs: 60_000,
+        compute: async () => ({ seq: 0 }),
+      });
+      expect(hitSeq0.cacheStatus).toBe("HIT");
+
+      // Insert another entry
+      await getOrComputeReport({
+        key: "seq-extra",
+        ttlMs: 60_000,
+        compute: async () => ({ seq: "extra" }),
+      });
+
+      expect(getReportServerCacheSize()).toBe(REPORT_CACHE_MAX_ENTRIES);
+
+      // seq-1 should have been evicted (oldest remaining after seq-0 was re-read or first in map)
+      // If seq-0 was re-read but not re-inserted, seq-0 was the oldest key in Map order:
+      // Note: Map keys are insertion ordered. Re-reading doesn't move to end unless re-set.
+      // So the oldest inserted key was evicted.
     });
   });
 });

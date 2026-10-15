@@ -10,9 +10,14 @@ interface CacheEntry<T> {
 }
 
 // In-memory server cache store
+export const REPORT_CACHE_MAX_ENTRIES = 500;
 const reportCache = new Map<string, CacheEntry<unknown>>();
 // In-flight deduplication to avoid thundering herd / stampede
 const inFlightRequests = new Map<string, Promise<unknown>>();
+
+export function getReportServerCacheSize(): number {
+  return reportCache.size;
+}
 
 const REPORT_CACHE_VERSION = "v1";
 
@@ -91,13 +96,17 @@ export async function getOrComputeReport<T>(
   // 1. If not bypassing, check cache
   if (!bypass) {
     const existing = reportCache.get(key) as CacheEntry<T> | undefined;
-    if (existing && existing.expiresAt > now) {
-      const durationMs = Math.round(performance.now() - start);
-      return {
-        data: existing.data,
-        cacheStatus: "HIT",
-        durationMs,
-      };
+    if (existing) {
+      if (existing.expiresAt > now) {
+        const durationMs = Math.round(performance.now() - start);
+        return {
+          data: existing.data,
+          cacheStatus: "HIT",
+          durationMs,
+        };
+      } else {
+        reportCache.delete(key);
+      }
     }
   }
 
@@ -109,10 +118,29 @@ export async function getOrComputeReport<T>(
     inFlight = (async () => {
       try {
         const result = await compute();
+        const writeNow = Date.now();
+
+        // Evict if at capacity before setting new key
+        if (reportCache.size >= REPORT_CACHE_MAX_ENTRIES && !reportCache.has(key)) {
+          // 1. Sweep expired entries
+          for (const [k, v] of reportCache.entries()) {
+            if (v.expiresAt <= writeNow) {
+              reportCache.delete(k);
+            }
+          }
+
+          // 2. If still at or above capacity, evict oldest (insertion-ordered Map)
+          while (reportCache.size >= REPORT_CACHE_MAX_ENTRIES) {
+            const oldestKey = reportCache.keys().next().value;
+            if (!oldestKey) break;
+            reportCache.delete(oldestKey);
+          }
+        }
+
         reportCache.set(key, {
           data: result,
-          expiresAt: Date.now() + ttlMs,
-          computedAt: Date.now(),
+          expiresAt: writeNow + ttlMs,
+          computedAt: writeNow,
         });
         return result;
       } finally {

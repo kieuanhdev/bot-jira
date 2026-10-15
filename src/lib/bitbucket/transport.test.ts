@@ -26,6 +26,7 @@ vi.mock("@/lib/crypto", () => ({
 }));
 
 import {
+  clearBitbucketCredsCache,
   clearRepoCredCache,
   fetchPaged,
   getAllBitbucketCreds,
@@ -39,6 +40,7 @@ describe("Bitbucket Transport", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearRepoCredCache();
+    clearBitbucketCredsCache();
     envMock.env.bitbucketUser = "system-user";
     envMock.env.bitbucketToken = "system-token";
     prismaMock.prisma.user.findMany.mockResolvedValue([]);
@@ -95,6 +97,74 @@ describe("Bitbucket Transport", () => {
       const creds = await getAllBitbucketCreds();
       expect(creds).toHaveLength(1);
       expect(creds[0].user).toBe("system-user");
+    });
+
+    it("caches credentials within 60s TTL so DB is not queried repeatedly", async () => {
+      prismaMock.prisma.user.findMany.mockResolvedValue([
+        { bitbucketUserEnc: "enc-alice", bitbucketTokenEnc: "enc-alice-token" },
+      ]);
+
+      const creds1 = await getAllBitbucketCreds();
+      expect(prismaMock.prisma.user.findMany).toHaveBeenCalledTimes(1);
+      expect(creds1).toEqual([
+        { user: "system-user", token: "system-token" },
+        { user: "alice", token: "alice-token" },
+      ]);
+
+      // Immediate second call should use cache
+      const creds2 = await getAllBitbucketCreds();
+      expect(prismaMock.prisma.user.findMany).toHaveBeenCalledTimes(1);
+      expect(creds2).toEqual(creds1);
+    });
+
+    it("refetches credentials after TTL expires", async () => {
+      vi.useFakeTimers();
+      try {
+        prismaMock.prisma.user.findMany.mockResolvedValueOnce([
+          { bitbucketUserEnc: "enc-alice", bitbucketTokenEnc: "enc-alice-token" },
+        ]);
+
+        await getAllBitbucketCreds();
+        expect(prismaMock.prisma.user.findMany).toHaveBeenCalledTimes(1);
+
+        // Advance time past 60s
+        vi.advanceTimersByTime(61_000);
+
+        prismaMock.prisma.user.findMany.mockResolvedValueOnce([
+          { bitbucketUserEnc: "enc-bob", bitbucketTokenEnc: "enc-bob-token" },
+        ]);
+
+        const creds2 = await getAllBitbucketCreds();
+        expect(prismaMock.prisma.user.findMany).toHaveBeenCalledTimes(2);
+        expect(creds2).toEqual([
+          { user: "system-user", token: "system-token" },
+          { user: "bob", token: "bob-token" },
+        ]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("clearBitbucketCredsCache invalidates the cache immediately", async () => {
+      prismaMock.prisma.user.findMany.mockResolvedValueOnce([
+        { bitbucketUserEnc: "enc-alice", bitbucketTokenEnc: "enc-alice-token" },
+      ]);
+
+      await getAllBitbucketCreds();
+      expect(prismaMock.prisma.user.findMany).toHaveBeenCalledTimes(1);
+
+      clearBitbucketCredsCache();
+
+      prismaMock.prisma.user.findMany.mockResolvedValueOnce([
+        { bitbucketUserEnc: "enc-alice2", bitbucketTokenEnc: "enc-alice2-token" },
+      ]);
+
+      const creds2 = await getAllBitbucketCreds();
+      expect(prismaMock.prisma.user.findMany).toHaveBeenCalledTimes(2);
+      expect(creds2).toEqual([
+        { user: "system-user", token: "system-token" },
+        { user: "alice2", token: "alice2-token" },
+      ]);
     });
   });
 

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   enqueueJiraDispatch: vi.fn(),
   userJiraAuth: vi.fn(),
   userBitbucketCreds: vi.fn(),
+  clearBitbucketCredsCache: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getSession: mocks.session }));
@@ -37,6 +38,10 @@ vi.mock("@/lib/env", () => ({
 }));
 vi.mock("@/lib/bitbucket/client", () => ({
   bitbucket: { verifyCreds: mocks.verifyBitbucket },
+  clearBitbucketCredsCache: mocks.clearBitbucketCredsCache,
+}));
+vi.mock("@/lib/bitbucket/transport", () => ({
+  clearBitbucketCredsCache: mocks.clearBitbucketCredsCache,
 }));
 vi.mock("@/lib/jira/client", () => ({
   jiraWith: () => ({ me: mocks.jiraMe }),
@@ -230,6 +235,7 @@ describe("credentials route-service", () => {
       // Onboarding enqueued
       expect(mocks.enqueueCheckBranches).toHaveBeenCalled();
       expect(mocks.enqueueJiraDispatch).toHaveBeenCalledWith({ source: "admin" });
+      expect(mocks.clearBitbucketCredsCache).toHaveBeenCalled();
     });
 
     it("handles disconnect flags to safely clear stored tokens", async () => {
@@ -261,6 +267,7 @@ describe("credentials route-service", () => {
           }),
         })
       );
+      expect(mocks.clearBitbucketCredsCache).toHaveBeenCalled();
     });
 
     it("preserves existing credentials when tokens are omitted", async () => {
@@ -276,6 +283,7 @@ describe("credentials route-service", () => {
       const updateCall = mocks.updateUser.mock.calls[0][0];
       expect(updateCall.data.jiraTokenEnc).toBeUndefined();
       expect(updateCall.data.bitbucketTokenEnc).toBeUndefined();
+      expect(mocks.clearBitbucketCredsCache).not.toHaveBeenCalled();
     });
   });
 
