@@ -120,7 +120,7 @@ export const BoardColumn = memo(function BoardColumn({
   }
 
   return (
-    <div className="flex min-w-64 flex-1 basis-72 flex-col">
+    <div className="flex min-h-0 min-w-64 flex-1 basis-72 flex-col">
       <div className="mb-2 flex items-center gap-1.5 px-0.5">
         <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dotColor)} />
         <span className={cn("min-w-0 truncate text-[13px] font-semibold tracking-tight", text)} title={label}>
@@ -187,7 +187,7 @@ export const BoardColumn = memo(function BoardColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          "relative flex flex-1 flex-col overflow-hidden rounded-xl border transition-colors duration-150",
+          "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border transition-colors duration-150",
           dragBlocked
             ? "border-rose-400/50 bg-rose-500/10"
             : isOver
@@ -196,7 +196,7 @@ export const BoardColumn = memo(function BoardColumn({
         )}
       >
         <div className={cn("pointer-events-none absolute inset-x-0 top-0 h-0.5 opacity-80", dragBlocked ? "bg-rose-400" : dotColor)} aria-hidden />
-        <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2 [scrollbar-width:thin]">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 [scrollbar-width:thin]">
           {items.length === 0 ? (
             <div
               className={cn(

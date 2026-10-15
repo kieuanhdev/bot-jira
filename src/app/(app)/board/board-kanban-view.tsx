@@ -78,7 +78,7 @@ export function BoardKanbanView({
     >
       <div
         ref={boardScrollRef}
-        className="flex flex-1 gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]"
+        className="flex h-[calc(100dvh-15rem)] min-h-[24rem] flex-none gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]"
       >
         {boardColumnsRender.map((col) => (
           <BoardColumnComponent
