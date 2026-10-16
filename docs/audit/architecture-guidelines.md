@@ -8,7 +8,7 @@
 - **Two processes:** web (`next start`) and worker (`src/worker.ts`, pg-boss). They share `src/lib/*` and Postgres.
 - **Data:** Jira DC is the source of truth; Postgres is a shared read model (ADR-001). User mutations use the user's personal Jira credentials; service accounts read/sync (ADR-002). Webhooks primary, polling reconciles (ADR-003).
 - **Server data flow:** server components prefetch with `getServerQueryClient()` (React `cache()`d) and pass state via `HydrationBoundary` (board, watch, issue detail); other pages render a client component that runs `useQuery` after hydration. Query keys live in `src/lib/query-keys.ts`, cache policy in `src/lib/query-policy.ts`.
-- **Session:** next-auth v4 JWT; `getSession()` (`src/lib/session.ts`) is `cache()`d; `SessionHydrator` seeds the client `SessionProvider`.
+- **Session:** next-auth v4 JWT; `getSession()` (`src/lib/session.ts`) is `cache()`d; `SessionHydrator` seeds the client `SessionProvider`. Root `SessionProvider` lacks initial `session` by design to keep `/login` and `/register` static (TASK-11), while root `SessionCacheBoundary` prevents cross-user QueryClient cache leaks on client-side login (REF-032.1).
 - **Domain code** lives in `src/lib/<domain>/` (jira, bitbucket, queue, bulk, reports, releases, issues, chat, ai, sentry, stale, notify, …). `*-route-service.ts` files hold request-handling logic extracted from `route.ts`; `route.ts` stays thin.
 - **Shared UI:** `src/components/ui` (shadcn/Radix), `src/components/shared` (page header, empty/async state, metric cards, filter bar), feature components colocated under `src/app/(app)/<feature>/`.
 
