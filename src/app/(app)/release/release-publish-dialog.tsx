@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { getErrorMessage } from "@/lib/api-client";
 import { usePublishRelease, ReleasePublishError } from "@/hooks/use-releases";
+import { getJiraVersionUrl } from "@/lib/jira/urls";
 
 interface ReleasePublishDialogProps {
   open: boolean;
@@ -51,11 +52,7 @@ export function ReleasePublishDialog({
 }: ReleasePublishDialogProps) {
   const publishMutation = usePublishRelease();
 
-  const versionUrl = jiraBaseUrl && projectKey
-    ? (jiraVersionId
-        ? `${jiraBaseUrl.replace(/\/$/, "")}/projects/${encodeURIComponent(projectKey)}/versions/${encodeURIComponent(jiraVersionId)}`
-        : `${jiraBaseUrl.replace(/\/$/, "")}/issues/?jql=project%20%3D%20%22${encodeURIComponent(projectKey)}%22%20AND%20fixVersion%20%3D%20%22${encodeURIComponent(version)}%22`)
-    : null;
+  const versionUrl = getJiraVersionUrl(jiraBaseUrl, projectKey, jiraVersionId, version);
 
   const errorMsg = publishMutation.error
     ? getErrorMessage(publishMutation.error)

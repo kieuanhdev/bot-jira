@@ -12,6 +12,7 @@ import { ArrowLeft, ExternalLink, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ACTION_LABELS, type OpDetail } from "./lib/bulk-types";
 import { stateVariant, itemVariant } from "./lib/bulk-utils";
+import { getJiraIssueUrl } from "@/lib/jira/urls";
 
 export function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: string }) {
   const qc = useQueryClient();
@@ -74,7 +75,7 @@ export function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: 
             <Badge variant={itemVariant(it.status)}>{it.status}</Badge>
             {jiraBaseUrl ? (
               <a
-                href={`${jiraBaseUrl}/browse/${it.jiraKey}`}
+                href={getJiraIssueUrl(jiraBaseUrl, it.jiraKey) ?? "#"}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="group/link inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline"

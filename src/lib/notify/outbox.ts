@@ -4,6 +4,7 @@ import type { NotifyType } from "./index";
 import type { NotifySourceType } from "./index";
 import { deliverToChat } from "./chat-delivery";
 import { DEFAULT_DISABLED_NOTIFICATION_TYPES, isAllNotificationsRequired } from "./policy";
+import { getJiraIssueUrl } from "@/lib/jira/urls";
 
 export * from "./delivery-contract";
 export * from "./delivery-adapters";
@@ -53,11 +54,13 @@ function resolveSource(data: {
 
   const issueMatch = data.link?.match(/^\/issue\/([A-Z][A-Z0-9_]*-\d+)(?:[/?#]|$)/i);
   if (issueMatch && env.jiraBaseUrl) {
-    const base = env.jiraBaseUrl.replace(/\/+$/, "");
-    return {
-      sourceLink: `${base}/browse/${encodeURIComponent(issueMatch[1].toUpperCase())}`,
-      sourceType: "jira",
-    };
+    const sourceLink = getJiraIssueUrl(env.jiraBaseUrl, issueMatch[1].toUpperCase());
+    if (sourceLink) {
+      return {
+        sourceLink,
+        sourceType: "jira",
+      };
+    }
   }
 
   return { sourceLink: null, sourceType: null };

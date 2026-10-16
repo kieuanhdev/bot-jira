@@ -14,14 +14,7 @@ export {
 } from "./format/time";
 export { formatNumber, formatPercent } from "./format/number";
 
-/**
- * Build Jira deep link to view an issue.
- */
-export function getJiraIssueUrl(jiraBaseUrl?: string | null, jiraKey?: string | null): string | null {
-  if (!jiraBaseUrl || !jiraKey) return null;
-  const base = jiraBaseUrl.replace(/\/$/, "");
-  return `${base}/browse/${encodeURIComponent(jiraKey)}`;
-}
+export { getJiraIssueUrl } from "./jira/urls";
 
 /**
  * Build Bitbucket deep link to view a branch.

@@ -23,6 +23,7 @@ import {
   Loader2,
 } from "lucide-react";
 import type { TaskReadinessResult, ReleaseBlocker } from "@/lib/releases/release-readiness";
+import { getJiraIssueUrl } from "@/lib/jira/urls";
 
 interface ReleaseTaskListProps {
   tasks: TaskReadinessResult[];
@@ -114,7 +115,7 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
 
                     {jiraBaseUrl && (
                       <a
-                        href={`${jiraBaseUrl}/browse/${t.jiraKey}`}
+                        href={getJiraIssueUrl(jiraBaseUrl, t.jiraKey) ?? "#"}
                         target="_blank"
                         rel="noreferrer"
                         className="text-muted-foreground hover:text-foreground inline-flex items-center"

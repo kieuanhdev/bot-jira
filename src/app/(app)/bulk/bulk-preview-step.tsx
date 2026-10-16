@@ -19,6 +19,7 @@ import {
 import { fieldRow } from "./bulk-preview-field-row";
 import { type Preview, type PreviewBucket, type PreviewItem, SKIP_LABELS } from "./lib/bulk-types";
 import { warningVariant } from "./lib/bulk-utils";
+import { getJiraIssueUrl } from "@/lib/jira/urls";
 
 export function PreviewItemCard({ item, jiraBaseUrl }: { item: PreviewItem; jiraBaseUrl: string }) {
   return (
@@ -26,7 +27,7 @@ export function PreviewItemCard({ item, jiraBaseUrl }: { item: PreviewItem; jira
       <div className="mb-2 flex items-center gap-2">
         {jiraBaseUrl ? (
           <a
-            href={`${jiraBaseUrl}/browse/${item.jiraKey}`}
+            href={getJiraIssueUrl(jiraBaseUrl, item.jiraKey) ?? "#"}
             target="_blank"
             rel="noopener noreferrer"
             className="group/link inline-flex items-center gap-1 font-mono text-xs font-semibold text-primary hover:underline"

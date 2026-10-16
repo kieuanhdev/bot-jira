@@ -10,6 +10,7 @@ import type { BoardColumn } from "./board-columns";
 import { findTransition } from "./board-columns";
 import type { QuickAction, Transition } from "./board-types";
 import { applyOptimisticIssuePatch, patchIssueLists } from "./board-optimistic";
+import { getJiraIssueUrl } from "@/lib/jira/urls";
 
 interface BoardActionsOptions {
   issues: IssueItem[];
@@ -223,8 +224,8 @@ export function useBoardActions({
     try {
       switch (action.kind) {
         case "openJira": {
-          const base = jiraBaseUrl.replace(/\/$/, "");
-          if (base) window.open(`${base}/browse/${key}`, "_blank", "noopener");
+          const url = getJiraIssueUrl(jiraBaseUrl, key);
+          if (url) window.open(url, "_blank", "noopener");
           else setToast("Jira base URL isn't configured.");
           return;
         }

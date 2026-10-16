@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { IssueItem } from "@/hooks/use-issues";
 import { DEFAULT_BULK_FILTERS, type IssueFilters } from "@/lib/issues/issue-filters";
 import { cn } from "@/lib/utils";
+import { getJiraIssueUrl } from "@/lib/jira/urls";
 import {
   ArrowUpDown,
   Clock,
@@ -346,7 +347,7 @@ export function BulkTaskRow({
       />
       {jiraBaseUrl ? (
         <a
-          href={`${jiraBaseUrl}/browse/${i.jiraKey}`}
+          href={getJiraIssueUrl(jiraBaseUrl, i.jiraKey) ?? "#"}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}

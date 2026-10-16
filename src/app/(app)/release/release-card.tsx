@@ -29,22 +29,8 @@ import { ReleaseAddTasksDialog } from "./release-add-tasks-dialog";
 import { ReleasePublishDialog } from "./release-publish-dialog";
 import type { TaskReadinessResult, ReleaseReadinessState } from "@/lib/releases/release-readiness";
 
-export function getJiraVersionUrl(
-  jiraBaseUrl?: string | null,
-  projectKey?: string,
-  jiraVersionId?: string | null,
-  versionName?: string
-): string | null {
-  if (!jiraBaseUrl || !projectKey) return null;
-  const base = jiraBaseUrl.replace(/\/$/, "");
-  if (jiraVersionId) {
-    return `${base}/projects/${encodeURIComponent(projectKey)}/versions/${encodeURIComponent(jiraVersionId)}`;
-  }
-  if (versionName) {
-    return `${base}/issues/?jql=project%20%3D%20%22${encodeURIComponent(projectKey)}%22%20AND%20fixVersion%20%3D%20%22${encodeURIComponent(versionName)}%22`;
-  }
-  return null;
-}
+import { getJiraVersionUrl } from "@/lib/jira/urls";
+export { getJiraVersionUrl };
 
 export interface ReleaseCardItem {
   id: string;
