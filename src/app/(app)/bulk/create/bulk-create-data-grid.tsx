@@ -23,6 +23,7 @@ import {
   generateUniqueClientRef,
   filterBlankPlaceholderItems,
 } from "@/lib/bulk/client-ref";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface BulkCreateDataGridProps {
   metadata: BulkCreateProjectMetadata;
@@ -53,6 +54,7 @@ export function BulkCreateDataGrid({
   selectedRows,
   onSelectedRowsChange,
 }: BulkCreateDataGridProps) {
+  const isDesktop = useMediaQuery("(min-width: 768px)", true);
   const [expandedRowIndex, setExpandedRowIndex] = useState<number | null>(null);
   const [prevFocus, setPrevFocus] = useState<{
     row: number | null | undefined;
@@ -277,99 +279,103 @@ export function BulkCreateDataGrid({
       )}
 
       {/* Mobile Card View (< md) */}
-      <div className="block md:hidden flex-1 overflow-y-auto px-4 py-2 space-y-3">
-        {items.map((item, idx) => (
-          <BulkCreateMobileCard
-            key={item.clientRef || idx}
-            item={item}
-            idx={idx}
-            rowVal={validationMap.get(idx)}
-            isSelected={selectedRows.has(idx)}
-            isExpanded={expandedRowIndex === idx}
-            itemsLength={items.length}
-            metadata={metadata}
-            projectKey={projectKey}
-            defaults={defaults}
-            allItems={items}
-            subtaskIssueTypeIds={subtaskIssueTypeIds}
-            effectiveIssueTypeName={getEffectiveIssueTypeName(item, defaults, metadata)}
-            onUpdateItem={updateItem}
-            onToggleSelection={toggleRowSelection}
-            onPasteSummary={handlePasteOnSummary}
-            onDuplicateRow={handleDuplicateRow}
-            onDeleteRow={handleDeleteRow}
-            onToggleExpand={(i) => setExpandedRowIndex(expandedRowIndex === i ? null : i)}
-            onOpenDetailSheet={(i) => setDetailSheetIndex(i)}
-          />
-        ))}
-      </div>
-
-      {/* Desktop Spreadsheet Table (>= md) */}
-      <div className="hidden md:block flex-1 min-h-0 overflow-auto bg-background border-t border-border">
-        <table className="w-full min-w-max border-collapse text-left text-xs">
-          {/* Sticky Header */}
-          <BulkCreateTableHeader
-            allSelected={selectedRows.size === items.length && items.length > 0}
-            onToggleSelectAll={toggleSelectAll}
-            isColVisible={isColVisible}
-          />
-
-          {/* Table Body */}
-          <tbody className="divide-y divide-border/50">
-            {items.map((item, idx) => (
-              <BulkCreateTableRow
-                key={item.clientRef || idx}
-                item={item}
-                idx={idx}
-                rowVal={validationMap.get(idx)}
-                isSelected={selectedRows.has(idx)}
-                isExpanded={expandedRowIndex === idx}
-                density={density}
-                metadata={metadata}
-                projectKey={projectKey}
-                defaults={defaults}
-                items={items}
-                subtaskIssueTypeIds={subtaskIssueTypeIds}
-                effectiveIssueTypeName={getEffectiveIssueTypeName(item, defaults, metadata)}
-                isColVisible={isColVisible}
-                onUpdateItem={updateItem}
-                onToggleSelection={toggleRowSelection}
-                onPasteSummary={handlePasteOnSummary}
-                onAddRow={handleAddRow}
-                onDuplicateRow={handleDuplicateRow}
-                onDeleteRow={handleDeleteRow}
-                onToggleExpand={(i) => setExpandedRowIndex(expandedRowIndex === i ? null : i)}
-                onOpenDetailSheet={(i) => setDetailSheetIndex(i)}
-              />
-            ))}
-          </tbody>
-        </table>
-
-        {/* Quick Start Guide when table is pristine / empty */}
-        {items.length === 1 && !items[0].summary.trim() && (
-          <BulkCreateEmptyGuide
-            projectKey={projectKey}
-            onAddFiveRows={handleAddFiveRows}
-          />
-        )}
-
-        {/* If any row is expanded, render ExpandedRowEditor container */}
-        {expandedRowIndex != null && items[expandedRowIndex] && (
-          <div className="sticky bottom-0 z-20 border-t-2 border-primary/40 bg-card shadow-lg p-3">
-            <ExpandedRowEditor
-              item={items[expandedRowIndex]}
-              rowIndex={expandedRowIndex}
-              defaults={defaults}
+      {!isDesktop && (
+        <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3">
+          {items.map((item, idx) => (
+            <BulkCreateMobileCard
+              key={item.clientRef || idx}
+              item={item}
+              idx={idx}
+              rowVal={validationMap.get(idx)}
+              isSelected={selectedRows.has(idx)}
+              isExpanded={expandedRowIndex === idx}
+              itemsLength={items.length}
               metadata={metadata}
               projectKey={projectKey}
+              defaults={defaults}
               allItems={items}
-              onChange={(patch) => updateItem(expandedRowIndex, patch)}
-              onCollapse={() => setExpandedRowIndex(null)}
-              onOpenFullSheet={() => setDetailSheetIndex(expandedRowIndex)}
+              subtaskIssueTypeIds={subtaskIssueTypeIds}
+              effectiveIssueTypeName={getEffectiveIssueTypeName(item, defaults, metadata)}
+              onUpdateItem={updateItem}
+              onToggleSelection={toggleRowSelection}
+              onPasteSummary={handlePasteOnSummary}
+              onDuplicateRow={handleDuplicateRow}
+              onDeleteRow={handleDeleteRow}
+              onToggleExpand={(i) => setExpandedRowIndex(expandedRowIndex === i ? null : i)}
+              onOpenDetailSheet={(i) => setDetailSheetIndex(i)}
             />
-          </div>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {/* Desktop Spreadsheet Table (>= md) */}
+      {isDesktop && (
+        <div className="flex-1 min-h-0 overflow-auto bg-background border-t border-border">
+          <table className="w-full min-w-max border-collapse text-left text-xs">
+            {/* Sticky Header */}
+            <BulkCreateTableHeader
+              allSelected={selectedRows.size === items.length && items.length > 0}
+              onToggleSelectAll={toggleSelectAll}
+              isColVisible={isColVisible}
+            />
+
+            {/* Table Body */}
+            <tbody className="divide-y divide-border/50">
+              {items.map((item, idx) => (
+                <BulkCreateTableRow
+                  key={item.clientRef || idx}
+                  item={item}
+                  idx={idx}
+                  rowVal={validationMap.get(idx)}
+                  isSelected={selectedRows.has(idx)}
+                  isExpanded={expandedRowIndex === idx}
+                  density={density}
+                  metadata={metadata}
+                  projectKey={projectKey}
+                  defaults={defaults}
+                  items={items}
+                  subtaskIssueTypeIds={subtaskIssueTypeIds}
+                  effectiveIssueTypeName={getEffectiveIssueTypeName(item, defaults, metadata)}
+                  isColVisible={isColVisible}
+                  onUpdateItem={updateItem}
+                  onToggleSelection={toggleRowSelection}
+                  onPasteSummary={handlePasteOnSummary}
+                  onAddRow={handleAddRow}
+                  onDuplicateRow={handleDuplicateRow}
+                  onDeleteRow={handleDeleteRow}
+                  onToggleExpand={(i) => setExpandedRowIndex(expandedRowIndex === i ? null : i)}
+                  onOpenDetailSheet={(i) => setDetailSheetIndex(i)}
+                />
+              ))}
+            </tbody>
+          </table>
+
+          {/* Quick Start Guide when table is pristine / empty */}
+          {items.length === 1 && !items[0].summary.trim() && (
+            <BulkCreateEmptyGuide
+              projectKey={projectKey}
+              onAddFiveRows={handleAddFiveRows}
+            />
+          )}
+
+          {/* If any row is expanded, render ExpandedRowEditor container */}
+          {expandedRowIndex != null && items[expandedRowIndex] && (
+            <div className="sticky bottom-0 z-20 border-t-2 border-primary/40 bg-card shadow-lg p-3">
+              <ExpandedRowEditor
+                item={items[expandedRowIndex]}
+                rowIndex={expandedRowIndex}
+                defaults={defaults}
+                metadata={metadata}
+                projectKey={projectKey}
+                allItems={items}
+                onChange={(patch) => updateItem(expandedRowIndex, patch)}
+                onCollapse={() => setExpandedRowIndex(null)}
+                onOpenFullSheet={() => setDetailSheetIndex(expandedRowIndex)}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Task Detail Sheet Modal (fallback & deep edit) */}
       <TaskDetailSheet
