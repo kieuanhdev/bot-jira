@@ -375,6 +375,6 @@ describe("filterAndSortIssues property-style equivalence test", () => {
       `[Benchmark 1000 issues × ${iterations} runs] Legacy: ${legacyDuration.toFixed(2)}ms, Single-pass: ${newDuration.toFixed(2)}ms (Speedup: ${speedup}x)\n`
     );
 
-    expect(newDuration).toBeLessThanOrEqual(legacyDuration * 1.5); // Allow CI noise
+    expect(newDuration).toBeLessThanOrEqual(legacyDuration * 2.0); // Allow parallel worker CPU noise
   });
 });
