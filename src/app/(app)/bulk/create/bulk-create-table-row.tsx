@@ -8,15 +8,7 @@ import {
   MAX_BULK_CREATE_ITEMS,
 } from "@/lib/bulk/create-types";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Trash2,
   Copy,
@@ -29,10 +21,16 @@ import { cn } from "@/lib/utils";
 import { AssigneeCombobox } from "./assignee-combobox";
 import { ParentCombobox, type ParentCandidate } from "./parent-combobox";
 import { LabelCombobox } from "./label-combobox";
-import { ComponentsCombobox } from "./components-combobox";
 import { type ColumnId } from "./lib/column-definitions";
 import { type GridDensity } from "./lib/editor-preferences";
 import { type RowValidationResult } from "./lib/client-validation";
+import { IssueTypeField } from "./fields/issue-type-field";
+import { PriorityField } from "./fields/priority-field";
+import { FixVersionField } from "./fields/fix-version-field";
+import { ComponentsField } from "./fields/components-field";
+import { PointsField } from "./fields/points-field";
+import { EstimateField } from "./fields/estimate-field";
+import { DueDateField } from "./fields/due-date-field";
 
 export interface BulkCreateTableRowProps {
   item: BulkCreateRowInput;
@@ -178,37 +176,19 @@ export const BulkCreateTableRow = React.memo(function BulkCreateTableRow({
       {/* Issue Type */}
       {isColVisible("issueType") && (
         <td className={`px-2.5 ${cellPadding} border-r border-border/30`}>
-          <Select
-            value={item.issueTypeId || ""}
-            onValueChange={(val) => {
-              const newType = val || undefined;
+          <IssueTypeField
+            value={item.issueTypeId}
+            onChange={(newType) => {
               const isSub = newType ? subtaskIssueTypeIds.has(newType) : false;
               const patch: Partial<BulkCreateRowInput> = { issueTypeId: newType };
               if (!isSub) patch.parent = null;
               onUpdateItem(idx, patch);
             }}
-          >
-            <SelectTrigger
-              className={`${inputHeight} text-xs cursor-pointer ${
-                !item.issueTypeId && !defaults.issueTypeId && !metadata.defaultIssueTypeId
-                  ? "border-amber-500/40 bg-amber-500/5"
-                  : item.issueTypeId
-                    ? ""
-                    : "text-muted-foreground"
-              }`}
-            >
-              <SelectValue
-                placeholder={effectiveIssueTypeName?.name || "Chọn loại task *"}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {metadata.issueTypes.map((t) => (
-                <SelectItem key={t.id} value={t.id} className="text-xs cursor-pointer">
-                  {t.subtask ? `⚡ ${t.name}` : t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            metadata={metadata}
+            defaults={defaults}
+            effectiveName={effectiveIssueTypeName?.name}
+            className={inputHeight}
+          />
         </td>
       )}
 
@@ -234,27 +214,13 @@ export const BulkCreateTableRow = React.memo(function BulkCreateTableRow({
       {/* Priority */}
       {isColVisible("priority") && (
         <td className={`px-2.5 ${cellPadding} border-r border-border/30`}>
-          <Select
-            value={item.priorityId || ""}
-            onValueChange={(val) => onUpdateItem(idx, { priorityId: val || undefined })}
-          >
-            <SelectTrigger className={`${inputHeight} text-xs cursor-pointer`}>
-              <SelectValue
-                placeholder={
-                  defaults.priorityId
-                    ? `${metadata.priorityOptions.find((p) => p.id === defaults.priorityId)?.name || "Mặc định"} (mặc định)`
-                    : "Mặc định"
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {metadata.priorityOptions.map((p) => (
-                <SelectItem key={p.id} value={p.id} className="text-xs cursor-pointer">
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PriorityField
+            value={item.priorityId}
+            onChange={(priorityId) => onUpdateItem(idx, { priorityId })}
+            metadata={metadata}
+            defaults={defaults}
+            className={inputHeight}
+          />
         </td>
       )}
 
@@ -273,18 +239,11 @@ export const BulkCreateTableRow = React.memo(function BulkCreateTableRow({
       {/* Components */}
       {isColVisible("components") && (
         <td className={`px-2.5 ${cellPadding} border-r border-border/30`}>
-          <ComponentsCombobox
-            options={metadata.components || []}
+          <ComponentsField
             value={item.componentIds}
             onChange={(componentIds) => onUpdateItem(idx, { componentIds })}
-            placeholder={
-              defaults.componentIds && defaults.componentIds.length > 0
-                ? (metadata.components ?? [])
-                    .filter((c) => defaults.componentIds?.includes(c.id))
-                    .map((c) => c.name)
-                    .join(", ") || "—"
-                : "—"
-            }
+            metadata={metadata}
+            defaults={defaults}
             compact
           />
         </td>
@@ -306,16 +265,11 @@ export const BulkCreateTableRow = React.memo(function BulkCreateTableRow({
       {/* Points */}
       {isColVisible("points") && (
         <td className={`px-2.5 ${cellPadding} border-r border-border/30`}>
-          <Input
-            type="number"
-            min="0"
-            placeholder={defaults.points != null ? String(defaults.points) : "—"}
-            value={item.points ?? ""}
-            onChange={(e) => {
-              const v = parseInt(e.target.value, 10);
-              onUpdateItem(idx, { points: Number.isFinite(v) && v >= 0 ? v : undefined });
-            }}
-            className={`${inputHeight} text-xs`}
+          <PointsField
+            value={item.points}
+            onChange={(points) => onUpdateItem(idx, { points })}
+            defaults={defaults}
+            className={inputHeight}
           />
         </td>
       )}
@@ -323,13 +277,11 @@ export const BulkCreateTableRow = React.memo(function BulkCreateTableRow({
       {/* Original Estimate */}
       {isColVisible("originalEstimate") && (
         <td className={`px-2.5 ${cellPadding} border-r border-border/30`}>
-          <Input
-            placeholder={defaults.originalEstimate || "1d 2h"}
-            value={item.originalEstimate ?? ""}
-            onChange={(e) =>
-              onUpdateItem(idx, { originalEstimate: e.target.value.trim() || undefined })
-            }
-            className={`${inputHeight} text-xs`}
+          <EstimateField
+            value={item.originalEstimate}
+            onChange={(originalEstimate) => onUpdateItem(idx, { originalEstimate })}
+            defaults={defaults}
+            className={inputHeight}
           />
         </td>
       )}
@@ -337,11 +289,10 @@ export const BulkCreateTableRow = React.memo(function BulkCreateTableRow({
       {/* Due Date */}
       {isColVisible("dueDate") && (
         <td className={`px-2.5 ${cellPadding} border-r border-border/30`}>
-          <Input
-            type="date"
-            value={item.dueDate ?? ""}
-            onChange={(e) => onUpdateItem(idx, { dueDate: e.target.value || undefined })}
-            className={`${inputHeight} text-xs`}
+          <DueDateField
+            value={item.dueDate}
+            onChange={(dueDate) => onUpdateItem(idx, { dueDate })}
+            className={inputHeight}
           />
         </td>
       )}
@@ -349,33 +300,13 @@ export const BulkCreateTableRow = React.memo(function BulkCreateTableRow({
       {/* Fix Version */}
       {isColVisible("fixVersion") && (
         <td className={`px-2.5 ${cellPadding} border-r border-border/30`}>
-          <Select
-            value={item.fixVersionIds?.[0] || ""}
-            onValueChange={(val) =>
-              onUpdateItem(idx, { fixVersionIds: val ? [val] : undefined })
-            }
-          >
-            <SelectTrigger className={`${inputHeight} text-xs cursor-pointer`}>
-              <SelectValue
-                placeholder={
-                  defaults.fixVersionIds?.[0]
-                    ? metadata.versionOptions.find(
-                        (v) => v.id === defaults.fixVersionIds?.[0]
-                      )?.name || "Mặc định"
-                    : "Mặc định"
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {metadata.versionOptions
-                .filter((v) => !v.archived)
-                .map((v) => (
-                  <SelectItem key={v.id} value={v.id} className="text-xs cursor-pointer">
-                    {v.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+          <FixVersionField
+            value={item.fixVersionIds}
+            onChange={(fixVersionIds) => onUpdateItem(idx, { fixVersionIds })}
+            metadata={metadata}
+            defaults={defaults}
+            className={inputHeight}
+          />
         </td>
       )}
 

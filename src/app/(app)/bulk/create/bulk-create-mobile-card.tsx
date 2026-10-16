@@ -10,13 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Trash2,
   Copy,
   Settings2,
@@ -25,6 +18,8 @@ import {
 } from "lucide-react";
 import { ExpandedRowEditor } from "./expanded-row-editor";
 import { type RowValidationResult } from "./lib/client-validation";
+import { IssueTypeField } from "./fields/issue-type-field";
+import { PriorityField } from "./fields/priority-field";
 
 export interface BulkCreateMobileCardProps {
   item: BulkCreateRowInput;
@@ -159,47 +154,29 @@ export const BulkCreateMobileCard = React.memo(function BulkCreateMobileCard({
 
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div>
-          <Select
-            value={item.issueTypeId || ""}
-            onValueChange={(val) => {
-              const newType = val || undefined;
+          <IssueTypeField
+            value={item.issueTypeId}
+            onChange={(newType) => {
               const isSub = newType ? subtaskIssueTypeIds.has(newType) : false;
               const patch: Partial<BulkCreateRowInput> = { issueTypeId: newType };
               if (!isSub) patch.parent = null;
               onUpdateItem(idx, patch);
             }}
-          >
-            <SelectTrigger className="h-8 text-xs cursor-pointer">
-              <SelectValue
-                placeholder={effectiveIssueTypeName?.name || "Loại task *"}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {metadata.issueTypes.map((t) => (
-                <SelectItem key={t.id} value={t.id} className="text-xs cursor-pointer">
-                  {t.subtask ? `⚡ ${t.name}` : t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            metadata={metadata}
+            defaults={defaults}
+            effectiveName={effectiveIssueTypeName?.name}
+            className="h-8"
+          />
         </div>
 
         <div>
-          <Select
-            value={item.priorityId || ""}
-            onValueChange={(val) => onUpdateItem(idx, { priorityId: val || undefined })}
-          >
-            <SelectTrigger className="h-8 text-xs cursor-pointer">
-              <SelectValue placeholder={defaults.priorityId || "Ưu tiên"} />
-            </SelectTrigger>
-            <SelectContent>
-              {metadata.priorityOptions.map((p) => (
-                <SelectItem key={p.id} value={p.id} className="text-xs cursor-pointer">
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PriorityField
+            value={item.priorityId}
+            onChange={(priorityId) => onUpdateItem(idx, { priorityId })}
+            metadata={metadata}
+            defaults={defaults}
+            className="h-8"
+          />
         </div>
       </div>
 

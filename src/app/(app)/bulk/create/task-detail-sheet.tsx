@@ -4,26 +4,24 @@ import {
   type BulkCreateRowInput,
   type BulkCreateFieldDefaults,
   type BulkCreateProjectMetadata,
-  MAX_DESCRIPTION_LENGTH,
 } from "@/lib/bulk/create-types";
 import { Sheet } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { AssigneeCombobox } from "./assignee-combobox";
 import { ParentCombobox } from "./parent-combobox";
 import { LabelCombobox } from "./label-combobox";
-import { ComponentsCombobox } from "./components-combobox";
 import { DynamicCustomFields } from "./dynamic-custom-fields";
 import { FileText } from "lucide-react";
+import { IssueTypeField } from "./fields/issue-type-field";
+import { PriorityField } from "./fields/priority-field";
+import { FixVersionField } from "./fields/fix-version-field";
+import { ComponentsField } from "./fields/components-field";
+import { PointsField } from "./fields/points-field";
+import { EstimateField } from "./fields/estimate-field";
+import { DueDateField } from "./fields/due-date-field";
+import { DescriptionEditor } from "./description-editor";
 
 interface TaskDetailSheetProps {
   open: boolean;
@@ -83,43 +81,20 @@ export function TaskDetailSheet({
           <Label className="text-xs font-medium text-foreground">
             Loại task <span className="text-destructive">*</span>
           </Label>
-          <Select
-            value={item.issueTypeId || ""}
-            onValueChange={(val) => {
-              const newType = val || undefined;
-              const isEpic = newType ? metadata.issueTypes.find((t) => t.id === newType)?.name.toLowerCase() === "epic" : false;
+          <IssueTypeField
+            value={item.issueTypeId}
+            onChange={(newType) => {
+              const isEpic = newType
+                ? metadata.issueTypes.find((t) => t.id === newType)?.name.toLowerCase() === "epic"
+                : false;
               const patch: Partial<BulkCreateRowInput> = { issueTypeId: newType };
               if (isEpic) patch.parent = null;
               update(patch);
             }}
-          >
-            <SelectTrigger className={`h-9 text-xs cursor-pointer ${
-              !item.issueTypeId && !defaults.issueTypeId && !metadata.defaultIssueTypeId
-                ? "border-amber-500/40 bg-amber-500/5"
-                : item.issueTypeId
-                  ? ""
-                  : "text-muted-foreground"
-            }`}>
-              <SelectValue placeholder={(() => {
-                if (defaults.issueTypeId) {
-                  const found = metadata.issueTypes.find((t) => t.id === defaults.issueTypeId);
-                  return found ? `${found.subtask ? "⚡ " : ""}${found.name} (mặc định)` : "Chọn loại task *";
-                }
-                if (metadata.defaultIssueTypeId) {
-                  const found = metadata.issueTypes.find((t) => t.id === metadata.defaultIssueTypeId);
-                  return found ? `${found.subtask ? "⚡ " : ""}${found.name} (Jira mặc định)` : "Chọn loại task *";
-                }
-                return "Chọn loại task *";
-              })()} />
-            </SelectTrigger>
-            <SelectContent>
-              {metadata.issueTypes.map((t) => (
-                <SelectItem key={t.id} value={t.id} className="text-xs cursor-pointer">
-                  {t.subtask ? `⚡ ${t.name}` : t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            metadata={metadata}
+            defaults={defaults}
+            className="h-9"
+          />
         </div>
 
         {/* Parent / Epic */}
@@ -155,39 +130,24 @@ export function TaskDetailSheet({
         {/* Priority */}
         <div className="space-y-1.5">
           <Label className="text-xs font-medium text-foreground">Mức ưu tiên</Label>
-          <Select
-            value={item.priorityId || ""}
-            onValueChange={(val) => update({ priorityId: val || undefined })}
-          >
-            <SelectTrigger className="h-9 text-xs cursor-pointer">
-              <SelectValue placeholder={defaults.priorityId ? metadata.priorityOptions.find((p) => p.id === defaults.priorityId)?.name || "Mặc định" : "Mặc định"} />
-            </SelectTrigger>
-            <SelectContent>
-              {metadata.priorityOptions.map((p) => (
-                <SelectItem key={p.id} value={p.id} className="text-xs cursor-pointer">
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PriorityField
+            value={item.priorityId}
+            onChange={(priorityId) => update({ priorityId })}
+            metadata={metadata}
+            defaults={defaults}
+            className="h-9"
+          />
         </div>
 
         {/* Components */}
         {metadata.components && metadata.components.length > 0 && (
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-foreground">Hợp phần (Components)</Label>
-            <ComponentsCombobox
-              options={metadata.components}
+            <ComponentsField
+              metadata={metadata}
               value={item.componentIds}
               onChange={(componentIds) => update({ componentIds })}
-              placeholder={
-                defaults.componentIds && defaults.componentIds.length > 0
-                  ? metadata.components
-                      .filter((c) => defaults.componentIds!.includes(c.id))
-                      .map((c) => c.name)
-                      .join(", ") + " (mặc định)"
-                  : "Chọn hợp phần…"
-              }
+              defaults={defaults}
             />
           </div>
         )}
@@ -207,17 +167,11 @@ export function TaskDetailSheet({
         {metadata.pointsFieldId && (
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-foreground">Story Points</Label>
-            <Input
-              type="number"
-              min="0"
-              step="1"
-              placeholder={defaults.points != null ? String(defaults.points) : "—"}
-              value={item.points ?? ""}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                update({ points: Number.isFinite(v) && v >= 0 ? v : undefined });
-              }}
-              className="h-9 text-sm"
+            <PointsField
+              value={item.points}
+              onChange={(points) => update({ points })}
+              defaults={defaults}
+              className="h-9"
             />
           </div>
         )}
@@ -226,11 +180,11 @@ export function TaskDetailSheet({
         {metadata.supportsTimeTracking && (
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-foreground">Ước tính thời gian</Label>
-            <Input
-              placeholder={defaults.originalEstimate || "vd: 1d 4h"}
-              value={item.originalEstimate ?? ""}
-              onChange={(e) => update({ originalEstimate: e.target.value.trim() || undefined })}
-              className="h-9 text-sm"
+            <EstimateField
+              value={item.originalEstimate}
+              onChange={(originalEstimate) => update({ originalEstimate })}
+              defaults={defaults}
+              className="h-9"
             />
           </div>
         )}
@@ -239,11 +193,10 @@ export function TaskDetailSheet({
         {metadata.supportsDueDate && (
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-foreground">Hạn hoàn thành</Label>
-            <Input
-              type="date"
-              value={item.dueDate ?? ""}
-              onChange={(e) => update({ dueDate: e.target.value || undefined })}
-              className="h-9 text-sm"
+            <DueDateField
+              value={item.dueDate}
+              onChange={(dueDate) => update({ dueDate })}
+              className="h-9"
             />
           </div>
         )}
@@ -252,44 +205,23 @@ export function TaskDetailSheet({
         {metadata.versionOptions.length > 0 && (
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-foreground">Phiên bản phát hành</Label>
-            <Select
-              value={item.fixVersionIds?.[0] || ""}
-              onValueChange={(val) => update({ fixVersionIds: val ? [val] : undefined })}
-            >
-              <SelectTrigger className="h-9 text-xs cursor-pointer">
-                <SelectValue placeholder={defaults.fixVersionIds?.[0] ? metadata.versionOptions.find((v) => v.id === defaults.fixVersionIds?.[0])?.name || "Mặc định" : "Mặc định"} />
-              </SelectTrigger>
-              <SelectContent>
-                {metadata.versionOptions
-                  .filter((v) => !v.archived)
-                  .map((v) => (
-                    <SelectItem key={v.id} value={v.id} className="text-xs cursor-pointer">
-                      {v.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            <FixVersionField
+              value={item.fixVersionIds}
+              onChange={(fixVersionIds) => update({ fixVersionIds })}
+              metadata={metadata}
+              defaults={defaults}
+              className="h-9"
+            />
           </div>
         )}
 
-        {/* Description — BC-SMART-302: taller area with char counter */}
+        {/* Description — BC-SMART-302 */}
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-medium text-foreground">Mô tả</Label>
-            <span className={`text-[10px] tabular-nums ${
-              (item.description?.length ?? 0) > MAX_DESCRIPTION_LENGTH * 0.9
-                ? "text-destructive font-medium"
-                : "text-muted-foreground"
-            }`}>
-              {item.description?.length ?? 0} / {MAX_DESCRIPTION_LENGTH.toLocaleString()}
-            </span>
-          </div>
-          <Textarea
-            placeholder="Mô tả chi tiết công việc..."
-            rows={8}
-            value={item.description ?? ""}
-            onChange={(e) => update({ description: e.target.value || undefined })}
-            className="resize-y text-sm min-h-[240px]"
+          <DescriptionEditor
+            value={item.description}
+            onChange={(description) => update({ description })}
+            defaultDescription={defaults.description}
+            showLayoutToggles={false}
           />
         </div>
 
