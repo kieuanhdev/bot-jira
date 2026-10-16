@@ -55,31 +55,81 @@ export function formatDueDate(value: string | null) {
   });
 }
 
+export interface ProjectEstimationUsage {
+  hasEst: boolean;
+  hasPts: boolean;
+}
+
+export function buildProjectEstimationUsage(
+  allStdTasks: StandardizationTask[]
+): Map<string, ProjectEstimationUsage> {
+  const map = new Map<string, ProjectEstimationUsage>();
+  for (const t of allStdTasks) {
+    let usage = map.get(t.projectKey);
+    if (!usage) {
+      usage = { hasEst: false, hasPts: false };
+      map.set(t.projectKey, usage);
+    }
+    if (!usage.hasEst && t.originalEstimateSeconds != null && t.originalEstimateSeconds > 0) {
+      usage.hasEst = true;
+    }
+    if (!usage.hasPts && t.points != null && t.points > 0) {
+      usage.hasPts = true;
+    }
+  }
+  return map;
+}
+
 export function getEstimationMissingLabel(
   task: StandardizationTask,
-  allTasks: StandardizationTask[]
+  allTasksOrMap: StandardizationTask[] | Map<string, ProjectEstimationUsage>
 ): string {
-  const projectTasks = allTasks.filter((t) => t.projectKey === task.projectKey);
-  const hasEst = projectTasks.some((t) => t.originalEstimateSeconds != null && t.originalEstimateSeconds > 0);
-  const hasPts = projectTasks.some((t) => t.points != null && t.points > 0);
+  let usage: ProjectEstimationUsage | undefined;
+  if (allTasksOrMap instanceof Map) {
+    usage = allTasksOrMap.get(task.projectKey);
+  } else {
+    const projectTasks = allTasksOrMap.filter((t) => t.projectKey === task.projectKey);
+    usage = {
+      hasEst: projectTasks.some((t) => t.originalEstimateSeconds != null && t.originalEstimateSeconds > 0),
+      hasPts: projectTasks.some((t) => t.points != null && t.points > 0),
+    };
+  }
+
+  const hasEst = usage?.hasEst ?? false;
+  const hasPts = usage?.hasPts ?? false;
 
   if (hasPts && !hasEst) return "Thiếu Points";
   if (hasEst && !hasPts) return "Thiếu Estimate";
   return "Thiếu Points/Est";
 }
 
-export function buildMissingBulkFields(keys: Set<string>, tasks: StandardizationTask[]): string {
+export function buildMissingBulkFields(
+  keys: Set<string>,
+  tasks: StandardizationTask[],
+  usageMap?: Map<string, ProjectEstimationUsage>
+): string {
   const fields = new Set<string>();
   const selectedTasks = tasks.filter((t) => keys.has(t.jiraKey));
   const relevantTasks = selectedTasks.length > 0 ? selectedTasks : tasks;
 
   const relevantProjects = new Set(relevantTasks.map((t) => t.projectKey));
-  const projectTasks = tasks.filter((t) => relevantProjects.has(t.projectKey));
 
-  const hasEstimateUsage = projectTasks.some(
-    (t) => t.originalEstimateSeconds != null && t.originalEstimateSeconds > 0
-  );
-  const hasPointsUsage = projectTasks.some((t) => t.points != null && t.points > 0);
+  let hasEstimateUsage = false;
+  let hasPointsUsage = false;
+
+  if (usageMap) {
+    for (const p of relevantProjects) {
+      const u = usageMap.get(p);
+      if (u?.hasEst) hasEstimateUsage = true;
+      if (u?.hasPts) hasPointsUsage = true;
+    }
+  } else {
+    const projectTasks = tasks.filter((t) => relevantProjects.has(t.projectKey));
+    hasEstimateUsage = projectTasks.some(
+      (t) => t.originalEstimateSeconds != null && t.originalEstimateSeconds > 0
+    );
+    hasPointsUsage = projectTasks.some((t) => t.points != null && t.points > 0);
+  }
 
   for (const task of relevantTasks) {
     for (const req of task.missing) {

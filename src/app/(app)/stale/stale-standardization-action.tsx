@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { StandardizationTask } from "./lib/stale-types";
-import { buildMissingBulkFields } from "./lib/stale-utils";
+import { buildMissingBulkFields, buildProjectEstimationUsage } from "./lib/stale-utils";
 
 export function BulkStandardizationAction({
   selectedKeys,
@@ -43,7 +43,8 @@ export function BulkStandardizationAction({
   const hasAnyMissWorklog = selectedTasksList.some((t) => t.missing.includes("WORKLOG"));
   const hasAnyMissMetadata = selectedTasksList.some((t) => t.missing.some((m) => m !== "WORKLOG"));
 
-  const metadataFields = buildMissingBulkFields(selectedKeys, allTasks);
+  const usageMap = useMemo(() => buildProjectEstimationUsage(allTasks), [allTasks]);
+  const metadataFields = buildMissingBulkFields(selectedKeys, allTasks, usageMap);
   const selectedKeysCsv = Array.from(selectedKeys).join(",");
   const worklogKeysCsv = selectedTasksList
     .filter((t) => t.missing.includes("WORKLOG"))

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildMissingBulkFields,
+  buildProjectEstimationUsage,
   computeFocusCounts,
   filterFocusedTasks,
   filterStdTasks,
@@ -144,6 +145,35 @@ describe("stale-utils estimation & bulk fields", () => {
     expect(formatTimeSpent(5400)).toBe("1h 30m");
     expect(formatDueDate(null)).toBeNull();
     expect(formatDueDate("2026-10-15")).toContain("15/10/2026");
+  });
+
+  it("buildProjectEstimationUsage precomputes hasEst and hasPts and matches array behavior", () => {
+    const cicm1 = mockTask({ jiraKey: "CICM-1", projectKey: "CICM", points: 5, originalEstimateSeconds: null });
+    const cicm2 = mockTask({ jiraKey: "CICM-2", projectKey: "CICM", points: null, originalEstimateSeconds: null });
+    const tm1 = mockTask({ jiraKey: "TM-1", projectKey: "TM", points: null, originalEstimateSeconds: 3600 });
+    const both1 = mockTask({ jiraKey: "BOTH-1", projectKey: "BOTH", points: 3, originalEstimateSeconds: 1800 });
+    const none1 = mockTask({ jiraKey: "NONE-1", projectKey: "NONE", points: null, originalEstimateSeconds: null });
+
+    const allTasks = [cicm1, cicm2, tm1, both1, none1];
+    const usageMap = buildProjectEstimationUsage(allTasks);
+
+    expect(usageMap.get("CICM")).toEqual({ hasEst: false, hasPts: true });
+    expect(usageMap.get("TM")).toEqual({ hasEst: true, hasPts: false });
+    expect(usageMap.get("BOTH")).toEqual({ hasEst: true, hasPts: true });
+    expect(usageMap.get("NONE")).toEqual({ hasEst: false, hasPts: false });
+
+    // Verify getEstimationMissingLabel equivalence across all tasks
+    for (const t of allTasks) {
+      const fromArray = getEstimationMissingLabel(t, allTasks);
+      const fromMap = getEstimationMissingLabel(t, usageMap);
+      expect(fromMap).toBe(fromArray);
+    }
+
+    // Verify buildMissingBulkFields equivalence
+    const keys = new Set(["CICM-1", "TM-1", "BOTH-1"]);
+    const fieldsFromArray = buildMissingBulkFields(keys, allTasks);
+    const fieldsFromMap = buildMissingBulkFields(keys, allTasks, usageMap);
+    expect(fieldsFromMap).toBe(fieldsFromArray);
   });
 });
 
