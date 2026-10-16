@@ -1,28 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { bulkKeys } from "@/lib/query-keys";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Loader2,
-  ExternalLink,
-  Copy,
-  Check,
-  RefreshCw,
-  PlusCircle,
-  GitBranch,
-  Download,
-} from "lucide-react";
+import { exportOperationCsv } from "./lib/export-operation-csv";
+import { ProgressStatusBanner } from "./progress-status-banner";
+import { ProgressItemsTable, type ProgressCreateItem } from "./progress-items-table";
 
 interface OperationDetailResponse {
   operation: {
@@ -36,19 +21,7 @@ interface OperationDetailResponse {
     startedAt: string | null;
     completedAt: string | null;
     payload: { projectKey?: string };
-    createItems?: Array<{
-      id: string;
-      rowIndex: number;
-      clientRef: string;
-      jiraKey: string | null;
-      status: string;
-      error: string | null;
-      errorCode: string | null;
-      retryable: boolean;
-      attemptCount: number;
-      parentClientRef: string | null;
-      requested: { summary?: string; issueTypeId?: string };
-    }>;
+    createItems?: ProgressCreateItem[];
   };
 }
 
@@ -103,24 +76,30 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
   });
 
   const op = data?.operation;
-  const items = op?.createItems ?? [];
+  const items = useMemo(() => op?.createItems ?? [], [op?.createItems]);
   const isFinished =
     op?.state === "completed" ||
     op?.state === "partially_failed" ||
     op?.state === "failed" ||
     op?.state === "cancelled";
 
-  const blockedCount = items.filter((i) => i.status === "blocked_by_parent").length;
+  const blockedCount = useMemo(
+    () => items.filter((i) => i.status === "blocked_by_parent").length,
+    [items]
+  );
 
-  const blockedChildrenMap = new Map<string, number>();
-  for (const item of items) {
-    if (item.status === "blocked_by_parent" && item.parentClientRef) {
-      blockedChildrenMap.set(
-        item.parentClientRef,
-        (blockedChildrenMap.get(item.parentClientRef) ?? 0) + 1
-      );
+  const blockedChildrenMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of items) {
+      if (item.status === "blocked_by_parent" && item.parentClientRef) {
+        map.set(
+          item.parentClientRef,
+          (map.get(item.parentClientRef) ?? 0) + 1
+        );
+      }
     }
-  }
+    return map;
+  }, [items]);
 
   const total = op?.total ?? 1;
   const succeeded = op?.succeeded ?? 0;
@@ -128,56 +107,45 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
   const processed = succeeded + failed;
   const percent = Math.min(100, Math.round((processed / total) * 100));
 
-  const allKeys = items
-    .map((i) => i.jiraKey)
-    .filter((k): k is string => Boolean(k));
+  const allKeys = useMemo(
+    () => items.map((i) => i.jiraKey).filter((k): k is string => Boolean(k)),
+    [items]
+  );
 
-  function handleCopyKeys() {
+  const handleCopyKeys = useCallback(() => {
     if (allKeys.length === 0) return;
     navigator.clipboard.writeText(allKeys.join(", "));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }
+  }, [allKeys]);
 
-  function handleExportCsv() {
+  const handleExportCsv = useCallback(() => {
     if (!items || items.length === 0) return;
     const projectKey = op?.payload?.projectKey || "";
-    const headers = ["STT", "Client Ref", "Jira Key", "Summary", "Trạng thái", "Lỗi / Chi tiết"];
-    const rows = items.map((item, idx) => {
-      const stt = String(idx + 1);
-      const clientRef = item.clientRef || "";
-      const jiraKey = item.jiraKey || "";
-      const summary = (item.requested?.summary || "").replace(/"/g, '""');
-      const statusText =
-        item.status === "succeeded"
-          ? "Thành công"
-          : item.status === "failed"
-            ? "Thất bại"
-            : item.status === "blocked_by_parent"
-              ? "Chờ task cha"
-              : item.status;
-      const errorText = (item.error || "").replace(/"/g, '""');
-      return `"${stt}","${clientRef}","${jiraKey}","${summary}","${statusText}","${errorText}"`;
+    exportOperationCsv(items, { projectKey, operationId });
+  }, [items, op?.payload?.projectKey, operationId]);
+
+  const toggleRetryItem = useCallback((id: string) => {
+    setSelectedRetryIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
+  }, []);
 
-    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `bulk-create-${projectKey || "jira"}-${operationId.slice(-6)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }
+  const handleRetry = useCallback(() => {
+    retryMutation.mutate(
+      selectedRetryIds.size > 0 ? Array.from(selectedRetryIds) : undefined
+    );
+  }, [retryMutation, selectedRetryIds]);
 
-  function toggleRetryItem(id: string) {
-    const next = new Set(selectedRetryIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelectedRetryIds(next);
-  }
+  const handleRetryBranch = useCallback(
+    (clientRef: string) => {
+      retryBranchMutation.mutate(clientRef);
+    },
+    [retryBranchMutation]
+  );
 
   if (isLoading && !op) {
     return (
@@ -190,333 +158,38 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
 
   return (
     <div className="space-y-5">
-      {/* Progress Status Banner */}
-      <Card className="border-border/80 bg-card shadow-sm">
-        <CardHeader className="pb-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2.5">
-              {!isFinished ? (
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-                </div>
-              ) : op?.state === "completed" ? (
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-                </div>
-              ) : (
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                  <XCircle className="h-5 w-5" aria-hidden="true" />
-                </div>
-              )}
-              <div>
-                <CardTitle className="text-base font-semibold">
-                  {!isFinished
-                    ? "Đang tiến hành tạo task trên Jira..."
-                    : op?.state === "completed"
-                      ? "Tất cả các task đã được tạo thành công!"
-                      : "Thao tác đã hoàn thành với một số lỗi"}
-                </CardTitle>
-                <CardDescription className="text-xs text-muted-foreground">
-                  Mã thao tác: <span className="font-mono">{operationId}</span>
-                </CardDescription>
-              </div>
-            </div>
+      <ProgressStatusBanner
+        operationId={operationId}
+        isFinished={isFinished}
+        state={op?.state}
+        total={total}
+        succeeded={succeeded}
+        failed={failed}
+        blockedCount={blockedCount}
+        processed={processed}
+        percent={percent}
+        allKeys={allKeys}
+        copied={copied}
+        itemsCount={items.length}
+        onCopyKeys={handleCopyKeys}
+        onExportCsv={handleExportCsv}
+        onReset={onReset}
+      />
 
-            <div className="flex flex-wrap items-center gap-2">
-              {allKeys.length > 0 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyKeys}
-                  className="h-8 gap-1.5 text-xs cursor-pointer"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
-                      Đã sao chép
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                      Sao chép {allKeys.length} Jira keys
-                    </>
-                  )}
-                </Button>
-              )}
-
-              {items.length > 0 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportCsv}
-                  className="h-8 gap-1.5 text-xs cursor-pointer text-foreground"
-                  title="Tải xuống toàn bộ kết quả tạo task ra file CSV"
-                >
-                  <Download className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                  <span>Xuất CSV ({items.length})</span>
-                </Button>
-              )}
-
-              {isFinished && (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={onReset}
-                  className="h-8 gap-1.5 text-xs cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90"
-                >
-                  <PlusCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                  Tạo batch mới
-                </Button>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-4 pt-1">
-          {/* Progress bar */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-xs">
-              <span className="font-medium text-foreground">
-                Tiến độ: {processed} / {total} task ({percent}%)
-              </span>
-              <span className="font-mono text-muted-foreground">
-                {succeeded} thành công · {failed} lỗi
-              </span>
-            </div>
-            <Progress value={percent} className="h-2.5" />
-          </div>
-
-          {/* Quick Counter Chips */}
-          <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-            <Badge variant="outline" className="px-2.5 py-1 font-mono">
-              Tổng: {total}
-            </Badge>
-            <Badge variant="success" className="px-2.5 py-1 font-mono">
-              Thành công: {succeeded}
-            </Badge>
-            {failed > 0 && (
-              <Badge variant="danger" className="px-2.5 py-1 font-mono">
-                Lỗi: {failed}
-              </Badge>
-            )}
-            {blockedCount > 0 && (
-              <Badge variant="secondary" className="px-2.5 py-1 font-mono">
-                Chờ parent: {blockedCount}
-              </Badge>
-            )}
-            {!isFinished && (
-              <Badge variant="info" className="px-2.5 py-1 font-mono">
-                Đang xử lý: {total - processed}
-              </Badge>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Items Details Table */}
-      <Card className="border-border/80 bg-card shadow-sm">
-        <CardHeader className="flex flex-col gap-2 pb-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="text-base font-semibold">Kết quả chi tiết từng dòng</CardTitle>
-            <CardDescription className="text-xs text-muted-foreground">
-              Nhấp vào mã Jira Key để mở trực tiếp trên Jira hoặc xem trong danh sách.
-            </CardDescription>
-          </div>
-
-          {isFinished && failed > 0 && (
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  retryMutation.mutate(
-                    selectedRetryIds.size > 0 ? Array.from(selectedRetryIds) : undefined
-                  )
-                }
-                disabled={retryMutation.isPending}
-                className="h-8 gap-1.5 text-xs cursor-pointer text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
-              >
-                {retryMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                )}
-                {selectedRetryIds.size > 0
-                  ? `Thử lại ${selectedRetryIds.size} dòng đã chọn`
-                  : "Thử lại các dòng lỗi (Retry)"}
-              </Button>
-            </div>
-          )}
-        </CardHeader>
-
-        {retryMutation.isError && (
-          <div className="mx-6 mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-400">
-            Lỗi khi thử lại: {retryMutation.error.message}
-          </div>
-        )}
-
-        {retryBranchMutation.isError && (
-          <div className="mx-6 mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-400">
-            Lỗi khi thử lại nhánh: {retryBranchMutation.error.message}
-          </div>
-        )}
-
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-y border-border bg-muted/20 font-semibold text-muted-foreground">
-                <tr>
-                  <th className="w-12 px-4 py-2.5">#</th>
-                  <th className="w-28 px-3 py-2.5">Trạng thái</th>
-                  <th className="w-36 px-3 py-2.5">Jira Key</th>
-                  <th className="min-w-[240px] px-3 py-2.5">Tiêu đề (Summary)</th>
-                  <th className="min-w-[200px] px-3 py-2.5">Kết quả / Lỗi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/40">
-                {items.map((item) => {
-                  const isSucceeded = item.status === "succeeded";
-                  const isFailed = item.status === "failed";
-                  const isRunning = item.status === "running";
-                  const isPending = item.status === "pending";
-                  const isWaitingForParent = item.status === "waiting_for_parent";
-                  const isBlockedByParent = item.status === "blocked_by_parent";
-                  const blockedChildCount = isFailed ? (blockedChildrenMap.get(item.clientRef) ?? 0) : 0;
-
-                  return (
-                    <tr
-                      key={item.id}
-                      className={`transition-colors ${
-                        isFailed ? "bg-red-500/5 hover:bg-red-500/10" : isBlockedByParent ? "bg-amber-500/5 hover:bg-amber-500/10" : "hover:bg-muted/15"
-                      }`}
-                    >
-                      <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">
-                        {item.rowIndex + 1}
-                      </td>
-
-                      <td className="px-3 py-3">
-                        {isSucceeded && (
-                          <Badge variant="success" className="gap-1 font-medium">
-                            <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
-                            Thành công
-                          </Badge>
-                        )}
-                        {isFailed && (
-                          <Badge variant="danger" className="gap-1 font-medium">
-                            <XCircle className="h-3 w-3" aria-hidden="true" />
-                            Thất bại
-                          </Badge>
-                        )}
-                        {isRunning && (
-                          <Badge variant="info" className="gap-1 font-medium">
-                            <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                            Đang tạo
-                          </Badge>
-                        )}
-                        {isPending && (
-                          <Badge variant="secondary" className="gap-1 font-medium">
-                            <Clock className="h-3 w-3" aria-hidden="true" />
-                            Chờ xử lý
-                          </Badge>
-                        )}
-                        {isWaitingForParent && (
-                          <Badge variant="info" className="gap-1 font-medium">
-                            <GitBranch className="h-3 w-3" aria-hidden="true" />
-                            Chờ parent
-                          </Badge>
-                        )}
-                        {isBlockedByParent && (
-                          <Badge variant="secondary" className="gap-1 font-medium text-amber-700 dark:text-amber-400">
-                            <XCircle className="h-3 w-3" aria-hidden="true" />
-                            Chặn (parent)
-                          </Badge>
-                        )}
-                      </td>
-
-                      <td className="px-3 py-3">
-                        {item.jiraKey ? (
-                          <Link
-                            href={`/issue/${item.jiraKey}`}
-                            className="inline-flex items-center gap-1 font-mono font-semibold text-primary hover:underline"
-                          >
-                            {item.jiraKey}
-                            <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                          </Link>
-                        ) : (
-                          <span className="font-mono text-muted-foreground">—</span>
-                        )}
-                      </td>
-
-                      <td className="px-3 py-3">
-                        <div className="font-medium text-foreground">
-                          {item.requested?.summary || item.clientRef}
-                        </div>
-                      </td>
-
-                      <td className="px-3 py-3">
-                        {isSucceeded && (
-                          <span className="text-emerald-700 dark:text-emerald-400">
-                            Đã tạo thành công
-                          </span>
-                        )}
-                        {isFailed && (
-                          <div className="space-y-1">
-                            <span className="text-red-700 dark:text-red-400">
-                              {item.error || "Lỗi tạo task"}
-                            </span>
-                            {(item.retryable || isFailed) && isFinished && (
-                              <div>
-                                <label className="inline-flex items-center gap-1.5 cursor-pointer text-[11px] text-muted-foreground hover:text-foreground">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedRetryIds.has(item.id)}
-                                    onChange={() => toggleRetryItem(item.id)}
-                                    className="rounded border-border"
-                                  />
-                                  Chọn để thử lại
-                                </label>
-                              </div>
-                            )}
-                            {blockedChildCount > 0 && isFinished && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => retryBranchMutation.mutate(item.clientRef)}
-                                disabled={retryBranchMutation.isPending}
-                                className="mt-1 h-7 gap-1 px-2 text-[11px] cursor-pointer text-primary border-primary/30 hover:bg-primary/10"
-                              >
-                                {retryBranchMutation.isPending && retryBranchMutation.variables === item.clientRef ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                                ) : (
-                                  <GitBranch className="h-3 w-3" aria-hidden="true" />
-                                )}
-                                Thử lại cả nhánh ({blockedChildCount} con)
-                              </Button>
-                            )}
-                          </div>
-                        )}
-                        {(isRunning || isPending) && (
-                          <span className="text-muted-foreground">Đang trong hàng đợi</span>
-                        )}
-                        {isWaitingForParent && (
-                          <span className="text-muted-foreground">Đang chờ parent được tạo</span>
-                        )}
-                        {isBlockedByParent && (
-                          <span className="text-amber-700 dark:text-amber-400">{item.error || "Parent thất bại"}</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      <ProgressItemsTable
+        items={items}
+        isFinished={isFinished}
+        failedCount={failed}
+        selectedRetryIds={selectedRetryIds}
+        blockedChildrenMap={blockedChildrenMap}
+        isRetrying={retryMutation.isPending}
+        retryError={retryMutation.isError ? retryMutation.error.message : null}
+        retryingBranchRef={retryBranchMutation.isPending ? retryBranchMutation.variables : null}
+        retryBranchError={retryBranchMutation.isError ? retryBranchMutation.error.message : null}
+        onRetry={handleRetry}
+        onToggleRetry={toggleRetryItem}
+        onRetryBranch={handleRetryBranch}
+      />
     </div>
   );
 }
