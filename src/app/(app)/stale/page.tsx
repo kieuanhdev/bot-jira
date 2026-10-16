@@ -26,14 +26,22 @@ export default async function StalePage(props: {
       const isTeam = viewParam === "team";
       const defaultAssignee = isTeam ? "ALL" : "me";
 
+      const project = typeof searchParams?.project === "string" ? searchParams.project : "ALL";
+      const assignee = typeof searchParams?.assignee === "string" ? searchParams.assignee : defaultAssignee;
+      const status = typeof searchParams?.status === "string" ? searchParams.status : "ALL";
+      const reason = typeof searchParams?.reason === "string" ? searchParams.reason : "ALL";
+      const severity = typeof searchParams?.severity === "string" ? searchParams.severity : "ALL";
+
       const url = new URL("http://localhost/api/stale");
-      if (defaultAssignee !== "ALL") {
-        url.searchParams.set("assignee", defaultAssignee);
-      }
+      if (project !== "ALL") url.searchParams.set("project", project);
+      if (assignee !== "ALL") url.searchParams.set("assignee", assignee);
+      if (status !== "ALL") url.searchParams.set("status", status);
+      if (reason !== "ALL") url.searchParams.set("reason", reason);
+      if (severity !== "ALL") url.searchParams.set("severity", severity);
       const params = parseStaleQueryParams(url);
 
       await queryClient.prefetchQuery({
-        queryKey: staleKeys.list("ALL", defaultAssignee, "ALL", "ALL", "ALL"),
+        queryKey: staleKeys.list(project, assignee, status, reason, severity),
         queryFn: () => getStaleData(session.user, params),
       });
     } catch (err) {
