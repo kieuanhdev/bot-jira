@@ -1,4 +1,4 @@
-import { BoardSkeleton } from "./board-column";
+import { BoardSkeleton } from "./board-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function BoardLoading() {

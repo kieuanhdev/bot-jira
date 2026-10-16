@@ -27,7 +27,7 @@ import { AlertCircle, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { BoardStatsLine } from "./board-summary-cards";
-import { BoardSkeleton } from "./board-column";
+import { BoardSkeleton } from "./board-skeleton";
 import { useIssueHoverPrefetch } from "./lib/issue-detail-queries";
 import {
   type Project,
