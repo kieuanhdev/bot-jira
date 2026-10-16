@@ -7,6 +7,7 @@ import { reportsKeys } from "@/lib/query-keys";
 import { queryPolicy } from "@/lib/query-policy";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/shared/async-state";
 import {
   ResponsiveContainer,
   LineChart,
@@ -40,7 +41,7 @@ export function TrendsTab({ projectKey, period, versionId }: TrendsTabProps) {
     return params;
   }, [period, isVersionScope, versionId]);
 
-  const { data, isLoading, isError } = useQuery<ProjectHistoryResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<ProjectHistoryResponse>({
     queryKey: reportsKeys.history(projectKey, historyParams),
     queryFn: () => {
       const sp = new URLSearchParams(historyParams);
@@ -70,9 +71,11 @@ export function TrendsTab({ projectKey, period, versionId }: TrendsTabProps) {
           <Skeleton className="h-[280px] w-full rounded-xl" />
         </div>
       ) : isError ? (
-        <div className="p-8 text-center text-sm text-destructive border rounded-xl bg-destructive/10">
-          Không thể tải dữ liệu xu hướng. Vui lòng thử lại sau.
-        </div>
+        <ErrorState
+          title="Không thể tải dữ liệu xu hướng"
+          message="Vui lòng thử lại sau."
+          onRetry={() => refetch()}
+        />
       ) : points.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 text-center rounded-xl border border-dashed border-border bg-card">
           <TrendingUp className="h-8 w-8 text-muted-foreground mb-2" />
