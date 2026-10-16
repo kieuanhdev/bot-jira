@@ -1,21 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+"use client";
+
+import { useCallback, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { IssueItem } from "@/hooks/use-issues";
-import { cn, timeAgo } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { PRIORITY_RANK } from "./lib/board-types";
-import { PRIORITIES } from "./lib/quick-panel-utils";
-import {
-  DateCell,
-  FixVersionCell,
-  PointsCell,
-  SelectCell,
-  StatusCell,
-} from "./board-list-inline-cells";
 import { BoardListBulkBar } from "./board-list-bulk-bar";
+import { BoardListRow } from "./board-list-row";
+import { useWindowedRows } from "@/hooks/use-windowed-rows";
 
-/** Dropdown choices for the editable columns. */
 export type ListOptions = {
   statuses: string[];
   assignees: string[];
@@ -31,17 +26,6 @@ export type EditFn = (
   api: Record<string, unknown>,
   itemFor: (issue: IssueItem) => Partial<IssueItem>
 ) => void;
-
-// Cells swallow clicks so opening a dropdown doesn't also open the quick panel.
-const stop = (e: React.MouseEvent) => e.stopPropagation();
-
-function dateLabel(value: string | null): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
-}
-
-const toIsoDay = (d: string | null) => (d ? `${d}T00:00:00.000Z` : null);
 
 type SortKey =
   | "key" | "summary" | "type" | "points" | "status" | "assignee" | "priority" | "due"
@@ -103,12 +87,6 @@ function SortTh({
   );
 }
 
-
-// Windowing: rows are single-line, so only the rows near the viewport are mounted.
-const WINDOW_THRESHOLD = 100;
-const OVERSCAN = 12;
-const FALLBACK_ROW_HEIGHT = 41;
-
 /** Table view of all loaded issues: inline-editable cells, sorting and bulk edit. */
 export function BoardListView({
   issues,
@@ -137,7 +115,7 @@ export function BoardListView({
 }) {
   const [sort, setSort] = useState<SortState>(null);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  // asc -> desc -> back to the server order
+
   const toggleSort = (key: SortKey) =>
     setSort((prev) =>
       prev?.key !== key ? { key, dir: "asc" } : prev.dir === "asc" ? { key, dir: "desc" } : null
@@ -162,90 +140,48 @@ export function BoardListView({
   const allChecked = rows.length > 0 && selected.length === rows.length;
   const toggleAll = () =>
     setSelectedKeys(allChecked ? new Set() : new Set(rows.map((r) => r.jiraKey)));
-  const toggleOne = (key: string) =>
+  const toggleOne = useCallback((key: string) => {
     setSelectedKeys((prev) => {
       const next = new Set(prev);
       if (!next.delete(key)) next.add(key);
       return next;
     });
+  }, []);
 
-  // Windowing state: scroll offset (relative to the first row) and measured row height.
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const tbodyRef = useRef<HTMLTableSectionElement | null>(null);
-  const [win, setWin] = useState({ top: 0, height: 800 });
-  const [rowHeight, setRowHeight] = useState(FALLBACK_ROW_HEIGHT);
-  const windowed = rows.length > WINDOW_THRESHOLD;
+  const {
+    scrollRef,
+    tbodyRef,
+    startIdx,
+    endIdx,
+    padTop,
+    padBottom,
+    windowed,
+  } = useWindowedRows({ totalRows: rows.length });
 
-  const measure = useCallback(() => {
-    const el = scrollRef.current;
-    const body = tbodyRef.current;
-    if (!el || !body) return;
-    const top = Math.max(0, el.scrollTop - body.offsetTop);
-    setWin((prev) =>
-      Math.abs(prev.top - top) < rowHeight / 2 && prev.height === el.clientHeight
-        ? prev
-        : { top, height: el.clientHeight }
-    );
-  }, [rowHeight]);
-
-  useEffect(() => {
-    if (!windowed) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(measure);
-    };
-    measure();
-    el.addEventListener("scroll", onScroll, { passive: true });
-    const ro = new ResizeObserver(onScroll);
-    ro.observe(el);
-    return () => {
-      cancelAnimationFrame(raf);
-      el.removeEventListener("scroll", onScroll);
-      ro.disconnect();
-    };
-  }, [windowed, measure]);
-
-  // Measure a real row once so the spacers match the actual row height.
-  useEffect(() => {
-    if (!windowed) return;
-    const row = tbodyRef.current?.querySelector<HTMLTableRowElement>("tr[data-row]");
-    const h = row?.offsetHeight;
-    if (h && Math.abs(h - rowHeight) > 1) setRowHeight(h);
-  }, [windowed, rowHeight, rows.length, hiddenTableCols]);
-
-  const startIdx = windowed ? Math.max(0, Math.floor(win.top / rowHeight) - OVERSCAN) : 0;
-  const endIdx = windowed
-    ? Math.min(rows.length, Math.ceil((win.top + win.height) / rowHeight) + OVERSCAN)
-    : rows.length;
   const visibleRows = windowed ? rows.slice(startIdx, endIdx) : rows;
-  const padTop = startIdx * rowHeight;
-  const padBottom = (rows.length - endIdx) * rowHeight;
-  const colSpan = 16; // checkbox + key + summary + 13 optional columns (extra span is harmless)
+  const colSpan = 16;
 
   const show = (col: string) => !hiddenTableCols.has(col);
-  const edit = (issue: IssueItem, api: Record<string, unknown>, item: Partial<IssueItem>) =>
-    onEdits([issue], api, () => item);
+  const edit = useCallback(
+    (issue: IssueItem, api: Record<string, unknown>, item: Partial<IssueItem>) => {
+      onEdits([issue], api, () => item);
+    },
+    [onEdits]
+  );
   const th = (col: SortKey, label: string) => (
     <SortTh col={col} label={label} sort={sort} onSort={toggleSort} />
   );
-  const person = (
-    issue: IssueItem,
-    field: "assignee" | "reporter" | "approver" | "tester",
-    value: string | null,
-    list: string[],
-    clearLabel?: string
-  ) => (
-    <SelectCell
-      label={`Đổi ${field} ${issue.jiraKey}`}
-      value={value}
-      options={list}
-      clearLabel={clearLabel}
-      onChange={(v) => edit(issue, { [field]: v }, { [`${field}Jira`]: v })}
-    />
-  );
+
+  const [now] = useState(() => Date.now());
+
+  const epicOptionsMap = useMemo(() => {
+    const epics = options.epics;
+    const map = new Map<string, string[]>();
+    for (const r of visibleRows) {
+      map.set(r.jiraKey, epics.filter((e) => e !== r.jiraKey));
+    }
+    return map;
+  }, [options.epics, visibleRows]);
 
   return (
     <div ref={scrollRef} className="max-h-[calc(100dvh-15rem)] min-h-[24rem] flex-1 overflow-auto overscroll-x-contain rounded-lg border">
@@ -297,128 +233,25 @@ export function BoardListView({
             </tr>
           )}
           {visibleRows.map((issue) => {
-            const overdue =
-              issue.dueDate && new Date(issue.dueDate) < new Date() && issue.statusCategory !== "done";
+            const isOverdue = Boolean(
+              issue.dueDate && new Date(issue.dueDate).getTime() < now && issue.statusCategory !== "done"
+            );
             return (
-              <tr
+              <BoardListRow
                 key={issue.jiraKey}
-                data-row
-                data-issue-key={issue.jiraKey}
-                data-selected={selectedKeys.has(issue.jiraKey) || undefined}
-                className="cursor-pointer border-t transition-colors hover:bg-muted/30 data-[selected]:bg-primary/5"
-                onClick={() => onOpen(issue)}
-              >
-                <td className="px-3 py-2" onClick={stop}>
-                  <Checkbox
-                    aria-label={`Chọn ${issue.jiraKey}`}
-                    checked={selectedKeys.has(issue.jiraKey)}
-                    onCheckedChange={() => toggleOne(issue.jiraKey)}
-                  />
-                </td>
-                <td className="px-3 py-2 font-mono text-xs text-primary">{issue.jiraKey}</td>
-                <td className="max-w-xs truncate px-3 py-2 font-medium">{issue.summary}</td>
-                {show("type") && (
-                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
-                    <SelectCell
-                      label={`Đổi loại ${issue.jiraKey}`}
-                      value={issue.type || null}
-                      options={options.types}
-                      onChange={(v) => v && edit(issue, { issueType: v }, { type: v })}
-                    />
-                  </td>
-                )}
-                {show("points") && (
-                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
-                    <PointsCell
-                      jiraKey={issue.jiraKey}
-                      value={issue.points}
-                      onChange={(points) => edit(issue, { points }, { points })}
-                    />
-                  </td>
-                )}
-                {show("status") && (
-                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
-                    <StatusCell
-                      jiraKey={issue.jiraKey}
-                      status={statusOverrides.get(issue.jiraKey) ?? issue.status}
-                      onTransition={(id, to) => onTransition(issue, id, to)}
-                    />
-                  </td>
-                )}
-                {show("assignee") && (
-                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
-                    {person(issue, "assignee", issue.assigneeJira, options.assignees, "Chưa gán")}
-                  </td>
-                )}
-                {show("priority") && (
-                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
-                    <SelectCell
-                      label={`Đổi độ ưu tiên ${issue.jiraKey}`}
-                      value={issue.priority || null}
-                      options={PRIORITIES}
-                      onChange={(v) => v && edit(issue, { priority: v }, { priority: v })}
-                    />
-                  </td>
-                )}
-                {show("due") && (
-                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
-                    <DateCell
-                      label={`Đổi hạn ${issue.jiraKey}`}
-                      value={issue.dueDate}
-                      display={dateLabel(issue.dueDate)}
-                      danger={Boolean(overdue)}
-                      onChange={(d) => edit(issue, { dueDate: d }, { dueDate: toIsoDay(d) })}
-                    />
-                  </td>
-                )}
-                {show("epic") && (
-                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
-                    <SelectCell
-                      label={`Đổi epic ${issue.jiraKey}`}
-                      value={issue.epic ?? null}
-                      options={options.epics.filter((e) => e !== issue.jiraKey)}
-                      clearLabel="Bỏ epic"
-                      onChange={(v) => edit(issue, { epic: v }, { epic: v })}
-                    />
-                  </td>
-                )}
-                {show("fixVersion") && (
-                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
-                    <FixVersionCell
-                      jiraKey={issue.jiraKey}
-                      names={issue.fixVersionNames}
-                      onToggle={(version, on) =>
-                        edit(
-                          issue,
-                          on ? { addFixVersion: version } : { removeFixVersion: version },
-                          {
-                            fixVersionNames: on
-                              ? [...issue.fixVersionNames, version]
-                              : issue.fixVersionNames.filter((v) => v !== version),
-                          }
-                        )
-                      }
-                    />
-                  </td>
-                )}
-                {show("reporter") && (
-                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
-                    {person(issue, "reporter", issue.reporterJira, options.reporters)}
-                  </td>
-                )}
-                {show("approver") && (
-                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
-                    {person(issue, "approver", issue.approverJira, options.approvers, "Xóa approver")}
-                  </td>
-                )}
-                {show("tester") && (
-                  <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
-                    {person(issue, "tester", issue.testerJira, options.testers, "Xóa tester")}
-                  </td>
-                )}
-                {show("created") && <td className="px-3 py-2 text-muted-foreground">{dateLabel(issue.createdAt)}</td>}
-                {show("updated") && <td className="px-3 py-2 text-muted-foreground">{timeAgo(issue.updatedAt)}</td>}
-              </tr>
+                issue={issue}
+                isSelected={selectedKeys.has(issue.jiraKey)}
+                statusCategory={issue.statusCategory}
+                status={statusOverrides.get(issue.jiraKey) ?? issue.status}
+                isOverdue={isOverdue}
+                hiddenTableCols={hiddenTableCols}
+                options={options}
+                epicOptions={epicOptionsMap.get(issue.jiraKey) ?? options.epics}
+                onToggleSelect={toggleOne}
+                onOpen={onOpen}
+                onEdit={edit}
+                onTransition={onTransition}
+              />
             );
           })}
           {padBottom > 0 && (
