@@ -44,15 +44,14 @@ export function useBulkCreateController() {
   const [confirmProjectDialogOpen, setConfirmProjectDialogOpen] = useState(false);
 
   // Query user available projects
-  const { data: projectsData } = useQuery({
+  const { data: projectsData, isLoading: isProjectsLoading } = useQuery({
     queryKey: ["projects"],
     queryFn: () => api<{ items: Array<{ key: string; openCount?: number }> }>("/api/projects"),
     staleTime: 5 * 60 * 1000,
   });
 
   const availableProjects = useMemo(() => {
-    const list = (projectsData?.items ?? []).map((p) => p.key);
-    return list.length > 0 ? list : ["EPM", "CICM", "MR", "EDM", "EMA", "ETM", "MHRM", "ECM"];
+    return (projectsData?.items ?? []).map((p) => p.key);
   }, [projectsData?.items]);
 
   const projectKey = userSelectedProject || availableProjects[0] || "";
@@ -147,7 +146,7 @@ export function useBulkCreateController() {
   } = useQuery({
     queryKey: ["bulk-create-metadata", projectKey],
     queryFn: () => api<BulkCreateProjectMetadata>(`/api/bulk/create/metadata?project=${projectKey}`),
-    enabled: Boolean(projectKey),
+    enabled: Boolean(projectKey) && Boolean(projectsData),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -232,6 +231,7 @@ export function useBulkCreateController() {
   }
 
   return {
+    isProjectsLoading,
     projectKey,
     availableProjects,
     step,

@@ -6,6 +6,7 @@ import { BulkCreateEditorShell } from "./bulk-create-editor-shell";
 import { CreatePreview } from "./create-preview";
 import { CreateProgress } from "./create-progress";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,6 +41,7 @@ import { cn } from "@/lib/utils";
 
 export function BulkCreateClient() {
   const {
+    isProjectsLoading,
     projectKey,
     availableProjects,
     step,
@@ -160,18 +162,22 @@ export function BulkCreateClient() {
             <FolderKanban className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
             <span className="text-xs text-muted-foreground font-medium">Dự án:</span>
             <div className="w-28 sm:w-32">
-              <Select value={projectKey} onValueChange={handleProjectSelect}>
-                <SelectTrigger className="h-7 border-0 p-0 text-xs font-bold text-foreground focus:ring-0 cursor-pointer shadow-none">
-                  <SelectValue placeholder="Chọn dự án" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableProjects.map((p) => (
-                    <SelectItem key={p} value={p} className="text-xs cursor-pointer font-medium">
-                      {p}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isProjectsLoading ? (
+                <Skeleton className="h-5 w-24 rounded" />
+              ) : (
+                <Select value={projectKey} onValueChange={handleProjectSelect} disabled={availableProjects.length === 0}>
+                  <SelectTrigger className="h-7 border-0 p-0 text-xs font-bold text-foreground focus:ring-0 cursor-pointer shadow-none">
+                    <SelectValue placeholder={availableProjects.length === 0 ? "Không có dự án" : "Chọn dự án"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableProjects.map((p) => (
+                      <SelectItem key={p} value={p} className="text-xs cursor-pointer font-medium">
+                        {p}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
 
@@ -246,8 +252,25 @@ export function BulkCreateClient() {
       {/* Step 1: Input & Defaults */}
       {step === "input" && (
         <div className="space-y-4">
-          {/* Empty State when no project is selected */}
-          {!projectKey && (
+          {/* Skeleton while projects are loading */}
+          {isProjectsLoading && (
+            <div className="space-y-3">
+              <Skeleton className="h-10 w-full rounded-lg" />
+              <Skeleton className="h-80 w-full rounded-lg" />
+            </div>
+          )}
+
+          {/* Empty State when no project is synced */}
+          {!isProjectsLoading && availableProjects.length === 0 && (
+            <EmptyState
+              icon={FolderKanban}
+              title="Chưa có project nào được đồng bộ"
+              hint="Vui lòng cấu hình đồng bộ dự án Jira trong cài đặt hoặc liên hệ quản trị viên."
+            />
+          )}
+
+          {/* Prompt when projects exist but none is selected */}
+          {!isProjectsLoading && availableProjects.length > 0 && !projectKey && (
             <Card className="border-dashed border-border p-10 text-center">
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <FolderKanban className="h-6 w-6" aria-hidden="true" />
@@ -262,7 +285,7 @@ export function BulkCreateClient() {
           )}
 
           {/* Loading Metadata Skeleton */}
-          {metadataLoading && (
+          {!isProjectsLoading && Boolean(projectKey) && metadataLoading && (
             <div className="space-y-3">
               <Skeleton className="h-10 w-full rounded-lg" />
               <Skeleton className="h-80 w-full rounded-lg" />
