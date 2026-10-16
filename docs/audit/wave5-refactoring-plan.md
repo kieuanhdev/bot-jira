@@ -380,11 +380,11 @@ Phase 3 và 4 có thể làm song song với 2. Các Phase sau Phase 1 độc l�
 - **REF-035.5** Nếu Phase 3 đã prefetch `/stale`, đảm bảo key mặc định từ `useStaleUrlState` khớp key server.
 
 **DoD:**
-- [ ] Back/forward trình duyệt khôi phục đúng view/tab/filter; reload giữ filter.
-- [ ] Test tương đương cho util mới; test stale hiện có pass.
-- [ ] `stale-client.tsx` ≤ 250 dòng; `stale-std-task-list.tsx` ≤ 250 dòng.
-- [ ] QA: hai view, drilldown chip, chọn nhiều + quick edit, phím tắt, "Xem thêm" — light + dark, desktop + mobile.
-- [ ] V-STD + build pass.
+- [x] Back/forward trình duyệt khôi phục đúng view/tab/filter; reload giữ filter.
+- [x] Test tương đương cho util mới; test stale hiện có pass.
+- [x] `stale-client.tsx` ≤ 250 dòng; `stale-std-task-list.tsx` ≤ 250 dòng.
+- [x] QA: hai view, drilldown chip, chọn nhiều + quick edit, phím tắt, "Xem thêm" — light + dark, desktop + mobile.
+- [x] V-STD + build pass.
 
 ---
 
