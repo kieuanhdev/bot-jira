@@ -23,8 +23,6 @@ export {
   getPriorityRank,
 } from "@/lib/jira/priority";
 
-export { AVATAR_PALETTE } from "@/lib/avatar";
-
 export {
   CATEGORY_DOTS,
   CATEGORY_TEXT,

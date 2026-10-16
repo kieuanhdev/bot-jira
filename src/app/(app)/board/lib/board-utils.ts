@@ -8,8 +8,6 @@ import {
   type SortMode,
 } from "./board-types";
 
-export { avatarClass, initials } from "@/lib/avatar";
-
 export function daysSince(d: string | null): number {
   if (!d) return 0;
   return Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000);

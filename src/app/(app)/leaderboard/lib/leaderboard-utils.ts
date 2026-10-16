@@ -8,6 +8,7 @@ import {
 export const ALL_PROJECTS = "ALL";
 
 // Helper for initials
+// Divergent by design pending D11: splits on \s+ only (does not split on ._- like lib/avatar.ts)
 export function getInitials(name: string): string {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/);
