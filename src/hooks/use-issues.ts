@@ -199,7 +199,6 @@ export function useMoreIssues(
     }),
   });
 
-  const stamp = results.map((r) => r.dataUpdatedAt).join("|");
   const items = useMemo(() => {
     const seen = new Set((firstPage?.items ?? []).map((i) => i.jiraKey));
     const out: IssueItem[] = [];
@@ -211,9 +210,7 @@ export function useMoreIssues(
       }
     }
     return out;
-    // `stamp` changes exactly when any page's data does; `results` is a fresh array every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stamp, firstPage]);
+  }, [results, firstPage]);
 
   const loading = results.some((r) => r.isFetching && !r.data);
   const total = firstPage?.total ?? 0;

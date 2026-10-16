@@ -84,9 +84,7 @@ export const BoardColumn = memo(function BoardColumn({
 
   useEffect(() => {
     onOverChange(isOver);
-    // onOverChange is a stable setState callback from the parent.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOver]);
+  }, [isOver, onOverChange]);
 
   if (collapsed) {
     return (

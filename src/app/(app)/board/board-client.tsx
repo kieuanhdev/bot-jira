@@ -458,16 +458,19 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
   const columnKeyByStatusId = useMemo(() => indexColumnsByStatusId(columns), [columns]);
   const columnKeyByStatus = useMemo(() => indexColumnsByStatus(columns), [columns]);
 
-  function findColumnForIssue(issue: IssueItem): string {
-    const effective = applyOptimisticStatus(issue, optimistic);
-    return columnKeyForIssue(
-      effective,
-      columnKeyByStatus,
-      statusCategoryMap,
-      columns,
-      columnKeyByStatusId
-    );
-  }
+  const findColumnForIssue = useCallback(
+    (issue: IssueItem): string => {
+      const effective = applyOptimisticStatus(issue, optimistic);
+      return columnKeyForIssue(
+        effective,
+        columnKeyByStatus,
+        statusCategoryMap,
+        columns,
+        columnKeyByStatusId
+      );
+    },
+    [optimistic, columnKeyByStatus, statusCategoryMap, columns, columnKeyByStatusId]
+  );
 
   const byColumn = useMemo(() => {
     const m = new Map<string, IssueItem[]>();
@@ -478,9 +481,7 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
       if (bucket) bucket.push(issue);
     }
     return m;
-    // findColumnForIssue closes over the same values listed below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [issues, columns, columnKeyByStatus, statusCategoryMap, optimistic]);
+  }, [columns, issues, findColumnForIssue]);
 
   const sortedByColumn = useMemo(() => {
     const m = new Map<string, IssueItem[]>();
