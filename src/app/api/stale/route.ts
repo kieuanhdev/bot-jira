@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { parseStaleQueryParams } from "@/lib/stale/params";
-import { executeStaleQuery } from "@/lib/stale/query";
+import { getStaleData, executeStaleQuery } from "@/lib/stale/query";
 import type {
   StandardizationTask,
   StandardizationSummary,
@@ -10,6 +10,7 @@ import type {
 
 // Re-export contracts for consumer and test backwards compatibility
 export type { StandardizationTask, StandardizationSummary, StaleApiResponse };
+export { executeStaleQuery };
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -18,7 +19,8 @@ export async function GET(req: Request) {
   }
 
   const params = parseStaleQueryParams(req.url);
-  const data = await executeStaleQuery(session.user, params);
+  const data = await getStaleData(session.user, params);
 
   return NextResponse.json(data);
 }
+

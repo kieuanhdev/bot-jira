@@ -74,3 +74,17 @@ export async function executeStaleQuery(
     now,
   });
 }
+
+/**
+ * Executes the stale query and serializes the result to exact JSON shape (Dates as ISO strings).
+ * Used by both Route Handler and Server Component prefetching.
+ */
+export async function getStaleData(
+  user: StaleUserContext,
+  params: StaleQueryParams,
+  now?: Date,
+): Promise<StaleApiResponse> {
+  const data = await executeStaleQuery(user, params, now);
+  return JSON.parse(JSON.stringify(data)) as StaleApiResponse;
+}
+
