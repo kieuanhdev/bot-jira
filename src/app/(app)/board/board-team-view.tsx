@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { BarChart3, ChevronDown, ChevronUp, Clock3, UserRound } from "lucide-react";
 import type { IssueItem } from "@/hooks/use-issues";
 import type { BoardColumn } from "./lib/board-columns";
-import { CardContent } from "./board-card";
+import { BoardCardBody } from "./board-card";
 import { cn } from "@/lib/utils";
 import { isOverdue } from "@/lib/due-date";
 import { JiraAvatar } from "@/components/jira-avatar";
@@ -161,7 +161,7 @@ export function BoardTeamView({
                               onClick={() => onOpen(issue)}
                               className={cn("block w-full cursor-pointer text-left")}
                             >
-                              <CardContent issue={issue} done={issue.statusCategory === "done"} />
+                              <BoardCardBody issue={issue} done={issue.statusCategory === "done"} />
                             </button>
                           ))}
                           {bucket.length > CELL_LIMIT && (

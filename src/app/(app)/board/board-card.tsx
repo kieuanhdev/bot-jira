@@ -36,7 +36,7 @@ import { priorityMeta, typeShort, daysSince } from "./lib/board-utils";
 import { PRIORITIES, isHighPriority } from "@/lib/jira/priority";
 import { JiraAvatar } from "@/components/jira-avatar";
 
-export function CardContent({
+export function BoardCardBody({
   issue,
   done,
   dragging,
@@ -337,7 +337,7 @@ export const DraggableCard = memo(function DraggableCard({
           "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
         )}
       >
-        <CardContent
+        <BoardCardBody
           issue={issue}
           done={done}
           onTransition={busy ? undefined : onTransition}
@@ -351,3 +351,5 @@ export const DraggableCard = memo(function DraggableCard({
     </div>
   );
 });
+
+export const CardContent = BoardCardBody;

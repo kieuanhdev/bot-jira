@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { DndContext, DragOverlay } from "@dnd-kit/core";
 import type { IssueItem } from "@/hooks/use-issues";
 import { BoardColumn as BoardColumnComponent } from "./board-column";
-import { CardContent } from "./board-card";
+import { BoardCardBody } from "./board-card";
 import type { BoardColumn, buildColumnViews } from "./lib/board-columns";
 import type { QuickAction, Transition } from "./lib/board-types";
 import { useBoardDnD } from "./lib/board-dnd-hook";
@@ -230,7 +230,7 @@ export function BoardKanbanView({
       <DragOverlay>
         {dnd.activeDrag ? (
           <div className="relative">
-            <CardContent issue={dnd.activeDrag} done={false} dragging />
+            <BoardCardBody issue={dnd.activeDrag} done={false} dragging />
             {selectedKeys.size > 1 && selectedKeys.has(dnd.activeDrag.jiraKey) && (
               <span className="absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground shadow">
                 {selectedKeys.size}
