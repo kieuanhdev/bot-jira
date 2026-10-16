@@ -119,7 +119,8 @@ export function useWindowedRows({
 
   useEffect(() => {
     if (!windowed) return;
-    const row = tbodyRef.current?.querySelector<HTMLElement>(rowSelector);
+    const container = tbodyRef.current ?? scrollRef.current;
+    const row = container?.querySelector<HTMLElement>(rowSelector);
     const h = row?.offsetHeight;
     if (h && Math.abs(h - rowHeight) > 1) {
       setRowHeight(h);

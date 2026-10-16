@@ -43,6 +43,7 @@ export function NotificationRow({
 
   return (
     <div
+      data-row
       onClick={() => onCardClick(n)}
       tabIndex={0}
       role="button"

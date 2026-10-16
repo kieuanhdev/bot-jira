@@ -1,20 +1,23 @@
 "use client";
 
+import { useMemo } from "react";
 import { BellOff, RotateCcw, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/shared/async-state";
 import { EmptyState } from "@/components/shared/empty-state";
 import { getErrorMessage } from "@/lib/api-client";
-import type { NotificationDateGroup } from "./lib/notification-metadata";
+import { groupNotificationsByDate, type NotificationDateGroup } from "./lib/notification-metadata";
 import { NotificationRow } from "./notification-row";
+import { useWindowedRows } from "@/hooks/use-windowed-rows";
 import type { Notification } from "@/hooks/use-notifications";
 
 type NotificationListProps = {
   isLoading: boolean;
   error: Error | null;
   onRetry: () => void;
-  groups: NotificationDateGroup[];
+  items?: Notification[];
+  groups?: NotificationDateGroup[];
   totalFiltered: number;
   searchQuery: string;
   tab: "all" | "unread" | "read";
@@ -36,7 +39,8 @@ export function NotificationList({
   isLoading,
   error,
   onRetry,
-  groups,
+  items: rawItems,
+  groups: fallbackGroups = [],
   totalFiltered,
   searchQuery,
   tab,
@@ -53,6 +57,23 @@ export function NotificationList({
   isFetchingNextPage,
   onFetchNextPage,
 }: NotificationListProps) {
+  const items = rawItems ?? [];
+  const { scrollRef, windowed, startIdx, endIdx, padTop, padBottom } = useWindowedRows({
+    totalRows: items.length,
+    rowHeight: 88,
+    overscan: 8,
+    threshold: 40,
+    rowSelector: "[data-row]",
+  });
+
+  const visibleItems = windowed ? items.slice(startIdx, endIdx) : items;
+  const groups = useMemo(() => {
+    if (rawItems) {
+      return groupNotificationsByDate(visibleItems);
+    }
+    return fallbackGroups;
+  }, [rawItems, visibleItems, fallbackGroups]);
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -78,7 +99,10 @@ export function NotificationList({
     return (
       <ErrorState
         title="Không thể tải danh sách thông báo"
-        message={getErrorMessage(error, "Có lỗi xảy ra khi kết nối tới máy chủ thông báo. Vui lòng kiểm tra kết nối mạng và thử lại.")}
+        message={getErrorMessage(
+          error,
+          "Có lỗi xảy ra khi kết nối tới máy chủ thông báo. Vui lòng kiểm tra kết nối mạng và thử lại."
+        )}
         onRetry={onRetry}
       />
     );
@@ -97,7 +121,10 @@ export function NotificationList({
         }
         hint={
           searchQuery ? (
-            <>Không có thông báo nào khớp với từ khóa &ldquo;{searchQuery}&rdquo;. Hãy thử tìm từ khóa khác hoặc xóa bộ lọc.</>
+            <>
+              Không có thông báo nào khớp với từ khóa &ldquo;{searchQuery}&rdquo;. Hãy thử tìm từ khóa
+              khác hoặc xóa bộ lọc.
+            </>
           ) : tab === "unread" ? (
             "Tuyệt vời! Không có hoạt động mới nào cần xử lý lúc này."
           ) : (
@@ -106,7 +133,12 @@ export function NotificationList({
         }
         action={
           hasActiveFilters ? (
-            <Button variant="outline" size="sm" onClick={onResetFilters} className="cursor-pointer gap-1.5 text-xs">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onResetFilters}
+              className="cursor-pointer gap-1.5 text-xs"
+            >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               Xóa tất cả bộ lọc
             </Button>
@@ -117,11 +149,15 @@ export function NotificationList({
   }
 
   return (
-    <div className="space-y-6">
-      {groups.map(({ group, items }) => (
+    <div
+      ref={scrollRef}
+      className="space-y-6 max-h-[calc(100dvh-18rem)] overflow-y-auto pr-1 overscroll-contain"
+    >
+      {padTop > 0 && <div style={{ height: padTop }} aria-hidden="true" />}
+      {groups.map(({ group, items: groupItems }) => (
         <div key={group} className="space-y-2.5">
           {/* Date group badge */}
-          <div className="sticky top-14 z-10 bg-background/95 backdrop-blur-xs py-1 flex items-center gap-2">
+          <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-xs py-1 flex items-center gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/80 px-2.5 py-0.5 rounded-full border border-border/50">
               {group}
             </span>
@@ -130,7 +166,7 @@ export function NotificationList({
 
           {/* Notification Cards */}
           <div className="space-y-2">
-            {items.map((n) => (
+            {groupItems.map((n) => (
               <NotificationRow
                 key={n.id}
                 notification={n}
@@ -146,6 +182,7 @@ export function NotificationList({
           </div>
         </div>
       ))}
+      {padBottom > 0 && <div style={{ height: padBottom }} aria-hidden="true" />}
 
       {/* Load More Button */}
       {hasNextPage && (

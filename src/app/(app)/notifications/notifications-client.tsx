@@ -9,9 +9,7 @@ import { notificationsKeys } from "@/lib/query-keys";
 import {
   Bell,
   CheckCheck,
-  Check,
   RefreshCw,
-  X,
   Trash2,
   Settings,
 } from "lucide-react";
@@ -28,29 +26,37 @@ import {
   type NotificationResponse,
 } from "@/hooks/use-notifications";
 import { cn } from "@/lib/utils";
-import { groupNotificationsByDate } from "./lib/notification-metadata";
 import { NotificationFilters } from "./notification-filters";
 import { NotificationList } from "./notification-list";
+import { NotificationsBatchBar } from "./notifications-batch-bar";
+import { useNotificationFilters } from "./hooks/use-notification-filters";
+import { useNotificationSelection } from "./hooks/use-notification-selection";
 
 export function NotificationsClient() {
   const router = useRouter();
   const qc = useQueryClient();
 
-  // Filters state
-  const [tab, setTab] = useState<"all" | "unread" | "read">("all");
-  const [selectedType, setSelectedType] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [severityFilter, setSeverityFilter] = useState<"all" | "attention" | "info">("all");
+  // URL-backed filters state [D15]
+  const {
+    tab,
+    setTab,
+    selectedType,
+    setSelectedType,
+    severityFilter,
+    setSeverityFilter,
+    searchQuery,
+    setSearchQuery,
+    hasActiveFilters,
+    resetFilters,
+    unreadOnly,
+    typeFilter,
+  } = useNotificationFilters();
 
-  // Selection & UI state
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // UI state
   const [expandedBodies, setExpandedBodies] = useState<Set<string>>(new Set());
   const [confirmDeleteDialog, setConfirmDeleteDialog] = useState<"selected" | "allRead" | null>(null);
 
-  const unreadOnly = tab === "unread";
-  const typeFilter = selectedType === "all" ? undefined : selectedType;
-
-  // Infinite query fetching notifications
+  // Infinite query fetching notifications with maxPages constraint
   const {
     data,
     isLoading,
@@ -72,6 +78,7 @@ export function NotificationsClient() {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    maxPages: 5,
     // SSE provides immediate invalidation; 60s interval is a fallback
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
@@ -80,7 +87,7 @@ export function NotificationsClient() {
   const { markRead, markUnread, markAllRead, isPending: isMarkPending } = useMarkNotifications();
   const { deleteNotifications, deleteAllRead, isDeleting } = useDeleteNotifications();
 
-  // Flattened items from all fetched pages
+  // Flattened items from all fetched pages (up to maxPages * 30 items)
   const rawItems = useMemo(() => {
     return data?.pages.flatMap((page) => page.items) ?? [];
   }, [data]);
@@ -112,6 +119,19 @@ export function NotificationsClient() {
     });
   }, [rawItems, tab, severityFilter, searchQuery]);
 
+  const allFilteredIds = useMemo(() => filteredItems.map((n) => n.id), [filteredItems]);
+
+  // Bulk selection hook
+  const {
+    selectedIds,
+    selectedCount,
+    isAllSelected,
+    toggleSelectAll,
+    toggleSelectOne,
+    clearSelection,
+    removeIds,
+  } = useNotificationSelection({ filteredIds: allFilteredIds });
+
   // Counts per category for pills
   const typeCounts = useMemo(() => {
     const map: Record<string, number> = { all: rawItems.length };
@@ -121,11 +141,7 @@ export function NotificationsClient() {
     return map;
   }, [rawItems]);
 
-  const groupedItems = useMemo(() => {
-    return groupNotificationsByDate(filteredItems);
-  }, [filteredItems]);
-
-  // Statistics
+  // Statistics (noting loaded pages context)
   const stats = useMemo(() => {
     const total = rawItems.length;
     const unread = rawItems.filter((n) => !n.read).length;
@@ -133,31 +149,6 @@ export function NotificationsClient() {
     const attention = rawItems.filter((n) => n.severity === "warning" || n.severity === "danger").length;
     return { total, unread, read, attention };
   }, [rawItems]);
-
-  // Bulk selection helpers
-  const allFilteredIds = useMemo(() => filteredItems.map((n) => n.id), [filteredItems]);
-  const isAllSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selectedIds.has(id));
-
-  const toggleSelectAll = () => {
-    if (isAllSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(allFilteredIds));
-    }
-  };
-
-  const toggleSelectOne = (id: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
 
   const handleCardClick = (n: Notification) => {
     if (!n.read) {
@@ -181,34 +172,30 @@ export function NotificationsClient() {
   const handleDeleteSingle = async (e: React.MouseEvent, n: Notification) => {
     e.stopPropagation();
     await deleteNotifications([n.id]);
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(n.id);
-      return next;
-    });
+    removeIds([n.id]);
   };
 
   const handleMarkSelectedRead = async () => {
-    if (selectedIds.size === 0) return;
+    if (selectedCount === 0) return;
     await markRead(Array.from(selectedIds));
     qc.invalidateQueries({ queryKey: notificationsKeys.infiniteAll() });
   };
 
   const handleMarkSelectedUnread = async () => {
-    if (selectedIds.size === 0) return;
+    if (selectedCount === 0) return;
     await markUnread(Array.from(selectedIds));
     qc.invalidateQueries({ queryKey: notificationsKeys.infiniteAll() });
   };
 
   const handleConfirmDelete = async () => {
     if (confirmDeleteDialog === "selected") {
-      if (selectedIds.size > 0) {
+      if (selectedCount > 0) {
         await deleteNotifications(Array.from(selectedIds));
-        setSelectedIds(new Set());
+        clearSelection();
       }
     } else if (confirmDeleteDialog === "allRead") {
       await deleteAllRead();
-      setSelectedIds(new Set());
+      clearSelection();
     }
     setConfirmDeleteDialog(null);
   };
@@ -225,15 +212,6 @@ export function NotificationsClient() {
       return next;
     });
   };
-
-  const resetFilters = () => {
-    setTab("all");
-    setSelectedType("all");
-    setSearchQuery("");
-    setSeverityFilter("all");
-  };
-
-  const hasActiveFilters = selectedType !== "all" || severityFilter !== "all" || !!searchQuery;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -303,20 +281,25 @@ export function NotificationsClient() {
         className="pb-4 border-b border-border"
       />
 
-      {/* Quick Summary Metric Cards */}
-      <NotificationsSummaryCards
-        total={stats.total}
-        unread={stats.unread}
-        read={stats.read}
-        attention={stats.attention}
-        tab={tab}
-        severityFilter={severityFilter}
-        onSelectTab={(t) => {
-          setTab(t);
-          setSeverityFilter("all");
-        }}
-        onToggleAttention={() => setSeverityFilter((prev) => (prev === "attention" ? "all" : "attention"))}
-      />
+      {/* Quick Summary Metric Cards with Scope Subtitle */}
+      <div className="space-y-1.5">
+        <NotificationsSummaryCards
+          total={stats.total}
+          unread={totalUnreadCount > 0 ? totalUnreadCount : stats.unread}
+          read={stats.read}
+          attention={stats.attention}
+          tab={tab}
+          severityFilter={severityFilter}
+          onSelectTab={(t) => {
+            setTab(t);
+            setSeverityFilter("all");
+          }}
+          onToggleAttention={() => setSeverityFilter((prev) => (prev === "attention" ? "all" : "attention"))}
+        />
+        <p className="text-[11px] text-muted-foreground/70 italic px-0.5">
+          * Thống kê tính trên các trang thông báo đã tải (tối đa 5 trang gần nhất). Số chưa đọc tổng thể: {totalUnreadCount}.
+        </p>
+      </div>
 
       {/* Filter and Search Bar */}
       <NotificationFilters
@@ -335,73 +318,21 @@ export function NotificationsClient() {
         onResetFilters={resetFilters}
       />
 
-      {/* Floating / Sticky Batch Actions Bar when items are selected */}
-      {selectedIds.size > 0 && (
-        <div className="sticky top-16 z-30 flex items-center justify-between gap-3 p-3 rounded-xl bg-card border-2 border-primary shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center gap-3">
-            <Checkbox
-              checked={isAllSelected}
-              onCheckedChange={toggleSelectAll}
-              aria-label="Chọn hoặc bỏ chọn tất cả"
-            />
-            <span className="text-xs sm:text-sm font-semibold text-foreground">
-              Đã chọn <span className="text-primary tabular-nums">{selectedIds.size}</span> thông báo
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleMarkSelectedRead}
-              disabled={isMarkPending}
-              className="cursor-pointer gap-1 text-xs h-8 text-foreground hover:border-primary"
-            >
-              <Check className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-              <span className="hidden sm:inline">Đánh dấu đã đọc</span>
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleMarkSelectedUnread}
-              disabled={isMarkPending}
-              className="cursor-pointer gap-1 text-xs h-8 text-foreground hover:border-primary"
-            >
-              <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-              <span className="hidden sm:inline">Đánh dấu chưa đọc</span>
-            </Button>
-
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={() => setConfirmDeleteDialog("selected")}
-              disabled={isDeleting}
-              className="cursor-pointer gap-1 text-xs h-8"
-            >
-              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Xóa ({selectedIds.size})</span>
-            </Button>
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setSelectedIds(new Set())}
-              className="cursor-pointer h-8 w-8 text-muted-foreground hover:text-foreground"
-              title="Bỏ chọn tất cả"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
-      )}
+      {/* Floating / Sticky Batch Actions Bar */}
+      <NotificationsBatchBar
+        selectedCount={selectedCount}
+        isAllSelected={isAllSelected}
+        onToggleSelectAll={toggleSelectAll}
+        onMarkRead={handleMarkSelectedRead}
+        onMarkUnread={handleMarkSelectedUnread}
+        onDelete={() => setConfirmDeleteDialog("selected")}
+        onClearSelection={clearSelection}
+        isMarkPending={isMarkPending}
+        isDeleting={isDeleting}
+      />
 
       {/* Select All Row (when not in floating mode and notifications exist) */}
-      {filteredItems.length > 0 && selectedIds.size === 0 && (
+      {filteredItems.length > 0 && selectedCount === 0 && (
         <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
           <div className="flex items-center gap-2">
             <Checkbox
@@ -423,12 +354,12 @@ export function NotificationsClient() {
         </div>
       )}
 
-      {/* Notifications List Content */}
+      {/* Windowed Notifications List */}
       <NotificationList
         isLoading={isLoading}
         error={error}
         onRetry={() => refetch()}
-        groups={groupedItems}
+        items={filteredItems}
         totalFiltered={filteredItems.length}
         searchQuery={searchQuery}
         tab={tab}
@@ -455,12 +386,12 @@ export function NotificationsClient() {
         title={
           confirmDeleteDialog === "allRead"
             ? "Dọn dẹp tất cả thông báo đã đọc?"
-            : `Xóa ${selectedIds.size} thông báo đã chọn?`
+            : `Xóa ${selectedCount} thông báo đã chọn?`
         }
         description={
           confirmDeleteDialog === "allRead"
             ? "Hành động này sẽ xóa toàn bộ các thông báo đã đọc khỏi lịch sử của bạn. Bạn không thể hoàn tác thao tác này."
-            : `Hành động này sẽ xóa vĩnh viễn ${selectedIds.size} thông báo đã được chọn. Bạn có chắc chắn muốn tiếp tục?`
+            : `Hành động này sẽ xóa vĩnh viễn ${selectedCount} thông báo đã được chọn. Bạn có chắc chắn muốn tiếp tục?`
         }
         onConfirm={handleConfirmDelete}
         confirmLabel="Xác nhận xóa"
