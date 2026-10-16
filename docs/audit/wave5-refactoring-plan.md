@@ -187,12 +187,12 @@ Phase 3 và 4 có thể làm song song với 2. Các Phase sau Phase 1 độc l�
 - **REF-028.4 (B4):** Thêm `adminKeys.overviewErrors(type: "sentry" | "outbox")` vào `query-keys.ts`, dùng 2 key riêng cho 2 query.
 
 **DoD:**
-- [ ] `rg -n "body: JSON.stringify" src/app` chỉ còn các site dùng **raw `fetch`** (setup-jira, register), không còn site nào dùng `api()`.
-- [ ] `src/lib/api-client.test.ts` pass (body object được serialize đúng 1 lần); `api("/x", { body: "str" })` gây lỗi typecheck (ghi chú `// @ts-expect-error` trong test để khoá hành vi).
-- [ ] QA thủ công: mở QuickPanel, gõ vào ô worklog trong lúc board refetch (bấm Sync) → không mất focus; Esc vẫn đóng; Tab vẫn bị trap.
-- [ ] QA: /admin → Error sheet → retry 1 dòng outbox → chỉ dòng đó đổi trạng thái (kiểm tra DB hoặc log). Sentry approve/reject/retry trả 2xx.
-- [ ] Network tab ở /bulk/create: không còn request `metadata?project=EPM` trước `/api/projects`.
-- [ ] V-STD pass.
+- [x] `rg -n "body: JSON.stringify" src/app` chỉ còn các site dùng **raw `fetch`** (setup-jira, register), không còn site nào dùng `api()`.
+- [x] `src/lib/api-client.test.ts` pass (body object được serialize đúng 1 lần); `api("/x", { body: "str" })` gây lỗi typecheck (ghi chú `// @ts-expect-error` trong test để khoá hành vi).
+- [x] QA thủ công: mở QuickPanel, gõ vào ô worklog trong lúc board refetch (bấm Sync) → không mất focus; Esc vẫn đóng; Tab vẫn bị trap.
+- [x] QA: /admin → Error sheet → retry 1 dòng outbox → chỉ dòng đó đổi trạng thái (kiểm tra DB hoặc log). Sentry approve/reject/retry trả 2xx.
+- [x] Network tab ở /bulk/create: không còn request `metadata?project=EPM` trước `/api/projects`.
+- [x] V-STD pass.
 
 ---
 
