@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SearchField } from "@/components/shared/search-field";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { ListTodo } from "lucide-react";
+import { ShowMoreFooter } from "@/components/shared/show-more-footer";
 import { ACTION_BY_REASON, GROUP_DOT, type SortMode, type Task } from "./lib/stale-types";
 import { formatDueDate } from "./lib/stale-utils";
 import { StaleEmptyState } from "./stale-empty-state";
@@ -218,21 +218,11 @@ export function StaleTaskListCard({
             </div>
           </>
         )}
-        {visibleCount < sortedCount && (
-          <div className="flex flex-col items-center gap-2 border-t px-6 py-4">
-            <p className="text-xs text-muted-foreground">
-              Đang hiển thị {visibleCount} trên {sortedCount} task
-            </p>
-            <Button
-              className="cursor-pointer"
-              variant="outline"
-              size="sm"
-              onClick={onShowMore}
-            >
-              Xem thêm 50 task
-            </Button>
-          </div>
-        )}
+        <ShowMoreFooter
+          visibleCount={visibleCount}
+          totalCount={sortedCount}
+          onShowMore={onShowMore}
+        />
       </CardContent>
     </Card>
   );
