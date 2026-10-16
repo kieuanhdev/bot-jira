@@ -1,7 +1,5 @@
-"use client";
-
-import { Search, Filter, Users } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Filter, Users } from "lucide-react";
+import { SearchField } from "@/components/shared/search-field";
 import {
   Select,
   SelectContent,
@@ -34,14 +32,12 @@ export function TasksToolbar({
 }: TasksToolbarProps) {
   return (
     <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-      <div className="relative w-full sm:max-w-xs">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <Input
+      <div className="w-full sm:max-w-xs">
+        <SearchField
           placeholder="Tìm theo mã hoặc tiêu đề task..."
           value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-9 h-9 text-xs"
-          aria-label="Tìm kiếm task"
+          onChange={onSearchChange}
+          ariaLabel="Tìm kiếm task"
         />
       </div>
 

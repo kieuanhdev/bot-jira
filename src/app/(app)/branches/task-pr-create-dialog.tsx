@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, CheckCircle2, ExternalLink, GitPullRequest, ChevronDown, MinusCircle, Search, XCircle } from "lucide-react";
+import { CheckCircle2, ExternalLink, GitPullRequest, ChevronDown, MinusCircle, XCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,8 +11,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
+import { SearchField } from "@/components/shared/search-field";
+import { EmptyState } from "@/components/shared/empty-state";
 import { getErrorMessage } from "@/lib/api-client";
 import {
   useCreatePullRequests,
@@ -124,10 +126,9 @@ export function TaskPrCreateDialog({ jiraKey, summary, open, onOpenChange, onSuc
 
         <div className="flex min-w-0 flex-col gap-3 py-2">
           {error && (
-            <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-xs text-red-600 dark:text-red-400">
-              <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>{error}</span>
-            </div>
+            <FeedbackBanner tone="destructive">
+              {error}
+            </FeedbackBanner>
           )}
 
           {results ? (
@@ -178,26 +179,23 @@ export function TaskPrCreateDialog({ jiraKey, summary, open, onOpenChange, onSuc
               <Skeleton className="h-12 w-full" />
             </div>
           ) : items.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-6 text-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                <GitPullRequest className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-              </div>
-              <p className="text-sm font-medium text-foreground">Task chưa có nhánh nào</p>
-              <p className="text-xs text-muted-foreground">Gắn nhánh vào task trước khi tạo PR.</p>
-            </div>
+            <EmptyState
+              size="compact"
+              icon={GitPullRequest}
+              title="Task chưa có nhánh nào"
+              hint="Gắn nhánh vào task trước khi tạo PR."
+            />
           ) : (
             <>
             <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                <Input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="Tìm theo repo hoặc tên nhánh"
-                  className="pl-8 text-sm"
-                  disabled={createMutation.isPending}
-                />
-              </div>
+              <SearchField
+                value={q}
+                onChange={setQ}
+                placeholder="Tìm theo repo hoặc tên nhánh"
+                ariaLabel="Tìm theo repo hoặc tên nhánh"
+                disabled={createMutation.isPending}
+                className="flex-1"
+              />
               <Button
                 type="button"
                 variant="outline"
@@ -265,26 +263,26 @@ export function TaskPrCreateDialog({ jiraKey, summary, open, onOpenChange, onSuc
                     )}
                     {isReady && openTarget === item.branchId && (
                       <div className="basis-full rounded-md border border-border bg-popover">
-                        <div className="relative border-b border-border p-1.5">
-                          <Search className="pointer-events-none absolute left-3.5 top-3.5 h-3 w-3 text-muted-foreground" aria-hidden="true" />
-                          <Input
-                            autoFocus
+                        <div
+                          className="border-b border-border p-1.5"
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") {
+                              e.stopPropagation();
+                              setOpenTarget(null);
+                            } else if (e.key === "Enter" && targetQ.trim()) {
+                              e.preventDefault();
+                              const first = item.targetOptions.find((n) =>
+                                n.toLowerCase().includes(targetQ.trim().toLowerCase())
+                              );
+                              pickTarget(item.branchId, first ?? targetQ.trim());
+                            }
+                          }}
+                        >
+                          <SearchField
                             value={targetQ}
-                            onChange={(e) => setTargetQ(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Escape") {
-                                e.stopPropagation();
-                                setOpenTarget(null);
-                              } else if (e.key === "Enter" && targetQ.trim()) {
-                                e.preventDefault();
-                                const first = item.targetOptions.find((n) =>
-                                  n.toLowerCase().includes(targetQ.trim().toLowerCase())
-                                );
-                                pickTarget(item.branchId, first ?? targetQ.trim());
-                              }
-                            }}
+                            onChange={setTargetQ}
                             placeholder={`Tìm nhánh đích trong ${item.repo.split("/").pop()}`}
-                            className="h-7 pl-6 text-xs"
+                            ariaLabel={`Tìm nhánh đích trong ${item.repo.split("/").pop()}`}
                           />
                         </div>
                         <ul role="listbox" className="max-h-40 overflow-y-auto py-1">

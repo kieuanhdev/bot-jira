@@ -6,6 +6,7 @@ import { Check, Layers, Loader2 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { issuesKeys, staleKeys } from "@/lib/query-keys";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface VersionItem {
   id?: string;
@@ -129,7 +130,12 @@ export function QuickFixVersionSelect({ jiraKey }: { jiraKey: string }) {
           <SelectValue placeholder="Fix Version" />
         </SelectTrigger>
         <SelectContent>
-          {isLoading && <div className="px-2 py-1.5 text-xs text-muted-foreground">Đang tải…</div>}
+          {isLoading && (
+            <div className="space-y-1.5 p-2" aria-busy="true" aria-label="Đang tải…">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+          )}
           {!isLoading && versions.length === 0 && (
             <div className="px-2 py-1.5 text-xs text-muted-foreground">Không có phiên bản khả dụng</div>
           )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, CopyPlus, Info, RefreshCw } from "lucide-react";
+import { CopyPlus, Info, RefreshCw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { cloneSummary } from "@/lib/issues/clone";
 
 const MAX_SUMMARY_LENGTH = 255;
@@ -56,10 +57,9 @@ export function QuickPanelCloneDialog({
 
         <div className="flex min-w-0 flex-col gap-3 py-2">
           {error && (
-            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive">
-              <AlertCircle className="mt-px h-4 w-4 shrink-0" aria-hidden="true" />
+            <FeedbackBanner tone="destructive" className="text-xs">
               <span className="min-w-0 break-words">{error}</span>
-            </div>
+            </FeedbackBanner>
           )}
 
           <div className="flex flex-col gap-1.5">

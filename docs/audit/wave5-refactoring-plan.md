@@ -445,12 +445,12 @@ Phase 3 và 4 có thể làm song song với 2. Các Phase sau Phase 1 độc l�
 - **REF-038.7** `branches/branch-toolbar.tsx`: 5 `<select>` native → shadcn `Select`.
 
 **DoD:**
-- [ ] `rg -n "bg-destructive/10" src/app` chỉ còn trong `components/shared/*` (hoặc có comment lý do).
-- [ ] `rg -n "absolute.*<Search|<Search className=\"absolute" src` = 0 ngoài `search-field.tsx`.
-- [ ] Mọi error state có `role="alert"`; mọi icon trang trí có `aria-hidden`; nút có `cursor-pointer`.
-- [ ] `/issue/KHONG-TON-TAI-1` hiển thị 404 trong app shell.
-- [ ] QA từng trang đã chạm ở light + dark; tương phản chữ ≥ 4.5:1 (DevTools Accessibility).
-- [ ] V-STD + build pass.
+- [x] `rg -n "bg-destructive/10" src/app` chỉ còn trong `components/shared/*` (hoặc có comment lý do).
+- [x] `rg -n "absolute.*<Search|<Search className=\"absolute" src` = 0 ngoài `search-field.tsx`.
+- [x] Mọi error state có `role="alert"`; mọi icon trang trí có `aria-hidden`; nút có `cursor-pointer`.
+- [x] `/issue/KHONG-TON-TAI-1` hiển thị 404 trong app shell.
+- [x] QA từng trang đã chạm ở light + dark; tương phản chữ ≥ 4.5:1 (DevTools Accessibility).
+- [x] V-STD + build pass.
 
 ---
 

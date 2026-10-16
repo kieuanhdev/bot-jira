@@ -1,17 +1,16 @@
 import {
   ChevronRight,
   Inbox,
-  Search,
   TrendingUp,
   Zap,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
+import { SearchField } from "@/components/shared/search-field";
 import { cn } from "@/lib/utils";
 import type { LeaderboardMember } from "@/lib/leaderboard/types";
 import { RankBadge, TierIcon } from "./leaderboard-tier-icon";
@@ -51,14 +50,12 @@ export function LeaderboardTable({
 
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Search input */}
-          <div className="relative w-full sm:w-56">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <Input
-              type="text"
+          <div className="w-full sm:w-56">
+            <SearchField
               placeholder="Tìm đạo hữu..."
               value={searchMember}
-              onChange={(e) => onSearchMemberChange(e.target.value)}
-              className="h-9 pl-8 text-xs"
+              onChange={onSearchMemberChange}
+              ariaLabel="Tìm đạo hữu"
             />
           </div>
 

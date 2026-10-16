@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { useState, useMemo } from "react";
-import { Users, Search, X, ChevronDown, UserX } from "lucide-react";
+import { Users, ChevronDown, UserX, X } from "lucide-react";
+import { SearchField } from "@/components/shared/search-field";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -235,30 +236,12 @@ export function AssigneeFilter({
         >
           {/* Search Input */}
           <div className="p-1.5 border-b border-border/60">
-            <div className="relative">
-              <Search
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <input
-                type="text"
-                placeholder="Tìm theo tên người phụ trách…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-8 pl-8 pr-7 text-xs bg-muted/40 rounded-md border border-input focus:outline-none focus:ring-1 focus:ring-primary text-foreground placeholder:text-muted-foreground transition-all"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
-                  title="Xóa tìm kiếm"
-                  aria-label="Xóa tìm kiếm"
-                >
-                  <X className="h-3 w-3" aria-hidden="true" />
-                </button>
-              )}
-            </div>
+            <SearchField
+              placeholder="Tìm theo tên người phụ trách…"
+              value={search}
+              onChange={setSearch}
+              className="h-8 text-xs"
+            />
           </div>
 
           {/* Quick Presets */}

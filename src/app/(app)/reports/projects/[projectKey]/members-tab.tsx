@@ -4,6 +4,8 @@ import { useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/shared/async-state";
+import { EmptyState } from "@/components/shared/empty-state";
+import { SearchField } from "@/components/shared/search-field";
 import { useProjectMembers } from "./lib/use-project-members";
 import {
   Users,
@@ -16,7 +18,6 @@ import {
   ArrowRight,
   Info,
   ChevronRight,
-  Search,
   UserRoundX,
   type LucideIcon,
 } from "lucide-react";
@@ -153,15 +154,12 @@ export function MembersTab({
           onRetry={() => refetch()}
         />
       ) : data?.members.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-12 text-center rounded-xl border border-dashed border-border bg-card">
-          <Users className="h-8 w-8 text-muted-foreground mb-2" />
-          <h4 className="text-sm font-semibold">
-            {isVersionScope ? "Chưa có thành viên nào trong version" : "Chưa có thành viên nào trong kỳ"}
-          </h4>
-          <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-            Không có thành viên nào được phân công hoặc hoàn thành công việc trong phạm vi đã chọn.
-          </p>
-        </div>
+        <EmptyState
+          icon={Users}
+          title={isVersionScope ? "Chưa có thành viên nào trong version" : "Chưa có thành viên nào trong kỳ"}
+          hint="Không có thành viên nào được phân công hoặc hoàn thành công việc trong phạm vi đã chọn."
+          className="bg-card"
+        />
       ) : selectedMember ? (
         /* INDIVIDUAL MEMBER VIEW WITH FORWARD TRANSITION */
         <div key={selectedMember.assignee} className="animate-view-forward">
@@ -203,15 +201,12 @@ export function MembersTab({
           </div>
 
           {visibleMembers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card p-10 text-center">
-              <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-muted">
-                <UserRoundX className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-              </span>
-              <h4 className="text-sm font-semibold text-foreground">Nhóm đã lưu chưa có dữ liệu trong phạm vi này</h4>
-              <p className="mt-1 max-w-md text-xs text-muted-foreground">
-                Hãy chọn lại thành viên hoặc chuyển sang “Hiển thị tất cả” để xem toàn bộ báo cáo.
-              </p>
-            </div>
+            <EmptyState
+              icon={UserRoundX}
+              title="Nhóm đã lưu chưa có dữ liệu trong phạm vi này"
+              hint="Hãy chọn lại thành viên hoặc chuyển sang “Hiển thị tất cả” để xem toàn bộ báo cáo."
+              className="bg-card"
+            />
           ) : (
             <MemberWorkloadChart
               members={visibleMembers}
@@ -231,14 +226,12 @@ export function MembersTab({
 
               {/* Quick search input if there are multiple members */}
               {visibleMembers.length > 3 && (
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                  <input
-                    type="text"
+                <div className="w-full sm:w-64">
+                  <SearchField
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={setSearchQuery}
                     placeholder="Tìm tên hoặc @username..."
-                    className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-3 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    ariaLabel="Tìm tên hoặc @username"
                   />
                 </div>
               )}

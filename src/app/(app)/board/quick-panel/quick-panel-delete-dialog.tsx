@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, RefreshCw, Trash2 } from "lucide-react";
+import { RefreshCw, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
 
 type QuickPanelDeleteDialogProps = {
   jiraKey: string;
@@ -51,10 +52,9 @@ export function QuickPanelDeleteDialog({
 
         <div className="flex min-w-0 flex-col gap-3 py-2">
           {error && (
-            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive">
-              <AlertCircle className="mt-px h-4 w-4 shrink-0" aria-hidden="true" />
+            <FeedbackBanner tone="destructive" className="text-xs">
               <span className="min-w-0 break-words">{error}</span>
-            </div>
+            </FeedbackBanner>
           )}
           <p className="text-xs text-muted-foreground">
             Task sẽ bị xóa vĩnh viễn trên Jira, kèm comment, worklog và file đính kèm. Không thể

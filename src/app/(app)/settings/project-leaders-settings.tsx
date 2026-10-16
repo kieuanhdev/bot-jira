@@ -2,12 +2,13 @@
 
 import { useState, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Shield, ShieldAlert, ShieldCheck, Save, Search, Check } from "lucide-react";
+import { Shield, ShieldAlert, ShieldCheck, Save, Check } from "lucide-react";
+import { SearchField } from "@/components/shared/search-field";
+import { EmptyState } from "@/components/shared/empty-state";
 import { api } from "@/lib/api-client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -218,15 +219,13 @@ export function ProjectLeadersSettings({
               ))}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border p-5 text-center">
-              <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-muted">
-                <ShieldAlert className="h-5 w-5 text-amber-500" aria-hidden />
-              </div>
-              <p className="text-sm font-medium text-foreground">Chưa có Leader nào cho dự án này</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Cảnh báo merge sẽ bị bỏ qua cho đến khi có ít nhất một Leader được phân công.
-              </p>
-            </div>
+            <EmptyState
+              size="compact"
+              icon={ShieldAlert}
+              title="Chưa có Leader nào cho dự án này"
+              description="Cảnh báo merge sẽ bị bỏ qua cho đến khi có ít nhất một Leader được phân công."
+              className="p-5"
+            />
           )}
         </div>
 
@@ -237,25 +236,24 @@ export function ProjectLeadersSettings({
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Phân quyền Leader ({selectedLeaderIds.length} đã chọn):
               </span>
-              <div className="relative w-48 sm:w-60">
-                <Search
-                  className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground"
-                  aria-hidden
-                />
-                <Input
+              <div className="w-48 sm:w-60">
+                <SearchField
                   placeholder="Tìm thành viên…"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-8 pl-8 text-xs"
+                  onChange={setSearchQuery}
+                  className="h-8 text-xs"
                 />
               </div>
             </div>
 
             <div className="max-h-56 overflow-y-auto rounded-md border border-border p-2 space-y-1">
               {filteredUsers.length === 0 ? (
-                <div className="py-4 text-center text-xs text-muted-foreground">
-                  Không tìm thấy người dùng phù hợp.
-                </div>
+                <EmptyState
+                  size="compact"
+                  title="Không tìm thấy người dùng"
+                  description="Thử tìm kiếm với từ khóa khác."
+                  className="py-4"
+                />
               ) : (
                 filteredUsers.map((user) => {
                   const isChecked = selectedLeaderIds.includes(user.id);

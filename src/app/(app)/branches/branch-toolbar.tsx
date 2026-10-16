@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import {
-  Search,
-  X,
   RotateCcw,
   ArrowUpDown,
   Briefcase,
@@ -11,10 +9,19 @@ import {
   Inbox,
   Link2Off,
   GitBranch,
+  X,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SearchField } from "@/components/shared/search-field";
+import { FacetSelect } from "@/components/shared/facet-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { BranchFilterState, CountOption, WorkspaceView } from "./branch-types";
 
 type BranchToolbarProps = {
@@ -44,7 +51,6 @@ export function BranchToolbar({
 }: BranchToolbarProps) {
   const [searchInput, setSearchInput] = useState(filters.q);
   const [prevQ, setPrevQ] = useState(filters.q);
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   if (filters.q !== prevQ) {
     setPrevQ(filters.q);
@@ -70,7 +76,7 @@ export function BranchToolbar({
         document.activeElement?.tagName !== "TEXTAREA"
       ) {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        document.getElementById("branches-search-field")?.focus();
       }
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -161,101 +167,83 @@ export function BranchToolbar({
       {/* Filter Row */}
       <div className="flex flex-wrap items-center gap-2 pt-1">
         {/* Search Input */}
-        <div className="relative min-w-[240px] flex-1 sm:max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input
-            ref={searchInputRef}
-            type="text"
+        <div className="min-w-[240px] flex-1 sm:max-w-xs">
+          <SearchField
+            id="branches-search-field"
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={(val) => setSearchInput(val)}
             placeholder="Tìm kiếm nhánh, task, repo... (/)"
-            className="h-9 pl-8 pr-8 text-xs sm:text-sm"
+            ariaLabel="Tìm kiếm nhánh, task, repo"
           />
-          {searchInput && (
-            <button
-              onClick={() => {
-                setSearchInput("");
-                onFilterChange({ q: "", page: 1 });
-              }}
-              aria-label="Xóa tìm kiếm"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
         </div>
 
         {/* Project Select */}
-        <select
+        <FacetSelect
           value={filters.project}
-          onChange={(e) => onFilterChange({ project: e.target.value, page: 1 })}
-          aria-label="Lọc theo dự án"
-          className="h-9 rounded-md border border-input bg-card px-2.5 py-1 text-xs text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
-        >
-          <option value="ALL">Tất cả dự án</option>
-          {projectOptions.map((p) => (
-            <option key={p.value} value={p.value}>
-              {p.label} ({p.count})
-            </option>
-          ))}
-        </select>
+          onChange={(project) => onFilterChange({ project, page: 1 })}
+          options={projectOptions}
+          allLabel="Tất cả dự án"
+          allValue="ALL"
+          ariaLabel="Lọc theo dự án"
+          className="w-[160px]"
+        />
 
         {/* Repository Select */}
-        <select
+        <FacetSelect
           value={filters.repo}
-          onChange={(e) => onFilterChange({ repo: e.target.value, page: 1 })}
-          aria-label="Lọc theo repository"
-          className="h-9 max-w-[200px] truncate rounded-md border border-input bg-card px-2.5 py-1 text-xs text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
-        >
-          <option value="ALL">Tất cả repository</option>
-          {repoOptions.map((r) => (
-            <option key={r.value} value={r.value}>
-              {r.label}
-            </option>
-          ))}
-        </select>
+          onChange={(repo) => onFilterChange({ repo, page: 1 })}
+          options={repoOptions}
+          allLabel="Tất cả repository"
+          allValue="ALL"
+          ariaLabel="Lọc theo repository"
+          className="max-w-[200px]"
+        />
 
         {/* PR State Select (Only if in all-branches or my-work view) */}
         {filters.view !== "pending-review" && filters.view !== "unlinked" && (
-          <select
+          <FacetSelect
             value={filters.pr}
-            onChange={(e) =>
+            onChange={(pr) =>
               onFilterChange({
-                pr: e.target.value as BranchFilterState["pr"],
+                pr: pr as BranchFilterState["pr"],
                 page: 1,
               })
             }
-            aria-label="Lọc theo trạng thái PR"
-            className="h-9 rounded-md border border-input bg-card px-2.5 py-1 text-xs text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
-          >
-            <option value="ALL">Tất cả trạng thái PR</option>
-            <option value="open">PR đang mở (Open)</option>
-            <option value="merged">Đã gộp (Merged)</option>
-            <option value="declined">Bị từ chối (Declined)</option>
-            <option value="closed">Đã đóng (Closed)</option>
-            <option value="none">Không có PR</option>
-          </select>
+            options={[
+              { value: "open", label: "PR đang mở (Open)" },
+              { value: "merged", label: "Đã gộp (Merged)" },
+              { value: "declined", label: "Bị từ chối (Declined)" },
+              { value: "closed", label: "Đã đóng (Closed)" },
+              { value: "none", label: "Không có PR" },
+            ]}
+            allLabel="Tất cả trạng thái PR"
+            allValue="ALL"
+            ariaLabel="Lọc theo trạng thái PR"
+            className="w-[170px]"
+          />
         )}
 
         {/* Technical all-branches extra filters */}
         {filters.view === "all-branches" && (
           <>
-            <select
+            <FacetSelect
               value={filters.link}
-              onChange={(e) =>
+              onChange={(link) =>
                 onFilterChange({
-                  link: e.target.value as BranchFilterState["link"],
+                  link: link as BranchFilterState["link"],
                   page: 1,
                 })
               }
-              aria-label="Lọc theo trạng thái liên kết task"
-              className="h-9 rounded-md border border-input bg-card px-2.5 py-1 text-xs text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
-            >
-              <option value="ALL">Tất cả liên kết</option>
-              <option value="linked">Đã liên kết task</option>
-              <option value="suggested">Gợi ý ứng viên</option>
-              <option value="unlinked">Chưa liên kết</option>
-            </select>
+              options={[
+                { value: "linked", label: "Đã liên kết task" },
+                { value: "suggested", label: "Gợi ý ứng viên" },
+                { value: "unlinked", label: "Chưa liên kết" },
+              ]}
+              allLabel="Tất cả liên kết"
+              allValue="ALL"
+              ariaLabel="Lọc theo trạng thái liên kết task"
+              className="w-[150px]"
+            />
 
             <Button
               variant={filters.attention === "1" ? "default" : "outline"}
@@ -266,37 +254,53 @@ export function BranchToolbar({
                   page: 1,
                 })
               }
-              className={`h-9 gap-1.5 text-xs ${
+              className={`h-9 cursor-pointer gap-1.5 text-xs ${
                 filters.attention === "1"
                   ? "bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500"
                   : "border-border text-foreground hover:bg-muted"
               }`}
             >
-              <AlertTriangle className="h-3.5 w-3.5" />
+              <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
               Cần chú ý
             </Button>
 
             <div className="ml-auto flex items-center gap-1.5">
               <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-              <select
+              <Select
                 value={`${filters.sort}_${filters.order}`}
-                onChange={(e) => {
-                  const [sort, order] = e.target.value.split("_");
+                onValueChange={(val) => {
+                  const [sort, order] = val.split("_");
                   onFilterChange({
                     sort: sort as BranchFilterState["sort"],
                     order: order as BranchFilterState["order"],
                     page: 1,
                   });
                 }}
-                aria-label="Sắp xếp danh sách theo"
-                className="h-9 rounded-md border border-input bg-card px-2 py-1 text-xs text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
               >
-                <option value="updated_desc">Mới cập nhật nhất</option>
-                <option value="attention_desc">Mức chú ý cao nhất</option>
-                <option value="branch_asc">Tên nhánh (A-Z)</option>
-                <option value="repo_asc">Repository (A-Z)</option>
-                <option value="task_asc">Mã Jira key</option>
-              </select>
+                <SelectTrigger
+                  aria-label="Sắp xếp danh sách theo"
+                  className="h-9 w-[165px] cursor-pointer gap-1 px-2.5 text-xs"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="updated_desc" className="cursor-pointer text-xs">
+                    Mới cập nhật nhất
+                  </SelectItem>
+                  <SelectItem value="attention_desc" className="cursor-pointer text-xs">
+                    Mức chú ý cao nhất
+                  </SelectItem>
+                  <SelectItem value="branch_asc" className="cursor-pointer text-xs">
+                    Tên nhánh (A-Z)
+                  </SelectItem>
+                  <SelectItem value="repo_asc" className="cursor-pointer text-xs">
+                    Repository (A-Z)
+                  </SelectItem>
+                  <SelectItem value="task_asc" className="cursor-pointer text-xs">
+                    Mã Jira key
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </>
         )}

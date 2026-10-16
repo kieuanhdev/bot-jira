@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { FeedbackBanner } from "./feedback-banner";
 import { cn } from "@/lib/utils";
 
 export type ConfirmDialogTone = "default" | "destructive";
@@ -85,9 +86,9 @@ export function ConfirmDialog({
         </DialogHeader>
         {children}
         {error ? (
-          <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <FeedbackBanner tone="destructive" className="text-xs">
             {error}
-          </div>
+          </FeedbackBanner>
         ) : null}
         <DialogFooter className="mt-3 flex gap-2 sm:gap-0">
           <Button

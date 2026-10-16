@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, GitBranch, Link2, Search } from "lucide-react";
+import { GitBranch, Link2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,8 +11,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
+import { SearchField } from "@/components/shared/search-field";
+import { EmptyState } from "@/components/shared/empty-state";
 import { getErrorMessage } from "@/lib/api-client";
 import { useBranchLink, useBranchPicker } from "@/hooks/use-branches";
 import { cn, timeAgo } from "@/lib/utils";
@@ -75,22 +77,18 @@ export function TaskBranchLinkDialog({
 
         <div className="flex min-w-0 flex-col gap-3 py-2">
           {error && (
-            <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-xs text-red-600 dark:text-red-400">
-              <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>{error}</span>
-            </div>
+            <FeedbackBanner tone="destructive">
+              {error}
+            </FeedbackBanner>
           )}
 
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Tìm nhánh theo tên hoặc repo"
-              className="pl-8 text-sm"
-              disabled={linkMutation.isPending}
-            />
-          </div>
+          <SearchField
+            value={q}
+            onChange={setQ}
+            placeholder="Tìm nhánh theo tên hoặc repo"
+            ariaLabel="Tìm nhánh theo tên hoặc repo"
+            disabled={linkMutation.isPending}
+          />
 
           {picker.isLoading ? (
             <div className="space-y-2">
@@ -99,15 +97,12 @@ export function TaskBranchLinkDialog({
               <Skeleton className="h-10 w-full" />
             </div>
           ) : items.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-6 text-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                <GitBranch className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-              </div>
-              <p className="text-sm font-medium text-foreground">Không tìm thấy nhánh phù hợp</p>
-              <p className="text-xs text-muted-foreground">
-                {q.trim() ? "Thử từ khóa khác." : "Không còn nhánh nào để gắn thêm vào task này."}
-              </p>
-            </div>
+            <EmptyState
+              size="compact"
+              icon={GitBranch}
+              title="Không tìm thấy nhánh phù hợp"
+              hint={q.trim() ? "Thử từ khóa khác." : "Không còn nhánh nào để gắn thêm vào task này."}
+            />
           ) : (
             <ul className="flex max-h-72 flex-col gap-1.5 overflow-y-auto pr-1">
               {items.map((item) => (

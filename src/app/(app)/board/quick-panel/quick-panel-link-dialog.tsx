@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, Link2, RefreshCw, Search } from "lucide-react";
+import { Link2, RefreshCw } from "lucide-react";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
+import { SearchField } from "@/components/shared/search-field";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +14,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api-client";
@@ -109,10 +110,9 @@ export function QuickPanelLinkDialog({
 
         <div className="flex min-w-0 flex-col gap-3 py-2">
           {error && (
-            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive">
-              <AlertCircle className="mt-px h-4 w-4 shrink-0" aria-hidden="true" />
+            <FeedbackBanner tone="destructive" className="text-xs">
               <span className="min-w-0 break-words">{error}</span>
-            </div>
+            </FeedbackBanner>
           )}
 
           <div className="flex flex-col gap-1.5">
@@ -146,24 +146,18 @@ export function QuickPanelLinkDialog({
             <Label htmlFor="link-target" className="text-xs">
               Task liên kết
             </Label>
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                id="link-target"
-                autoFocus
-                disabled={linking}
-                placeholder="Tìm theo mã hoặc tiêu đề (ví dụ: EPM-123)"
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setTargetKey("");
-                }}
-                className="pl-8 text-sm"
-              />
-            </div>
+            <SearchField
+              id="link-target"
+              autoFocus
+              disabled={linking}
+              placeholder="Tìm theo mã hoặc tiêu đề (ví dụ: EPM-123)"
+              value={query}
+              onChange={(val) => {
+                setQuery(val);
+                setTargetKey("");
+              }}
+              className="text-sm"
+            />
 
             {effectiveTarget && (
               <p className="text-[11px] text-muted-foreground">

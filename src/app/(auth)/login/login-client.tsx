@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,6 @@ import {
 import {
   KeyRound,
   ShieldCheck,
-  AlertCircle,
   ExternalLink,
   Eye,
   EyeOff,
@@ -162,10 +162,9 @@ export function LoginClient() {
           />
         </div>
         {error && (
-          <div role="alert" className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
-            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <FeedbackBanner tone="destructive">
             <span>{error}</span>
-          </div>
+          </FeedbackBanner>
         )}
         <Button type="submit" disabled={loading} className="w-full h-10 cursor-pointer">
           {loading ? "Đang xác thực…" : "Đăng nhập với mật khẩu"}
@@ -346,13 +345,9 @@ export function LoginClient() {
 
       {/* Error alert */}
       {error && (
-        <div
-          role="alert"
-          className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive animate-in fade-in-50 duration-200"
-        >
-          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
+        <FeedbackBanner tone="destructive">
           <div className="flex-1 leading-snug">{error}</div>
-        </div>
+        </FeedbackBanner>
       )}
 
       {/* Loading Skeleton / Submit button */}

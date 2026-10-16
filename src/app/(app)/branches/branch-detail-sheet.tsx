@@ -15,10 +15,12 @@ import {
   Copy,
   Check,
   Link2,
+  Link2Off,
   AlertTriangle,
   User,
   Calendar,
 } from "lucide-react";
+import { EmptyState } from "@/components/shared/empty-state";
 import type { BranchRowItem } from "./branch-types";
 
 type BranchDetailSheetProps = {
@@ -254,9 +256,12 @@ export function BranchDetailSheet({
                   </Button>
                 </div>
               ) : (
-                <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-                  <p>Chưa có Jira task nào được liên kết với nhánh này.</p>
-                </div>
+                <EmptyState
+                  size="compact"
+                  icon={Link2Off}
+                  title="Chưa có Jira task"
+                  hint="Chưa có Jira task nào được liên kết với nhánh này."
+                />
               )}
             </div>
 
@@ -318,9 +323,12 @@ export function BranchDetailSheet({
                   )}
                 </div>
               ) : (
-                <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-                  <p>Không có pull request nào liên kết với nhánh này.</p>
-                </div>
+                <EmptyState
+                  size="compact"
+                  icon={GitPullRequest}
+                  title="Chưa có Pull Request"
+                  hint="Không có pull request nào liên kết với nhánh này."
+                />
               )}
             </div>
 

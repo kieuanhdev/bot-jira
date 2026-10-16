@@ -8,7 +8,8 @@ import { api } from "@/lib/api-client";
 import { issuesKeys, bulkKeys, staleKeys } from "@/lib/query-keys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ExternalLink, Loader2, RefreshCw } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ArrowLeft, ExternalLink, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ACTION_LABELS, type OpDetail } from "./lib/bulk-types";
 import { stateVariant, itemVariant } from "./lib/bulk-utils";
@@ -43,9 +44,16 @@ export function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: 
 
   if (!op) {
     return (
-      <div className="mb-3 flex items-center gap-2 rounded-md border border-border p-3 text-sm">
-        {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-        Đang tải chi tiết thao tác…
+      <div className="mb-4 rounded-md border border-border p-3 space-y-3" aria-busy="true" aria-label="Đang tải chi tiết thao tác…">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-5 w-20 rounded" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+        <Skeleton className="h-2 w-full rounded" />
+        <div className="space-y-1.5 pt-1">
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
       </div>
     );
   }

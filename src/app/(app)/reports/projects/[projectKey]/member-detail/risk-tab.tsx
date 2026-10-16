@@ -2,6 +2,7 @@
 
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AlertTriangle, ShieldCheck } from "lucide-react";
+import { EmptyState } from "@/components/shared/empty-state";
 import type { SignalStyle } from "./signal-config";
 import type { MemberReportItem } from "@/lib/reports/types";
 import type { IndividualMemberAnalysis } from "../lib/member-workload-model";
@@ -159,10 +160,13 @@ export function RiskTab({ member, analysis, signal, drillDown }: RiskTabProps) {
                   ))}
                 </ul>
               ) : (
-                <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-                  <ShieldCheck className="h-5 w-5 text-emerald-500 mx-auto mb-1" />
-                  Không có cảnh báo tắc nghẽn hay trễ hạn nào.
-                </div>
+                <EmptyState
+                  size="compact"
+                  icon={ShieldCheck}
+                  title="Không có cảnh báo rủi ro"
+                  description="Không có cảnh báo tắc nghẽn hay trễ hạn nào."
+                  className="p-4"
+                />
               )}
             </div>
 

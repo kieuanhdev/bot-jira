@@ -7,7 +7,9 @@ import { issuesKeys } from "@/lib/query-keys";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Link2, AlertTriangle, AlertCircle, ArrowRight } from "lucide-react";
+import { Link2, ArrowRight } from "lucide-react";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
+import { EmptyState } from "@/components/shared/empty-state";
 
 export type DependencyItem = {
   key: string;
@@ -71,10 +73,9 @@ export function IssueDependencies({
           <CardTitle className="text-base font-medium">Task phụ thuộc (is blocked by)</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
-            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>Không thể tải danh sách task phụ thuộc: {(error as Error)?.message || "Lỗi không xác định"}</span>
-          </div>
+          <FeedbackBanner tone="destructive">
+            Không thể tải danh sách task phụ thuộc: {(error as Error)?.message || "Lỗi không xác định"}
+          </FeedbackBanner>
         </CardContent>
       </Card>
     );
@@ -101,8 +102,7 @@ export function IssueDependencies({
 
       <CardContent className="space-y-4">
         {cycles.length > 0 && (
-          <div className="flex items-start gap-2.5 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
-            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
+          <FeedbackBanner tone="destructive">
             <div className="space-y-1">
               <p className="font-medium">Phát hiện vòng lặp phụ thuộc (Cycle)!</p>
               <div className="text-xs opacity-90">
@@ -113,26 +113,22 @@ export function IssueDependencies({
                 ))}
               </div>
             </div>
-          </div>
+          </FeedbackBanner>
         )}
 
         {truncated && (
-          <div className="flex items-center gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
-            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>Đồ thị dependency vượt giới hạn hiển thị tối đa (đã cắt ngắn kết quả).</span>
-          </div>
+          <FeedbackBanner tone="warning" className="text-xs">
+            Đồ thị dependency vượt giới hạn hiển thị tối đa (đã cắt ngắn kết quả).
+          </FeedbackBanner>
         )}
 
         {dependencies.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-              <Link2 className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-            </div>
-            <p className="text-sm font-medium">Không có task phụ thuộc</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Task này không có liên kết is blocked by.
-            </p>
-          </div>
+          <EmptyState
+            icon={Link2}
+            title="Không có task phụ thuộc"
+            description="Task này không có liên kết is blocked by."
+            className="py-8 border-none"
+          />
         ) : (
           <div className="divide-y divide-border rounded-md border">
             {dependencies.map((dep) => {

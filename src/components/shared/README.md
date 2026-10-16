@@ -52,6 +52,8 @@ orphan base components.
 | `FilterBar` | `filter-bar.tsx` | No (client) | Layout only: primary (left) / secondary (right) + "Xóa lọc (n)" when `activeCount > 0` & `onReset`. |
 | `SearchField` | `search-field.tsx` | No (client) | Icon + clear button (only when there is a value), controlled. |
 | `SegmentedControl<T>` | `segmented-control.tsx` | No (client) | `aria-pressed` single-select toggle cluster; `tone` primary/neutral; `count` optional. |
+| `FacetSelect` | `facet-select.tsx` | No (client) | Reusable "Select + Tất cả" dropdown based on shadcn `Select`; uses `isAllFilter` from `src/lib/filters.ts`. |
+| `FacetMultiSelect` | `facet-multi-select.tsx` | No (client) | Popover multi-select facet with inline search, 100-item cap + hint, and preset quick actions. |
 
 ### Feedback / confirm
 

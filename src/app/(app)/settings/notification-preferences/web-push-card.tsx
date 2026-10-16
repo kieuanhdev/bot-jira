@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertCircle, CheckCheck, Send, ShieldAlert, Smartphone, Sparkles, XCircle } from "lucide-react";
+import { AlertCircle, CheckCheck, Send, Smartphone, Sparkles, XCircle } from "lucide-react";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,25 +63,23 @@ export function WebPushCard({
     </CardHeader>
     <CardContent className="space-y-5">
       {!pushSupported ? (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-sm text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
-          <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" aria-hidden="true" />
+        <FeedbackBanner tone="warning">
           <div>
             <p className="font-medium">Trình duyệt không hỗ trợ Web Push</p>
             <p className="text-xs mt-0.5 opacity-90">
               Trình duyệt hiện tại không hỗ trợ Service Worker hoặc PushManager. Bạn vẫn có thể sử dụng thông báo in-app bình thường.
             </p>
           </div>
-        </div>
+        </FeedbackBanner>
       ) : pushPermission === "denied" ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3.5 text-sm text-destructive flex items-start gap-2.5">
-          <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" aria-hidden="true" />
+        <FeedbackBanner tone="destructive">
           <div>
             <p className="font-medium">Quyền thông báo đã bị chặn trên trình duyệt</p>
             <p className="text-xs mt-0.5 opacity-90">
               Vui lòng bấm vào biểu tượng ổ khóa bên cạnh thanh địa chỉ trình duyệt, bật lại quyền &quot;Thông báo&quot; và tải lại trang.
             </p>
           </div>
-        </div>
+        </FeedbackBanner>
       ) : (
         <div className="rounded-xl border border-border p-4 bg-muted/20 space-y-4">
           <div className="flex items-center justify-between gap-4">

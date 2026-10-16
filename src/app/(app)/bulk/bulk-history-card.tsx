@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,13 +53,12 @@ export function BulkHistoryCard({
         {!opsLoaded ? (
           <div className="space-y-2">{[0, 1, 2].map((row) => <Skeleton key={row} className="h-16 w-full" />)}</div>
         ) : ops.length === 0 ? (
-          <div className="flex flex-col items-center rounded-lg border border-dashed px-6 py-12 text-center">
-            <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-muted">
-              <History className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-            </span>
-            <p className="font-medium">Chưa có thao tác hàng loạt nào</p>
-            <p className="mt-1 text-sm text-muted-foreground">Các thao tác đã hoàn thành hoặc đang chạy sẽ xuất hiện tại đây.</p>
-          </div>
+          <EmptyState
+            icon={History}
+            title="Chưa có thao tác hàng loạt nào"
+            description="Các thao tác đã hoàn thành hoặc đang chạy sẽ xuất hiện tại đây."
+            className="py-12"
+          />
         ) : (
           <ul className="flex flex-col gap-2">
             {ops.map((op) => (

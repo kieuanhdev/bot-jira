@@ -5,8 +5,9 @@ import { useBulkCreateController } from "./lib/use-bulk-create-controller";
 import { BulkCreateEditorShell } from "./bulk-create-editor-shell";
 import { CreatePreview } from "./create-preview";
 import { CreateProgress } from "./create-progress";
-import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ErrorState } from "@/components/shared/async-state";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,9 +20,7 @@ import {
 } from "@/components/ui/select";
 import {
   PlusCircle,
-  RotateCcw,
   FolderKanban,
-  AlertCircle,
   ListPlus,
   Edit3,
   Maximize2,
@@ -188,17 +187,12 @@ export function BulkCreateClient() {
 
           {/* Prompt when projects exist but none is selected */}
           {!isProjectsLoading && availableProjects.length > 0 && !projectKey && (
-            <Card className="border-dashed border-border p-10 text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <FolderKanban className="h-6 w-6" aria-hidden="true" />
-              </div>
-              <h3 className="text-sm font-semibold text-foreground">
-                Chưa chọn dự án Jira
-              </h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Vui lòng chọn một dự án ở thanh tiêu đề trên để tải loại issue, phiên bản và nhập danh sách task.
-              </p>
-            </Card>
+            <EmptyState
+              icon={FolderKanban}
+              title="Chưa chọn dự án Jira"
+              description="Vui lòng chọn một dự án ở thanh tiêu đề trên để tải loại issue, phiên bản và nhập danh sách task."
+              className="p-10"
+            />
           )}
 
           {/* Loading Metadata Skeleton */}
@@ -211,44 +205,25 @@ export function BulkCreateClient() {
 
           {/* Error State */}
           {metadataError && !metadataLoading && (
-            <Card className="border-destructive/30 bg-destructive/5 p-6 text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-                <AlertCircle className="h-6 w-6" aria-hidden="true" />
-              </div>
-              <h3 className="text-base font-semibold text-foreground">
-                Không thể tải thông tin dự án {projectKey}
-              </h3>
-              <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
-                {metadataError instanceof Error ? metadataError.message : "Đã xảy ra lỗi khi kết nối tới Jira. Vui lòng kiểm tra lại token cá nhân trong Cài đặt."}
-              </p>
-              <div className="mt-4 flex justify-center">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => refetchMetadata()}
-                  className="cursor-pointer gap-2 text-xs"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                  Thử lại
-                </Button>
-              </div>
-            </Card>
+            <ErrorState
+              title={`Không thể tải thông tin dự án ${projectKey}`}
+              message={metadataError instanceof Error ? metadataError.message : "Đã xảy ra lỗi khi kết nối tới Jira. Vui lòng kiểm tra lại token cá nhân trong Cài đặt."}
+              onRetry={() => refetchMetadata()}
+              retryLabel="Thử lại"
+              className="p-6"
+            />
           )}
 
           {/* Permission Error State */}
           {metadata && !metadata.canCreate && (
-            <Card className="border-destructive/30 bg-destructive/5 p-6 text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-                <AlertCircle className="h-6 w-6" aria-hidden="true" />
-              </div>
-              <h3 className="text-base font-semibold text-foreground">
+            <FeedbackBanner tone="destructive" className="my-4">
+              <div className="font-semibold text-foreground">
                 Không thể tạo task trong dự án {projectKey}
-              </h3>
-              <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
+              </div>
+              <div className="mt-1 text-xs">
                 {metadata.permissionReason || "Tài khoản Jira của bạn không có quyền CREATE_ISSUES trên dự án này."}
-              </p>
-            </Card>
+              </div>
+            </FeedbackBanner>
           )}
 
           {/* Main Workspace when metadata is loaded and canCreate is true */}
@@ -318,10 +293,9 @@ export function BulkCreateClient() {
               />
 
               {previewMutation.isError && (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span>Lỗi kiểm tra xem trước: {previewMutation.error.message}</span>
-                </div>
+                <FeedbackBanner tone="destructive">
+                  Lỗi kiểm tra xem trước: {previewMutation.error.message}
+                </FeedbackBanner>
               )}
             </div>
           )}

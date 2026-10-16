@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, ListPlus, Search, ListTodo } from "lucide-react";
+import { ListPlus, ListTodo } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,8 +12,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
+import { SearchField } from "@/components/shared/search-field";
+import { EmptyState } from "@/components/shared/empty-state";
 import { api, getErrorMessage } from "@/lib/api-client";
 import { issuesKeys, meKeys, releasesKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
@@ -121,22 +123,18 @@ export function ReleaseAddTasksDialog({
 
         <div className="flex min-w-0 flex-col gap-3 py-2">
           {error && (
-            <div role="alert" className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive">
-              <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>{error}</span>
-            </div>
+            <FeedbackBanner tone="destructive">
+              {error}
+            </FeedbackBanner>
           )}
 
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Tìm theo mã hoặc tiêu đề task"
-              className="pl-8 text-sm"
-              disabled={busy}
-            />
-          </div>
+          <SearchField
+            value={q}
+            onChange={setQ}
+            placeholder="Tìm theo mã hoặc tiêu đề task"
+            ariaLabel="Tìm theo mã hoặc tiêu đề task"
+            disabled={busy}
+          />
 
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <label className="flex cursor-pointer items-center gap-1.5">
@@ -170,15 +168,14 @@ export function ReleaseAddTasksDialog({
               <Skeleton className="h-10 w-full" />
             </div>
           ) : items.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-6 text-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                <ListTodo className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-              </div>
-              <p className="text-sm font-medium text-foreground">Không có task nào để thêm</p>
-              <p className="text-xs text-muted-foreground">
-                {q.trim() || onlyMine ? "Thử đổi từ khóa hoặc bỏ bộ lọc." : "Mọi task đã nằm trong phiên bản này."}
-              </p>
-            </div>
+            <EmptyState
+              size="compact"
+              icon={ListTodo}
+              title="Không có task nào để thêm"
+              hint={
+                q.trim() || onlyMine ? "Thử đổi từ khóa hoặc bỏ bộ lọc." : "Mọi task đã nằm trong phiên bản này."
+              }
+            />
           ) : (
             <ul className="flex max-h-72 flex-col gap-1.5 overflow-y-auto pr-1">
               {items.map((item) => (

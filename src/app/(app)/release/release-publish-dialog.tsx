@@ -10,9 +10,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import {
   Rocket,
-  AlertTriangle,
   Loader2,
   ExternalLink,
 } from "lucide-react";
@@ -136,14 +136,11 @@ export function ReleasePublishDialog({
 
           {/* Error / Blockers alert */}
           {errorMsg && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive space-y-2">
-              <div className="flex items-center gap-1.5 font-semibold">
-                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>{errorMsg}</span>
-              </div>
+            <FeedbackBanner tone="destructive" className="space-y-2 text-xs">
+              <div className="font-semibold">{errorMsg}</div>
 
               {blockers.length > 0 && (
-                <div className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pl-5">
+                <div className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pl-1">
                   {blockers.map((b, idx) => (
                     <div key={idx} className="flex flex-wrap items-center gap-1 text-[11px]">
                       <span className="font-mono font-semibold text-foreground">{b.jiraKey}:</span>
@@ -165,7 +162,7 @@ export function ReleasePublishDialog({
                   ))}
                 </div>
               )}
-            </div>
+            </FeedbackBanner>
           )}
         </div>
 

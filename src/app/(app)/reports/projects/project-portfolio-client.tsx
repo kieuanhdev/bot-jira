@@ -10,7 +10,7 @@ import { PortfolioSummary } from "./portfolio-summary";
 import { ProjectReportTable } from "./project-report-table";
 import { ReportPeriodFilter } from "../report-period-filter";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/shared/search-field";
 import {
   Select,
   SelectContent,
@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, RefreshCw, Clock, Globe } from "lucide-react";
+import { RefreshCw, Clock, Globe } from "lucide-react";
 import type { ProjectPortfolioResponse, ReportUnit, ReportPeriod } from "@/lib/reports/types";
 import { parsePeriodParams } from "../lib/parse-period-params";
 import { shouldReplaceReportUrl } from "./[projectKey]/lib/report-url-state";
@@ -200,13 +200,12 @@ export function ProjectPortfolioClient() {
 
           {/* Search bar and count */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative max-w-sm flex-1">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
+            <div className="max-w-sm flex-1">
+              <SearchField
                 placeholder="Tìm kiếm dự án theo tên hoặc mã..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 h-9 text-sm"
+                onChange={setSearch}
+                ariaLabel="Tìm kiếm dự án theo tên hoặc mã"
               />
             </div>
 

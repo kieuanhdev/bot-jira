@@ -7,6 +7,7 @@ import { queryPolicy } from "@/lib/query-policy";
 import { api } from "@/lib/api-client";
 import { formatRelative } from "@/lib/format/time";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/shared/empty-state";
 
 import {
   ArrowRight,
@@ -64,15 +65,12 @@ export function ProjectReportTable({ projects, period, unit }: ProjectReportTabl
 
   if (projects.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-center rounded-xl border border-dashed border-border bg-card">
-        <div className="p-3 rounded-full bg-muted text-muted-foreground mb-3">
-          <FolderKanban className="h-6 w-6" aria-hidden="true" />
-        </div>
-        <h3 className="text-base font-semibold">Chưa có dự án để báo cáo</h3>
-        <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-          Kiểm tra cấu hình danh mục dự án hoặc tùy chọn bảng làm việc của bạn trong phần Cài đặt.
-        </p>
-      </div>
+      <EmptyState
+        icon={FolderKanban}
+        title="Chưa có dự án để báo cáo"
+        hint="Kiểm tra cấu hình danh mục dự án hoặc tùy chọn bảng làm việc của bạn trong phần Cài đặt."
+        className="bg-card"
+      />
     );
   }
 

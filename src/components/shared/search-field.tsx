@@ -11,8 +11,10 @@ export type SearchFieldProps = {
   /** Accessible label (the field has no visible label). */
   ariaLabel?: string;
   id?: string;
+  autoFocus?: boolean;
   disabled?: boolean;
   className?: string;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 };
 
 /**
@@ -27,8 +29,10 @@ export function SearchField({
   placeholder = "Tìm kiếm...",
   ariaLabel = "Tìm kiếm",
   id,
+  autoFocus,
   disabled,
   className,
+  onKeyDown,
 }: SearchFieldProps) {
   return (
     <div className={cn("relative", className)}>
@@ -38,8 +42,10 @@ export function SearchField({
       />
       <Input
         id={id}
+        autoFocus={autoFocus}
         value={value}
         disabled={disabled}
+        onKeyDown={onKeyDown}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={ariaLabel}

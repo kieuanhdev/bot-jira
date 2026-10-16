@@ -192,7 +192,7 @@ export function BulkTaskListFooter({
             {isLoadingMore ? (
               <>
                 <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                Đang tải...
+                Đang tải…
               </>
             ) : (
               `Tải thêm (${totalServerIssues - loadedCount} task còn lại)`

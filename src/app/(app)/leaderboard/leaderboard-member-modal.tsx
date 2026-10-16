@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ExternalLink, Search, Trophy } from "lucide-react";
+import { ExternalLink, Trophy, Inbox } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -9,7 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/shared/search-field";
+import { EmptyState } from "@/components/shared/empty-state";
 import { cn } from "@/lib/utils";
 import type { LeaderboardMember } from "@/lib/leaderboard/types";
 import { filterModalTasks } from "./lib/leaderboard-utils";
@@ -78,23 +79,25 @@ export function LeaderboardMemberModal({
         )}
 
         {/* Search inside modal */}
-        <div className="relative my-1">
-          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-          <Input
-            type="text"
+        <div className="my-1">
+          <SearchField
             placeholder="Tìm theo mã nhiệm vụ hoặc tiêu đề..."
             value={taskSearch}
-            onChange={(e) => setTaskSearch(e.target.value)}
-            className="h-8 pl-8 text-xs"
+            onChange={setTaskSearch}
+            ariaLabel="Tìm theo mã nhiệm vụ hoặc tiêu đề"
           />
         </div>
 
         {/* Task list inside modal */}
         <div className="flex-1 overflow-y-auto min-h-48 divide-y divide-border border rounded-md">
           {modalTasks.length === 0 ? (
-            <div className="p-8 text-center text-xs text-muted-foreground italic">
-              Không tìm thấy task nào phù hợp.
-            </div>
+            <EmptyState
+              size="compact"
+              icon={Inbox}
+              title="Không tìm thấy task"
+              hint="Không có nhiệm vụ nào phù hợp với bộ lọc hiện tại."
+              className="border-0 rounded-none py-8"
+            />
           ) : (
             modalTasks.map((t) => {
               const isDone = t.statusCategory.toLowerCase() === "done";

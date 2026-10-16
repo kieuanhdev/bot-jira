@@ -2,12 +2,13 @@
 
 import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, RefreshCw, AlertCircle, RotateCcw } from "lucide-react";
+import { Check, Copy, RefreshCw, RotateCcw } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ListSkeleton } from "@/components/shared/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { api, getErrorMessage } from "@/lib/api-client";
 import { adminKeys } from "@/lib/query-keys";
 import { maskSecrets } from "@/lib/admin/mask-secrets";
@@ -163,19 +164,17 @@ export function ErrorSheet({
     >
       <div className="flex flex-col gap-4">
         {actionFeedback && (
-          <div className="flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/10 p-2.5 text-xs text-emerald-600 dark:text-emerald-400">
-            <Check className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>{actionFeedback}</span>
-          </div>
+          <FeedbackBanner tone="success" className="text-xs">
+            {actionFeedback}
+          </FeedbackBanner>
         )}
 
         {query.isLoading ? (
           <ListSkeleton rows={4} />
         ) : query.error ? (
-          <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
-            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>{getErrorMessage(query.error)}</span>
-          </div>
+          <FeedbackBanner tone="destructive" className="text-xs">
+            {getErrorMessage(query.error)}
+          </FeedbackBanner>
         ) : (
           <>
             {type === "sentry" ? (

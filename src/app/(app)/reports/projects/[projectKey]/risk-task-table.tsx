@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { PaginationFooter } from "@/components/shared/pagination-footer";
+import { EmptyState } from "@/components/shared/empty-state";
 import {
   AlertOctagon,
   AlertTriangle,
@@ -117,13 +118,12 @@ export function RiskTaskTable({
 
       {/* Table */}
       {tasks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl border border-dashed border-border bg-card">
-          <ShieldAlert className="h-7 w-7 text-muted-foreground mb-2" aria-hidden="true" />
-          <h4 className="text-sm font-semibold">Không tìm thấy task rủi ro</h4>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Không có task nào vi phạm tiêu chí lọc đã chọn trong phạm vi này.
-          </p>
-        </div>
+        <EmptyState
+          icon={ShieldAlert}
+          title="Không tìm thấy task rủi ro"
+          hint="Không có task nào vi phạm tiêu chí lọc đã chọn trong phạm vi này."
+          className="bg-card"
+        />
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
           <table className="w-full text-left border-collapse text-sm">

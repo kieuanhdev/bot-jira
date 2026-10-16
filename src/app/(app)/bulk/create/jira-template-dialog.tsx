@@ -23,10 +23,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/shared/search-field";
 import {
   ClipboardCopy,
-  Search,
   PlusCircle,
   ArrowRight,
   X,
@@ -296,28 +295,14 @@ export function JiraTemplateDialog({
         </DialogHeader>
 
         {/* Live Search Input */}
-        <div className="relative pt-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <Input
+        <div className="pt-1">
+          <SearchField
             placeholder={`Tìm task theo Jira key hoặc tiêu đề (vd: ${projectKey}-123 hoặc Đăng nhập)...`}
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={setSearchInput}
             onKeyDown={handleKeyDown}
-            className="h-10 pl-9 pr-8 text-sm"
-            autoFocus
+            ariaLabel="Tìm task mẫu"
           />
-          {searchInput && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchInput("");
-              }}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-              aria-label="Xóa tìm kiếm"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
-          )}
         </div>
 
         {/* Content Area */}

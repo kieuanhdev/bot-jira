@@ -8,6 +8,7 @@ import { queryPolicy } from "@/lib/query-policy";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/shared/async-state";
+import { EmptyState } from "@/components/shared/empty-state";
 import { PaginationFooter } from "@/components/shared/pagination-footer";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
@@ -215,13 +216,12 @@ export function TasksTab({
           onRetry={() => refetch()}
         />
       ) : !data?.tasks || data.tasks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-12 text-center rounded-xl border border-dashed border-border bg-card">
-          <CheckCircle2 className="h-8 w-8 text-muted-foreground mb-2" aria-hidden="true" />
-          <h4 className="text-sm font-semibold">Không tìm thấy task phù hợp</h4>
-          <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-            Thử thay đổi bộ lọc hoạt động, nhóm trạng thái hoặc tìm kiếm từ khóa khác.
-          </p>
-        </div>
+        <EmptyState
+          icon={CheckCircle2}
+          title="Không tìm thấy task phù hợp"
+          hint="Thử thay đổi bộ lọc hoạt động, nhóm trạng thái hoặc tìm kiếm từ khóa khác."
+          className="bg-card"
+        />
       ) : (
         <ReportTasksTable
           tasks={data.tasks}

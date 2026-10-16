@@ -8,6 +8,7 @@ import { queryPolicy } from "@/lib/query-policy";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/shared/async-state";
+import { EmptyState } from "@/components/shared/empty-state";
 import {
   ResponsiveContainer,
   LineChart,
@@ -77,15 +78,12 @@ export function TrendsTab({ projectKey, period, versionId }: TrendsTabProps) {
           onRetry={() => refetch()}
         />
       ) : points.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-12 text-center rounded-xl border border-dashed border-border bg-card">
-          <TrendingUp className="h-8 w-8 text-muted-foreground mb-2" />
-          <h4 className="text-sm font-semibold">
-            {isVersionScope ? "Chưa có dữ liệu xu hướng của version" : "Chưa có dữ liệu xu hướng trong kỳ"}
-          </h4>
-          <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-            Không có hoạt động tạo mới hoặc hoàn thành nào trong khoảng thời gian đã chọn.
-          </p>
-        </div>
+        <EmptyState
+          icon={TrendingUp}
+          title={isVersionScope ? "Chưa có dữ liệu xu hướng của version" : "Chưa có dữ liệu xu hướng trong kỳ"}
+          hint="Không có hoạt động tạo mới hoặc hoàn thành nào trong khoảng thời gian đã chọn."
+          className="bg-card"
+        />
       ) : (
         <div className="grid grid-cols-1 gap-6">
           {/* Chart 1: Throughput Timeline */}

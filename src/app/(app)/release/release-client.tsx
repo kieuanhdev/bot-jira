@@ -16,6 +16,8 @@ import { FilterBar } from "@/components/shared/filter-bar";
 import { SearchField } from "@/components/shared/search-field";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import { FeedbackBanner } from "@/components/shared/feedback-banner";
+import { EmptyState } from "@/components/shared/empty-state";
+import { ErrorState } from "@/components/shared/async-state";
 import { ReleaseSummaryCards } from "./release-summary-cards";
 import { ReleaseCreateDialog } from "./release-create-dialog";
 import { ReleaseCard } from "./release-card";
@@ -242,91 +244,51 @@ export function ReleaseClient() {
             </div>
           ))
         ) : filteredReleases.length === 0 ? (
-          // Differentiate empty states based on sync metadata
-          <div className="py-16 text-center rounded-xl border border-dashed border-border bg-card p-8 flex flex-col items-center justify-center">
-            {searchQuery ? (
-              <>
-                <div className="p-4 rounded-full bg-muted/60 mb-3">
-                  <PackageOpen className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-                </div>
-                <h3 className="text-base font-semibold text-foreground">
-                  Không tìm thấy bản phát hành nào
-                </h3>
-                <p className="text-xs text-muted-foreground max-w-sm mt-1">
-                  Không có phiên bản nào khớp với từ khóa tìm kiếm &quot;{searchQuery}&quot;.
-                </p>
-              </>
-            ) : syncMeta?.state === "auth_required" ? (
-              <>
-                <div className="p-4 rounded-full bg-amber-500/10 mb-3">
-                  <AlertCircle className="h-8 w-8 text-amber-500" aria-hidden="true" />
-                </div>
-                <h3 className="text-base font-semibold text-foreground">
-                  Cần cấu hình tài khoản Jira
-                </h3>
-                <p className="text-xs text-muted-foreground max-w-sm mt-1">
-                  Bạn cần cấu hình token Jira cá nhân trong phần Cài đặt để đồng bộ và xem các bản phát hành.
-                </p>
-                <Button asChild variant="outline" size="sm" className="mt-4 gap-1.5 text-xs">
+          searchQuery ? (
+            <EmptyState
+              icon={PackageOpen}
+              title="Không tìm thấy bản phát hành nào"
+              description={`Không có phiên bản nào khớp với từ khóa tìm kiếm "${searchQuery}".`}
+              className="py-16"
+            />
+          ) : syncMeta?.state === "auth_required" ? (
+            <EmptyState
+              icon={AlertCircle}
+              title="Cần cấu hình tài khoản Jira"
+              description="Bạn cần cấu hình token Jira cá nhân trong phần Cài đặt để đồng bộ và xem các bản phát hành."
+              className="py-16"
+              action={
+                <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs">
                   <Link href="/settings">Đi đến Cài đặt</Link>
                 </Button>
-              </>
-            ) : syncMeta?.state === "forbidden" ? (
-              <>
-                <div className="p-4 rounded-full bg-rose-500/10 mb-3">
-                  <AlertCircle className="h-8 w-8 text-destructive" aria-hidden="true" />
-                </div>
-                <h3 className="text-base font-semibold text-foreground">
-                  Không có quyền truy cập dự án {selectedProject}
-                </h3>
-                <p className="text-xs text-muted-foreground max-w-sm mt-1">
-                  Tài khoản Jira của bạn không có quyền xem hoặc quản lý Fix Version trong dự án này.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSync}
-                  disabled={isSyncPending}
-                  className="mt-4 gap-1.5 text-xs cursor-pointer"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                  Thử lại
-                </Button>
-              </>
-            ) : syncMeta?.state === "failed" ? (
-              <>
-                <div className="p-4 rounded-full bg-rose-500/10 mb-3">
-                  <AlertCircle className="h-8 w-8 text-destructive" aria-hidden="true" />
-                </div>
-                <h3 className="text-base font-semibold text-foreground">
-                  Đồng bộ bản phát hành thất bại
-                </h3>
-                <p className="text-xs text-muted-foreground max-w-sm mt-1">
-                  {syncMeta.lastError || "Đã xảy ra lỗi khi kết nối đến Jira để lấy danh sách bản phát hành."}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSync}
-                  disabled={isSyncPending}
-                  className="mt-4 gap-1.5 text-xs cursor-pointer"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                  Thử lại
-                </Button>
-              </>
-            ) : syncMeta?.state === "empty" ? (
-              <>
-                <div className="p-4 rounded-full bg-muted/60 mb-3">
-                  <PackageOpen className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-                </div>
-                <h3 className="text-base font-semibold text-foreground">
-                  Dự án {selectedProject} chưa có Fix Version trên Jira
-                </h3>
-                <p className="text-xs text-muted-foreground max-w-sm mt-1">
-                  Hệ thống đã đồng bộ thành công nhưng dự án này chưa có phiên bản phát hành nào trên Jira.
-                </p>
-                <div className="mt-4 flex items-center gap-2">
+              }
+            />
+          ) : syncMeta?.state === "forbidden" ? (
+            <ErrorState
+              title={`Không có quyền truy cập dự án ${selectedProject}`}
+              message="Tài khoản Jira của bạn không có quyền xem hoặc quản lý Fix Version trong dự án này."
+              onRetry={handleSync}
+              retryDisabled={isSyncPending}
+              retryLabel="Thử lại"
+              className="py-16"
+            />
+          ) : syncMeta?.state === "failed" ? (
+            <ErrorState
+              title="Đồng bộ bản phát hành thất bại"
+              message={syncMeta.lastError || "Đã xảy ra lỗi khi kết nối đến Jira để lấy danh sách bản phát hành."}
+              onRetry={handleSync}
+              retryDisabled={isSyncPending}
+              retryLabel="Thử lại"
+              className="py-16"
+            />
+          ) : syncMeta?.state === "empty" ? (
+            <EmptyState
+              icon={PackageOpen}
+              title={`Dự án ${selectedProject} chưa có Fix Version trên Jira`}
+              description="Hệ thống đã đồng bộ thành công nhưng dự án này chưa có phiên bản phát hành nào trên Jira."
+              className="py-16"
+              action={
+                <div className="flex items-center gap-2">
                   {canManage && (
                     <Button
                       size="sm"
@@ -351,33 +313,32 @@ export function ReleaseClient() {
                     Đồng bộ lại
                   </Button>
                 </div>
-              </>
-            ) : (
-              <>
-                <div className="p-4 rounded-full bg-muted/60 mb-3">
-                  <PackageOpen className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-                </div>
-                <h3 className="text-base font-semibold text-foreground">
-                  {selectedProject !== "all"
-                    ? `Chưa đồng bộ bản phát hành dự án ${selectedProject}`
-                    : "Chưa có bản phát hành nào"}
-                </h3>
-                <p className="text-xs text-muted-foreground max-w-sm mt-1">
-                  Chưa có Fix Version nào trong phạm vi đã chọn hoặc cần đồng bộ từ Jira.
-                </p>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={PackageOpen}
+              title={
+                selectedProject !== "all"
+                  ? `Chưa đồng bộ bản phát hành dự án ${selectedProject}`
+                  : "Chưa có bản phát hành nào"
+              }
+              description="Chưa có Fix Version nào trong phạm vi đã chọn hoặc cần đồng bộ từ Jira."
+              className="py-16"
+              action={
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleSync}
                   disabled={isSyncPending}
-                  className="mt-4 gap-1.5 text-xs cursor-pointer"
+                  className="gap-1.5 text-xs cursor-pointer"
                 >
                   <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                   Đồng bộ từ Jira ngay
                 </Button>
-              </>
-            )}
-          </div>
+              }
+            />
+          )
         ) : (
           filteredReleases.map((release) => (
             <ReleaseCard

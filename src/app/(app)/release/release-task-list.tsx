@@ -7,6 +7,7 @@ import { api, getErrorMessage } from "@/lib/api-client";
 import { meKeys, releasesKeys } from "@/lib/query-keys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { TaskBranchLinkDialog } from "../branches/task-branch-link-dialog";
 import {
   CheckCircle2,
@@ -77,9 +78,9 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
   return (
     <>
     {assignError && (
-      <div role="alert" className="mb-2 rounded border border-destructive/20 bg-destructive/10 p-2 text-xs text-destructive">
+      <FeedbackBanner tone="destructive" className="mb-2 text-xs">
         Gán task thất bại — {assignError}
-      </div>
+      </FeedbackBanner>
     )}
     <div className="divide-y divide-border rounded-md border border-border bg-card overflow-hidden">
       {sortedTasks.map((t) => {
@@ -201,10 +202,9 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
 
             {/* Blockers explanation if any */}
             {t.blockers.length > 0 && (
-              <div className="mt-2 ml-7 sm:ml-7 text-xs bg-destructive/10 text-destructive border border-destructive/20 rounded p-2 flex flex-col gap-1">
+              <FeedbackBanner tone="destructive" className="mt-2 ml-7 sm:ml-7 text-xs flex flex-col gap-1">
                 {t.blockers.map((b, idx) => (
                   <div key={idx} className="flex items-center gap-1.5">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     <span>{formatBlockerMessage(b)}</span>
                     {b.prUrl && (
                       <a
@@ -218,7 +218,7 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
                     )}
                   </div>
                 ))}
-              </div>
+              </FeedbackBanner>
             )}
 
             {canManage && !t.noCode && (

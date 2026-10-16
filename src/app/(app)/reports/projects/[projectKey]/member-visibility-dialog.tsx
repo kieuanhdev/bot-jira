@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Search, SlidersHorizontal, Users } from "lucide-react";
+import { useState, useMemo } from "react";
+import { SlidersHorizontal, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SearchField } from "@/components/shared/search-field";
+import { EmptyState } from "@/components/shared/empty-state";
 import {
   Dialog,
   DialogContent,
@@ -90,16 +92,12 @@ export function MemberVisibilityDialog({
         </DialogHeader>
 
         <div className="space-y-3 px-5">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Tìm tên hoặc @username..."
-              className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
-            />
-          </div>
+          <SearchField
+            value={query}
+            onChange={setQuery}
+            placeholder="Tìm tên hoặc @username..."
+            ariaLabel="Tìm tên hoặc @username"
+          />
 
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">Đã chọn {draft.length}/{members.length} người</span>
@@ -140,13 +138,13 @@ export function MemberVisibilityDialog({
                 );
               })
             ) : (
-              <div className="flex flex-col items-center px-4 py-8 text-center">
-                <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-muted">
-                  <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                </span>
-                <p className="text-sm font-medium text-foreground">Không tìm thấy thành viên</p>
-                <p className="mt-1 text-xs text-muted-foreground">Thử tìm bằng tên hoặc username khác.</p>
-              </div>
+              <EmptyState
+                size="compact"
+                icon={Users}
+                title="Không tìm thấy thành viên"
+                hint="Thử tìm bằng tên hoặc username khác."
+                className="border-0 rounded-none py-8"
+              />
             )}
           </div>
           {draft.length === 0 && (

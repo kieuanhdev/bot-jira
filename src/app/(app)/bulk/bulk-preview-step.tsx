@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/shared/empty-state";
 import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -217,13 +218,12 @@ export function BulkPreviewCard({
             <PreviewItemCard key={item.jiraKey} item={item} jiraBaseUrl={jiraBaseUrl} />
           ))}
           {visiblePreviewItems.length === 0 && (
-            <div className="flex flex-col items-center rounded-lg border border-dashed px-6 py-10 text-center">
-              <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                <CheckCircle2 className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-              </span>
-              <p className="font-medium">Không có task nào trong nhóm này</p>
-              <p className="mt-1 text-sm text-muted-foreground">Chọn một thẻ tóm tắt khác để xem các task tương ứng.</p>
-            </div>
+            <EmptyState
+              icon={CheckCircle2}
+              title="Không có task nào trong nhóm này"
+              description="Chọn một thẻ tóm tắt khác để xem các task tương ứng."
+              className="py-10"
+            />
           )}
         </div>
 
