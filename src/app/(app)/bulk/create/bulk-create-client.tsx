@@ -11,14 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -27,17 +19,16 @@ import {
 } from "@/components/ui/select";
 import {
   PlusCircle,
-  CheckCheck,
   RotateCcw,
   FolderKanban,
   AlertCircle,
   ListPlus,
   Edit3,
-  AlertTriangle,
   Maximize2,
   Sparkles,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { BulkCreateStepper } from "./bulk-create-stepper";
+import { BulkCreateProjectDialog } from "./bulk-create-project-dialog";
 
 export function BulkCreateClient() {
   const {
@@ -81,40 +72,6 @@ export function BulkCreateClient() {
     setPendingProjectKey,
     applyProjectChange,
   } = useBulkCreateController();
-
-  const stepsConfig = [
-    {
-      number: 1,
-      title: "Nhập dữ liệu & Mặc định",
-      desc: filledCount > 0 ? `${filledCount} task đã sẵn sàng` : "Nhập hoặc dán từ bảng tính",
-      active: step === "input",
-      done: step !== "input",
-      clickable: step === "preview",
-      onClick: () => {
-        if (step === "preview") setStep("input");
-      },
-    },
-    {
-      number: 2,
-      title: "Xem trước & Xác nhận",
-      desc: previewData ? `${previewData.actionable} task sẵn sàng tạo` : "Kiểm tra chuẩn hoá",
-      active: step === "preview",
-      done: step === "progress",
-      clickable: step === "input" && Boolean(previewData),
-      onClick: () => {
-        if (step === "input" && previewData) setStep("preview");
-      },
-    },
-    {
-      number: 3,
-      title: "Tiến độ & Kết quả",
-      desc: activeOperationId ? "Hàng đợi nền Jira" : "Tạo tự động trên Jira",
-      active: step === "progress",
-      done: false,
-      clickable: false,
-      onClick: undefined,
-    },
-  ];
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
@@ -201,53 +158,13 @@ export function BulkCreateClient() {
       </header>
 
       {/* Interactive Progress Steps */}
-      <ol
-        aria-label="Tiến trình tạo task hàng loạt"
-        className="grid grid-cols-1 sm:grid-cols-3 overflow-hidden rounded-xl border border-border/80 bg-card shadow-xs select-none divide-y sm:divide-y-0 sm:divide-x divide-border/60"
-      >
-        {stepsConfig.map((s) => {
-          const Tag = s.clickable ? "button" : "div";
-          return (
-            <li key={s.number}>
-              <Tag
-                type={s.clickable ? "button" : undefined}
-                onClick={s.onClick}
-                disabled={!s.clickable}
-                className={cn(
-                  "w-full text-left flex items-center gap-3 px-4 py-3.5 transition-colors",
-                  s.active && "bg-primary/5 text-foreground font-medium",
-                  !s.active && !s.done && "text-muted-foreground",
-                  s.done && "text-foreground",
-                  s.clickable && "cursor-pointer hover:bg-muted/40"
-                )}
-              >
-                <span
-                  className={cn(
-                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition-transform duration-150",
-                    s.done
-                      ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-                      : s.active
-                        ? "border-primary bg-primary text-primary-foreground shadow-xs scale-105"
-                        : "border-border bg-muted/60 text-muted-foreground"
-                  )}
-                >
-                  {s.done ? <CheckCheck className="h-4 w-4" aria-hidden="true" /> : s.number}
-                </span>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="truncate text-xs sm:text-sm font-semibold">{s.title}</span>
-                    {s.clickable && (
-                      <span className="text-[10px] text-primary underline">Quay lại</span>
-                    )}
-                  </div>
-                  <div className="truncate text-[11px] text-muted-foreground">{s.desc}</div>
-                </div>
-              </Tag>
-            </li>
-          );
-        })}
-      </ol>
+      <BulkCreateStepper
+        step={step}
+        onStepChange={setStep}
+        filledCount={filledCount}
+        previewData={previewData}
+        activeOperationId={activeOperationId}
+      />
 
       {/* Step 1: Input & Defaults */}
       {step === "input" && (
@@ -440,52 +357,20 @@ export function BulkCreateClient() {
       )}
 
       {/* Project Change Confirmation Dialog */}
-      <Dialog open={confirmProjectDialogOpen} onOpenChange={setConfirmProjectDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-              Xác nhận thay đổi dự án Jira
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Bảng soạn thảo hiện tại đang có dữ liệu task hoặc cài đặt mặc định.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground leading-relaxed">
-            Dự án sẽ chuyển sang <strong>{pendingProjectKey}</strong>. Các giá trị phụ thuộc vào dự án cũ (Loại task, Mức ưu tiên, Phiên bản) và các giá trị mặc định sẽ được đặt lại để tương thích. Tiêu đề và mô tả công việc sẽ được giữ nguyên an toàn.
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setPendingProjectKey(null);
-                setConfirmProjectDialogOpen(false);
-              }}
-              className="cursor-pointer text-xs"
-            >
-              Huỷ bỏ
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => {
-                if (pendingProjectKey) {
-                  applyProjectChange(pendingProjectKey);
-                }
-                setPendingProjectKey(null);
-                setConfirmProjectDialogOpen(false);
-              }}
-              className="cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold"
-            >
-              Đồng ý chuyển dự án
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BulkCreateProjectDialog
+        open={confirmProjectDialogOpen}
+        onOpenChange={setConfirmProjectDialogOpen}
+        pendingProjectKey={pendingProjectKey}
+        onConfirm={(key) => {
+          applyProjectChange(key);
+          setPendingProjectKey(null);
+          setConfirmProjectDialogOpen(false);
+        }}
+        onCancel={() => {
+          setPendingProjectKey(null);
+          setConfirmProjectDialogOpen(false);
+        }}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useRef, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { parseBulkCreateCsv, type ParsedCsvResult } from "@/lib/bulk/csv-parser";
+import { parseBulkCreateCsv } from "@/lib/bulk/csv-parser";
 import { MAX_BULK_CREATE_ITEMS } from "@/lib/bulk/create-types";
 import {
   Upload,
@@ -32,6 +32,7 @@ import {
   resolveCsvNamesToIds,
   validateImportFile,
 } from "./lib/csv-import-utils";
+import { useCsvImport } from "./lib/use-csv-import";
 import { CsvImportFormattingGuide } from "./csv-import-formatting-guide";
 import { CsvImportExcelPreview } from "./csv-import-excel-preview";
 import { CsvImportCsvPreview } from "./csv-import-csv-preview";
@@ -44,39 +45,36 @@ export function CsvImportDialog({
   projectKey,
   metadata,
 }: CsvImportDialogProps) {
-  const [activeTab, setActiveTab] = useState<"file" | "paste" | "guide">("file");
-  const [rawText, setRawText] = useState("");
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [parsed, setParsed] = useState<ParsedCsvResult | null>(null);
-  const [excelResult, setExcelResult] = useState<ExcelImportResponse | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [fileError, setFileError] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [importMode, setImportMode] = useState<"replace" | "append">(
-    existingFilledCount > 0 ? "append" : "replace"
-  );
-  const [confirmTruncation, setConfirmTruncation] = useState(false);
-  const [downloadingExcel, setDownloadingExcel] = useState(false);
+  const [state, dispatch] = useCsvImport(existingFilledCount);
+  const {
+    activeTab,
+    rawText,
+    fileName,
+    parsed,
+    excelResult,
+    isProcessing,
+    fileError,
+    isDragging,
+    importMode,
+    confirmTruncation,
+    downloadingExcel,
+  } = state;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const remainingCapacity = calcRemainingCapacity(importMode, existingFilledCount);
 
   async function processFile(file: File) {
-    setFileError(null);
-    setFileName(file.name);
-    setParsed(null);
-    setExcelResult(null);
+    dispatch({ type: "START_PROCESSING_FILE", fileName: file.name });
 
     const validation = validateImportFile(file.name, file.size);
     if (validation.error) {
-      setFileError(validation.error);
+      dispatch({ type: "SET_FILE_ERROR", error: validation.error });
       return;
     }
 
     // Handle Excel file (.xlsx) via backend API
     if (validation.isExcel) {
-      setIsProcessing(true);
       try {
         const formData = new FormData();
         formData.append("file", file);
@@ -91,15 +89,19 @@ export function CsvImportDialog({
 
         const data: ExcelImportResponse & { error?: string } = await res.json();
         if (!res.ok) {
-          setFileError(data.error || `Lỗi khi xử lý file Excel (${res.status})`);
+          dispatch({
+            type: "SET_FILE_ERROR",
+            error: data.error || `Lỗi khi xử lý file Excel (${res.status})`,
+          });
           return;
         }
 
-        setExcelResult(data);
+        dispatch({ type: "SET_EXCEL_RESULT", result: data });
       } catch (err) {
-        setFileError(`Không thể tải và đọc file Excel: ${(err as Error).message}`);
-      } finally {
-        setIsProcessing(false);
+        dispatch({
+          type: "SET_FILE_ERROR",
+          error: `Không thể tải và đọc file Excel: ${(err as Error).message}`,
+        });
       }
       return;
     }
@@ -107,19 +109,28 @@ export function CsvImportDialog({
     // Handle text/csv file with FileReader
     const reader = new FileReader();
     reader.onerror = () => {
-      setFileError("Đã xảy ra lỗi khi đọc nội dung tệp. Vui lòng kiểm tra lại tệp và thử lại.");
+      dispatch({
+        type: "SET_FILE_ERROR",
+        error: "Đã xảy ra lỗi khi đọc nội dung tệp. Vui lòng kiểm tra lại tệp và thử lại.",
+      });
     };
     reader.onload = (e) => {
       const content = String(e.target?.result ?? "");
       if (!content.trim()) {
-        setFileError(`Tệp "${file.name}" trống, không có dữ liệu để nhập.`);
+        dispatch({
+          type: "SET_FILE_ERROR",
+          error: `Tệp "${file.name}" trống, không có dữ liệu để nhập.`,
+        });
         return;
       }
       try {
         const res = parseBulkCreateCsv(content, undefined, remainingCapacity);
-        setParsed(res);
+        dispatch({ type: "SET_PARSED_CSV", result: res });
       } catch (err) {
-        setFileError(`Không thể phân tích cú pháp tệp CSV: ${(err as Error).message}`);
+        dispatch({
+          type: "SET_FILE_ERROR",
+          error: `Không thể phân tích cú pháp tệp CSV: ${(err as Error).message}`,
+        });
       }
     };
     reader.readAsText(file, "UTF-8");
@@ -136,19 +147,19 @@ export function CsvImportDialog({
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(true);
+    dispatch({ type: "SET_DRAGGING", isDragging: true });
   }
 
   function handleDragLeave(e: React.DragEvent) {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(false);
+    dispatch({ type: "SET_DRAGGING", isDragging: false });
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(false);
+    dispatch({ type: "SET_DRAGGING", isDragging: false });
     const file = e.dataTransfer.files?.[0];
     if (file) {
       processFile(file);
@@ -156,21 +167,18 @@ export function CsvImportDialog({
   }
 
   function handlePasteChange(text: string) {
-    setRawText(text);
-    setFileError(null);
-    setExcelResult(null);
     if (!text.trim()) {
-      setParsed(null);
+      dispatch({ type: "SET_PASTE_TEXT", text, parsed: null });
       return;
     }
     const res = parseBulkCreateCsv(text, undefined, remainingCapacity);
-    setParsed(res);
+    dispatch({ type: "SET_PASTE_TEXT", text, parsed: res });
   }
 
   async function handleDownloadExcelTemplate() {
     if (!projectKey) return;
-    setDownloadingExcel(true);
-    setFileError(null);
+    dispatch({ type: "SET_DOWNLOADING_EXCEL", downloading: true });
+    dispatch({ type: "SET_FILE_ERROR", error: null });
     try {
       const res = await fetch(`/api/bulk/create/excel-template?project=${encodeURIComponent(projectKey)}`);
       if (!res.ok) {
@@ -193,9 +201,12 @@ export function CsvImportDialog({
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setFileError(`Lỗi khi tải mẫu Excel: ${(err as Error).message}`);
+      dispatch({
+        type: "SET_FILE_ERROR",
+        error: `Lỗi khi tải mẫu Excel: ${(err as Error).message}`,
+      });
     } finally {
-      setDownloadingExcel(false);
+      dispatch({ type: "SET_DOWNLOADING_EXCEL", downloading: false });
     }
   }
 
@@ -227,7 +238,7 @@ export function CsvImportDialog({
     excelHasErrors ||
     (hasTruncation && !confirmTruncation);
 
-  function handleConfirmImport() {
+  const handleConfirmImport = useCallback(() => {
     if (itemsToImport.length === 0) return;
     const sourceType = excelResult ? "excel" : activeTab === "file" ? "csv" : "paste";
     onImport(
@@ -239,14 +250,8 @@ export function CsvImportDialog({
       importMode
     );
     onOpenChange(false);
-    // Reset state
-    setParsed(null);
-    setExcelResult(null);
-    setRawText("");
-    setFileName(null);
-    setFileError(null);
-    setConfirmTruncation(false);
-  }
+    dispatch({ type: "RESET", defaultMode: importMode });
+  }, [itemsToImport, excelResult, activeTab, onImport, fileName, importMode, onOpenChange, dispatch]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -296,7 +301,7 @@ export function CsvImportDialog({
         <div className="flex shrink-0 border-b border-border">
           <button
             type="button"
-            onClick={() => setActiveTab("file")}
+            onClick={() => dispatch({ type: "SET_TAB", tab: "file" })}
             className={`cursor-pointer border-b-2 px-4 py-2 text-xs font-semibold transition-colors ${
               activeTab === "file"
                 ? "border-primary text-primary"
@@ -307,7 +312,7 @@ export function CsvImportDialog({
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("paste")}
+            onClick={() => dispatch({ type: "SET_TAB", tab: "paste" })}
             className={`cursor-pointer border-b-2 px-4 py-2 text-xs font-semibold transition-colors ${
               activeTab === "paste"
                 ? "border-primary text-primary"
@@ -318,7 +323,7 @@ export function CsvImportDialog({
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("guide")}
+            onClick={() => dispatch({ type: "SET_TAB", tab: "guide" })}
             className={`cursor-pointer border-b-2 px-4 py-2 text-xs font-semibold transition-colors ${
               activeTab === "guide"
                 ? "border-primary text-primary"
@@ -420,11 +425,13 @@ export function CsvImportDialog({
               itemsToImport={itemsToImport}
               existingFilledCount={existingFilledCount}
               importMode={importMode}
-              onImportModeChange={setImportMode}
+              onImportModeChange={(mode) => dispatch({ type: "SET_IMPORT_MODE", mode })}
               hasTruncation={hasTruncation}
               remainingCapacity={remainingCapacity}
               confirmTruncation={confirmTruncation}
-              onConfirmTruncationChange={setConfirmTruncation}
+              onConfirmTruncationChange={(confirm) =>
+                dispatch({ type: "SET_CONFIRM_TRUNCATION", confirm })
+              }
             />
           )}
 
@@ -435,11 +442,13 @@ export function CsvImportDialog({
               itemsToImport={itemsToImport}
               existingFilledCount={existingFilledCount}
               importMode={importMode}
-              onImportModeChange={setImportMode}
+              onImportModeChange={(mode) => dispatch({ type: "SET_IMPORT_MODE", mode })}
               hasTruncation={hasTruncation}
               remainingCapacity={remainingCapacity}
               confirmTruncation={confirmTruncation}
-              onConfirmTruncationChange={setConfirmTruncation}
+              onConfirmTruncationChange={(confirm) =>
+                dispatch({ type: "SET_CONFIRM_TRUNCATION", confirm })
+              }
             />
           )}
         </div>

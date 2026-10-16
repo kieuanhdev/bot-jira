@@ -6,14 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
@@ -25,6 +17,8 @@ import {
   Crosshair,
   Trash2,
 } from "lucide-react";
+import { CreatePreviewStats } from "./create-preview-stats";
+import { CreatePreviewConfirmDialog } from "./create-preview-confirm-dialog";
 
 interface CreatePreviewProps {
   preview: BulkCreatePreviewResult;
@@ -65,55 +59,7 @@ export function CreatePreview({
 
   return (
     <div className="space-y-5">
-      {/* Stats Summary Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card className="border-border/70 bg-card p-4">
-          <div className="text-xs font-medium text-muted-foreground">Tổng số task</div>
-          <div className="mt-1 text-2xl font-bold tracking-tight text-foreground">
-            {preview.total}
-          </div>
-        </Card>
-
-        <Card className="border-emerald-500/20 bg-emerald-500/5 p-4 dark:border-emerald-500/30">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-            Sẵn sàng tạo
-          </div>
-          <div className="mt-1 text-2xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">
-            {preview.actionable}
-          </div>
-        </Card>
-
-        <Card className="border-amber-500/20 bg-amber-500/5 p-4 dark:border-amber-500/30">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
-            <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
-            Có cảnh báo
-          </div>
-          <div className="mt-1 text-2xl font-bold tracking-tight text-amber-700 dark:text-amber-400">
-            {warningItems.length}
-          </div>
-        </Card>
-
-        <Card className="border-red-500/20 bg-red-500/5 p-4 dark:border-red-500/30">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-red-700 dark:text-red-400">
-            <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
-            Bị chặn (Lỗi)
-          </div>
-          <div className="mt-1 text-2xl font-bold tracking-tight text-red-700 dark:text-red-400">
-            {preview.blocked}
-          </div>
-        </Card>
-      </div>
-
-      {/* Slow operation latency alert banner */}
-      {preview.metrics?.isSlow && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-800 dark:text-amber-300">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-          <span>
-            Thời gian tạo bản xem trước kéo dài ({preview.metrics.durationMs}ms). Hoạt động mạng hoặc batch lớn có thể làm chậm quá trình xử lý.
-          </span>
-        </div>
-      )}
+      <CreatePreviewStats preview={preview} warningCount={warningItems.length} />
 
       {/* Top Quick Action Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs">
@@ -441,65 +387,13 @@ export function CreatePreview({
         </Button>
       </div>
 
-      {/* Confirmation Dialog */}
-      <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-              <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-              Xác nhận tạo task trên Jira
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Vui lòng xem lại thông tin tóm tắt trước khi hệ thống đưa vào hàng đợi xử lý nền.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 rounded-lg border bg-muted/20 p-3.5 text-xs">
-            <div className="flex justify-between border-b pb-2">
-              <span className="text-muted-foreground">Dự án đích:</span>
-              <span className="font-semibold text-foreground">{projectKey}</span>
-            </div>
-            <div className="flex justify-between border-b pb-2">
-              <span className="text-muted-foreground">Số task sẽ tạo:</span>
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                {preview.actionable} task
-              </span>
-            </div>
-            {preview.blocked > 0 && (
-              <div className="flex justify-between border-b pb-2">
-                <span className="text-muted-foreground">Số task bị chặn (bỏ qua):</span>
-                <span className="font-semibold text-red-600 dark:text-red-400">
-                  {preview.blocked} task
-                </span>
-              </div>
-            )}
-            <div className="pt-1 text-[11px] text-muted-foreground leading-relaxed">
-              ⚠️ <strong>Lưu ý:</strong> Task được tạo trực tiếp trên Jira dưới danh nghĩa tài khoản cá nhân của bạn. Không có tính năng tự động xoá/rollback sau khi task đã tạo thành công.
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setConfirmDialogOpen(false)}
-              className="cursor-pointer text-xs"
-            >
-              Huỷ bỏ
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => {
-                setConfirmDialogOpen(false);
-                onConfirm();
-              }}
-              className="cursor-pointer gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold"
-            >
-              Tôi đồng ý, tạo ngay
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CreatePreviewConfirmDialog
+        open={confirmDialogOpen}
+        onOpenChange={setConfirmDialogOpen}
+        projectKey={projectKey}
+        preview={preview}
+        onConfirm={onConfirm}
+      />
     </div>
   );
 }
