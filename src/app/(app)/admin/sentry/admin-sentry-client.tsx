@@ -17,7 +17,7 @@ import {
 import { api, getErrorMessage } from "@/lib/api-client";
 import { adminKeys } from "@/lib/query-keys";
 import { maskSecrets } from "@/lib/admin/mask-secrets";
-import { cn, timeAgo } from "@/lib/utils";
+import { cn, timeAgo, formatNumber } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
 import { MetricCard } from "@/components/shared/metric-card";
 import { MetricGrid } from "@/components/shared/metric-grid";
@@ -360,7 +360,7 @@ export function AdminSentryClient() {
                           {row.sentryProject} → {row.targetProject ?? "chưa map"}
                         </span>
                         {row.eventCount !== null && (
-                          <span>{row.eventCount.toLocaleString("vi-VN")} lần xảy ra</span>
+                          <span>{formatNumber(row.eventCount)} lần xảy ra</span>
                         )}
                         <span>
                           lần cuối {timeAgo(row.lastSeen ?? row.createdAt)}

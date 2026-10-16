@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 
 export type SparklineDataPoint = number | { value: number; label?: string };
 
@@ -97,7 +97,7 @@ export function Sparkline({
     if (formatter) return formatter(v);
     if (unit === "ms") return `${Math.round(v)} ms`;
     if (unit === "s") return `${v.toFixed(1)} s`;
-    return `${v.toLocaleString("vi-VN")}${unit ? ` ${unit}` : ""}`;
+    return `${formatNumber(v)}${unit ? ` ${unit}` : ""}`;
   };
 
   const defaultAria = `Biểu đồ xu hướng: giá trị hiện tại ${formatValue(lastPoint.val)}, thấp nhất ${formatValue(min)}, cao nhất ${formatValue(max)}`;

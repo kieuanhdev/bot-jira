@@ -4,10 +4,8 @@
 
 export { formatDurationMs as formatDuration } from "@/lib/format/time";
 
-export function formatNumber(n: number | null | undefined): string {
-  if (n == null) return "0";
-  return n.toLocaleString("vi-VN");
-}
+import { formatNumber } from "@/lib/format/number";
+export { formatNumber };
 
 export const RELEASE_GATE_LABELS: Record<string, string> = {
   ci: "Kiểm tra CI",

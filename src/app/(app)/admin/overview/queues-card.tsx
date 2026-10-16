@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/shared/async-state";
 import { ListSkeleton } from "@/components/shared/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { getReleaseGateLabel } from "./format-stats";
 
 export type BarSegment = {
@@ -69,7 +69,7 @@ export function StackedBar({
             <span className={cn("h-2 w-2 rounded-full", s.dotColor ?? s.color)} aria-hidden="true" />
             <span className="text-muted-foreground">{s.label}:</span>
             <span className="font-semibold tabular-nums text-foreground">
-              {s.count.toLocaleString("vi-VN")}
+              {formatNumber(s.count)}
             </span>
           </div>
         ))}

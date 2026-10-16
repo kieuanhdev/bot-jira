@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { maskSecrets } from "@/lib/admin/mask-secrets";
-import { cn, timeAgo } from "@/lib/utils";
+import { cn, timeAgo, formatNumber } from "@/lib/utils";
 import type { AdminProjectSyncRow, AdminSyncState } from "@/lib/admin/project-sync";
 import { ALL_SYNC_FEATURES } from "@/lib/jira/sync-features-shared";
 import { SyncSwitch } from "./sync-switch";
@@ -105,7 +105,7 @@ export function ProjectSyncRow({
             )}
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-            <span>{p.issueCount.toLocaleString("vi-VN")} issue</span>
+            <span>{formatNumber(p.issueCount)} issue</span>
             <span>
               · thành công {p.lastSuccessAt ? timeAgo(p.lastSuccessAt) : "chưa từng"}
             </span>

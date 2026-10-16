@@ -12,6 +12,7 @@ export {
   formatRelative,
   formatDuration,
 } from "./format/time";
+export { formatNumber, formatPercent } from "./format/number";
 
 /**
  * Build Jira deep link to view an issue.

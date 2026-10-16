@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ListSkeleton } from "@/components/shared/skeleton";
-import { timeAgo, cn } from "@/lib/utils";
+import { timeAgo, cn, formatNumber } from "@/lib/utils";
 import { useNow } from "@/hooks/use-now";
 
 export type WebhookSourceMetric = {
@@ -89,7 +89,7 @@ export function WebhooksCard({
                       </div>
                     </TableCell>
                     <TableCell className="py-2.5 text-center tabular-nums font-semibold">
-                      {w.count24h.toLocaleString("vi-VN")}
+                      {formatNumber(w.count24h)}
                     </TableCell>
                     <TableCell className="py-2.5 text-center tabular-nums">
                       {hasUnprocessed ? (
