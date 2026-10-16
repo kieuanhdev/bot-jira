@@ -422,11 +422,11 @@ Phase 3 và 4 có thể làm song song với 2. Các Phase sau Phase 1 độc l�
 - **REF-037.4 Sentry:** phân trang client 50/trang bằng `PaginationFooter`; `selected` được lọc theo danh sách hiện có mỗi lần render (không effect); `filter` vào URL **[D15]**; tách `SentryRow`, `SentryBulkBar`, `SentryFilterTabs`.
 
 **DoD:**
-- [ ] Notifications sau 10 lần "tải thêm": mỗi phút chỉ ≤ `maxPages` request; DOM ≤ ~60 item.
-- [ ] Admin overview: Profiler cho thấy tick 15s chỉ re-render `StaleIndicator`.
-- [ ] `jobs-card.tsx` ≤ 200 dòng; `admin-sentry-client.tsx` ≤ 200 dòng.
-- [ ] QA: mark read/unread, batch, filter, SSE đẩy thông báo mới; admin retry/approve/reject (sau Phase 0), filter jobs, error sheet — light + dark.
-- [ ] V-STD + build pass.
+- [x] Notifications sau 10 lần "tải thêm": mỗi phút chỉ ≤ `maxPages` request; DOM ≤ ~60 item.
+- [x] Admin overview: Profiler cho thấy tick 15s chỉ re-render `StaleIndicator`.
+- [x] `jobs-card.tsx` ≤ 200 dòng; `admin-sentry-client.tsx` ≤ 200 dòng.
+- [x] QA: mark read/unread, batch, filter, SSE đẩy thông báo mới; admin retry/approve/reject (sau Phase 0), filter jobs, error sheet — light + dark.
+- [x] V-STD + build pass.
 
 ---
 
