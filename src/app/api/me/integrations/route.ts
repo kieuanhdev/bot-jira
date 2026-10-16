@@ -40,32 +40,46 @@ export async function GET() {
       : m.slice(0, 160);
 
   let jiraStatus: { ok: boolean; detail?: string } = { ok: false };
-  const jiraAuth = userJiraAuth(user);
-  if (jiraLinked && jiraAuth && env.jiraBaseUrl) {
+  let bbStatus: { ok: boolean; detail?: string } = { ok: false };
+
+  const checkJira = async (): Promise<{ ok: boolean; detail?: string }> => {
+    const jiraAuth = userJiraAuth(user);
+    if (!jiraLinked || !jiraAuth || !env.jiraBaseUrl) return { ok: false };
     try {
       const me = await jiraWith(jiraAuth).me();
-      jiraStatus = { ok: true, detail: me.displayName || me.name };
+      return { ok: true, detail: me.displayName || me.name };
     } catch (e) {
-      jiraStatus = { ok: false, detail: clean((e as Error).message) };
+      return { ok: false, detail: clean((e as Error).message) };
     }
-  }
-  let bbStatus: { ok: boolean; detail?: string } = { ok: false };
-  const bbCreds = userBitbucketCreds(user);
-  if (bbLinked && bbCreds && env.bitbucketBaseUrl && bitbucketRepoList[0]) {
+  };
+
+  const checkBitbucket = async (): Promise<{ ok: boolean; detail?: string }> => {
+    const bbCreds = userBitbucketCreds(user);
+    if (!bbLinked || !bbCreds || !env.bitbucketBaseUrl || !bitbucketRepoList[0]) return { ok: false };
     try {
       await bb.listBranches(bitbucketRepoList[0], bbCreds);
-      bbStatus = { ok: true, detail: bbCreds.user };
+      return { ok: true, detail: bbCreds.user };
     } catch (e) {
-      bbStatus = { ok: false, detail: clean((e as Error).message) };
+      return { ok: false, detail: clean((e as Error).message) };
     }
-  }
+  };
+
+  const [jiraResult, bbResult, systemJiraAvailable] = await Promise.all([
+    checkJira(),
+    checkBitbucket(),
+    hasJiraCredentials(),
+  ]);
+
+  jiraStatus = jiraResult;
+  bbStatus = bbResult;
 
   return NextResponse.json({
     jira: { linked: jiraLinked, status: jiraStatus, verifiedAt: user.jiraVerifiedAt },
     bitbucket: { linked: bbLinked, status: bbStatus, verifiedAt: user.bitbucketVerifiedAt },
     // System credentials may sync shared data, but are never a user fallback.
-    syncAvailable: { jira: await hasJiraCredentials(), bitbucket: hasBitbucketConfig() },
+    syncAvailable: { jira: systemJiraAvailable, bitbucket: hasBitbucketConfig() },
     bitbucketRepo: bitbucketRepoList[0] ?? null,
     bitbucketRepoCount: bitbucketRepoList.length,
   });
 }
+

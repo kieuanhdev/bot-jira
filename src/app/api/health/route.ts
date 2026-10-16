@@ -7,6 +7,7 @@ import { sentry } from "@/lib/sentry/client";
 import { env, hasBitbucketConfig, hasSentryConfig, hasOllamaConfig, hasOpenAiConfig } from "@/lib/env";
 import { getWorkerHealth, isJiraFresh } from "@/lib/health/worker-health";
 import { getJobSchedules } from "@/lib/queue/schedules";
+import { withTimeout } from "@/lib/async/with-timeout";
 
 export type PingResult = {
   ok: boolean;
@@ -25,12 +26,15 @@ function recordServiceLatency(name: string, ms: number): number[] {
   return [...history];
 }
 
-async function ping(name: string, fn: () => Promise<unknown>): Promise<PingResult> {
+async function ping(name: string, fn: () => Promise<unknown>, timeoutMs: number = 5000): Promise<PingResult> {
   const started = Date.now();
   try {
-    await fn();
+    const res = await withTimeout(fn(), timeoutMs);
     const ms = Date.now() - started;
     const history = recordServiceLatency(name, ms);
+    if (res === "timeout") {
+      return { ok: false, ms, error: `timeout after ${timeoutMs}ms`, history };
+    }
     return { ok: true, ms, history };
   } catch (e) {
     const ms = Date.now() - started;
@@ -47,37 +51,123 @@ export async function GET() {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const db = await ping("db", async () => prisma.$queryRaw`SELECT 1`);
-  const workerHealth = await getWorkerHealth();
+  const pingDb = async (): Promise<PingResult> => {
+    return ping("db", async () => prisma.$queryRaw`SELECT 1`);
+  };
 
-  const jiraConfigured = await hasJiraCredentials();
-  const jiraHealth = jiraConfigured
-    ? await ping("jira", () => jira.me())
-    : { ok: false, ms: 0, error: "not configured" };
+  const pingJira = async (): Promise<{ configured: boolean; health: PingResult }> => {
+    const configured = await hasJiraCredentials();
+    if (!configured) {
+      return { configured, health: { ok: false, ms: 0, error: "not configured" } };
+    }
+    const health = await ping("jira", () => jira.me());
+    return { configured, health };
+  };
 
-  const bitbucketHealth = hasBitbucketConfig() && bitbucket.repos().length
-    ? await ping("bitbucket", () => bitbucket.listBranches(bitbucket.repos()[0]))
-    : { ok: false, ms: 0, error: "not configured" };
+  const pingBitbucket = async (): Promise<PingResult> => {
+    if (!hasBitbucketConfig() || !bitbucket.repos().length) {
+      return { ok: false, ms: 0, error: "not configured" };
+    }
+    return ping("bitbucket", () => bitbucket.listBranches(bitbucket.repos()[0]));
+  };
 
-  const sentryHealth = hasSentryConfig()
-    ? await ping("sentry", () => sentry.listUnresolvedIssues(1))
-    : { ok: false, ms: 0, error: "not configured" };
+  const pingSentry = async (): Promise<PingResult> => {
+    if (!hasSentryConfig()) {
+      return { ok: false, ms: 0, error: "not configured" };
+    }
+    return ping("sentry", () => sentry.listUnresolvedIssues(1));
+  };
 
-  const ollamaHealth = hasOllamaConfig()
-    ? await ping("ollama", async () => {
-        const r = await fetch(`${env.ollamaBaseUrl.replace(/\/$/, "")}/api/tags`);
-        if (!r.ok) throw new Error(`ollama ${r.status}`);
-      })
-    : { ok: false, ms: 0, error: "not configured" };
+  const pingOllama = async (): Promise<PingResult> => {
+    if (!hasOllamaConfig()) {
+      return { ok: false, ms: 0, error: "not configured" };
+    }
+    return ping("ollama", async () => {
+      const r = await fetch(`${env.ollamaBaseUrl.replace(/\/$/, "")}/api/tags`);
+      if (!r.ok) throw new Error(`ollama ${r.status}`);
+    });
+  };
 
-  const openaiHealth = hasOpenAiConfig()
-    ? await ping("openai", async () => {
-        const r = await fetch(`${env.openaiBaseUrl.replace(/\/$/, "")}/models`, {
-          headers: { Authorization: `Bearer ${env.openaiApiKey}` },
-        });
-        if (!r.ok) throw new Error(`openai ${r.status}`);
-      })
-    : { ok: false, ms: 0, error: "not configured" };
+  const pingOpenai = async (): Promise<PingResult> => {
+    if (!hasOpenAiConfig()) {
+      return { ok: false, ms: 0, error: "not configured" };
+    }
+    return ping("openai", async () => {
+      const r = await fetch(`${env.openaiBaseUrl.replace(/\/$/, "")}/models`, {
+        headers: { Authorization: `Bearer ${env.openaiApiKey}` },
+      });
+      if (!r.ok) throw new Error(`openai ${r.status}`);
+    });
+  };
+
+  const [
+    dbSettled,
+    workerHealthSettled,
+    jiraSettled,
+    bitbucketSettled,
+    sentrySettled,
+    ollamaSettled,
+    openaiSettled,
+  ] = await Promise.allSettled([
+    pingDb(),
+    getWorkerHealth(),
+    pingJira(),
+    pingBitbucket(),
+    pingSentry(),
+    pingOllama(),
+    pingOpenai(),
+  ]);
+
+  const db: PingResult =
+    dbSettled.status === "fulfilled"
+      ? dbSettled.value
+      : { ok: false, ms: 0, error: (dbSettled.reason as Error)?.message ?? "db check failed" };
+
+  const workerHealth =
+    workerHealthSettled.status === "fulfilled"
+      ? workerHealthSettled.value
+      : {
+          status: "down" as const,
+          workerAgeMs: null,
+          jiraSyncAgeMs: null,
+          hasErrors: true,
+          checkedAt: new Date().toISOString(),
+          jobs: [],
+          staleProjects: [],
+          failingProjects: [],
+          jiraSyncPaused: false,
+          failingJobs: [],
+          runningJobs: [],
+          stuckJobs: [],
+        };
+
+  const jiraResult =
+    jiraSettled.status === "fulfilled"
+      ? jiraSettled.value
+      : { configured: false, health: { ok: false, ms: 0, error: (jiraSettled.reason as Error)?.message ?? "jira check failed" } };
+
+  const bitbucketHealth: PingResult =
+    bitbucketSettled.status === "fulfilled"
+      ? bitbucketSettled.value
+      : { ok: false, ms: 0, error: (bitbucketSettled.reason as Error)?.message ?? "bitbucket check failed" };
+
+  const sentryHealth: PingResult =
+    sentrySettled.status === "fulfilled"
+      ? sentrySettled.value
+      : { ok: false, ms: 0, error: (sentrySettled.reason as Error)?.message ?? "sentry check failed" };
+
+  const ollamaHealth: PingResult =
+    ollamaSettled.status === "fulfilled"
+      ? ollamaSettled.value
+      : { ok: false, ms: 0, error: (ollamaSettled.reason as Error)?.message ?? "ollama check failed" };
+
+  const openaiHealth: PingResult =
+    openaiSettled.status === "fulfilled"
+      ? openaiSettled.value
+      : { ok: false, ms: 0, error: (openaiSettled.reason as Error)?.message ?? "openai check failed" };
+
+  const jiraConfigured = jiraResult.configured;
+  const jiraHealth = jiraResult.health;
 
   return NextResponse.json({
     status: "ok",
@@ -89,7 +179,14 @@ export async function GET() {
       openaiConfigured: hasOpenAiConfig(),
       ollamaConfigured: hasOllamaConfig(),
     },
-    services: { db, jira: jiraHealth, bitbucket: bitbucketHealth, sentry: sentryHealth, openai: openaiHealth, ollama: ollamaHealth },
+    services: {
+      db,
+      jira: jiraHealth,
+      bitbucket: bitbucketHealth,
+      sentry: sentryHealth,
+      openai: openaiHealth,
+      ollama: ollamaHealth,
+    },
     worker: {
       status: workerHealth.status,
       jiraFresh: isJiraFresh(workerHealth),
@@ -107,3 +204,4 @@ export async function GET() {
     schedules: getJobSchedules(env.pollIntervalMs),
   });
 }
+

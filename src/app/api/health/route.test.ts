@@ -13,7 +13,13 @@ const mocks = vi.hoisted(() => ({
   hasOllamaConfig: vi.fn(),
   hasOpenAiConfig: vi.fn(),
   getJobSchedules: vi.fn(),
+  withTimeout: vi.fn(),
 }));
+
+vi.mock("@/lib/async/with-timeout", () => ({
+  withTimeout: (p: Promise<unknown>, ms: number) => mocks.withTimeout(p, ms),
+}));
+
 
 vi.mock("@/lib/session", () => ({
   getSession: mocks.session,
@@ -79,6 +85,7 @@ describe("GET /api/health", () => {
     mocks.hasOllamaConfig.mockReturnValue(false);
     mocks.hasOpenAiConfig.mockReturnValue(false);
     mocks.getJobSchedules.mockReturnValue({});
+    mocks.withTimeout.mockImplementation((p: Promise<unknown>) => p);
   });
 
   it("returns 403 when user is not admin", async () => {
@@ -102,4 +109,41 @@ describe("GET /api/health", () => {
     expect(data.services.jira.ok).toBe(true);
     expect(Array.isArray(data.services.jira.history)).toBe(true);
   });
+
+  it("executes service pings in parallel (time ≈ max, not sum)", async () => {
+    // Both take 40ms
+    mocks.prismaQueryRaw.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve([{ 1: 1 }]), 40))
+    );
+    mocks.jiraMe.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve({ name: "JiraBot" }), 40))
+    );
+
+    const start = Date.now();
+    const res = await GET();
+    const duration = Date.now() - start;
+
+    expect(res.status).toBe(200);
+    // If sequential, duration >= 80ms. In parallel, duration < 75ms.
+    expect(duration).toBeLessThan(75);
+  });
+
+  it("handles ping timeout gracefully without failing the entire response", async () => {
+    mocks.withTimeout.mockImplementation(async (p: Promise<unknown>) => {
+      const val = await p;
+      if (val && typeof val === "object" && "name" in (val as Record<string, unknown>)) {
+        return "timeout";
+      }
+      return val;
+    });
+
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.status).toBe("ok");
+    expect(data.services.jira.ok).toBe(false);
+    expect(data.services.jira.error).toContain("timeout");
+  });
 });
+
+
