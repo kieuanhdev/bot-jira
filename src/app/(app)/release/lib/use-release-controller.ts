@@ -61,7 +61,7 @@ export function useReleaseController() {
       stale: boolean;
     };
   }>({
-    queryKey: ["releases", selectedProject],
+    queryKey: releasesKeys.list(selectedProject),
     queryFn: () => {
       const p = selectedProject !== "all" ? `?projectKey=${encodeURIComponent(selectedProject)}&includeArchived=true` : "?includeArchived=true";
       return api<{

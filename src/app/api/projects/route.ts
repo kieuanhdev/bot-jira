@@ -14,20 +14,12 @@ import {
 } from "@/lib/jira/project-catalog";
 import { detectPeopleFields } from "@/lib/jira/people-fields";
 
-/**
- * Project list and open counts from the shared Jira catalog and read model.
- * Returns all active catalog projects with their selection state for current user.
- */
-export async function GET() {
-  const reqStart = Date.now();
-  const session = await getSession();
-  if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
+export async function listUserProjects(userId: string) {
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: userId },
     select: { jiraUsername: true, jiraUserEnc: true, boardProjects: true },
   });
-  if (!user) return NextResponse.json({ error: "session_invalid" }, { status: 401 });
+  if (!user) return null;
 
   const activeCatalog = await listActiveProjects();
   const activeKeys = new Set(activeCatalog.map((p) => p.key));
@@ -68,12 +60,28 @@ export async function GET() {
     features: resolveSyncFeatures(project.syncFeatures),
   }));
 
+  return { items };
+}
+
+/**
+ * Project list and open counts from the shared Jira catalog and read model.
+ * Returns all active catalog projects with their selection state for current user.
+ */
+export async function GET() {
+  const reqStart = Date.now();
+  const session = await getSession();
+  if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  const result = await listUserProjects(session.user.id);
+  if (!result) return NextResponse.json({ error: "session_invalid" }, { status: 401 });
+
   const dur = Date.now() - reqStart;
   return NextResponse.json(
-    { items },
+    result,
     { headers: { "Server-Timing": `total;dur=${dur}` } }
   );
 }
+
 
 /**
  * Register a new project in the shared catalog, verify Jira access,

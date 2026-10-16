@@ -5,6 +5,46 @@ import { userJiraAuth, userJiraUsername } from "@/lib/user-creds";
 import { env } from "@/lib/env";
 import { can } from "@/lib/permissions";
 
+export async function getMeStatus(sessionUser: { id: string; role?: string }) {
+  const user = await prisma.user.findUnique({
+    where: { id: sessionUser.id },
+    select: {
+      jiraUserEnc: true,
+      jiraTokenEnc: true,
+      jiraAuth: true,
+      jiraVerifiedAt: true,
+      jiraUsername: true,
+      onboarded: true,
+      role: true,
+    },
+  });
+
+  const auth = userJiraAuth(user);
+
+  const base = {
+    onboarded: Boolean(user?.onboarded),
+    jiraVerifiedAt: user?.jiraVerifiedAt ? user.jiraVerifiedAt.toISOString() : null,
+    jiraBaseUrl: env.jiraBaseUrl,
+    bitbucketBaseUrl: env.bitbucketBaseUrl || null,
+    role: user?.role ?? sessionUser.role ?? "member",
+    canBoardTeam: can({ user: { role: user?.role ?? sessionUser.role } }, "board.team"),
+  };
+
+  if (!auth) {
+    return {
+      jiraLinked: false,
+      jiraName: null,
+      ...base,
+    };
+  }
+
+  return {
+    jiraLinked: true,
+    jiraName: userJiraUsername(user),
+    ...base,
+  };
+}
+
 /**
  * Tells the client whether the current user has their own Jira token linked,
  * and (if linked) their Jira identity. Used to gate the app and to default the
@@ -20,50 +60,10 @@ export async function GET() {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: {
-      jiraUserEnc: true,
-      jiraTokenEnc: true,
-      jiraAuth: true,
-      jiraVerifiedAt: true,
-      jiraUsername: true,
-      onboarded: true,
-      role: true,
-    },
-  });
-
-  const auth = userJiraAuth(user);
+  const result = await getMeStatus(session.user);
   const dur = Date.now() - reqStart;
   const headers = { "Server-Timing": `total;dur=${dur}` };
 
-  if (!auth) {
-    return NextResponse.json(
-      {
-        jiraLinked: false,
-        onboarded: Boolean(user?.onboarded),
-        jiraName: null,
-        jiraVerifiedAt: user?.jiraVerifiedAt ?? null,
-        jiraBaseUrl: env.jiraBaseUrl,
-        bitbucketBaseUrl: env.bitbucketBaseUrl || null,
-        role: user?.role ?? session.user.role ?? "member",
-        canBoardTeam: can({ user: { role: user?.role ?? session.user.role } }, "board.team"),
-      },
-      { headers }
-    );
-  }
-
-  return NextResponse.json(
-    {
-      jiraLinked: true,
-      onboarded: Boolean(user?.onboarded),
-      jiraName: userJiraUsername(user),
-      jiraVerifiedAt: user?.jiraVerifiedAt ?? null,
-      jiraBaseUrl: env.jiraBaseUrl,
-      bitbucketBaseUrl: env.bitbucketBaseUrl || null,
-      role: user?.role ?? session.user.role ?? "member",
-      canBoardTeam: can({ user: { role: user?.role ?? session.user.role } }, "board.team"),
-    },
-    { headers }
-  );
+  return NextResponse.json(result, { headers });
 }
+

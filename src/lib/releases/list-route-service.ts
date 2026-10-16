@@ -49,19 +49,28 @@ const RELEASE_SELECT = {
   },
 };
 
-/** List releases, optionally filtered by project and readiness. Includes summary KPIs. */
-export async function handleReleaseListRequest(req: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+export class ReleaseForbiddenError extends Error {
+  constructor(message: string = "forbidden_project") {
+    super(message);
+    this.name = "ReleaseForbiddenError";
+  }
+}
 
-  const url = new URL(req.url);
-  const projectKey = url.searchParams.get("projectKey")?.trim() || undefined;
-  const readinessFilter = url.searchParams.get("readiness")?.trim();
-  const includeArchived = url.searchParams.get("includeArchived") === "true";
+export interface ListReleasesOptions {
+  projectKey?: string;
+  readinessFilter?: string;
+  includeArchived?: boolean;
+}
+
+export async function listReleasesForUser(
+  session: { user: { id: string; role?: string } },
+  options: ListReleasesOptions = {}
+) {
+  const { projectKey, readinessFilter, includeArchived = false } = options;
 
   const scope = await getUserScopedProjects(session.user.id, session.user.role);
   if (projectKey && projectKey !== "all" && !scope.includes(projectKey)) {
-    return NextResponse.json({ error: "forbidden_project" }, { status: 403 });
+    throw new ReleaseForbiddenError("forbidden_project");
   }
 
   const releases = await prisma.release.findMany({
@@ -215,20 +224,48 @@ export async function handleReleaseListRequest(req: Request) {
     syncState = "synced";
   }
 
-  return NextResponse.json({
-    summary,
-    items,
-    jiraBaseUrl: env.jiraBaseUrl || null,
-    sync: {
-      state: syncState,
-      lastAttemptAt: cursor?.lastStartedAt?.toISOString() ?? null,
-      lastSuccessAt: cursor?.lastSuccessAt?.toISOString() ?? null,
-      lastErrorCode,
-      lastError,
-      stale: isStale,
-    },
-  });
+  return JSON.parse(
+    JSON.stringify({
+      summary,
+      items,
+      jiraBaseUrl: env.jiraBaseUrl || null,
+      sync: {
+        state: syncState,
+        lastAttemptAt: cursor?.lastStartedAt?.toISOString() ?? null,
+        lastSuccessAt: cursor?.lastSuccessAt?.toISOString() ?? null,
+        lastErrorCode,
+        lastError,
+        stale: isStale,
+      },
+    })
+  );
 }
+
+/** List releases, optionally filtered by project and readiness. Includes summary KPIs. */
+export async function handleReleaseListRequest(req: Request) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  const url = new URL(req.url);
+  const projectKey = url.searchParams.get("projectKey")?.trim() || undefined;
+  const readinessFilter = url.searchParams.get("readiness")?.trim();
+  const includeArchived = url.searchParams.get("includeArchived") === "true";
+
+  try {
+    const data = await listReleasesForUser(session, {
+      projectKey,
+      readinessFilter,
+      includeArchived,
+    });
+    return NextResponse.json(data);
+  } catch (err) {
+    if (err instanceof ReleaseForbiddenError || (err as Error)?.message === "forbidden_project") {
+      return NextResponse.json({ error: "forbidden_project" }, { status: 403 });
+    }
+    throw err;
+  }
+}
+
 
 /**
  * Create a release. Identified by a Jira Fix Version:
