@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { queryBranches, type BranchQueryParams } from "@/lib/bitbucket/branch-query";
-import { env } from "@/lib/env";
-import { getUserScopedProjects } from "@/lib/project-scope";
+import { listBranchesForUser } from "@/lib/branches/list-route-service";
+import type { BranchQueryParams } from "@/lib/bitbucket/branch-query";
+
+export { listBranchesForUser };
 
 /**
  * List tracked branches with search, filters, pagination, summary, facets, and task context.
@@ -28,10 +29,7 @@ export async function GET(req: Request) {
   const page = pageStr ? parseInt(pageStr, 10) : 1;
   const pageSize = pageSizeStr ? parseInt(pageSizeStr, 10) : 25;
 
-  const projectScope = await getUserScopedProjects(session.user.id, session.user.role);
-
-  const result = await queryBranches({
-    projectScope,
+  const data = await listBranchesForUser(session.user, {
     q,
     project,
     repo,
@@ -42,13 +40,9 @@ export async function GET(req: Request) {
     attention,
     sort,
     order,
-    page: isNaN(page) ? 1 : page,
-    pageSize: isNaN(pageSize) ? 25 : pageSize,
+    page,
+    pageSize,
   });
 
-  return NextResponse.json({
-    ...result,
-    bitbucketBaseUrl: env.bitbucketBaseUrl || null,
-    jiraBaseUrl: env.jiraBaseUrl || null,
-  });
+  return NextResponse.json(data);
 }

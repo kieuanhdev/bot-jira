@@ -1,24 +1,20 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { prisma } from "@/lib/prisma";
-import { userJiraUsername, jiraUsernameAliases } from "@/lib/user-creds";
-import { queryDeliveryTasks, type TaskDeliveryQueryParams } from "@/lib/bitbucket/task-delivery-query";
-import { env } from "@/lib/env";
+import { listDeliveryTasksForUser } from "@/lib/branches/list-route-service";
+
+export { listDeliveryTasksForUser };
 
 export async function GET(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { jiraUsername: true, jiraUserEnc: true },
-  });
-
-  const username = userJiraUsername(user);
-  const userAliases = username ? jiraUsernameAliases(username) : [];
-
   const url = new URL(req.url);
-  const view = (url.searchParams.get("view") as TaskDeliveryQueryParams["view"]) ?? "my-work";
+  const rawView = url.searchParams.get("view");
+  const view = (
+    rawView === "needs-attention" || rawView === "pending-review" || rawView === "unlinked"
+      ? rawView
+      : "my-work"
+  ) as "my-work" | "needs-attention" | "pending-review" | "unlinked";
   const q = url.searchParams.get("q") ?? undefined;
   const project = url.searchParams.get("project") ?? undefined;
   const repo = url.searchParams.get("repo") ?? undefined;
@@ -31,7 +27,7 @@ export async function GET(req: Request) {
   const page = pageStr ? parseInt(pageStr, 10) : 1;
   const pageSize = pageSizeStr ? parseInt(pageSizeStr, 10) : 20;
 
-  const result = await queryDeliveryTasks({
+  const data = await listDeliveryTasksForUser(session.user, {
     view,
     q,
     project,
@@ -39,14 +35,9 @@ export async function GET(req: Request) {
     pr,
     taskStatus,
     assignee,
-    userAliases,
-    page: isNaN(page) ? 1 : page,
-    pageSize: isNaN(pageSize) ? 20 : pageSize,
+    page,
+    pageSize,
   });
 
-  return NextResponse.json({
-    ...result,
-    bitbucketBaseUrl: env.bitbucketBaseUrl || null,
-    jiraBaseUrl: env.jiraBaseUrl || null,
-  });
+  return NextResponse.json(data);
 }
