@@ -13,24 +13,15 @@ export type QuickAction =
 export type ViewMode = "board" | "list";
 export type Transition = BoardTransition;
 
-export const PRIORITY_RANK: Record<string, number> = {
-  Blocker: 0,
-  Highest: 1,
-  High: 2,
-  Medium: 3,
-  Low: 4,
-  Lowest: 5,
-};
-
-export const PRIORITY_META: Record<string, { rail: string; badge: string }> = {
-  Blocker: { rail: "bg-rose-500", badge: "bg-rose-500/12 text-rose-600 dark:text-rose-400" },
-  Highest: { rail: "bg-rose-400", badge: "bg-rose-400/12 text-rose-600 dark:text-rose-400" },
-  High: { rail: "bg-amber-500", badge: "bg-amber-500/12 text-amber-700 dark:text-amber-400" },
-  Medium: { rail: "bg-sky-400", badge: "bg-sky-500/12 text-sky-700 dark:text-sky-400" },
-  Low: { rail: "bg-slate-300 dark:bg-slate-600", badge: "bg-muted text-muted-foreground" },
-  Lowest: { rail: "bg-slate-300 dark:bg-slate-600", badge: "bg-muted text-muted-foreground" },
-};
-export const PRIORITY_NEUTRAL = { rail: "bg-transparent", badge: "bg-muted text-muted-foreground" };
+export {
+  PRIORITIES,
+  type PriorityName,
+  PRIORITY_RANK,
+  PRIORITY_META,
+  PRIORITY_NEUTRAL,
+  isHighPriority,
+  getPriorityRank,
+} from "@/lib/jira/priority";
 
 export { AVATAR_PALETTE } from "@/lib/avatar";
 

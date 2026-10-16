@@ -1,13 +1,4 @@
-export const PRIORITIES = [
-  "Blocker",
-  "Highest",
-  "High",
-  "Medium",
-  "Low",
-  "Lowest",
-] as const;
-
-export type PriorityName = (typeof PRIORITIES)[number];
+export { PRIORITIES, type PriorityName } from "@/lib/jira/priority";
 
 export function toName(t: { to?: { name?: string } | string } | undefined): string {
   if (!t) return "";

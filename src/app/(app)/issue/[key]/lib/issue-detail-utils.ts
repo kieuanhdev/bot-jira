@@ -4,14 +4,7 @@ import type { Transition } from "./issue-detail-types";
 // the board quick panel shares the same worklog validation.
 export { getDefaultLogStartedAt, validateWorklog } from "@/lib/worklogs/schema";
 
-export const PRIORITIES = [
-  "Blocker",
-  "Highest",
-  "High",
-  "Medium",
-  "Low",
-  "Lowest",
-] as const;
+export { PRIORITIES, type PriorityName } from "@/lib/jira/priority";
 
 export function transitionTo(t: Transition): string {
   return typeof t.to === "string" ? t.to : t.to?.name ?? t.name ?? "";

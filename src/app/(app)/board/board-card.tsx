@@ -33,6 +33,7 @@ import type { IssueItem } from "@/hooks/use-issues";
 import { isOverdue } from "@/lib/due-date";
 import type { QuickAction } from "./lib/board-types";
 import { priorityMeta, typeShort, daysSince } from "./lib/board-utils";
+import { PRIORITIES, isHighPriority } from "@/lib/jira/priority";
 import { JiraAvatar } from "@/components/jira-avatar";
 
 export function CardContent({
@@ -61,7 +62,6 @@ export function CardContent({
   const pm = priorityMeta(issue.priority || "");
   const canPrev = (colIndex ?? 0) > 0;
   const canNext = (colIndex ?? 0) < (columnCount ?? 0) - 1;
-  const priorities = ["Blocker", "Highest", "High", "Medium", "Low", "Lowest"];
   return (
     <div
       className={cn(
@@ -123,7 +123,7 @@ export function CardContent({
                   )}
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel>Priority</DropdownMenuLabel>
-                  {priorities.map((p) => (
+                  {PRIORITIES.map((p) => (
                     <DropdownMenuItem
                       key={p}
                       onSelect={(e) => { e.preventDefault(); onQuickAction(issue.jiraKey, { kind: "priority", value: p }); }}
@@ -201,7 +201,7 @@ export function CardContent({
                 <CalendarClock className="h-2.5 w-2.5" aria-hidden /> Quá hạn
               </Badge>
             )}
-            {issue.priority && ["Blocker", "Highest", "High"].includes(issue.priority) && (
+            {isHighPriority(issue.priority) && (
               <span className={cn("inline-flex h-4 items-center rounded-full px-1.5 text-[10px] font-semibold", pm.badge)}>
                 {issue.priority}
               </span>
