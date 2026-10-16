@@ -1,246 +1,56 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useState, useMemo } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { reportsKeys } from "@/lib/query-keys";
 import { queryPolicy } from "@/lib/query-policy";
 import type {
   ProjectDetailResponse,
-  ReportUnit,
   RiskTasksResponse,
-  ReportStatusGroup,
-  ReportPeriod,
 } from "@/lib/reports/types";
-import { resolveReportPeriod } from "@/lib/reports/period";
 import {
-  buildReportUrlSearchParams,
   buildReportQueryParams,
   buildRiskQueryParams,
   extractExportFilename,
-  shouldReplaceReportUrl,
 } from "./report-url-state";
+import { useReportUrlState } from "./use-report-url-state";
 
 export function useProjectReportController(projectKey: string) {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
-  const pendingNavigationUrlRef = useRef<string | null>(null);
-
-  const initialPeriod = useMemo(() => {
-    return resolveReportPeriod({
-      period: searchParams.get("period") || "this_week",
-      from: searchParams.get("from"),
-      to: searchParams.get("to"),
-      timezone: searchParams.get("timezone") || "Asia/Ho_Chi_Minh",
-    }).period;
-  }, [searchParams]);
-
-  const [period, setPeriod] = useState<ReportPeriod>(initialPeriod);
-  const [versionId, setVersionId] = useState<string>(searchParams.get("versionId") || "all");
-  const [unit, setUnit] = useState<ReportUnit>(
-    (searchParams.get("unit") as ReportUnit) || "auto"
-  );
-  const [activeTab, setActiveTab] = useState<string>(searchParams.get("tab") || "overview");
-  const [activeMember, setActiveMember] = useState<string | null>(
-    searchParams.get("member") || null
-  );
-
-  const [activeKpiFilter, setActiveKpiFilter] = useState<string | null>(null);
-  const [activeActivity, setActiveActivity] = useState<string>(
-    searchParams.get("activity") || "all"
-  );
-  const [activeStatusGroup, setActiveStatusGroup] = useState<ReportStatusGroup | null>(
-    (searchParams.get("statusGroup") as ReportStatusGroup) || null
-  );
-  const [activeAssignee, setActiveAssignee] = useState<string>(
-    searchParams.get("assignee") || "all"
-  );
-  const [riskOffset, setRiskOffset] = useState<number>(0);
-  const [isExporting, setIsExporting] = useState<boolean>(false);
-
-  // Listen to browser Back / Forward history navigation
-  const searchParamsString = searchParams.toString();
-  const [prevParamsString, setPrevParamsString] = useState(searchParamsString);
-  if (searchParamsString !== prevParamsString) {
-    setPrevParamsString(searchParamsString);
-    setActiveTab(searchParams.get("tab") || "overview");
-    setActiveMember(searchParams.get("member") || null);
-    setActiveStatusGroup((searchParams.get("statusGroup") as ReportStatusGroup) || null);
-    setActiveActivity(searchParams.get("activity") || "all");
-    setActiveAssignee(searchParams.get("assignee") || "all");
-    setVersionId(searchParams.get("versionId") || "all");
-    setUnit((searchParams.get("unit") as ReportUnit) || "auto");
-    setPeriod(
-      resolveReportPeriod({
-        period: searchParams.get("period") || "this_week",
-        from: searchParams.get("from"),
-        to: searchParams.get("to"),
-        timezone: searchParams.get("timezone") || "Asia/Ho_Chi_Minh",
-      }).period
-    );
-  }
-
-  // Sync state to URL
-  useEffect(() => {
-    const params = buildReportUrlSearchParams({
-      period,
-      versionId,
-      unit,
-      activeTab,
-      activeMember,
-      activeActivity,
-      activeStatusGroup,
-      activeAssignee,
-    });
-
-    const qs = params.toString();
-    const newUrl = qs ? `${pathname}?${qs}` : pathname;
-    const currentQs = searchParams.toString();
-    const currentUrl = currentQs ? `${pathname}?${currentQs}` : pathname;
-
-    if (pendingNavigationUrlRef.current === currentUrl) {
-      pendingNavigationUrlRef.current = null;
-    }
-
-    if (shouldReplaceReportUrl(newUrl, currentUrl, pendingNavigationUrlRef.current)) {
-      router.replace(newUrl, { scroll: false });
-    }
-  }, [
+  const urlState = useReportUrlState();
+  const {
     period,
+    setPeriod,
     versionId,
+    setVersionId,
     unit,
+    setUnit,
     activeTab,
     activeMember,
     activeActivity,
     activeStatusGroup,
     activeAssignee,
-    pathname,
-    router,
-    searchParams,
-  ]);
+    activeSearch,
+    activeOffset,
+    tasksSearchInput,
+    setTasksSearchInput,
+    handleTabChange,
+    handleSelectMember,
+    handleBackFromMember,
+    handleDrillDownToTasks,
+    handleNavigateToOverview,
+    handleNavigateBack,
+    setTasksActivity,
+    setTasksStatusGroup,
+    setTasksAssignee,
+    setTasksSearch,
+    setTasksOffset,
+    resetTasksFilters,
+  } = urlState;
 
-  const handleTabChange = (tabId: string) => {
-    if (tabId === activeTab) return;
-    setActiveTab(tabId);
-    const nextMember = tabId === "members" ? activeMember : null;
-    if (tabId !== "members") {
-      setActiveMember(null);
-    }
-    const params = buildReportUrlSearchParams({
-      period,
-      versionId,
-      unit,
-      activeTab: tabId,
-      activeMember: nextMember,
-      activeActivity,
-      activeStatusGroup,
-      activeAssignee,
-    });
-    const qs = params.toString();
-    const nextUrl = qs ? `${pathname}?${qs}` : pathname;
-    pendingNavigationUrlRef.current = nextUrl;
-    router.push(nextUrl, { scroll: false });
-  };
-
-  const handleSelectMember = (assignee: string | null) => {
-    setActiveMember(assignee);
-    const params = buildReportUrlSearchParams({
-      period,
-      versionId,
-      unit,
-      activeTab: "members",
-      activeMember: assignee,
-      activeActivity,
-      activeStatusGroup,
-      activeAssignee,
-    });
-    const qs = params.toString();
-    const nextUrl = qs ? `${pathname}?${qs}` : pathname;
-    pendingNavigationUrlRef.current = nextUrl;
-    if (assignee) {
-      router.push(nextUrl, { scroll: false });
-    } else {
-      if (typeof window !== "undefined" && window.history.length > 1) {
-        router.back();
-      } else {
-        router.push(nextUrl, { scroll: false });
-      }
-    }
-  };
-
-  const handleBackFromMember = () => {
-    handleSelectMember(null);
-  };
-
-  const handleDrillDownToTasks = (filter: {
-    activity?: string;
-    statusGroup?: string;
-    assignee?: string;
-  }) => {
-    const nextActivity = filter.activity !== undefined ? filter.activity : activeActivity;
-    const nextStatusGroup =
-      filter.statusGroup !== undefined
-        ? (filter.statusGroup as ReportStatusGroup)
-        : activeStatusGroup;
-    const nextAssignee = filter.assignee !== undefined ? filter.assignee : activeAssignee;
-
-    if (filter.activity !== undefined) setActiveActivity(filter.activity);
-    if (filter.statusGroup !== undefined)
-      setActiveStatusGroup(filter.statusGroup as ReportStatusGroup);
-    if (filter.assignee !== undefined) setActiveAssignee(filter.assignee);
-    setActiveTab("tasks");
-    setActiveMember(null);
-
-    // Push new history state so Browser Back returns to overview / previous screen
-    const params = buildReportUrlSearchParams({
-      period,
-      versionId,
-      unit,
-      activeTab: "tasks",
-      activeMember: null,
-      activeActivity: nextActivity,
-      activeStatusGroup: nextStatusGroup,
-      activeAssignee: nextAssignee,
-    });
-
-    const qs = params.toString();
-    const nextUrl = qs ? `${pathname}?${qs}` : pathname;
-    pendingNavigationUrlRef.current = nextUrl;
-    router.push(nextUrl, { scroll: false });
-  };
-
-  const handleNavigateToOverview = () => {
-    setActiveTab("overview");
-    setActiveMember(null);
-    setActiveStatusGroup(null);
-    setActiveActivity("all");
-    setActiveAssignee("all");
-
-    const params = buildReportUrlSearchParams({
-      period,
-      versionId,
-      unit,
-      activeTab: "overview",
-      activeMember: null,
-      activeActivity: "all",
-      activeStatusGroup: null,
-      activeAssignee: "all",
-    });
-    const qs = params.toString();
-    const nextUrl = qs ? `${pathname}?${qs}` : pathname;
-    pendingNavigationUrlRef.current = nextUrl;
-    router.push(nextUrl, { scroll: false });
-  };
-
-  const handleNavigateBack = () => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-    } else {
-      handleNavigateToOverview();
-    }
-  };
+  const [activeKpiFilter, setActiveKpiFilter] = useState<string | null>(null);
+  const [riskOffset, setRiskOffset] = useState<number>(0);
+  const [isExporting, setIsExporting] = useState<boolean>(false);
 
   const queryParams = useMemo(() => {
     return buildReportQueryParams(period, versionId, unit);
@@ -289,7 +99,6 @@ export function useProjectReportController(projectKey: string) {
     gcTime: queryPolicy.reports.risks.gcTime,
   });
 
-
   const handleExportCsv = async () => {
     try {
       setIsExporting(true);
@@ -326,17 +135,16 @@ export function useProjectReportController(projectKey: string) {
     unit,
     setUnit,
     activeTab,
-    setActiveTab,
     activeMember,
-    setActiveMember,
     activeKpiFilter,
     setActiveKpiFilter,
     activeActivity,
-    setActiveActivity,
     activeStatusGroup,
-    setActiveStatusGroup,
     activeAssignee,
-    setActiveAssignee,
+    activeSearch,
+    activeOffset,
+    tasksSearchInput,
+    setTasksSearchInput,
     riskOffset,
     setRiskOffset,
     isExporting,
@@ -355,5 +163,11 @@ export function useProjectReportController(projectKey: string) {
     handleBackFromMember,
     handleTabChange,
     handleExportCsv,
+    setTasksActivity,
+    setTasksStatusGroup,
+    setTasksAssignee,
+    setTasksSearch,
+    setTasksOffset,
+    resetTasksFilters,
   };
 }

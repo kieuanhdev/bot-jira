@@ -20,7 +20,6 @@ import {
 import {
   ArrowLeft,
   Download,
-  AlertCircle,
   RefreshCw,
   Clock,
   Layers,
@@ -29,17 +28,16 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useMemo } from "react";
-import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-
+import { ErrorState } from "@/components/shared/async-state";
 import { reportsKeys } from "@/lib/query-keys";
 import { queryPolicy } from "@/lib/query-policy";
 import type {
   ReportUnit,
-  ReportStatusGroup,
-  ProjectMembersResponse,
 } from "@/lib/reports/types";
 import { useProjectReportController } from "./lib/use-project-report-controller";
+import { useProjectMembers } from "./lib/use-project-members";
 
 
 interface ProjectReportClientProps {
@@ -59,11 +57,10 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
     activeKpiFilter,
     setActiveKpiFilter,
     activeActivity,
-    setActiveActivity,
     activeStatusGroup,
-    setActiveStatusGroup,
     activeAssignee,
-    setActiveAssignee,
+    activeSearch,
+    activeOffset,
     riskOffset,
     setRiskOffset,
     isExporting,
@@ -81,6 +78,12 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
     handleBackFromMember,
     handleTabChange,
     handleExportCsv,
+    setTasksActivity,
+    setTasksStatusGroup,
+    setTasksAssignee,
+    setTasksSearch,
+    setTasksOffset,
+    resetTasksFilters,
   } = useProjectReportController(projectKey);
 
   const isMemberTabAndSelected = activeTab === "members" && Boolean(activeMember);
@@ -97,18 +100,8 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
     return params;
   }, [period, isVersionScope, versionId]);
 
-  const { data: membersData } = useQuery<ProjectMembersResponse>({
-    queryKey: reportsKeys.members(projectKey, memberParams),
-    queryFn: () => {
-      const qp = new URLSearchParams(memberParams);
-      return api<ProjectMembersResponse>(
-        `/api/reports/projects/${projectKey}/members?${qp.toString()}`
-      );
-    },
+  const { data: membersData } = useProjectMembers(projectKey, memberParams, {
     enabled: isMemberTabAndSelected,
-    placeholderData: keepPreviousData,
-    staleTime: queryPolicy.reports.members.staleTime,
-    gcTime: queryPolicy.reports.members.gcTime,
   });
 
 
@@ -387,22 +380,11 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
 
       {/* Error state */}
       {isError && (
-        <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl border border-destructive/20 bg-destructive/10">
-          <AlertCircle className="h-8 w-8 text-destructive mb-2" aria-hidden="true" />
-          <h3 className="text-base font-semibold text-destructive">
-            Không thể tải dữ liệu báo cáo dự án
-          </h3>
-          <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-            {(error as Error)?.message || "Đã xảy ra lỗi khi kết nối tới máy chủ."}
-          </p>
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="mt-4 inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:opacity-90 transition-opacity cursor-pointer"
-          >
-            Thử lại
-          </button>
-        </div>
+        <ErrorState
+          title="Không thể tải dữ liệu báo cáo dự án"
+          message={(error as Error)?.message || "Đã xảy ra lỗi khi kết nối tới máy chủ."}
+          onRetry={() => refetch()}
+        />
       )}
 
       {/* Success Tab Content */}
@@ -418,7 +400,7 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
               }}
               activeStatusGroup={activeStatusGroup}
               onStatusGroupChange={(group) => {
-                setActiveStatusGroup(group);
+                setTasksStatusGroup(group);
               }}
               onDrillDownToTasks={handleDrillDownToTasks}
               riskData={riskData}
@@ -433,16 +415,17 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
               projectKey={projectKey}
               period={period}
               versionId={versionId}
-              initialStatusGroup={activeStatusGroup}
-              initialActivity={activeActivity}
-              initialAssignee={activeAssignee}
-              onFilterChange={({ activity, statusGroup, assignee }) => {
-                setActiveActivity(activity);
-                setActiveStatusGroup(
-                  statusGroup === "all" ? null : (statusGroup as ReportStatusGroup)
-                );
-                setActiveAssignee(assignee);
-              }}
+              activity={activeActivity}
+              statusGroup={activeStatusGroup}
+              assignee={activeAssignee}
+              search={activeSearch}
+              offset={activeOffset}
+              onActivityChange={setTasksActivity}
+              onStatusGroupChange={setTasksStatusGroup}
+              onAssigneeChange={setTasksAssignee}
+              onSearchChange={setTasksSearch}
+              onOffsetChange={setTasksOffset}
+              onResetFilters={resetTasksFilters}
               onNavigateToOverview={handleNavigateBack}
             />
           )}

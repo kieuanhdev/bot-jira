@@ -9,6 +9,8 @@ export interface ReportStateParams {
   activeActivity: string;
   activeStatusGroup: ReportStatusGroup | null;
   activeAssignee: string;
+  activeSearch?: string;
+  activeOffset?: number;
 }
 
 export function shouldReplaceReportUrl(
@@ -39,6 +41,8 @@ export function buildReportUrlSearchParams(state: ReportStateParams): URLSearchP
     if (state.activeActivity !== "all") params.set("activity", state.activeActivity);
     if (state.activeStatusGroup) params.set("statusGroup", state.activeStatusGroup);
     if (state.activeAssignee !== "all") params.set("assignee", state.activeAssignee);
+    if (state.activeSearch?.trim()) params.set("search", state.activeSearch.trim());
+    if (state.activeOffset && state.activeOffset > 0) params.set("offset", String(state.activeOffset));
   }
   return params;
 }

@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
-import { reportsKeys } from "@/lib/query-keys";
-import { queryPolicy } from "@/lib/query-policy";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/shared/async-state";
+import { useProjectMembers } from "./lib/use-project-members";
 import {
   Users,
   ShieldCheck,
@@ -24,7 +22,6 @@ import {
 } from "lucide-react";
 import { getPeriodDisplayLabel } from "@/lib/reports/period";
 import type {
-  ProjectMembersResponse,
   ReportPeriod,
   SupportSignal,
 } from "@/lib/reports/types";
@@ -81,16 +78,6 @@ export function MembersTab({
   const effectiveSelectedAssignee =
     selectedMemberId !== undefined ? selectedMemberId : internalSelectedAssignee;
 
-  const prevAssigneeRef = useRef(effectiveSelectedAssignee);
-  useEffect(() => {
-    if (prevAssigneeRef.current && !effectiveSelectedAssignee) {
-      setTransitionDirection("backward");
-    } else if (!prevAssigneeRef.current && effectiveSelectedAssignee) {
-      setTransitionDirection("forward");
-    }
-    prevAssigneeRef.current = effectiveSelectedAssignee;
-  }, [effectiveSelectedAssignee]);
-
   const isVersionScope = Boolean(versionId && versionId !== "all");
   const periodLabel = isVersionScope ? "Toàn bộ version" : getPeriodDisplayLabel(period);
 
@@ -105,16 +92,7 @@ export function MembersTab({
     return params;
   }, [period, isVersionScope, versionId]);
 
-  const { data, isLoading, isError } = useQuery<ProjectMembersResponse>({
-    queryKey: reportsKeys.members(projectKey, memberParams),
-    queryFn: () => {
-      const sp = new URLSearchParams(memberParams);
-      return api<ProjectMembersResponse>(`/api/reports/projects/${projectKey}/members?${sp.toString()}`);
-    },
-    placeholderData: keepPreviousData,
-    staleTime: queryPolicy.reports.members.staleTime,
-    gcTime: queryPolicy.reports.members.gcTime,
-  });
+  const { data, isLoading, isError, refetch } = useProjectMembers(projectKey, memberParams);
 
 
   const allMembers = useMemo(() => data?.members ?? [], [data?.members]);
@@ -169,9 +147,11 @@ export function MembersTab({
           <Skeleton className="h-[420px] w-full rounded-xl" />
         </div>
       ) : isError ? (
-        <div className="p-8 text-center text-sm text-destructive border rounded-xl bg-destructive/10">
-          Không thể tải dữ liệu thành viên. Vui lòng thử lại sau.
-        </div>
+        <ErrorState
+          title="Không thể tải dữ liệu thành viên"
+          message="Vui lòng thử lại sau."
+          onRetry={() => refetch()}
+        />
       ) : data?.members.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 text-center rounded-xl border border-dashed border-border bg-card">
           <Users className="h-8 w-8 text-muted-foreground mb-2" />

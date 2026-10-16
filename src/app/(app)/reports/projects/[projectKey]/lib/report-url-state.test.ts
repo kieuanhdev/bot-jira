@@ -53,11 +53,15 @@ describe("report-url-state", () => {
       activeActivity: "completed",
       activeStatusGroup: "Done",
       activeAssignee: "usr-42",
+      activeSearch: "refactor auth",
+      activeOffset: 20,
     });
     expect(params.get("tab")).toBe("tasks");
     expect(params.get("activity")).toBe("completed");
     expect(params.get("statusGroup")).toBe("Done");
     expect(params.get("assignee")).toBe("usr-42");
+    expect(params.get("search")).toBe("refactor auth");
+    expect(params.get("offset")).toBe("20");
   });
 
   it("builds URL search params for members tab with selected member", () => {
