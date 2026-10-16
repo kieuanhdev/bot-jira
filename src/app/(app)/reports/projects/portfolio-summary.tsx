@@ -1,7 +1,8 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Layers, CheckCircle2, AlertTriangle, AlertOctagon, Trophy } from "lucide-react";
+import { Layers } from "lucide-react";
+import { PORTFOLIO_HEALTH_CONFIG } from "@/lib/reports/health-style";
 
 interface PortfolioSummaryProps {
   summary: {
@@ -33,48 +34,28 @@ export function PortfolioSummary({
       border: selectedHealth === null ? "ring-2 ring-primary" : "border-border",
     },
     {
-      id: "at_risk",
-      label: "Rủi ro cao",
+      ...PORTFOLIO_HEALTH_CONFIG.at_risk,
       count: summary.atRisk,
-      icon: AlertOctagon,
-      color: "text-red-600 dark:text-red-400",
-      bg: "bg-red-500/10",
-      badgeVariant: "danger" as const,
       filterValue: "at_risk",
-      border: selectedHealth === "at_risk" ? "ring-2 ring-red-500" : "border-border",
+      border: selectedHealth === "at_risk" ? PORTFOLIO_HEALTH_CONFIG.at_risk.ring : "border-border",
     },
     {
-      id: "attention",
-      label: "Cần chú ý",
+      ...PORTFOLIO_HEALTH_CONFIG.attention,
       count: summary.attention,
-      icon: AlertTriangle,
-      color: "text-amber-600 dark:text-amber-400",
-      bg: "bg-amber-500/10",
-      badgeVariant: "warning" as const,
       filterValue: "attention",
-      border: selectedHealth === "attention" ? "ring-2 ring-amber-500" : "border-border",
+      border: selectedHealth === "attention" ? PORTFOLIO_HEALTH_CONFIG.attention.ring : "border-border",
     },
     {
-      id: "healthy",
-      label: "Đúng tiến độ",
+      ...PORTFOLIO_HEALTH_CONFIG.healthy,
       count: summary.healthy,
-      icon: CheckCircle2,
-      color: "text-emerald-600 dark:text-emerald-400",
-      bg: "bg-emerald-500/10",
-      badgeVariant: "success" as const,
       filterValue: "healthy",
-      border: selectedHealth === "healthy" ? "ring-2 ring-emerald-500" : "border-border",
+      border: selectedHealth === "healthy" ? PORTFOLIO_HEALTH_CONFIG.healthy.ring : "border-border",
     },
     {
-      id: "completed",
-      label: "Đã hoàn thành",
+      ...PORTFOLIO_HEALTH_CONFIG.completed,
       count: summary.completed,
-      icon: Trophy,
-      color: "text-teal-600 dark:text-teal-400",
-      bg: "bg-teal-500/10",
-      badgeVariant: "info" as const,
       filterValue: "completed",
-      border: selectedHealth === "completed" ? "ring-2 ring-teal-500" : "border-border",
+      border: selectedHealth === "completed" ? PORTFOLIO_HEALTH_CONFIG.completed.ring : "border-border",
     },
   ];
 

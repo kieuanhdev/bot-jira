@@ -9,37 +9,21 @@ import { formatRelative } from "@/lib/format/time";
 import { Badge } from "@/components/ui/badge";
 
 import {
-  AlertOctagon,
-  AlertTriangle,
-  CheckCircle2,
-  Trophy,
-  HelpCircle,
   ArrowRight,
   FolderKanban,
   TrendingUp,
   TrendingDown,
   Minus,
   Users,
-  type LucideIcon,
 } from "lucide-react";
-import type { ProjectReportSummary, HealthStatus, ReportPeriod } from "@/lib/reports/types";
+import type { ProjectReportSummary, ReportPeriod } from "@/lib/reports/types";
+import { HEALTH_CONFIG } from "@/lib/reports/health-style";
 
 interface ProjectReportTableProps {
   projects: ProjectReportSummary[];
   period: ReportPeriod;
   unit: string;
 }
-
-const HEALTH_CONFIG: Record<
-  HealthStatus,
-  { label: string; variant: "success" | "warning" | "danger" | "info" | "secondary"; icon: LucideIcon }
-> = {
-  at_risk: { label: "Rủi ro cao", variant: "danger", icon: AlertOctagon },
-  attention: { label: "Cần chú ý", variant: "warning", icon: AlertTriangle },
-  healthy: { label: "Ổn định", variant: "success", icon: CheckCircle2 },
-  completed: { label: "Hoàn thành", variant: "info", icon: Trophy },
-  unknown: { label: "Chưa đủ dữ liệu", variant: "secondary", icon: HelpCircle },
-};
 
 function formatUnitLabel(unit: string): string {
   switch (unit) {

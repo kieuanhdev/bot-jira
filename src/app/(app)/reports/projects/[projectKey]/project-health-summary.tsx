@@ -2,68 +2,14 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  AlertOctagon,
-  AlertTriangle,
-  CheckCircle2,
-  Trophy,
-  HelpCircle,
-  type LucideIcon,
-} from "lucide-react";
 import type { HealthStatus, HealthReason } from "@/lib/reports/types";
+import { HEALTH_THEME } from "@/lib/reports/health-style";
 
 interface ProjectHealthSummaryProps {
   status: HealthStatus;
   headline: string;
   reasons: HealthReason[];
 }
-
-const HEALTH_THEME: Record<
-  HealthStatus,
-  {
-    label: string;
-    variant: "success" | "warning" | "danger" | "info" | "secondary";
-    icon: LucideIcon;
-    cardBorder: string;
-    cardBg: string;
-  }
-> = {
-  at_risk: {
-    label: "Rủi ro cao",
-    variant: "danger",
-    icon: AlertOctagon,
-    cardBorder: "border-red-500/30",
-    cardBg: "bg-red-500/5",
-  },
-  attention: {
-    label: "Cần chú ý",
-    variant: "warning",
-    icon: AlertTriangle,
-    cardBorder: "border-amber-500/30",
-    cardBg: "bg-amber-500/5",
-  },
-  healthy: {
-    label: "Đúng tiến độ",
-    variant: "success",
-    icon: CheckCircle2,
-    cardBorder: "border-emerald-500/30",
-    cardBg: "bg-emerald-500/5",
-  },
-  completed: {
-    label: "Hoàn thành",
-    variant: "info",
-    icon: Trophy,
-    cardBorder: "border-teal-500/30",
-    cardBg: "bg-teal-500/5",
-  },
-  unknown: {
-    label: "Chưa đủ dữ liệu",
-    variant: "secondary",
-    icon: HelpCircle,
-    cardBorder: "border-border",
-    cardBg: "bg-muted/20",
-  },
-};
 
 export function ProjectHealthSummary({
   status,

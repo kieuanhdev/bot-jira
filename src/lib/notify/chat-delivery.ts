@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import type { ChatMessagePayload } from "@/lib/chat";
 import type { NotifyType } from "./index";
 import type { NotifySourceType } from "./index";
+import { TYPE_LABELS } from "./notification-types";
 
 export function chatDedupeKey(userId: string, type: NotifyType, eventId: string): string {
   return `${userId}:discord:${type}:${eventId}`;
@@ -55,19 +56,6 @@ export type ChatDeliverResult = {
   skippedReason?: "no_destination" | "already_queued" | "no_event_id";
   /** When the row will be sent, if not immediately. */
   scheduledAt?: Date;
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  comment: "Bình luận",
-  issue: "Cập nhật task",
-  transition: "Chuyển trạng thái",
-  stale: "SLA / Tồn đọng",
-  release: "Phát hành",
-  sentry: "Lỗi Sentry",
-  ci: "Build / CI",
-  ai: "AI gợi ý",
-  system: "Hệ thống",
-  pr: "Pull Request",
 };
 
 export function inferNotificationTone(title: string, body: string): "info" | "success" | "warning" | "danger" {
