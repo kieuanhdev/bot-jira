@@ -285,7 +285,7 @@ export function JiraTemplateDialog({
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-              <ClipboardCopy className="h-5 w-5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+              <ClipboardCopy className="h-5 w-5 text-primary" aria-hidden="true" />
               Lấy task Jira làm mẫu
             </DialogTitle>
           </div>
@@ -352,7 +352,7 @@ export function JiraTemplateDialog({
               size="sm"
               onClick={handleAddRow}
               disabled={!(customSummary ?? template.summary)?.trim() || isTemplateLoading}
-              className="cursor-pointer bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600 text-xs font-semibold gap-1.5"
+              className="cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold gap-1.5"
             >
               {template.sourceIsSubtask && includeParentRow ? (
                 <>

@@ -36,14 +36,14 @@ export function CsvImportExcelPreview({
     <div className="space-y-3 rounded-md border bg-card p-3.5 text-xs">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5">
         <div className="flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+          <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
           <span className="font-semibold text-foreground">
             Kết quả đọc file Excel: {excelResult.stats?.validCount ?? excelResult.items.length} task hợp lệ
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
           {excelResult.manifest?.projectKey && (
-            <Badge variant="outline" className="text-teal-600 dark:text-teal-400 border-teal-500/30">
+            <Badge variant="outline" className="text-primary border-primary/30">
               Project: {excelResult.manifest.projectKey}
             </Badge>
           )}
@@ -57,11 +57,11 @@ export function CsvImportExcelPreview({
 
       {/* Stale Metadata Warning */}
       {excelResult.isStaleMetadata && (
-        <div className="flex items-start gap-2 rounded bg-amber-500/10 p-2.5 text-amber-800 dark:text-amber-300">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" aria-hidden="true" />
+        <div className="flex items-start gap-2 rounded border border-warning/30 bg-warning/10 p-2.5 text-warning">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" aria-hidden="true" />
           <div className="space-y-0.5">
             <p className="font-semibold">Mẫu Excel cũ hơn cấu hình Jira hiện tại</p>
-            <p className="text-[11px]">
+            <p className="text-[11px] text-muted-foreground">
               Cấu hình của dự án trên Jira đã thay đổi kể từ khi file mẫu này được tải. Dữ liệu vẫn được nạp vào bảng và sẽ được kiểm tra lại với cấu hình mới nhất.
             </p>
           </div>
@@ -111,13 +111,13 @@ export function CsvImportExcelPreview({
 
       {/* Truncation Warning */}
       {hasTruncation && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300 space-y-2">
+        <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-warning space-y-2">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" aria-hidden="true" />
+            <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" aria-hidden="true" />
             <div>
               <p className="font-semibold">Dữ liệu vượt quá sức chứa còn lại của bảng!</p>
-              <p className="mt-0.5 text-[11px] leading-relaxed">
-                Tệp có <strong>{rawItems.length}</strong> task hợp lệ, nhưng theo chế độ đã chọn chỉ có thể nhận thêm <strong>{remainingCapacity}</strong> task.
+              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                Tệp có <strong className="text-foreground">{rawItems.length}</strong> task hợp lệ, nhưng theo chế độ đã chọn chỉ có thể nhận thêm <strong className="text-foreground">{remainingCapacity}</strong> task.
               </p>
             </div>
           </div>
@@ -126,7 +126,7 @@ export function CsvImportExcelPreview({
               type="checkbox"
               checked={confirmTruncation}
               onChange={(e) => onConfirmTruncationChange(e.target.checked)}
-              className="rounded border-amber-500/50"
+              className="rounded border-warning/50 text-warning focus:ring-warning"
             />
             <span>Tôi hiểu và đồng ý chỉ nhập {remainingCapacity} task đầu tiên.</span>
           </label>
@@ -135,7 +135,7 @@ export function CsvImportExcelPreview({
 
       {/* Errors list */}
       {excelResult.errors && excelResult.errors.length > 0 && (
-        <div className="rounded border border-red-500/20 bg-red-500/5 p-2.5 text-[11px] text-red-700 dark:text-red-400 space-y-1">
+        <div className="rounded border border-destructive/30 bg-destructive/5 p-2.5 text-[11px] text-destructive space-y-1">
           <div className="font-semibold flex items-center gap-1.5">
             <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
             Các dòng có lỗi ({excelResult.errors.length} lỗi):

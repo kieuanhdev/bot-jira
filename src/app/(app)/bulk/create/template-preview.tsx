@@ -74,8 +74,8 @@ export function TemplatePreview({
 
       {/* Template Error State */}
       {Boolean(templateError) && !isTemplateLoading && (
-        <div className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/5 p-4">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-600 dark:text-red-400">
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
             <AlertCircle className="h-4 w-4" aria-hidden="true" />
           </div>
           <div className="space-y-1 text-xs">
@@ -90,14 +90,14 @@ export function TemplatePreview({
         <div className="space-y-3.5">
           {/* Sub-task & Parent Box */}
           {template.sourceIsSubtask && (
-            <div className="rounded-lg border border-teal-500/30 bg-teal-500/5 dark:bg-teal-950/20 p-3.5 space-y-2.5">
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3.5 space-y-2.5">
               <div className="flex items-start gap-2">
-                <GitBranch className="h-4 w-4 text-teal-600 dark:text-teal-400 shrink-0 mt-0.5" aria-hidden="true" />
+                <GitBranch className="h-4 w-4 text-primary shrink-0 mt-0.5" aria-hidden="true" />
                 <div className="space-y-1 text-xs">
                   <div className="font-semibold text-foreground flex items-center gap-1.5 flex-wrap">
                     Issue này là Sub-task của task cha:
                     {template.parentKey ? (
-                      <Badge variant="outline" className="font-mono font-semibold text-teal-700 dark:text-teal-300 border-teal-500/40">
+                      <Badge variant="outline" className="font-mono font-semibold text-primary border-primary/40">
                         {template.parentKey}
                       </Badge>
                     ) : (
@@ -113,13 +113,13 @@ export function TemplatePreview({
               </div>
 
               {template.parentKey && (
-                <div className="pt-1.5 border-t border-teal-500/20">
+                <div className="pt-1.5 border-t border-primary/20">
                   <label className="flex items-start gap-2.5 cursor-pointer text-xs select-none">
                     <input
                       type="checkbox"
                       checked={includeParentRow}
                       onChange={(e) => onIncludeParentRowChange(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-border text-teal-600 focus:ring-teal-500"
+                      className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
                     />
                     <div className="space-y-0.5">
                       <span className="font-semibold text-foreground">
@@ -141,7 +141,7 @@ export function TemplatePreview({
           <div className="rounded-lg border border-border bg-muted/20 p-3.5 space-y-3 text-xs">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-foreground flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
                 Trường được sao chép từ {selectedKey}
               </span>
             </div>
@@ -213,7 +213,7 @@ export function TemplatePreview({
 
           {/* Skipped fields warnings if any */}
           {template.skippedFields && template.skippedFields.length > 0 && (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-1 text-xs">
+            <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 space-y-1 text-xs">
               <span className="text-[11px] font-semibold text-foreground">Trường bỏ qua</span>
               {template.skippedFields.map((sf, i) => (
                 <div key={i} className="text-[11px] text-muted-foreground">
@@ -225,7 +225,7 @@ export function TemplatePreview({
 
           {/* Success notification */}
           {addedMessage && (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
+            <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success/5 px-3 py-2 text-xs text-success">
               <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
               {addedMessage}
             </div>

@@ -59,9 +59,9 @@ export const ProgressItemRow = React.memo(function ProgressItemRow({
     <tr
       className={`transition-colors ${
         isFailed
-          ? "bg-red-500/5 hover:bg-red-500/10"
+          ? "bg-destructive/5 hover:bg-destructive/10"
           : isBlockedByParent
-            ? "bg-amber-500/5 hover:bg-amber-500/10"
+            ? "bg-warning/5 hover:bg-warning/10"
             : "hover:bg-muted/15"
       }`}
     >
@@ -101,7 +101,7 @@ export const ProgressItemRow = React.memo(function ProgressItemRow({
           </Badge>
         )}
         {isBlockedByParent && (
-          <Badge variant="secondary" className="gap-1 font-medium text-amber-700 dark:text-amber-400">
+          <Badge variant="warning" className="gap-1 font-medium">
             <XCircle className="h-3 w-3" aria-hidden="true" />
             Chặn (parent)
           </Badge>
@@ -130,13 +130,13 @@ export const ProgressItemRow = React.memo(function ProgressItemRow({
 
       <td className="px-3 py-3">
         {isSucceeded && (
-          <span className="text-emerald-700 dark:text-emerald-400">
+          <span className="text-success">
             Đã tạo thành công
           </span>
         )}
         {isFailed && (
           <div className="space-y-1">
-            <span className="text-red-700 dark:text-red-400">
+            <span className="text-destructive">
               {item.error || "Lỗi tạo task"}
             </span>
             {(item.retryable || isFailed) && isFinished && (
@@ -178,7 +178,7 @@ export const ProgressItemRow = React.memo(function ProgressItemRow({
           <span className="text-muted-foreground">Đang chờ parent được tạo</span>
         )}
         {isBlockedByParent && (
-          <span className="text-amber-700 dark:text-amber-400">{item.error || "Parent thất bại"}</span>
+          <span className="text-warning">{item.error || "Parent thất bại"}</span>
         )}
       </td>
     </tr>
@@ -232,7 +232,7 @@ export function ProgressItemsTable({
               size="sm"
               onClick={onRetry}
               disabled={isRetrying}
-              className="h-8 gap-1.5 text-xs cursor-pointer text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+              className="h-8 gap-1.5 text-xs cursor-pointer text-warning border-warning/30 hover:bg-warning/10"
             >
               {isRetrying ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
@@ -248,13 +248,13 @@ export function ProgressItemsTable({
       </CardHeader>
 
       {retryError && (
-        <div className="mx-6 mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-400">
+        <div className="mx-6 mb-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
           Lỗi khi thử lại: {retryError}
         </div>
       )}
 
       {retryBranchError && (
-        <div className="mx-6 mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-400">
+        <div className="mx-6 mb-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
           Lỗi khi thử lại nhánh: {retryBranchError}
         </div>
       )}

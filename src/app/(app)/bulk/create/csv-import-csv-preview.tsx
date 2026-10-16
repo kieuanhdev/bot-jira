@@ -34,7 +34,7 @@ export function CsvImportCsvPreview({
     <div className="space-y-3 rounded-md border bg-card p-3.5 text-xs">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5">
         <div className="flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+          <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
           <span className="font-semibold text-foreground">
             Kết quả nhận diện: {parsed.validCount} task hợp lệ
           </span>
@@ -95,14 +95,14 @@ export function CsvImportCsvPreview({
 
       {/* Capacity Truncation Warning */}
       {hasTruncation && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300 space-y-2">
+        <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-warning space-y-2">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" aria-hidden="true" />
+            <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" aria-hidden="true" />
             <div>
               <p className="font-semibold">Dữ liệu vượt quá sức chứa còn lại của bảng!</p>
-              <p className="mt-0.5 text-[11px] leading-relaxed">
-                Tệp có <strong>{parsed.items.length}</strong> task hợp lệ, nhưng theo chế độ đã chọn chỉ có thể nhận thêm <strong>{remainingCapacity}</strong> task.{" "}
-                <strong>{parsed.items.length - remainingCapacity}</strong> task ở cuối tệp sẽ bị bỏ qua.
+              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                Tệp có <strong className="text-foreground">{parsed.items.length}</strong> task hợp lệ, nhưng theo chế độ đã chọn chỉ có thể nhận thêm <strong className="text-foreground">{remainingCapacity}</strong> task.{" "}
+                <strong className="text-foreground">{parsed.items.length - remainingCapacity}</strong> task ở cuối tệp sẽ bị bỏ qua.
               </p>
             </div>
           </div>
@@ -111,7 +111,7 @@ export function CsvImportCsvPreview({
               type="checkbox"
               checked={confirmTruncation}
               onChange={(e) => onConfirmTruncationChange(e.target.checked)}
-              className="rounded border-amber-500/50"
+              className="rounded border-warning/50 text-warning focus:ring-warning"
             />
             <span>Tôi hiểu và đồng ý chỉ nhập {remainingCapacity} task đầu tiên.</span>
           </label>
@@ -120,8 +120,8 @@ export function CsvImportCsvPreview({
 
       {/* Unrecognized Headers Warning */}
       {parsed.unrecognizedHeaders.length > 0 && (
-        <div className="flex items-start gap-2 rounded bg-amber-500/10 p-2.5 text-amber-800 dark:text-amber-300">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" aria-hidden="true" />
+        <div className="flex items-start gap-2 rounded border border-warning/30 bg-warning/10 p-2.5 text-warning">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" aria-hidden="true" />
           <div className="space-y-0.5">
             <p className="font-semibold">Các cột không nhận diện được sẽ bị bỏ qua:</p>
             <p className="font-mono text-[11px]">{parsed.unrecognizedHeaders.join(", ")}</p>
@@ -131,8 +131,8 @@ export function CsvImportCsvPreview({
 
       {/* Duplicate Canonical Headers Warning */}
       {parsed.duplicateCanonicalHeaders.length > 0 && (
-        <div className="flex items-start gap-2 rounded bg-amber-500/10 p-2.5 text-amber-800 dark:text-amber-300">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" aria-hidden="true" />
+        <div className="flex items-start gap-2 rounded border border-warning/30 bg-warning/10 p-2.5 text-warning">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" aria-hidden="true" />
           <div className="space-y-0.5">
             <p className="font-semibold">Phát hiện cột trùng trường dữ liệu:</p>
             <p className="text-[11px]">{parsed.duplicateCanonicalHeaders.join(", ")}</p>
@@ -142,7 +142,7 @@ export function CsvImportCsvPreview({
 
       {/* Errors list */}
       {parsed.errors.length > 0 && (
-        <div className="rounded border border-red-500/20 bg-red-500/5 p-2.5 text-[11px] text-red-700 dark:text-red-400 space-y-1">
+        <div className="rounded border border-destructive/30 bg-destructive/5 p-2.5 text-[11px] text-destructive space-y-1">
           <div className="font-semibold flex items-center gap-1.5">
             <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
             Các dòng có lỗi ({parsed.errors.length} lỗi):
@@ -160,7 +160,7 @@ export function CsvImportCsvPreview({
 
       {/* General warnings */}
       {parsed.warnings.length > 0 && (
-        <div className="space-y-1 text-[11px] text-amber-700 dark:text-amber-400">
+        <div className="space-y-1 text-[11px] text-warning">
           {parsed.warnings.map((w, i) => (
             <p key={i}>⚠️ {w}</p>
           ))}

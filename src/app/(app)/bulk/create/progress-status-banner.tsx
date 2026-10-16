@@ -60,11 +60,11 @@ export function ProgressStatusBanner({
                 <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
               </div>
             ) : state === "completed" ? (
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-success/10 text-success">
                 <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
               </div>
             ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-warning/10 text-warning">
                 <XCircle className="h-5 w-5" aria-hidden="true" />
               </div>
             )}
@@ -93,7 +93,7 @@ export function ProgressStatusBanner({
               >
                 {copied ? (
                   <>
-                    <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+                    <Check className="h-3.5 w-3.5 text-success" aria-hidden="true" />
                     Đã sao chép
                   </>
                 ) : (

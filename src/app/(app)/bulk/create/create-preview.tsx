@@ -97,7 +97,7 @@ export function CreatePreview({
               size="sm"
               onClick={onDiscardBlockedRows}
               disabled={isConfirming}
-              className="gap-1.5 cursor-pointer text-xs h-8 text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+              className="gap-1.5 cursor-pointer text-xs h-8 text-warning border-warning/30 hover:bg-warning/10"
               title="Loại bỏ các dòng bị lỗi khỏi batch và chỉ giữ lại các dòng hợp lệ"
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -166,7 +166,7 @@ export function CreatePreview({
               type="button"
               onClick={() => setFilterTab("ready")}
               className={`cursor-pointer rounded-md px-2.5 py-1 font-medium transition-colors ${
-                filterTab === "ready" ? "bg-card text-emerald-700 dark:text-emerald-400 shadow-xs" : "text-muted-foreground hover:text-foreground"
+                filterTab === "ready" ? "bg-card text-success shadow-xs" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               Sẵn sàng ({readyItems.length})
@@ -176,7 +176,7 @@ export function CreatePreview({
                 type="button"
                 onClick={() => setFilterTab("warning")}
                 className={`cursor-pointer rounded-md px-2.5 py-1 font-medium transition-colors ${
-                  filterTab === "warning" ? "bg-card text-amber-700 dark:text-amber-400 shadow-xs" : "text-muted-foreground hover:text-foreground"
+                  filterTab === "warning" ? "bg-card text-warning shadow-xs" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Cảnh báo ({warningItems.length})
@@ -187,7 +187,7 @@ export function CreatePreview({
                 type="button"
                 onClick={() => setFilterTab("blocked")}
                 className={`cursor-pointer rounded-md px-2.5 py-1 font-medium transition-colors ${
-                  filterTab === "blocked" ? "bg-card text-red-700 dark:text-red-400 shadow-xs" : "text-muted-foreground hover:text-foreground"
+                  filterTab === "blocked" ? "bg-card text-destructive shadow-xs" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Bị chặn ({blockedItems.length})
@@ -218,7 +218,7 @@ export function CreatePreview({
                     <tr
                       key={item.rowIndex}
                       className={`transition-colors ${
-                        !isReady ? "bg-red-500/5 hover:bg-red-500/10" : "hover:bg-muted/15"
+                        !isReady ? "bg-destructive/5 hover:bg-destructive/10" : "hover:bg-muted/15"
                       }`}
                     >
                       <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">
@@ -267,14 +267,14 @@ export function CreatePreview({
                       <td className="px-3 py-3">
                         <div className="space-y-1">
                           {item.errors.map((e, i) => (
-                            <div key={i} className="flex items-start gap-1.5 text-red-600 dark:text-red-400">
+                            <div key={i} className="flex items-start gap-1.5 text-destructive">
                               <XCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden="true" />
                               <span className="flex-1">{e.message}</span>
                               {onFixRow && (
                                 <button
                                   type="button"
                                   onClick={() => onFixRow(item.rowIndex, e.field)}
-                                  className="shrink-0 rounded p-0.5 text-red-500 hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer"
+                                  className="shrink-0 rounded p-0.5 text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
                                   title="Sửa dòng này"
                                 >
                                   <Wrench className="h-3 w-3" aria-hidden="true" />
@@ -284,14 +284,14 @@ export function CreatePreview({
                           ))}
 
                           {item.warnings.map((w, i) => (
-                            <div key={i} className="flex items-start gap-1.5 text-amber-600 dark:text-amber-400">
+                            <div key={i} className="flex items-start gap-1.5 text-warning">
                               <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden="true" />
                               <span className="flex-1">{w.message}</span>
                               {onFixRow && (
                                 <button
                                   type="button"
                                   onClick={() => onFixRow(item.rowIndex, w.field)}
-                                  className="shrink-0 rounded p-0.5 text-amber-500 hover:bg-amber-500/10 hover:text-amber-700 dark:hover:text-amber-300 transition-colors cursor-pointer"
+                                  className="shrink-0 rounded p-0.5 text-warning hover:bg-warning/10 transition-colors cursor-pointer"
                                   title="Sửa dòng này"
                                 >
                                   <Wrench className="h-3 w-3" aria-hidden="true" />
@@ -315,7 +315,7 @@ export function CreatePreview({
       </Card>
 
       {confirmError && (
-        <div className="flex flex-col gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-700 dark:text-red-400">
+        <div className="flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3.5 text-xs text-destructive">
           <div className="flex items-center justify-between font-semibold">
             <span className="flex items-center gap-1.5">
               <ShieldAlert className="h-4 w-4" aria-hidden="true" />
@@ -358,7 +358,7 @@ export function CreatePreview({
               size="sm"
               onClick={() => onFixRow(blockedItems[0]!.rowIndex)}
               disabled={isConfirming}
-              className="gap-1.5 cursor-pointer text-xs text-red-600 dark:text-red-400 hover:text-red-700"
+              className="gap-1.5 cursor-pointer text-xs text-destructive hover:text-destructive/80"
             >
               <Crosshair className="h-3.5 w-3.5" aria-hidden="true" />
               Focus lỗi đầu tiên
