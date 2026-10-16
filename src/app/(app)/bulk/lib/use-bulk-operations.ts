@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import { issuesKeys, staleKeys } from "@/lib/query-keys";
+import { bulkKeys, issuesKeys, staleKeys } from "@/lib/query-keys";
 import type { OpListItem, Preview } from "./bulk-types";
 import type { SelectionMode } from "./bulk-logic";
 
@@ -27,20 +27,19 @@ export function useBulkOperations({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [activeOp, setActiveOp] = useState<string | null>(null);
 
-  // Operations history
-  const [ops, setOps] = useState<OpListItem[]>([]);
-  const [opsLoaded, setOpsLoaded] = useState(false);
+  // Operations history managed via TanStack Query
+  const { data: opsData, isSuccess, refetch } = useQuery({
+    queryKey: bulkKeys.operations,
+    queryFn: () => api<{ items: OpListItem[] }>("/api/bulk/operations?limit=20"),
+    staleTime: 30_000,
+  });
+
+  const ops = opsData?.items ?? [];
+  const opsLoaded = isSuccess || ops.length > 0;
 
   const loadOps = useCallback(() => {
-    api<{ items: OpListItem[] }>("/api/bulk/operations?limit=20")
-      .then((r) => setOps(r.items))
-      .catch(() => null)
-      .finally(() => setOpsLoaded(true));
-  }, []);
-
-  useEffect(() => {
-    loadOps();
-  }, [loadOps]);
+    refetch();
+  }, [refetch]);
 
   async function doConfirm() {
     if (!preview) return;
@@ -58,7 +57,7 @@ export function useBulkOperations({
       onOperationConfirmed?.(r.operationId);
       qc.invalidateQueries({ queryKey: issuesKeys.all });
       qc.invalidateQueries({ queryKey: staleKeys.all });
-      loadOps();
+      qc.invalidateQueries({ queryKey: bulkKeys.operations });
     } catch (e) {
       setPreviewError((e as Error).message);
     } finally {
@@ -70,7 +69,7 @@ export function useBulkOperations({
     try {
       await api(`/api/bulk/operations/${id}/retry`, { method: "POST" });
       setActiveOp(id);
-      loadOps();
+      qc.invalidateQueries({ queryKey: bulkKeys.operations });
     } catch (e) {
       setPreviewError((e as Error).message);
     }
