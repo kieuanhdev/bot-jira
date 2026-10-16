@@ -1,9 +1,15 @@
 # Hardening & Refactoring Progress
 
-Baseline verified: 2026-10-15
+Baseline verified: 2026-10-15 (Wave 1-4)
 - `npm run typecheck`: exit 0
 - `npm run lint`: exit 0
 - `npm test`: 274 files / 2555 tests passing, exit 0
+
+Wave 5 baseline verified: 2026-10-16 (REF-028.0)
+- `npm run typecheck`: pass (exit 0)
+- `npm run lint`: pass (exit 0, max-warnings=0)
+- `npm test`: 307 files / 2778 tests passing, exit 0
+- `npm run build`: pass (74/74 routes generated, exit 0)
 
 ## Progress Table
 
@@ -36,6 +42,7 @@ Baseline verified: 2026-10-15
 | REF-023 | SKIPPED | — | Evaluation of /watch prefetch | CONDITIONAL: Plan default decision ("no change") upheld. `listWatchedItems` runs fast indexed parallel Prisma queries; streaming with Suspense deferred to avoid hydration mismatches with pending queries. |
 | REF-024 | DONE | `ff1565a` | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (306 files / 2776 tests pass), `npm run build` (pass, 74/74 routes, 13.6s), `test:db` (not run: no DB) | Split `admin-sync-client.tsx` from 1034 lines to 393 lines (< 400 lines target). Extracted components in same directory: `project-sync-row.tsx` (owns local expanded error state), `project-features-sheet.tsx` (lazy-loaded via `next/dynamic`), `sync-switch.tsx`, `sync-bulk-bar.tsx`, `sync-metrics.tsx`, `sync-header.tsx`, and `sync-confirm-dialog.tsx`. Added `[content-visibility:auto]` to project list. Added unit tests in `project-sync-row.test.ts` (2 tests). Zero new useEffects added. |
 | REF-025 | DONE | `e366c73` | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (307 files / 2778 tests pass), `npm run build` (pass, 74/74 routes, 10.8s), `test:db` (not run: no DB) | Extracted `useBoardPerfMarks` hook (`src/app/(app)/board/hooks/use-board-perf-marks.ts`) preserving exact performance mark & measure names (`board:start`, `board:bootstrap-ready`, `board:issues-ready`, `board:content-rendered`, `board:load-to-issues`, `board:load-to-content`). Converted `view` and `sortMode` storage persistence from `useEffect` to event handlers (`handleViewChange`, `handleSortModeChange`), avoiding `useEffect` cascades and satisfying React Compiler memoization rules. Left DnD, bootstrap, and URL sync effects intact. Added unit tests in `use-board-perf-marks.test.ts` (2 tests). |
+| REF-028.0 | DONE | pending | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (307 files / 2778 tests pass), `npm run build` (pass, 74/74 routes) | Baseline measured and recorded for Wave 5 on `main`. |
 
 ## Classification of 38 `req.json()` Sites (REF-005)
 
