@@ -127,3 +127,28 @@ export function parseLeaderboardParams(
     project,
   };
 }
+
+/**
+ * Computes default period parameters using Asia/Ho_Chi_Minh timezone
+ * so server and client stay synchronized regardless of system local timezone.
+ */
+export function getDefaultLeaderboardPeriod(date: Date = new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "numeric",
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parseInt(parts.find((p) => p.type === "year")?.value || String(date.getFullYear()), 10);
+  const month = parseInt(parts.find((p) => p.type === "month")?.value || String(date.getMonth() + 1), 10);
+  const quarter = Math.floor((month - 1) / 3) + 1;
+
+  return {
+    timeframe: "month" as LeaderboardTimeframe,
+    year,
+    month,
+    quarter,
+    project: "ALL" as const,
+  };
+}
+

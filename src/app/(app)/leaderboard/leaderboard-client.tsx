@@ -17,6 +17,8 @@ import { LeaderboardPodium } from "./leaderboard-podium";
 import { LeaderboardTable } from "./leaderboard-table";
 import { LeaderboardMemberModal } from "./leaderboard-member-modal";
 import { LeaderboardRealmsModal } from "./leaderboard-realms-modal";
+import { leaderboardKeys } from "@/lib/query-keys";
+import { getDefaultLeaderboardPeriod } from "@/lib/leaderboard/period";
 import {
   ALL_PROJECTS,
   groupTiersByRealm,
@@ -30,16 +32,17 @@ import type {
 } from "@/lib/leaderboard/types";
 
 export function LeaderboardClient() {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
-  const currentQuarter = Math.floor(now.getMonth() / 3) + 1;
+  const defaultPeriod = useMemo(() => getDefaultLeaderboardPeriod(), []);
+  const currentYear = defaultPeriod.year;
+  const currentMonth = defaultPeriod.month;
+  const currentQuarter = defaultPeriod.quarter;
 
   // Filter states
-  const [timeframe, setTimeframe] = useState<LeaderboardTimeframe>("month");
-  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
-  const [selectedMonth, setSelectedMonth] = useState<number>(currentMonth);
-  const [selectedQuarter, setSelectedQuarter] = useState<number>(currentQuarter);
+
+  const [timeframe, setTimeframe] = useState<LeaderboardTimeframe>(defaultPeriod.timeframe);
+  const [selectedYear, setSelectedYear] = useState<number>(defaultPeriod.year);
+  const [selectedMonth, setSelectedMonth] = useState<number>(defaultPeriod.month);
+  const [selectedQuarter, setSelectedQuarter] = useState<number>(defaultPeriod.quarter);
   const [selectedProject, setSelectedProject] = useState<string>(ALL_PROJECTS);
   const [searchMember, setSearchMember] = useState("");
   const [sortBy, setSortBy] = useState<"completed" | "total" | "tasks">("completed");
@@ -58,12 +61,13 @@ export function LeaderboardClient() {
   );
 
   const { data, isLoading, isFetching, error, refetch } = useQuery<LeaderboardResponse>({
-    queryKey: ["leaderboard", timeframe, selectedYear, selectedMonth, selectedQuarter, selectedProject],
+    queryKey: leaderboardKeys.list(timeframe, selectedYear, selectedMonth, selectedQuarter, selectedProject),
     queryFn: () => api<LeaderboardResponse>(queryUrl),
     placeholderData: keepPreviousData,
     staleTime: queryPolicy.leaderboard.staleTime,
     gcTime: queryPolicy.leaderboard.gcTime,
   });
+
 
 
   const members = useMemo(() => data?.members ?? [], [data?.members]);

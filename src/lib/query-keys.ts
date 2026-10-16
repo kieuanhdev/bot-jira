@@ -140,7 +140,16 @@ export const releasesKeys = {
   permissionsAll: () => ["release-permissions"] as const,
 };
 
-
+export const leaderboardKeys = {
+  all: ["leaderboard"] as const,
+  list: (
+    timeframe: string,
+    year: number,
+    month?: number,
+    quarter?: number,
+    project: string = "ALL"
+  ) => ["leaderboard", timeframe, year, month, quarter, project] as const,
+};
 export const branchesKeys = {
   all: ["branches"] as const,
   /** `["branches", <filters>]`. */

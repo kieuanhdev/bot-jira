@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { computePeriodBounds, parseLeaderboardParams } from "./period";
+import { computePeriodBounds, parseLeaderboardParams, getDefaultLeaderboardPeriod } from "./period";
+
 
 describe("Leaderboard Period Bounds & Parsing", () => {
   describe("computePeriodBounds", () => {
@@ -102,4 +103,20 @@ describe("Leaderboard Period Bounds & Parsing", () => {
       expect(parsed.quarter).toBeUndefined();
     });
   });
+
+  describe("getDefaultLeaderboardPeriod", () => {
+    it("computes year, month, quarter accurately in Asia/Ho_Chi_Minh timezone", () => {
+      // 2026-10-31 20:00:00 UTC = 2026-11-01 03:00:00 in Asia/Ho_Chi_Minh (UTC+7)
+      const dateInUtc = new Date("2026-10-31T20:00:00.000Z");
+      const defaultPeriod = getDefaultLeaderboardPeriod(dateInUtc);
+
+
+      expect(defaultPeriod.timeframe).toBe("month");
+      expect(defaultPeriod.year).toBe(2026);
+      expect(defaultPeriod.month).toBe(11);
+      expect(defaultPeriod.quarter).toBe(4);
+      expect(defaultPeriod.project).toBe("ALL");
+    });
+  });
 });
+
