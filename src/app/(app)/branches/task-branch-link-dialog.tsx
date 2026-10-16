@@ -120,7 +120,7 @@ export function TaskBranchLinkDialog({
                       checked={selected.has(item.id)}
                       onChange={() => toggle(item.id)}
                       disabled={linkMutation.isPending}
-                      className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-teal-600"
+                      className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-primary"
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
@@ -152,7 +152,7 @@ export function TaskBranchLinkDialog({
               checked={syncPr}
               onChange={(e) => setSyncPr(e.target.checked)}
               disabled={linkMutation.isPending}
-              className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-teal-600"
+              className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-primary"
             />
             <span>
               Cập nhật PR trên Bitbucket để Jira nhận (thêm <code className="font-mono">Jira: {jiraKey}</code> vào mô

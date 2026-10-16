@@ -121,10 +121,10 @@ export function BranchDetailSheet({
                         key={idx}
                         className={`flex items-start gap-2.5 rounded-md border p-3 text-xs ${
                           s.severity === "high"
-                            ? "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400"
+                            ? "border-destructive/30 bg-destructive/10 text-destructive"
                             : s.severity === "medium"
-                            ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                            : "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400"
+                            ? "border-warning/30 bg-warning/10 text-warning"
+                            : "border-info/30 bg-info/10 text-info"
                         }`}
                       >
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -231,9 +231,9 @@ export function BranchDetailSheet({
                   </div>
                 </div>
               ) : isSuggested ? (
-                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+                <div className="rounded-lg border border-warning/30 bg-warning/5 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-sm font-bold text-amber-600 dark:text-amber-400">
+                    <span className="font-mono text-sm font-bold text-warning">
                       Ứng viên: {branch.suggestedJiraKey}
                     </span>
                     <Badge variant="warning">Gợi ý</Badge>
@@ -250,7 +250,7 @@ export function BranchDetailSheet({
                         onOpenLinkDialog(branch);
                       }
                     }}
-                    className="h-8 w-full bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500"
+                    className="h-8 w-full bg-warning text-warning-foreground hover:bg-warning/90"
                   >
                     Xác nhận liên kết với {branch.suggestedJiraKey}
                   </Button>
@@ -370,11 +370,11 @@ export function BranchDetailSheet({
           <div className="flex items-center justify-between border-t border-border bg-card p-4 gap-2">
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={handleCopy} className="h-8 gap-1.5 text-xs cursor-pointer">
-                {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
                 {copied ? "Đã chép" : "Sao chép tên nhánh"}
               </Button>
               {gitUrl && (
-                <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 text-xs cursor-pointer border-teal-500/30 text-teal-400 hover:bg-teal-500/10">
+                <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 text-xs cursor-pointer border-primary/30 text-primary hover:bg-primary/10">
                   <a href={gitUrl} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-3.5 w-3.5" />
                     <span>Mở trên Git</span>
@@ -388,7 +388,7 @@ export function BranchDetailSheet({
                   variant="outline"
                   size="sm"
                   onClick={() => onUnlinkBranch(branch)}
-                  className="h-8 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 border-red-500/30 cursor-pointer"
+                  className="h-8 text-xs text-destructive hover:text-destructive/80 hover:bg-destructive/10 border-destructive/30 cursor-pointer"
                 >
                   Hủy liên kết
                 </Button>

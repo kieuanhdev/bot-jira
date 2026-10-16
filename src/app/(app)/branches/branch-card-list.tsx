@@ -93,7 +93,7 @@ export function BranchCardList({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectB
                 </div>
               ) : isSuggested ? (
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                  <div className="flex items-center gap-1.5 text-xs text-warning">
                     <Link2 className="h-3.5 w-3.5" />
                     <span className="font-mono font-semibold">Gợi ý: {row.suggestedJiraKey}</span>
                   </div>
@@ -104,7 +104,7 @@ export function BranchCardList({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectB
                       e.stopPropagation();
                       onOpenLinkDialog(row);
                     }}
-                    className="h-6 border-amber-500/30 px-2 text-[10px] text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+                    className="h-6 border-warning/30 px-2 text-[10px] text-warning hover:bg-warning/10"
                   >
                     Xác nhận
                   </Button>
@@ -220,10 +220,10 @@ export function BranchCardList({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectB
                 <AlertTriangle
                   className={`h-3.5 w-3.5 shrink-0 ${
                     primarySignal.severity === "high"
-                      ? "text-red-500"
+                      ? "text-destructive"
                       : primarySignal.severity === "medium"
-                      ? "text-amber-500"
-                      : "text-sky-500"
+                      ? "text-warning"
+                      : "text-info"
                   }`}
                 />
                 <span className="truncate font-medium text-foreground">{primarySignal.message}</span>

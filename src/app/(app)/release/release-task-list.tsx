@@ -92,16 +92,16 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
           <div
             key={t.jiraKey}
             className={`p-3.5 transition-colors hover:bg-muted/20 ${
-              !t.ready ? "bg-amber-500/5" : ""
+              !t.ready ? "bg-warning/5" : ""
             }`}
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-start gap-2.5 min-w-0">
                 <div className="mt-0.5 shrink-0">
                   {t.ready ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+                    <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
                   ) : (
-                    <Clock className="h-4 w-4 text-amber-500" aria-hidden="true" />
+                    <Clock className="h-4 w-4 text-warning" aria-hidden="true" />
                   )}
                 </div>
 
@@ -173,12 +173,8 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
               <div className="flex flex-wrap items-center gap-1.5 shrink-0 pl-7 sm:pl-0">
                 {/* Jira Status Category */}
                 <Badge
-                  variant="outline"
-                  className={`text-[11px] font-medium ${
-                    isDone
-                      ? "border-emerald-500/30 text-emerald-500 bg-emerald-500/10"
-                      : "border-amber-500/30 text-amber-500 bg-amber-500/10"
-                  }`}
+                  variant={isDone ? "success" : "warning"}
+                  className="text-[11px] font-medium"
                 >
                   {t.status || (isDone ? "Done" : "In Progress")}
                 </Badge>
@@ -190,7 +186,7 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
                     Không cần code
                   </Badge>
                 ) : isGitComplete ? (
-                  <Badge variant="outline" className="text-[11px] gap-1 border-teal-500/30 text-teal-500 bg-teal-500/10">
+                  <Badge variant="success" className="text-[11px] gap-1">
                     <GitPullRequest className="h-3 w-3" aria-hidden="true" />
                     PR đã merge
                   </Badge>
@@ -281,7 +277,7 @@ function renderGitPendingBadge(blockers: ReleaseBlocker[]) {
 
   if (codes.has("NO_CONFIRMED_BRANCH")) {
     return (
-      <Badge variant="outline" className="text-[11px] gap-1 border-rose-500/30 text-rose-500 bg-rose-500/10">
+      <Badge variant="danger" className="text-[11px] gap-1">
         <GitBranch className="h-3 w-3" aria-hidden="true" />
         Chưa có branch
       </Badge>
@@ -290,7 +286,7 @@ function renderGitPendingBadge(blockers: ReleaseBlocker[]) {
 
   if (codes.has("BRANCH_LINK_UNCONFIRMED")) {
     return (
-      <Badge variant="outline" className="text-[11px] gap-1 border-amber-500/30 text-amber-500 bg-amber-500/10">
+      <Badge variant="warning" className="text-[11px] gap-1">
         <GitBranch className="h-3 w-3" aria-hidden="true" />
         Chờ xác nhận branch
       </Badge>
@@ -299,7 +295,7 @@ function renderGitPendingBadge(blockers: ReleaseBlocker[]) {
 
   if (codes.has("NO_PULL_REQUEST")) {
     return (
-      <Badge variant="outline" className="text-[11px] gap-1 border-amber-500/30 text-amber-500 bg-amber-500/10">
+      <Badge variant="warning" className="text-[11px] gap-1">
         <GitPullRequest className="h-3 w-3" aria-hidden="true" />
         Chưa tạo PR
       </Badge>
@@ -308,7 +304,7 @@ function renderGitPendingBadge(blockers: ReleaseBlocker[]) {
 
   if (codes.has("PR_NOT_MERGED")) {
     return (
-      <Badge variant="outline" className="text-[11px] gap-1 border-amber-500/30 text-amber-500 bg-amber-500/10">
+      <Badge variant="warning" className="text-[11px] gap-1">
         <GitPullRequest className="h-3 w-3" aria-hidden="true" />
         PR chưa merge
       </Badge>
@@ -317,7 +313,7 @@ function renderGitPendingBadge(blockers: ReleaseBlocker[]) {
 
   if (codes.has("WRONG_MERGE_DESTINATION")) {
     return (
-      <Badge variant="outline" className="text-[11px] gap-1 border-destructive/30 text-destructive bg-destructive/10">
+      <Badge variant="danger" className="text-[11px] gap-1">
         <AlertTriangle className="h-3 w-3" aria-hidden="true" />
         Sai branch đích
       </Badge>

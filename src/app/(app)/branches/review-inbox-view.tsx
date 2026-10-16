@@ -69,9 +69,9 @@ export function ReviewInboxView({
 
   return (
     <div className="space-y-3">
-      <div className="p-3 bg-teal-500/10 border border-teal-500/20 rounded-xl text-xs text-teal-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="p-3 bg-primary/10 border border-primary/20 rounded-xl text-xs text-primary flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 shrink-0 text-teal-400" />
+          <Sparkles className="w-4 h-4 shrink-0 text-primary" />
           <span>
             Các branch dưới đây được gợi ý liên kết Jira task tự động. Nhấn Xác nhận để gắn nhánh cho task trong hệ thống này (không ghi đè lên Jira).
           </span>
@@ -81,7 +81,7 @@ export function ReviewInboxView({
             size="sm"
             disabled={isConfirmingAll || !!loadingId}
             onClick={handleConfirmAll}
-            className="shrink-0 bg-teal-600 hover:bg-teal-500 text-white font-medium text-xs gap-1.5 cursor-pointer"
+            className="shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground font-medium text-xs gap-1.5 cursor-pointer"
           >
             {isConfirmingAll ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -114,21 +114,21 @@ export function ReviewInboxView({
                     href={gitUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-mono text-sm font-semibold text-foreground hover:text-teal-400 hover:underline flex items-center gap-1.5"
+                    className="font-mono text-sm font-semibold text-foreground hover:text-primary hover:underline flex items-center gap-1.5"
                     title={`Mở nhánh ${item.branch} trên Git`}
                   >
-                    <GitBranch className="w-3.5 h-3.5 text-teal-400" />
+                    <GitBranch className="w-3.5 h-3.5 text-primary" />
                     <span>{item.branch}</span>
                     <ExternalLink className="w-3 h-3 opacity-60" />
                   </a>
                 ) : (
                   <span className="font-mono text-sm font-semibold text-foreground flex items-center gap-1.5">
-                    <GitBranch className="w-3.5 h-3.5 text-teal-400" />
+                    <GitBranch className="w-3.5 h-3.5 text-primary" />
                     {item.branch}
                   </span>
                 )}
                 {item.linkConfidence !== null && (
-                  <Badge variant="outline" className="text-xs text-teal-400 border-teal-500/30">
+                  <Badge variant="outline" className="text-xs text-primary border-primary/30">
                     Độ tin cậy: {item.linkConfidence}%
                   </Badge>
                 )}
@@ -145,7 +145,7 @@ export function ReviewInboxView({
                     <span className="text-xs text-muted-foreground">Gợi ý liên kết tới:</span>
                     <Link
                       href={`/issue/${item.suggestedJiraKey}`}
-                      className="font-mono font-bold text-teal-400 hover:underline flex items-center gap-1 text-sm"
+                      className="font-mono font-bold text-primary hover:underline flex items-center gap-1 text-sm"
                     >
                       {item.suggestedJiraKey}
                     </Link>
@@ -154,7 +154,7 @@ export function ReviewInboxView({
                         href={jiraUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-teal-400 inline-flex items-center"
+                        className="text-muted-foreground hover:text-primary inline-flex items-center"
                         title="Xem trên Jira"
                       >
                         <ExternalLink className="w-3 h-3 opacity-60 hover:opacity-100" />
@@ -211,7 +211,7 @@ export function ReviewInboxView({
                 size="sm"
                 disabled={isLoading}
                 onClick={() => handleReject(item.id)}
-                className="gap-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 border-red-500/30 cursor-pointer"
+                className="gap-1.5 text-xs text-destructive hover:text-destructive/80 hover:bg-destructive/10 border-destructive/30 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
                 <span>Từ chối</span>
@@ -222,7 +222,7 @@ export function ReviewInboxView({
                 size="sm"
                 disabled={isLoading}
                 onClick={() => handleConfirm(item.id)}
-                className="gap-1.5 text-xs bg-teal-600 hover:bg-teal-500 text-white cursor-pointer"
+                className="gap-1.5 text-xs bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer"
               >
                 {isLoading ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />

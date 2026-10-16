@@ -58,7 +58,7 @@ export function ReleaseCreateDialog({
         <form onSubmit={onSubmit}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground">
-              <Plus className="h-5 w-5 text-teal-500" aria-hidden="true" />
+              <Plus className="h-5 w-5 text-primary" aria-hidden="true" />
               Tạo bản phát hành mới
             </DialogTitle>
             <DialogDescription className="text-muted-foreground text-xs">

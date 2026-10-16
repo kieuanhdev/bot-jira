@@ -140,7 +140,7 @@ export function BranchToolbar({
               onClick={() => onFilterChange({ view: tab.id, page: 1 })}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer select-none ${
                 isActive
-                  ? "bg-teal-600 text-white shadow-sm"
+                  ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/80"
               }`}
             >
@@ -152,7 +152,7 @@ export function BranchToolbar({
                     isActive
                       ? "bg-white/20 text-white"
                       : tab.highlight
-                        ? "bg-amber-500/20 text-amber-400"
+                        ? "bg-warning/20 text-warning"
                         : "bg-muted text-muted-foreground"
                   }`}
                 >
@@ -256,7 +256,7 @@ export function BranchToolbar({
               }
               className={`h-9 cursor-pointer gap-1.5 text-xs ${
                 filters.attention === "1"
-                  ? "bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500"
+                  ? "bg-warning text-warning-foreground hover:bg-warning/90"
                   : "border-border text-foreground hover:bg-muted"
               }`}
             >
@@ -319,7 +319,7 @@ export function BranchToolbar({
           )}
 
           {filters.q && (
-            <Badge variant="outline" className="gap-1 border-teal-500/40 bg-teal-500/10 text-teal-400">
+            <Badge variant="outline" className="gap-1 border-primary/40 bg-primary/10 text-primary">
               Tìm: &quot;{filters.q}&quot;
               <button onClick={() => onFilterChange({ q: "", page: 1 })} aria-label="Xóa tìm kiếm">
                 <X className="h-3 w-3" />

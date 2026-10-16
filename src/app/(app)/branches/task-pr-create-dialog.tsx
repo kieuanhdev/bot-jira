@@ -139,9 +139,9 @@ export function TaskPrCreateDialog({ jiraKey, summary, open, onOpenChange, onSuc
                   className="flex items-start gap-2 rounded-md border border-border px-3 py-2 text-xs"
                 >
                   {r.status === "created" ? (
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
                   ) : r.status === "error" || r.status === "forbidden" ? (
-                    <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
+                    <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
                   ) : (
                     <MinusCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   )}
@@ -229,7 +229,7 @@ export function TaskPrCreateDialog({ jiraKey, summary, open, onOpenChange, onSuc
                       checked={checked}
                       disabled={!isReady || createMutation.isPending}
                       onChange={() => toggle(item.branchId)}
-                      className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-teal-600 disabled:cursor-not-allowed"
+                      className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-primary disabled:cursor-not-allowed"
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-1.5">

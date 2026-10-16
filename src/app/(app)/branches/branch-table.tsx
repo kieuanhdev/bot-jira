@@ -110,7 +110,7 @@ export function BranchTable({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectBran
                     </div>
                   ) : isSuggested ? (
                     <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                      <div className="flex items-center gap-1.5 text-warning">
                         <Link2 className="h-3.5 w-3.5" />
                         <span className="font-mono font-semibold">Gợi ý: {row.suggestedJiraKey}</span>
                       </div>
@@ -219,10 +219,10 @@ export function BranchTable({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectBran
                       <AlertTriangle
                         className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
                           primarySignal.severity === "high"
-                            ? "text-red-500"
+                            ? "text-destructive"
                             : primarySignal.severity === "medium"
-                            ? "text-amber-500"
-                            : "text-sky-500"
+                            ? "text-warning"
+                            : "text-info"
                         }`}
                       />
                       <span
@@ -263,7 +263,7 @@ export function BranchTable({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectBran
                           e.stopPropagation();
                           onOpenLinkDialog(row);
                         }}
-                        className="h-7 border-amber-500/30 px-2 text-xs text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+                        className="h-7 border-warning/30 px-2 text-xs text-warning hover:bg-warning/10"
                       >
                         Xác nhận
                       </Button>

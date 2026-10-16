@@ -76,7 +76,7 @@ export function ReleasePublishDialog({
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-foreground">
-            <Rocket className="h-5 w-5 text-teal-500" aria-hidden="true" />
+            <Rocket className="h-5 w-5 text-primary" aria-hidden="true" />
             Phát hành Fix Version trên Jira
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
@@ -108,13 +108,13 @@ export function ReleasePublishDialog({
             </div>
             <div className="text-center">
               <div className="text-xs text-muted-foreground">Jira Done</div>
-              <div className="text-lg font-bold text-emerald-500 mt-0.5">
+              <div className="text-lg font-bold text-success mt-0.5">
                 {doneCount} / {taskCount}
               </div>
             </div>
             <div className="text-center">
               <div className="text-xs text-muted-foreground">Git Merged</div>
-              <div className="text-lg font-bold text-teal-500 mt-0.5">
+              <div className="text-lg font-bold text-primary mt-0.5">
                 {gitCompleteCount} / {taskCount}
               </div>
             </div>

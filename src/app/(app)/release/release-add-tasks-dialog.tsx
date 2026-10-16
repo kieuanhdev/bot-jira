@@ -143,7 +143,7 @@ export function ReleaseAddTasksDialog({
                 checked={allSelected}
                 onChange={toggleAll}
                 disabled={busy || items.length === 0}
-                className="h-3.5 w-3.5 cursor-pointer accent-teal-600"
+                className="h-3.5 w-3.5 cursor-pointer accent-primary"
               />
               Chọn tất cả ({items.length})
             </label>
@@ -154,7 +154,7 @@ export function ReleaseAddTasksDialog({
                   checked={onlyMine}
                   onChange={(e) => setOnlyMine(e.target.checked)}
                   disabled={busy}
-                  className="h-3.5 w-3.5 cursor-pointer accent-teal-600"
+                  className="h-3.5 w-3.5 cursor-pointer accent-primary"
                 />
                 Chỉ task của tôi
               </label>
@@ -191,7 +191,7 @@ export function ReleaseAddTasksDialog({
                       checked={selected.has(item.jiraKey)}
                       onChange={() => toggle(item.jiraKey)}
                       disabled={busy}
-                      className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-teal-600"
+                      className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-primary"
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">

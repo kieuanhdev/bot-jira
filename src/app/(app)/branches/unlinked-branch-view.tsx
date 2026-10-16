@@ -31,7 +31,7 @@ export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink, onLinkMany
   return (
     <div className="space-y-3">
       <div className="p-3 bg-muted/40 border border-border rounded-xl text-xs text-muted-foreground flex items-center gap-2">
-        <GitBranch className="w-4 h-4 shrink-0 text-teal-400" />
+        <GitBranch className="w-4 h-4 shrink-0 text-primary" />
         <span>
           Danh sách các nhánh đang hoạt động trên Bitbucket nhưng chưa tìm thấy Jira task tương ứng.
           Gắn mã Jira để đưa nhánh vào tiến độ delivery của task.
@@ -44,7 +44,7 @@ export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink, onLinkMany
             type="checkbox"
             checked={allSelected}
             onChange={() => setSelected(allSelected ? new Set() : new Set(items.map((i) => i.id)))}
-            className="h-3.5 w-3.5 cursor-pointer accent-teal-600"
+            className="h-3.5 w-3.5 cursor-pointer accent-primary"
           />
           Chọn tất cả ({items.length})
         </label>
@@ -52,7 +52,7 @@ export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink, onLinkMany
           <Button
             size="sm"
             onClick={() => onLinkMany(selectedItems)}
-            className="gap-1.5 text-xs bg-teal-600 hover:bg-teal-500 text-white cursor-pointer"
+            className="gap-1.5 text-xs bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer"
           >
             <LinkIcon className="w-3.5 h-3.5" />
             <span>Gắn {selectedItems.length} nhánh vào 1 task</span>
@@ -72,7 +72,7 @@ export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink, onLinkMany
               checked={selected.has(item.id)}
               onChange={() => toggle(item.id)}
               aria-label={`Chọn nhánh ${item.branch}`}
-              className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-teal-600"
+              className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-primary"
             />
             <div className="space-y-1 min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -84,7 +84,7 @@ export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink, onLinkMany
                     href={gitUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-mono font-semibold text-foreground hover:text-teal-400 hover:underline flex items-center gap-1.5"
+                    className="font-mono font-semibold text-foreground hover:text-primary hover:underline flex items-center gap-1.5"
                     title={`Mở nhánh ${item.branch} trên Git`}
                   >
                     <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
@@ -125,7 +125,7 @@ export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink, onLinkMany
                   href={gitUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-muted-foreground hover:text-teal-400 hover:underline flex items-center gap-1 px-2 py-1"
+                  className="text-muted-foreground hover:text-primary hover:underline flex items-center gap-1 px-2 py-1"
                   title="Mở nhánh trên Git"
                 >
                   Xem Git
@@ -137,7 +137,7 @@ export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink, onLinkMany
                   href={item.prUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-teal-400 hover:underline flex items-center gap-1 px-2 py-1"
+                  className="text-primary hover:underline flex items-center gap-1 px-2 py-1"
                 >
                   Xem PR
                   <ExternalLink className="w-3 h-3" />
@@ -147,7 +147,7 @@ export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink, onLinkMany
                 variant="default"
                 size="sm"
                 onClick={() => onLink(item)}
-                className="gap-1.5 text-xs bg-teal-600 hover:bg-teal-500 text-white cursor-pointer"
+                className="gap-1.5 text-xs bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer"
               >
                 <LinkIcon className="w-3.5 h-3.5" />
                 <span>Gắn Jira task</span>

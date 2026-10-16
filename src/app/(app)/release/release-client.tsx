@@ -99,7 +99,7 @@ export function ReleaseClient() {
                 href="/settings"
                 className="text-xs text-primary hover:underline flex items-center gap-1.5 px-2.5 py-1 rounded bg-primary/10 border border-primary/20 transition-colors cursor-pointer"
               >
-                <AlertCircle className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
+                <AlertCircle className="h-3.5 w-3.5 text-warning" aria-hidden="true" />
                 <span>Cấu hình Jira token trong Cài đặt</span>
               </Link>
             ) : (
@@ -130,7 +130,7 @@ export function ReleaseClient() {
             </Button>
           ) : (
             <div className="text-xs text-muted-foreground flex items-center gap-1.5 px-2 py-1 rounded bg-muted/60 border border-border">
-              <AlertCircle className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
+              <AlertCircle className="h-3.5 w-3.5 text-warning" aria-hidden="true" />
               <span>Không có quyền tạo Version trong dự án {selectedProject}</span>
             </div>
           )}

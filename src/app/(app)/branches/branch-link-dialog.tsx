@@ -122,7 +122,7 @@ export function BranchLinkDialog({
 
         <div className="flex min-w-0 flex-col gap-4 py-2">
           {error && (
-            <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-xs text-red-600 dark:text-red-400">
+            <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -197,7 +197,7 @@ export function BranchLinkDialog({
                 checked={replace}
                 onChange={(e) => setReplace(e.target.checked)}
                 disabled={linkMutation.isPending}
-                className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-teal-600"
+                className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-primary"
               />
               <span>
                 Thay thế liên kết hiện tại ({branch.jiraKey}). Bỏ chọn để gắn <strong>thêm</strong> task này và giữ{" "}
@@ -212,7 +212,7 @@ export function BranchLinkDialog({
               checked={syncPr}
               onChange={(e) => setSyncPr(e.target.checked)}
               disabled={linkMutation.isPending}
-              className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-teal-600"
+              className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-primary"
             />
             <span>
               Cập nhật PR trên Bitbucket để Jira nhận (thêm <code className="font-mono">Jira: {jiraKeyInput.trim().toUpperCase() || "KEY"}</code> vào mô
@@ -229,7 +229,7 @@ export function BranchLinkDialog({
               size="sm"
               disabled={linkMutation.isPending}
               onClick={() => handleSave(true)}
-              className="border-red-500/30 text-red-600 hover:bg-red-500/10 dark:text-red-400"
+              className="border-destructive/30 text-destructive hover:bg-destructive/10"
             >
               <Unlink className="mr-1 h-3.5 w-3.5" /> Gỡ liên kết
             </Button>

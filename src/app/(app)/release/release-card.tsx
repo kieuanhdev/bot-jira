@@ -104,9 +104,9 @@ export function ReleaseCard({
             <div className="flex items-start sm:items-center gap-2.5 min-w-0">
               <div className="p-2 rounded-lg bg-muted shrink-0 text-primary">
                 {isReleased ? (
-                  <Rocket className="h-5 w-5 text-emerald-500" aria-hidden="true" />
+                  <Rocket className="h-5 w-5 text-success" aria-hidden="true" />
                 ) : isReady ? (
-                  <CheckCircle2 className="h-5 w-5 text-teal-500" aria-hidden="true" />
+                  <CheckCircle2 className="h-5 w-5 text-primary" aria-hidden="true" />
                 ) : (
                   <GitBranch className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                 )}
@@ -154,7 +154,7 @@ export function ReleaseCard({
                   onClick={() => setPublishDialogOpen(true)}
                   className={`gap-1.5 cursor-pointer text-xs font-semibold ${
                     isReady
-                      ? "bg-teal-600 hover:bg-teal-700 text-white"
+                      ? "bg-primary hover:bg-primary/90 text-primary-foreground"
                       : "bg-muted text-muted-foreground hover:bg-muted/80"
                   }`}
                   title={
@@ -197,7 +197,7 @@ export function ReleaseCard({
               </div>
               <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
                 <div
-                  className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                  className="h-full bg-success rounded-full transition-all duration-300"
                   style={{ width: `${jiraPct}%` }}
                 />
               </div>
@@ -212,7 +212,7 @@ export function ReleaseCard({
               </div>
               <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
                 <div
-                  className="h-full bg-teal-500 rounded-full transition-all duration-300"
+                  className="h-full bg-primary rounded-full transition-all duration-300"
                   style={{ width: `${deliveryPct}%` }}
                 />
               </div>
@@ -229,7 +229,7 @@ export function ReleaseCard({
                 </span>
               )}
               {release.releasedAt && (
-                <span className="inline-flex items-center gap-1 text-emerald-500 font-medium">
+                <span className="inline-flex items-center gap-1 text-success font-medium">
                   <Rocket className="h-3 w-3" aria-hidden="true" />
                   Đã phát hành: {new Date(release.releasedAt).toLocaleDateString("vi-VN")}
                 </span>
@@ -354,7 +354,7 @@ function renderStatusBadge(release: ReleaseCardItem) {
 
   if (release.status === "released" || release.readiness === "released") {
     return (
-      <Badge variant="outline" className="text-[11px] gap-1 border-emerald-500/30 text-emerald-500 bg-emerald-500/10">
+      <Badge variant="success" className="text-[11px] gap-1">
         <Rocket className="h-3 w-3" aria-hidden="true" />
         Đã phát hành
       </Badge>
@@ -372,7 +372,7 @@ function renderStatusBadge(release: ReleaseCardItem) {
 
   if (release.readiness === "ready") {
     return (
-      <Badge variant="outline" className="text-[11px] gap-1 border-teal-500/30 text-teal-500 bg-teal-500/10">
+      <Badge variant="info" className="text-[11px] gap-1">
         <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
         Sẵn sàng phát hành
       </Badge>
@@ -380,7 +380,7 @@ function renderStatusBadge(release: ReleaseCardItem) {
   }
 
   return (
-    <Badge variant="outline" className="text-[11px] gap-1 border-amber-500/30 text-amber-500 bg-amber-500/10">
+    <Badge variant="warning" className="text-[11px] gap-1">
       <Clock className="h-3 w-3" aria-hidden="true" />
       Đang thực hiện
     </Badge>

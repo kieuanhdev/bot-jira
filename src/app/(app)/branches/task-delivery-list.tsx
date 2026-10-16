@@ -47,9 +47,9 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
   const getStatusBadge = (category: string, status: string) => {
     switch (category.toLowerCase()) {
       case "done":
-        return <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">{status}</Badge>;
+        return <Badge variant="success">{status}</Badge>;
       case "indeterminate":
-        return <Badge variant="secondary" className="bg-teal-500/10 text-teal-400 border-teal-500/20">{status}</Badge>;
+        return <Badge variant="info">{status}</Badge>;
       default:
         return <Badge variant="outline" className="text-muted-foreground">{status}</Badge>;
     }
@@ -65,7 +65,7 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
     }
     if (state?.toUpperCase() === "OPEN") {
       return (
-        <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs">
+        <Badge variant="success" className="text-xs">
           PR OPEN
         </Badge>
       );
@@ -94,7 +94,7 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
             key={task.jiraKey}
             className={`border rounded-xl bg-card transition-all ${
               hasAttention
-                ? "border-amber-500/40 shadow-sm"
+                ? "border-warning/40 shadow-sm"
                 : "border-border hover:border-border/80"
             }`}
           >
@@ -121,7 +121,7 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
                     <Link
                       href={`/issue/${task.jiraKey}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="font-mono font-semibold text-teal-400 hover:underline flex items-center gap-1 text-sm"
+                      className="font-mono font-semibold text-primary hover:underline flex items-center gap-1 text-sm"
                     >
                       {task.jiraKey}
                     </Link>
@@ -131,7 +131,7 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="text-muted-foreground hover:text-teal-400 inline-flex items-center"
+                        className="text-muted-foreground hover:text-primary inline-flex items-center"
                         title="Xem trên Jira"
                       >
                         <ExternalLink className="w-3 h-3 opacity-60 hover:opacity-100" />
@@ -159,11 +159,11 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
               <div className="flex flex-wrap items-center gap-3 pl-7 md:pl-0">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded">
-                    <GitBranch className="w-3.5 h-3.5 text-teal-400" />
+                    <GitBranch className="w-3.5 h-3.5 text-primary" />
                     <span>{task.branchCount} branch</span>
                   </span>
                   {task.prSummary.open > 0 && (
-                    <span className="flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded">
+                    <span className="flex items-center gap-1 bg-success/10 text-success border border-success/20 px-2 py-1 rounded">
                       <GitPullRequest className="w-3.5 h-3.5" />
                       <span>{task.prSummary.open} open</span>
                     </span>
@@ -177,7 +177,7 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
                 </div>
 
                 {hasAttention && (
-                  <Badge variant="warning" className="bg-amber-500/10 text-amber-400 border-amber-500/30 flex items-center gap-1">
+                  <Badge variant="warning" className="flex items-center gap-1">
                     <AlertTriangle className="w-3 h-3" />
                     <span>Cần chú ý</span>
                   </Badge>
@@ -190,10 +190,10 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
               <div className="border-t border-border/60 bg-muted/20 px-4 py-3 space-y-3 rounded-b-xl">
                 {/* Attention Alert Banner if present */}
                 {hasAttention && (
-                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div className="p-3 rounded-lg bg-warning/10 border border-warning/20 flex flex-col md:flex-row md:items-center justify-between gap-2">
                     <div className="space-y-1">
                       {task.attention.map((sig, idx) => (
-                        <div key={idx} className="flex items-center gap-2 text-xs text-amber-300">
+                        <div key={idx} className="flex items-center gap-2 text-xs text-warning">
                           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                           <span>{sig.message}</span>
                         </div>
@@ -208,7 +208,7 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
                             className="bg-card text-foreground px-2 py-1 rounded border border-border flex items-center gap-1"
                           >
                             <span>{action}</span>
-                            <ArrowRight className="w-3 h-3 text-teal-400" />
+                            <ArrowRight className="w-3 h-3 text-primary" />
                           </span>
                         ))}
                       </div>
@@ -270,10 +270,10 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
                               href={branchGitUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="group/branch font-mono font-medium text-foreground hover:text-teal-400 hover:underline truncate inline-flex items-center gap-1"
+                              className="group/branch font-mono font-medium text-foreground hover:text-primary hover:underline truncate inline-flex items-center gap-1"
                               title={`Xem nhánh ${b.branch} trên Git`}
                             >
-                              <GitBranch className="w-3 h-3 text-muted-foreground group-hover/branch:text-teal-400 shrink-0" />
+                              <GitBranch className="w-3 h-3 text-muted-foreground group-hover/branch:text-primary shrink-0" />
                               <span className="truncate">{b.branch}</span>
                               <ExternalLink className="w-2.5 h-2.5 shrink-0 opacity-50 group-hover/branch:opacity-100" />
                             </a>
@@ -298,7 +298,7 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
                               href={b.prUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-teal-400 hover:underline flex items-center gap-1"
+                              className="text-primary hover:underline flex items-center gap-1"
                             >
                               PR #{b.prId}
                               <ExternalLink className="w-3 h-3" />
@@ -310,7 +310,7 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
                               href={branchGitUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-teal-400 hover:underline flex items-center gap-1"
+                              className="text-primary hover:underline flex items-center gap-1"
                               title="Mở nhánh trên Git"
                             >
                               Xem Git
@@ -334,7 +334,7 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
                 <div className="pt-1 flex justify-end">
                   <Link
                     href={`/issue/${task.jiraKey}`}
-                    className="text-xs text-teal-400 hover:text-teal-300 flex items-center gap-1 font-medium"
+                    className="text-xs text-primary hover:underline flex items-center gap-1 font-medium"
                   >
                     Mở chi tiết Jira Task & Quản lý nhánh
                     <ArrowRight className="w-3 h-3" />
