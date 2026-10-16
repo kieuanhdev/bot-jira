@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { bulkKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { Loader2 } from "lucide-react";
 
 type ParentSearchResult = {
@@ -29,19 +30,8 @@ export function EpicInput({
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const debouncedQuery = useDebouncedValue(query, 250);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      setDebouncedQuery(query);
-    }, 250);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [query]);
 
   const { data: parentData, isLoading } = useQuery({
     queryKey: bulkKeys.createParentIssues(projectKey, debouncedQuery),

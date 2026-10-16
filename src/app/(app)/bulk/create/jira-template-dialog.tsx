@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useQuery } from "@tanstack/react-query";
 import { api, getErrorMessage } from "@/lib/api-client";
 import { bulkKeys } from "@/lib/query-keys";
@@ -56,23 +57,11 @@ export function JiraTemplateDialog({
   onAddRow,
 }: JiraTemplateDialogProps) {
   const [searchInput, setSearchInput] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(searchInput.trim(), 300);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [customSummary, setCustomSummary] = useState<string | null>(null);
   const [includeParentRow, setIncludeParentRow] = useState(true);
   const [addedMessage, setAddedMessage] = useState<string | null>(null);
-  const debounceTimer = useRef<ReturnType<typeof setTimeout>>(null);
-
-  // Debounce search query
-  useEffect(() => {
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => {
-      setDebouncedQuery(searchInput.trim());
-    }, 300);
-    return () => {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    };
-  }, [searchInput]);
 
   // Fetch recent or searched issues list
   const {
@@ -282,7 +271,6 @@ export function JiraTemplateDialog({
     onOpenChange(false);
     setTimeout(() => {
       setSearchInput("");
-      setDebouncedQuery("");
       setSelectedKey(null);
       setCustomSummary(null);
       setAddedMessage(null);
@@ -320,7 +308,6 @@ export function JiraTemplateDialog({
               type="button"
               onClick={() => {
                 setSearchInput("");
-                setDebouncedQuery("");
               }}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
               aria-label="Xóa tìm kiếm"

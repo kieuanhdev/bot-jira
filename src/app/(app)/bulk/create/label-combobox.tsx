@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { bulkKeys } from "@/lib/query-keys";
 import { MAX_LABELS_COUNT, MAX_LABEL_LENGTH } from "@/lib/bulk/create-types";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { X, Tag } from "lucide-react";
 
 interface LabelComboboxProps {
@@ -33,16 +34,7 @@ export function LabelCombobox({
   const [highlighted, setHighlighted] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceTimer = useRef<ReturnType<typeof setTimeout>>(null);
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-
-  useEffect(() => {
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => setDebouncedQuery(inputValue.trim()), 250);
-    return () => {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    };
-  }, [inputValue]);
+  const debouncedQuery = useDebouncedValue(inputValue.trim(), 250);
 
   const { data: suggestions, isFetching } = useQuery({
     queryKey: bulkKeys.createLabels(projectKey, debouncedQuery),

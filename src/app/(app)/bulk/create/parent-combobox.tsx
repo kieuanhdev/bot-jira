@@ -6,6 +6,7 @@ import { Search, X, ListTree, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { bulkKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { BulkParentRef, BulkCreateRowInput } from "@/lib/bulk/create-types";
 
 interface ParentComboboxProps {
@@ -45,19 +46,9 @@ export function ParentCombobox({
 }: ParentComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(query, 300);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceTimer = useRef<ReturnType<typeof setTimeout>>(null);
-
-  // Debounce search
-  useEffect(() => {
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => setDebouncedQuery(query), 300);
-    return () => {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    };
-  }, [query]);
 
   // Fetch Jira parent issues when query changes
   const { data: jiraResults, isLoading: jiraLoading } = useQuery({
