@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import { reportsKeys } from "@/lib/query-keys";
+import { meKeys, reportsKeys } from "@/lib/query-keys";
 import { queryPolicy } from "@/lib/query-policy";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -89,7 +89,7 @@ export function TasksTab({
   });
 
   const { data: meStatus } = useQuery({
-    queryKey: ["me", "status"],
+    queryKey: meKeys.status,
     queryFn: () => api<{ jiraName: string | null; jiraBaseUrl?: string }>("/api/me/status"),
     staleTime: 5 * 60 * 1000,
   });

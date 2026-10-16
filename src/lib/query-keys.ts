@@ -21,7 +21,13 @@ export const issuesKeys = {
   linkTypes: (jiraKey: string) => ["issues", jiraKey, "link-types"] as const,
   /** `["issues", "search", <query>]` — the lightweight key/summary picker lookup. */
   search: (query: string) => ["issues", "search", query] as const,
+  /** `["issues", "release-add", projectKey, version, query, assignee]` */
+  releaseAdd: (projectKey: string, version: string, query: string, assignee: string) =>
+    ["issues", "release-add", projectKey, version, query, assignee] as const,
+  /** `["issue-versions", projectKey]` — cached project versions for quick fix-version picker. */
+  versionsByProject: (projectKey: string) => ["issue-versions", projectKey] as const,
 };
+
 
 const JIRA_KEY_RE = /^[A-Z][A-Z0-9_]*-\d+$/i;
 
@@ -69,14 +75,26 @@ export const notificationsKeys = {
   infiniteAll: () => ["notifications", "infinite"] as const,
 };
 
+export const projectsKeys = {
+  all: ["projects"] as const,
+  list: ["projects"] as const,
+  peopleFields: (project: string) => ["projects", project, "people-fields"] as const,
+  members: (project: string) => ["projects", project, "members"] as const,
+};
+
 export const boardKeys = {
   projects: ["projects"] as const,
   statuses: (project: string, boardId?: number | null) =>
     ["board", "statuses", project, boardId ? String(boardId) : "auto"] as const,
+  statusesPrefix: (project?: string) =>
+    project ? (["board", "statuses", project] as const) : (["board", "statuses"] as const),
   options: (project: string) => ["board", "options", project] as const,
   membershipStatus: (project: string, boardId: number) =>
     ["board", "membership", "status", project, boardId] as const,
+  peopleFields: (project: string) => projectsKeys.peopleFields(project),
+  members: (project: string) => projectsKeys.members(project),
 };
+
 
 export const meKeys = {
   status: ["me", "status"] as const,
@@ -158,11 +176,17 @@ export const branchesKeys = {
   /** `["branches-tasks", <filters>]`. */
   tasks: (filters: unknown) => ["branches-tasks", filters] as const,
   facets: ["branches-facets"] as const,
+  picker: (jiraKey: string, term: string) => ["branches-tasks", "picker", jiraKey, term] as const,
+  prPlan: (jiraKey: string) => ["branches-tasks", "pr-plan", jiraKey] as const,
 };
 
 export const bulkKeys = {
-  /** `["bulk-op", <operationId>]`. */
-  op: (id: string) => ["bulk-op", id] as const,
+  /** `["bulk-operations"]`. */
+  operations: ["bulk-operations"] as const,
+  /** `["bulk-operation", <operationId>]`. */
+  operation: (id: string) => ["bulk-operation", id] as const,
+  /** `["bulk-operation", <operationId>]`. */
+  op: (id: string) => ["bulk-operation", id] as const,
   /** Existing Jira Fix Versions for the selected project scope. */
   versions: (projects: string[]) => ["bulk-versions", [...projects].sort()] as const,
   /** Available editable fields metadata for a project. */
@@ -229,4 +253,6 @@ export const adminKeys = {
   health: ["admin", "overview", "health"] as const,
   overviewErrors: (type: "sentry" | "outbox") => ["admin", "overview", "errors", type] as const,
   sentry: ["admin", "sentry"] as const,
+  sentryList: (filter: string = "review") => ["admin", "sentry", filter] as const,
 };
+

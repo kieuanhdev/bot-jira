@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { settingsKeys } from "@/lib/query-keys";
+import { boardKeys, projectsKeys, settingsKeys } from "@/lib/query-keys";
 import type { User } from "./lib/settings-model";
 
 type LeaderCandidate = {
@@ -49,12 +49,12 @@ export function ProjectLeadersSettings({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const { data: projectsData, isLoading: isProjectsLoading } = useQuery({
-    queryKey: ["settings", "projects"],
+    queryKey: boardKeys.projects,
     queryFn: () => api<{ items: Array<{ key: string; name: string }> }>("/api/projects"),
   });
 
   const effectiveProject = selectedProject || projectsData?.items[0]?.key || "";
-  const queryKey = ["projects", effectiveProject, "members"];
+  const queryKey = projectsKeys.members(effectiveProject);
 
   const { data: membersData, isLoading: isMembersLoading } = useQuery({
     queryKey,

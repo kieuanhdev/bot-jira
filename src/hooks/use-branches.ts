@@ -2,6 +2,7 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { branchesKeys, issuesKeys, releasesKeys } from "@/lib/query-keys";
 
 type LinkResult = { ok?: boolean; prSync?: { summary: string } };
 type SyncResult = { queued?: boolean };
@@ -15,8 +16,8 @@ export function useBranchSync() {
   return useMutation({
     mutationFn: () => api<SyncResult>("/api/branches/sync", { method: "POST" }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["branches"] });
-      qc.invalidateQueries({ queryKey: ["branches-tasks"] });
+      qc.invalidateQueries({ queryKey: branchesKeys.all });
+      qc.invalidateQueries({ queryKey: branchesKeys.tasksAll });
     },
   });
 }
@@ -27,9 +28,9 @@ export function useBranchLink() {
     mutationFn: ({ branchId, body }: { branchId: string; body: LinkBody }) =>
       api<LinkResult>(`/api/branches/${branchId}/link`, { method: "PATCH", body }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["branches"] });
-      qc.invalidateQueries({ queryKey: ["branches-tasks"] });
-      qc.invalidateQueries({ queryKey: ["releases"] });
+      qc.invalidateQueries({ queryKey: branchesKeys.all });
+      qc.invalidateQueries({ queryKey: branchesKeys.tasksAll });
+      qc.invalidateQueries({ queryKey: releasesKeys.all });
     },
   });
 }
@@ -45,7 +46,7 @@ export type IssueSearchItem = {
 export function useIssueSearch(q: string) {
   const term = q.trim();
   return useQuery({
-    queryKey: ["issue-search", term],
+    queryKey: issuesKeys.search(term),
     queryFn: () =>
       api<{ items: IssueSearchItem[] }>(`/api/issues/search?q=${encodeURIComponent(term)}`),
     enabled: term.length >= 2,
@@ -53,6 +54,7 @@ export function useIssueSearch(q: string) {
     placeholderData: keepPreviousData,
   });
 }
+
 
 export type PickerBranch = {
   id: string;
@@ -69,7 +71,7 @@ export type PickerBranch = {
 export function useBranchPicker(jiraKey: string, q: string, enabled: boolean) {
   const term = q.trim();
   return useQuery({
-    queryKey: ["branches-tasks", "picker", jiraKey, term],
+    queryKey: branchesKeys.picker(jiraKey, term),
     queryFn: () =>
       api<{ items: PickerBranch[] }>(
         `/api/branches/picker?jiraKey=${encodeURIComponent(jiraKey)}&q=${encodeURIComponent(term)}`
@@ -112,7 +114,7 @@ export type PrCreateResult = {
 /** Dry-run plan of the PRs that would be created for a task's linked branches. */
 export function usePrPlan(jiraKey: string, enabled: boolean) {
   return useQuery({
-    queryKey: ["branches-tasks", "pr-plan", jiraKey],
+    queryKey: branchesKeys.prPlan(jiraKey),
     queryFn: () =>
       api<{ plan: { items: PrPlanItem[] } }>("/api/branches/pull-requests", {
         method: "POST",
@@ -133,8 +135,9 @@ export function useCreatePullRequests() {
         body,
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["branches"] });
-      qc.invalidateQueries({ queryKey: ["branches-tasks"] });
+      qc.invalidateQueries({ queryKey: branchesKeys.all });
+      qc.invalidateQueries({ queryKey: branchesKeys.tasksAll });
     },
   });
 }
+

@@ -15,7 +15,7 @@ export default async function AdminSentryPage() {
 
   try {
     await queryClient.prefetchQuery({
-      queryKey: [...adminKeys.sentry, "review"],
+      queryKey: adminKeys.sentryList("review"),
       queryFn: () => listSentryImports("review"),
     });
   } catch (err) {

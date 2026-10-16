@@ -56,7 +56,7 @@ export function ReleaseAddTasksDialog({
   const assignee = onlyMine && meName ? meName : "";
 
   const search = useQuery({
-    queryKey: ["issues", "release-add", projectKey, version, q.trim(), assignee],
+    queryKey: issuesKeys.releaseAdd(projectKey, version, q.trim(), assignee),
     queryFn: () => {
       const p = new URLSearchParams({ project: projectKey, excludeVersion: version, limit: "50" });
       if (q.trim()) p.set("q", q.trim());

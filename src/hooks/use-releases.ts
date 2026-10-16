@@ -58,7 +58,7 @@ export function useReleaseSync() {
       return api<SyncResult>(url, { method: "POST" });
     },
     onSuccess: (_data, projectKey) => {
-      qc.invalidateQueries({ queryKey: ["releases"] });
+      qc.invalidateQueries({ queryKey: releasesKeys.all });
       if (projectKey && projectKey !== "all") {
         qc.invalidateQueries({ queryKey: releasesKeys.permissions(projectKey) });
       }
@@ -77,7 +77,7 @@ export function useCreateRelease() {
       }
     },
     onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ["releases"] });
+      qc.invalidateQueries({ queryKey: releasesKeys.all });
       qc.invalidateQueries({ queryKey: releasesKeys.permissions(variables.projectKey) });
     },
   });
@@ -89,7 +89,7 @@ export function useSaveReleaseNotes() {
     mutationFn: ({ id, notes }: { id: string; notes: string }) =>
       api(`/api/releases/${id}`, { method: "PATCH", body: { notes } }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["releases"] });
+      qc.invalidateQueries({ queryKey: releasesKeys.all });
     },
   });
 }
@@ -125,7 +125,7 @@ export function usePublishRelease() {
       return data;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["releases"] });
+      qc.invalidateQueries({ queryKey: releasesKeys.all });
     },
   });
 }

@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { boardKeys, projectsKeys } from "@/lib/query-keys";
 
 type Fields = { reporter: string; approver?: string | null; tester?: string | null };
 
@@ -15,9 +16,9 @@ export function ProjectPeopleFieldsSettings() {
   const qc = useQueryClient();
   const [project, setProject] = useState("");
   const [draftState, setDraftState] = useState<{ project: string; fields: Fields }>({ project: "", fields: { reporter: "reporter", approver: "", tester: "" } });
-  const { data: projects } = useQuery({ queryKey: ["settings", "projects"], queryFn: () => api<{ items: Array<{ key: string; name: string }> }>("/api/projects") });
+  const { data: projects } = useQuery({ queryKey: boardKeys.projects, queryFn: () => api<{ items: Array<{ key: string; name: string }> }>("/api/projects") });
   const effectiveProject = project || projects?.items[0]?.key || "";
-  const queryKey = ["projects", effectiveProject, "people-fields"];
+  const queryKey = projectsKeys.peopleFields(effectiveProject);
   const { data, isLoading } = useQuery({
     queryKey,
     enabled: Boolean(effectiveProject),

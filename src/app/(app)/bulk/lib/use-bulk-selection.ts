@@ -5,7 +5,7 @@ import type { ReadonlyURLSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { useIssues, useMoreIssues, type IssueItem } from "@/hooks/use-issues";
-import { issuesKeys, boardKeys, meKeys } from "@/lib/query-keys";
+import { issuesKeys, boardKeys, meKeys, projectsKeys } from "@/lib/query-keys";
 import { scopeProjectItems } from "@/lib/project-scope-client";
 import { type IssueFilters, DEFAULT_BULK_FILTERS } from "@/lib/issues/issue-filters";
 import {
@@ -118,7 +118,7 @@ export function useBulkSelection({
 
   // Project people fields (approver, tester custom fields)
   const { data: peopleFieldData } = useQuery({
-    queryKey: ["projects", filterProject, "people-fields"],
+    queryKey: projectsKeys.peopleFields(filterProject),
     enabled: Boolean(filterProject),
     queryFn: () =>
       api<{ fields: { reporter: string; approver?: string | null; tester?: string | null } }>(

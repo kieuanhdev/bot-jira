@@ -101,7 +101,7 @@ export function AdminSentryClient() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tone: FeedbackTone; text: string } | null>(null);
 
-  const queryKey = [...adminKeys.sentry, filter] as const;
+  const queryKey = adminKeys.sentryList(filter);
   const query = useQuery({
     queryKey,
     queryFn: () => api<SentryQueueResponse>(`/api/admin/sentry-import?state=${FILTER_STATES[filter]}`),

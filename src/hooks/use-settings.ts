@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import { settingsKeys, notifyKeys } from "@/lib/query-keys";
+import { chatKeys, settingsKeys, notifyKeys } from "@/lib/query-keys";
 import type { Role } from "@/lib/permissions";
 
 export function useSetUserRole() {
@@ -92,7 +92,7 @@ export function useSaveDiscordIntegration() {
     mutationFn: (body: DiscordIntegrationBody) =>
       api("/api/discord/integration", { method: "PUT", body }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["chat", "identity"] });
+      qc.invalidateQueries({ queryKey: chatKeys.identity });
     },
   });
 }
@@ -102,7 +102,8 @@ export function useRemoveDiscordIntegration() {
   return useMutation({
     mutationFn: () => api("/api/discord/integration", { method: "DELETE" }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["chat", "identity"] });
+      qc.invalidateQueries({ queryKey: chatKeys.identity });
     },
   });
 }
+

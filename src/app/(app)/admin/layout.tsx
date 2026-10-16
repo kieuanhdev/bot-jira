@@ -29,7 +29,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         }),
       }),
       queryClient.prefetchQuery({
-        queryKey: [...adminKeys.sentry, "review"],
+        queryKey: adminKeys.sentryList("review"),
         queryFn: () => listSentryImports("review"),
       }),
     ]);

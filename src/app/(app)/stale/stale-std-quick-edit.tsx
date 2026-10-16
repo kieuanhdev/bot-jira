@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Layers, Loader2 } from "lucide-react";
 import { api } from "@/lib/api-client";
-import { staleKeys } from "@/lib/query-keys";
+import { issuesKeys, staleKeys } from "@/lib/query-keys";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface VersionItem {
@@ -101,7 +101,7 @@ export function QuickFixVersionSelect({ jiraKey }: { jiraKey: string }) {
   const [open, setOpen] = useState(false);
   const { patch, pending, error } = useQuickPatch(jiraKey);
   const { data, isLoading } = useQuery({
-    queryKey: ["issue-versions", jiraKey.split("-")[0]],
+    queryKey: issuesKeys.versionsByProject(jiraKey.split("-")[0]),
     queryFn: () => api<{ items: VersionItem[] }>(`/api/issues/${encodeURIComponent(jiraKey)}/versions`),
     enabled: open,
     staleTime: 5 * 60_000,

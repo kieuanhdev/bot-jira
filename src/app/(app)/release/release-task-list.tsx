@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getErrorMessage } from "@/lib/api-client";
-import { meKeys } from "@/lib/query-keys";
+import { meKeys, releasesKeys } from "@/lib/query-keys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TaskBranchLinkDialog } from "../branches/task-branch-link-dialog";
@@ -49,7 +49,7 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
       api(`/api/issues/${jiraKey}`, { method: "PATCH", body: { assignee: meName } }),
     onMutate: () => setAssignError(null),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["releases"] });
+      qc.invalidateQueries({ queryKey: releasesKeys.all });
     },
     onError: (err, jiraKey) => setAssignError(`${jiraKey}: ${getErrorMessage(err)}`),
   });

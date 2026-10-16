@@ -26,7 +26,7 @@ export function AdminNav() {
   const failedCount = data?.items?.filter((p) => p.state === "failed").length ?? 0;
 
   const { data: sentry } = useQuery({
-    queryKey: [...adminKeys.sentry, "review"],
+    queryKey: adminKeys.sentryList("review"),
     queryFn: () => api<{ counts: Record<string, number> }>("/api/admin/sentry-import?state=review"),
     staleTime: 15_000,
   });

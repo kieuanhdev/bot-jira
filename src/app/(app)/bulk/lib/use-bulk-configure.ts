@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { ReadonlyURLSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import { bulkKeys } from "@/lib/query-keys";
+import { boardKeys, bulkKeys } from "@/lib/query-keys";
 import { parseJiraDuration } from "@/lib/worklogs/schema";
 import type { IssueItem } from "@/hooks/use-issues";
 import type { BulkAction, BulkVersionOption, ProjectFieldOption } from "./bulk-types";
@@ -141,7 +141,7 @@ export function useBulkConfigure({
 
   // Fetch workflow statuses for the selected project
   const { data: boardStatusesData } = useQuery({
-    queryKey: ["board", "statuses", filterProject],
+    queryKey: boardKeys.statuses(filterProject),
     queryFn: () =>
       api<{ items: { name: string; category: string }[] }>(
         `/api/board/statuses?project=${encodeURIComponent(filterProject)}`

@@ -144,7 +144,7 @@ export function useBoardProjectPicker({
       await Promise.all([
         qc.invalidateQueries({ queryKey: meKeys.prefs }),
         qc.invalidateQueries({ queryKey: boardKeys.projects }),
-        qc.invalidateQueries({ queryKey: ["board", "statuses", verifiedKey] }),
+        qc.invalidateQueries({ queryKey: boardKeys.statusesPrefix(verifiedKey) }),
       ]);
       setBoardNewKey("");
       closePicker();

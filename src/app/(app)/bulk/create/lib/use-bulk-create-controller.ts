@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { boardKeys, bulkKeys } from "@/lib/query-keys";
 import {
   type BulkCreateRowInput,
   type BulkCreateFieldDefaults,
@@ -45,7 +46,7 @@ export function useBulkCreateController() {
 
   // Query user available projects
   const { data: projectsData, isLoading: isProjectsLoading } = useQuery({
-    queryKey: ["projects"],
+    queryKey: boardKeys.projects,
     queryFn: () => api<{ items: Array<{ key: string; openCount?: number }> }>("/api/projects"),
     staleTime: 5 * 60 * 1000,
   });
@@ -144,7 +145,7 @@ export function useBulkCreateController() {
     error: metadataError,
     refetch: refetchMetadata,
   } = useQuery({
-    queryKey: ["bulk-create-metadata", projectKey],
+    queryKey: bulkKeys.createMetadata(projectKey),
     queryFn: () => api<BulkCreateProjectMetadata>(`/api/bulk/create/metadata?project=${projectKey}`),
     enabled: Boolean(projectKey) && Boolean(projectsData),
     staleTime: 5 * 60 * 1000,

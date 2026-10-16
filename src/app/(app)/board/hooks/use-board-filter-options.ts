@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import { issuesKeys } from "@/lib/query-keys";
+import { issuesKeys, projectsKeys } from "@/lib/query-keys";
 import type { BoardBootstrap } from "@/lib/board/bootstrap";
 import type { ListOptions } from "../board-list-view";
 
@@ -88,7 +88,7 @@ export function useBoardFilterOptions(
   }, [optData]);
 
   const { data: peopleFieldData } = useQuery({
-    queryKey: ["projects", selectedProject, "people-fields"],
+    queryKey: projectsKeys.peopleFields(selectedProject),
     enabled: Boolean(selectedProject),
     queryFn: () =>
       api<PeopleFieldData>(

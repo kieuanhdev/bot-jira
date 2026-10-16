@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { bulkKeys } from "@/lib/query-keys";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -62,7 +63,7 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
   const [selectedRetryIds, setSelectedRetryIds] = useState<Set<string>>(new Set());
 
   const { data, isLoading } = useQuery({
-    queryKey: ["bulk-operation", operationId],
+    queryKey: bulkKeys.operation(operationId),
     queryFn: () => api<OperationDetailResponse>(`/api/bulk/operations/${operationId}`),
     refetchInterval: (query) => {
       const state = query.state.data?.operation.state;
@@ -84,8 +85,8 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
       ),
     onSuccess: () => {
       setSelectedRetryIds(new Set());
-      queryClient.invalidateQueries({ queryKey: ["bulk-operation", operationId] });
-      queryClient.invalidateQueries({ queryKey: ["bulk-operations"] });
+      queryClient.invalidateQueries({ queryKey: bulkKeys.operation(operationId) });
+      queryClient.invalidateQueries({ queryKey: bulkKeys.operations });
     },
   });
 
@@ -96,8 +97,8 @@ export function CreateProgress({ operationId, onReset }: CreateProgressProps) {
         { method: "POST", body: { clientRef } }
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["bulk-operation", operationId] });
-      queryClient.invalidateQueries({ queryKey: ["bulk-operations"] });
+      queryClient.invalidateQueries({ queryKey: bulkKeys.operation(operationId) });
+      queryClient.invalidateQueries({ queryKey: bulkKeys.operations });
     },
   });
 

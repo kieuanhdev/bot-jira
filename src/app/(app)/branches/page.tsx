@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { getSession } from "@/lib/session";
 import { getServerQueryClient } from "@/lib/query-server";
-import { branchesKeys } from "@/lib/query-keys";
+import { branchesKeys, meKeys } from "@/lib/query-keys";
 import { listBranchesForUser, listDeliveryTasksForUser } from "@/lib/branches/list-route-service";
 import { parseBranchFilters } from "./lib/branches-filter-model";
 import { getMeStatus } from "@/app/api/me/status/route";
@@ -60,7 +60,7 @@ export default async function BranchesPage({ searchParams }: BranchesPageProps) 
           queryFn: () => listBranchesForUser(session.user, { pageSize: 1 }),
         }),
         queryClient.prefetchQuery({
-          queryKey: ["me-status"],
+          queryKey: meKeys.status,
           queryFn: () => getMeStatus(session.user),
         }),
       ]);

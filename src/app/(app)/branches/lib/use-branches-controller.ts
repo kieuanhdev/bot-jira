@@ -4,7 +4,7 @@ import { useState, useTransition, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { api, getErrorMessage } from "@/lib/api-client";
-import { branchesKeys } from "@/lib/query-keys";
+import { branchesKeys, meKeys } from "@/lib/query-keys";
 import { useBranchSync, useBranchLink } from "@/hooks/use-branches";
 import {
   type BranchFilterState,
@@ -101,7 +101,7 @@ export function useBranchesController() {
   });
 
   const { data: meStatus } = useQuery({
-    queryKey: ["me-status"],
+    queryKey: meKeys.status,
     queryFn: () => api<{ jiraName: string | null; jiraBaseUrl?: string; bitbucketBaseUrl?: string }>("/api/me/status"),
     staleTime: 5 * 60 * 1000,
   });
