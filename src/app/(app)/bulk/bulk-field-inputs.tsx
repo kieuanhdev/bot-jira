@@ -94,10 +94,15 @@ export function BulkFieldInputs({
     setEpic, setClearEpic, setPerson,
   } = setters;
 
-  const selectedLabels = label
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+  // REF-033.5: Parse selected labels once to avoid O(labels²) in render loop
+  const selectedLabels = useMemo(
+    () => label.split(",").map((item) => item.trim()).filter(Boolean),
+    [label]
+  );
+  const selectedLabelsSet = useMemo(
+    () => new Set(selectedLabels),
+    [selectedLabels]
+  );
 
   return (
     <div className="grid grid-cols-1 gap-4 rounded-lg border bg-card/60 p-4 sm:grid-cols-2">
@@ -156,7 +161,7 @@ export function BulkFieldInputs({
           {!clearLabels && labelOptions.length > 0 && (
             <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto rounded-md border bg-muted/20 p-2">
               {labelOptions.map((option) => {
-                const checked = selectedLabels.includes(option);
+                const checked = selectedLabelsSet.has(option);
                 return (
                   <label key={option} className="flex cursor-pointer items-center gap-1.5 rounded-md bg-muted/60 px-2 py-1 text-xs hover:bg-muted">
                     <Checkbox
