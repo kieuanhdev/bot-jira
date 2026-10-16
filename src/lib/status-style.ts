@@ -37,9 +37,9 @@ export const CATEGORY_DOTS: Record<string, string[]> = {
 };
 
 export const CATEGORY_TEXT: Record<string, string> = {
-  new: "text-sky-600 dark:text-sky-400",
+  new: "text-info",
   indeterminate: "text-primary",
-  done: "text-emerald-600 dark:text-emerald-400",
+  done: "text-success",
 };
 
 /**
@@ -47,10 +47,10 @@ export const CATEGORY_TEXT: Record<string, string> = {
  */
 export const GROUP_DOT: Record<string, string> = {
   Backlog: "bg-muted-foreground/50",
-  "To Do": "bg-sky-500",
+  "To Do": "bg-info",
   "In Progress": "bg-primary",
-  "In Review": "bg-amber-500",
-  Done: "bg-emerald-500",
+  "In Review": "bg-warning",
+  Done: "bg-success",
 };
 
 /**
@@ -72,7 +72,7 @@ export interface CategoryStyle {
 
 export const STATUS_CATEGORY_STYLE: Record<StatusCategoryKey, CategoryStyle> = {
   new: {
-    dot: "bg-sky-500",
+    dot: "bg-info",
     dots: CATEGORY_DOTS.new,
     text: CATEGORY_TEXT.new,
     badgeVariant: "info",
@@ -84,7 +84,7 @@ export const STATUS_CATEGORY_STYLE: Record<StatusCategoryKey, CategoryStyle> = {
     badgeVariant: "secondary",
   },
   done: {
-    dot: "bg-emerald-500",
+    dot: "bg-success",
     dots: CATEGORY_DOTS.done,
     text: CATEGORY_TEXT.done,
     badgeVariant: "success",

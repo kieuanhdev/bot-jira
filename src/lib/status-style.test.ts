@@ -19,9 +19,9 @@ describe("status style constants and helpers", () => {
     expect(CATEGORY_DOTS.indeterminate).toBeDefined();
     expect(CATEGORY_DOTS.done).toBeDefined();
 
-    expect(CATEGORY_TEXT.new).toBe("text-sky-600 dark:text-sky-400");
+    expect(CATEGORY_TEXT.new).toBe("text-info");
     expect(CATEGORY_TEXT.indeterminate).toBe("text-primary");
-    expect(CATEGORY_TEXT.done).toBe("text-emerald-600 dark:text-emerald-400");
+    expect(CATEGORY_TEXT.done).toBe("text-success");
 
     expect(STATUS_CATEGORY_STYLE.new.badgeVariant).toBe("info");
     expect(STATUS_CATEGORY_STYLE.indeterminate.badgeVariant).toBe("secondary");
@@ -30,10 +30,10 @@ describe("status style constants and helpers", () => {
 
   it("provides GROUP_DOT matching status group colors", () => {
     expect(GROUP_DOT.Backlog).toBe("bg-muted-foreground/50");
-    expect(GROUP_DOT["To Do"]).toBe("bg-sky-500");
+    expect(GROUP_DOT["To Do"]).toBe("bg-info");
     expect(GROUP_DOT["In Progress"]).toBe("bg-primary");
-    expect(GROUP_DOT["In Review"]).toBe("bg-amber-500");
-    expect(GROUP_DOT.Done).toBe("bg-emerald-500");
+    expect(GROUP_DOT["In Review"]).toBe("bg-warning");
+    expect(GROUP_DOT.Done).toBe("bg-success");
   });
 
   it("provides CATEGORY_DOT_MAP matching legacy board map", () => {
