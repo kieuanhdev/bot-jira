@@ -18,9 +18,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, AlertCircle, RefreshCw, Clock, Globe } from "lucide-react";
+import { Search, RefreshCw, Clock, Globe } from "lucide-react";
 import type { ProjectPortfolioResponse, ReportUnit, ReportPeriod } from "@/lib/reports/types";
-import { resolveReportPeriod } from "@/lib/reports/period";
+import { parsePeriodParams } from "../lib/parse-period-params";
+import { shouldReplaceReportUrl } from "./[projectKey]/lib/report-url-state";
+import { ErrorState } from "@/components/shared/async-state";
 
 export function ProjectPortfolioClient() {
   const searchParams = useSearchParams();
@@ -28,12 +30,7 @@ export function ProjectPortfolioClient() {
   const pathname = usePathname();
 
   const initialPeriod = useMemo(() => {
-    return resolveReportPeriod({
-      period: searchParams.get("period") || "this_week",
-      from: searchParams.get("from"),
-      to: searchParams.get("to"),
-      timezone: searchParams.get("timezone") || "Asia/Ho_Chi_Minh",
-    }).period;
+    return parsePeriodParams(searchParams);
   }, [searchParams]);
 
   const [period, setPeriod] = useState<ReportPeriod>(initialPeriod);
@@ -45,7 +42,17 @@ export function ProjectPortfolioClient() {
     (searchParams.get("unit") as ReportUnit) || "auto"
   );
 
-  // Sync state to URL
+  // Sync from URL on browser Back / Forward history navigation
+  const searchParamsString = searchParams.toString();
+  const [prevParamsString, setPrevParamsString] = useState(searchParamsString);
+  if (searchParamsString !== prevParamsString) {
+    setPrevParamsString(searchParamsString);
+    setPeriod(parsePeriodParams(searchParams));
+    setHealthFilter(searchParams.get("health") || null);
+    setUnit((searchParams.get("unit") as ReportUnit) || "auto");
+  }
+
+  // Sync state to URL - only replace when query string actually changes (REF-036.1)
   useEffect(() => {
     const params = new URLSearchParams();
     if (period.preset !== "this_week") params.set("period", period.preset);
@@ -58,8 +65,13 @@ export function ProjectPortfolioClient() {
 
     const qs = params.toString();
     const newUrl = qs ? `${pathname}?${qs}` : pathname;
-    router.replace(newUrl, { scroll: false });
-  }, [period, healthFilter, unit, pathname, router]);
+    const currentQs = searchParams.toString();
+    const currentUrl = currentQs ? `${pathname}?${currentQs}` : pathname;
+
+    if (shouldReplaceReportUrl(newUrl, currentUrl, null)) {
+      router.replace(newUrl, { scroll: false });
+    }
+  }, [period, healthFilter, unit, pathname, router, searchParams]);
 
   const queryParams = useMemo(() => {
     const params: Record<string, string> = {
@@ -169,22 +181,11 @@ export function ProjectPortfolioClient() {
 
       {/* Error state */}
       {isError && (
-        <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl border border-destructive/20 bg-destructive/10">
-          <AlertCircle className="h-8 w-8 text-destructive mb-2" aria-hidden="true" />
-          <h3 className="text-base font-semibold text-destructive">
-            Không thể tải dữ liệu báo cáo
-          </h3>
-          <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-            {(error as Error)?.message || "Đã xảy ra lỗi khi kết nối tới máy chủ."}
-          </p>
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="mt-4 inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:opacity-90 transition-opacity cursor-pointer"
-          >
-            Thử lại
-          </button>
-        </div>
+        <ErrorState
+          title="Không thể tải dữ liệu báo cáo danh mục dự án"
+          message={(error as Error)?.message || "Đã xảy ra lỗi khi kết nối tới máy chủ."}
+          onRetry={() => refetch()}
+        />
       )}
 
       {/* Success data content */}
