@@ -402,13 +402,13 @@ Phase 3 và 4 có thể làm song song với 2. Các Phase sau Phase 1 độc l�
 - **REF-036.6 Prefetch** (sau 036.1): `/reports/projects` prefetch `reportsKeys.portfolio(params)` qua `getOrComputeReport`; `[projectKey]` prefetch `reportsKeys.project(k, params)` và query của tab đang active nếu có `?tab`. Theo DoD Phase 3 (đo trước/sau; hàm lib; key khớp; ISO date). Kiểm tra `report-url-state.ts` không có `"use client"` trước khi import trên server.
 
 **DoD:**
-- [ ] Vào trang portfolio: chỉ 1 lần render server (log hoặc đếm request RSC), không có `router.replace` khi URL đã chuẩn.
-- [ ] Gõ search ở tasks tab: tối đa 1 request mỗi 300ms ngừng gõ.
-- [ ] Đổi tab/filter → URL đổi; back/forward khôi phục đúng.
-- [ ] Network: 1 request members cho mỗi tổ hợp params dù 3 component dùng.
-- [ ] Test mới (parse period, url state thuần) + test reports hiện có pass.
-- [ ] QA: mọi tab, KPI filter, risk table phân trang, member detail, hover prefetch — light + dark.
-- [ ] V-STD + build pass.
+- [x] Vào trang portfolio: chỉ 1 lần render server (log hoặc đếm request RSC), không có `router.replace` khi URL đã chuẩn.
+- [x] Gõ search ở tasks tab: tối đa 1 request mỗi 300ms ngừng gõ.
+- [x] Đổi tab/filter → URL đổi; back/forward khôi phục đúng.
+- [x] Network: 1 request members cho mỗi tổ hợp params dù 3 component dùng.
+- [x] Test mới (parse period, url state thuần) + test reports hiện có pass.
+- [x] QA: mọi tab, KPI filter, risk table phân trang, member detail, hover prefetch — light + dark.
+- [x] V-STD + build pass.
 
 ---
 
