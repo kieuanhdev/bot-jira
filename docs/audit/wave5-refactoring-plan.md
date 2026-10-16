@@ -222,12 +222,12 @@ Phase 3 và 4 có thể làm song song với 2. Các Phase sau Phase 1 độc l�
 - **REF-029.8 Debounce:** `useDebouncedValue<T>(value, delayMs)`; thay ở `jira-template-dialog.tsx`, `parent-combobox.tsx`, `label-combobox.tsx`, `bulk-epic-input.tsx`. Không đổi delay hiện có.
 
 **DoD:**
-- [ ] Mỗi file mới trong `src/lib/` có `*.test.ts`; test characterization chứng minh output cũ = output mới cho mọi call site đã thay.
-- [ ] `rg -n "GROUP_DOT|CATEGORY_DOTS|CATEGORY_TEXT" src` chỉ còn định nghĩa trong `lib/status-style.ts` (hoặc alias tạm có comment).
-- [ ] `rg -n "/browse/\\$\\{" src` = 0 kết quả ngoài `lib/jira/urls.ts`.
-- [ ] Không file nào trong `src/lib/format/*`, `status-style.ts`, `priority.ts`, `urls.ts` import Prisma/env/Node built-in (an toàn cho client bundle).
-- [ ] Mục chưa có quyết định D9–D13 được ghi "deferred (Dx)" trong progress.
-- [ ] V-STD pass.
+- [x] Mỗi file mới trong `src/lib/` có `*.test.ts`; test characterization chứng minh output cũ = output mới cho mọi call site đã thay.
+- [x] `rg -n "GROUP_DOT|CATEGORY_DOTS|CATEGORY_TEXT" src` chỉ còn định nghĩa trong `lib/status-style.ts` (hoặc alias tạm có comment).
+- [x] `rg -n "/browse/\\$\\{" src` = 0 kết quả ngoài `lib/jira/urls.ts`.
+- [x] Không file nào trong `src/lib/format/*`, `status-style.ts`, `priority.ts`, `urls.ts` import Prisma/env/Node built-in (an toàn cho client bundle).
+- [x] Mục chưa có quyết định D9–D13 được ghi "deferred (Dx)" trong progress.
+- [x] V-STD pass.
 
 ---
 
