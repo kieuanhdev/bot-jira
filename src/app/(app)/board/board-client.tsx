@@ -376,8 +376,6 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
     retry: 0,
   });
   const assignees = useMemo(() => optData?.assignees ?? [], [optData?.assignees]);
-  const labelOptions = optData?.labels ?? [];
-  const personOptions = (values: string[] | undefined) => (values ?? []).map((value) => ({ value, label: optData?.displayNames?.[value] ? `${optData.displayNames[value]} (${value})` : value }));
 
   // Approver/tester lists only hold people already set on some issue, so pick from everyone on the project.
   const listOptions = useMemo(() => {
@@ -397,6 +395,28 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
       reporters: everyone,
       approvers: everyone,
       testers: everyone,
+    };
+  }, [optData]);
+
+  const filterBarOptions = useMemo(() => {
+    const personOpts = (values: string[] | undefined) =>
+      (values ?? []).map((value) => ({
+        value,
+        label: optData?.displayNames?.[value]
+          ? `${optData.displayNames[value]} (${value})`
+          : value,
+      }));
+    return {
+      assignees: personOpts(optData?.assignees),
+      labels: optData?.labels ?? [],
+      priorities: optData?.priorities ?? ["Low", "Medium", "High", "Highest", "Blocker"],
+      statuses: optData?.statuses ?? [],
+      epics: optData?.epics ?? [],
+      types: optData?.types ?? [],
+      fixVersions: optData?.fixVersions ?? [],
+      reporters: personOpts(optData?.reporters),
+      approvers: personOpts(optData?.approvers),
+      testers: personOpts(optData?.testers),
     };
   }, [optData]);
 
@@ -549,6 +569,28 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
     (key: string, action: QuickAction) => latestActions.current.handleQuickAction(key, action),
     []
   );
+  const stableEdits = useCallback(
+    (
+      targets: IssueItem[],
+      apiPayload: Record<string, unknown>,
+      itemFor: (issue: IssueItem) => Partial<IssueItem>
+    ) => {
+      void handleEdits(targets, apiPayload, itemFor);
+    },
+    [handleEdits]
+  );
+  const stableInlineTransition = useCallback(
+    (issue: IssueItem, transitionId: string, toStatusName: string) => {
+      void handleInlineTransition(issue, transitionId, toStatusName);
+    },
+    [handleInlineTransition]
+  );
+  const stableBulkTransition = useCallback(
+    (targets: IssueItem[], toStatusName: string) => {
+      void handleBulkTransition(targets, toStatusName);
+    },
+    [handleBulkTransition]
+  );
   const openQuickPanel = useCallback((issue: IssueItem) => setQuickPanel(issue), []);
   const closeQuickPanel = useCallback(() => setQuickPanel(null), []);
   const registerCardRef = useCallback((key: string, el: HTMLElement | null) => {
@@ -561,8 +603,6 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
     columnsCount: columns.length,
     issuesCount: issues.length,
   });
-
-
 
   const colResetSig = useMemo(
     () => `${selectedProject}|${sortMode}|${filterSig}|${issues.length}`,
@@ -578,13 +618,13 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
     [visibleColumns, sortedByColumn, colVisible, collapsedCols, activeFilterCount]
   );
 
-  function growColumn(colId: string) {
+  const growColumn = useCallback((colId: string) => {
     setColVisibleState((prev) => {
       const counts = prev.sig === colResetSig ? { ...prev.counts } : {};
       counts[colId] = (counts[colId] ?? COL_BATCH) + COL_BATCH;
       return { sig: colResetSig, counts };
     });
-  }
+  }, [colResetSig]);
 
   const [hiddenTableCols, setHiddenTableCols] = useState<Set<string>>(new Set());
   const effectiveHiddenTableCols = useMemo(() => {
@@ -734,18 +774,7 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
         value={filters}
         defaults={DEFAULT_BOARD_FILTERS}
         onChange={setFilters}
-        options={{
-          assignees: personOptions(assignees),
-          labels: labelOptions,
-          priorities: optData?.priorities ?? ["Low", "Medium", "High", "Highest", "Blocker"],
-          statuses: optData?.statuses ?? [],
-          epics: optData?.epics ?? [],
-          types: optData?.types ?? [],
-          fixVersions: optData?.fixVersions ?? [],
-          reporters: personOptions(optData?.reporters),
-          approvers: personOptions(optData?.approvers),
-          testers: personOptions(optData?.testers),
-        }}
+        options={filterBarOptions}
         capabilities={{
           search: true,
           assignee: "multi",
@@ -846,12 +875,12 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
           hiddenTableCols={effectiveHiddenTableCols}
           options={listOptions}
           statusOverrides={optimistic}
-          onEdits={(targets, api, itemFor) => void handleEdits(targets, api, itemFor)}
-          onTransition={(issue, id, to) => void handleInlineTransition(issue, id, to)}
-          onBulkTransition={(targets, to) => void handleBulkTransition(targets, to)}
+          onEdits={stableEdits}
+          onTransition={stableInlineTransition}
+          onBulkTransition={stableBulkTransition}
           hasMore={hasMore}
           loadingMore={loadingMore}
-          onOpen={setQuickPanel}
+          onOpen={openQuickPanel}
           onLoadMore={loadMore}
         />
       )}
