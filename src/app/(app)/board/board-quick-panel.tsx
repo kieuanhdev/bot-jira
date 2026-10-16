@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -175,6 +175,10 @@ export function QuickPanel({
   const timeSpentSeconds = d?.timeSpentSeconds ?? issue.timeSpent;
   const stale = d?.staleSnapshots?.[0] ?? null;
 
+  const onPanelClose = useEffectEvent(() => {
+    onClose();
+  });
+
   // Auto-focus the panel on open; trap Tab inside; Escape closes.
   useEffect(() => {
     panelRef.current?.focus({ preventScroll: true });
@@ -183,7 +187,7 @@ export function QuickPanel({
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        onPanelClose();
         return;
       }
       if (e.key === "Tab" && panelRef.current) {
@@ -209,7 +213,7 @@ export function QuickPanel({
       node?.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [onClose]);
+  }, []);
 
   async function invalidate() {
     await qc.invalidateQueries({ queryKey: issuesKeys.all });

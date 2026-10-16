@@ -549,6 +549,7 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
     []
   );
   const openQuickPanel = useCallback((issue: IssueItem) => setQuickPanel(issue), []);
+  const closeQuickPanel = useCallback(() => setQuickPanel(null), []);
   const registerCardRef = useCallback((key: string, el: HTMLElement | null) => {
     cardRefs.current.set(key, el);
   }, []);
@@ -862,7 +863,7 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
           issue={quickPanel}
           jiraBaseUrl={jiraBaseUrl}
           assignees={assignees}
-          onClose={() => setQuickPanel(null)}
+          onClose={closeQuickPanel}
           onOptimisticUpdate={handleOptimisticIssueUpdate}
         />
       )}
