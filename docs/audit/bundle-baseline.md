@@ -146,3 +146,40 @@
 - `static/chunks/27w8tzs66i69c.js`: 5.64 kB
 - `static/chunks/30htf1xqeagsm.js`: 5.56 kB
 - `static/chunks/1likdf7w_7a0-.js`: 3.58 kB
+
+---
+
+## 4. Wave 5 Baseline (Before Phase 2) — REF-030.1
+
+> Date: 2026-10-16
+> Baseline measured after Wave 4 + Wave 5 Phase 0 & 1 commits (`7283603`).
+
+### 4.1 `/board` Before First Load JS
+
+| Metric | Value |
+|---|---|
+| Total First Load JS | **1062.16 kB** (1,087,654 B) |
+| Shared Framework/App JS | 543.47 kB (6 chunks) |
+| Route-Specific JS | 518.69 kB (18 chunks) |
+| Total Chunks | 24 |
+| `@dnd-kit` chunk | `static/chunks/1e3j0uus350s2.js` (60.21 kB, 61,650 B) — present in entry bundle via `BoardSkeleton` import in `board-client.tsx` |
+
+#### `/board` Route Chunks
+- `static/chunks/1e3j0uus350s2.js`: 60.21 kB (`@dnd-kit`)
+- `static/chunks/060q8efsnqf39.js`: 53.01 kB
+- `static/chunks/2rc9i6i6i5evy.js`: 38.30 kB
+- `static/chunks/2lhhlmkx9xd2o.js`: 36.49 kB
+- `static/chunks/2bq2n1mx5amga.js`: 35.52 kB
+- `static/chunks/0p7y823quzojl.js`: 35.15 kB
+- `static/chunks/35skbnwz2qp4d.js`: 34.98 kB
+- `static/chunks/3x9iiv81ikpco.js`: 32.96 kB
+- `static/chunks/091zc3i5-zhud.js`: 27.93 kB
+- `static/chunks/17f-bac6tno9a.js`: 27.86 kB
+- `static/chunks/2zfjf2jokftts.js`: 26.12 kB
+- `static/chunks/2i04mbkw-kjtn.js`: 25.90 kB
+- `static/chunks/325w533o_mpeg.js`: 24.18 kB
+- `static/chunks/14kdix769i-l5.js`: 21.19 kB
+- `static/chunks/0_wiw-1hd_4ej.js`: 17.28 kB
+- `static/chunks/2edse7txocj_f.js`: 15.58 kB
+- `static/chunks/0aj_crccehvyo.js`: 5.56 kB
+- `static/chunks/2ie2kxbpk0if2.js`: 0.48 kB
