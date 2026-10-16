@@ -44,13 +44,7 @@ export function matchesFocus(task: Task, focus: FocusMode) {
   return true;
 }
 
-export function formatTimeSpent(seconds: number | null) {
-  if (seconds == null || seconds <= 0) return null;
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) return `${hours}h${minutes > 0 ? ` ${minutes}m` : ""}`;
-  return minutes > 0 ? `${minutes}m` : `${seconds}s`;
-}
+export { formatTimeSpent } from "@/lib/format/time";
 
 export function formatDueDate(value: string | null) {
   if (!value) return null;

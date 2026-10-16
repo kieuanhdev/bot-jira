@@ -48,6 +48,7 @@ Wave 5 baseline verified: 2026-10-16 (REF-028.0)
 | REF-028.3 | DONE | `aa84f9f` | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (307 files / 2783 tests pass) | B3: Removed hardcoded fallback projects from `useBulkCreateController`. Guarded metadata query with `Boolean(projectKey) && Boolean(projectsData)`. Rendered `Skeleton` while projects load and `EmptyState` when project list is empty in `bulk-create-client.tsx`. |
 | REF-028.4 | DONE | `7c145cd` | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (307 files / 2783 tests pass) | B4: Added `adminKeys.overviewErrors(type: "sentry" | "outbox")` factory in `query-keys.ts`. Separated sentry and outbox queries in `error-sheet.tsx` to use dedicated query keys. |
 | REF-028.1b | DEFERRED | — | — | [BEHAVIOUR CHANGE — D14]: Require `{ all: true }` for outbox batch retry. Deferred pending project owner approval of decision D14. |
+| REF-029.1 | DONE | `a350249` | `typecheck` (pass 0 err), `lint` (pass 0 warn), `npm test` (308 files / 2796 tests pass), `npm run build` (pass, 74/74 routes) | Unified time helpers in `src/lib/format/time.ts` (`formatRelative`, `formatDateTime`, `formatDate`, `formatDuration`, `formatJiraDuration`, `formatSecondsToJira`, `formatTimeSpent`, `formatDurationMs`, `formatAge`). Re-exported in callers. Preserved English `timeAgo` per deferred D10. Added 13 tests in `time.test.ts`. |
 
 ## Classification of 38 `req.json()` Sites (REF-005)
 

@@ -79,33 +79,7 @@ export function parseJiraDuration(durationStr: string | null | undefined): numbe
   return totalSeconds > 0 ? totalSeconds : null;
 }
 
-/**
- * Formats a duration in seconds into a standard Jira duration string.
- * Example: 5400 -> "1h 30m", 28800 -> "1d"
- */
-export function formatJiraDuration(totalSeconds: number | null | undefined): string {
-  if (!totalSeconds || totalSeconds <= 0) return "0m";
-
-  let remaining = Math.round(totalSeconds);
-  const weeks = Math.floor(remaining / SECONDS_PER_WEEK);
-  remaining %= SECONDS_PER_WEEK;
-
-  const days = Math.floor(remaining / SECONDS_PER_DAY);
-  remaining %= SECONDS_PER_DAY;
-
-  const hours = Math.floor(remaining / SECONDS_PER_HOUR);
-  remaining %= SECONDS_PER_HOUR;
-
-  const minutes = Math.floor(remaining / SECONDS_PER_MINUTE);
-
-  const parts: string[] = [];
-  if (weeks > 0) parts.push(`${weeks}w`);
-  if (days > 0) parts.push(`${days}d`);
-  if (hours > 0) parts.push(`${hours}h`);
-  if (minutes > 0) parts.push(`${minutes}m`);
-
-  return parts.length > 0 ? parts.join(" ") : "0m";
-}
+export { formatJiraDuration } from "@/lib/format/time";
 
 /**
  * Formats an ISO datetime string into the exact format Jira REST API expects:

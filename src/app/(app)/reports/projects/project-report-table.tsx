@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { reportsKeys } from "@/lib/query-keys";
 import { queryPolicy } from "@/lib/query-policy";
 import { api } from "@/lib/api-client";
+import { formatRelative } from "@/lib/format/time";
 import { Badge } from "@/components/ui/badge";
 
 import {
@@ -52,17 +53,7 @@ function formatUnitLabel(unit: string): string {
 }
 
 function formatRelativeTime(isoString: string | null): string {
-  if (!isoString) return "Chưa đồng bộ";
-  const date = new Date(isoString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMinutes = Math.floor(diffMs / 60000);
-
-  if (diffMinutes < 1) return "Vừa xong";
-  if (diffMinutes < 60) return `${diffMinutes} phút trước`;
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours} giờ trước`;
-  return date.toLocaleDateString("vi-VN");
+  return formatRelative(isoString, { locale: "vi", empty: "Chưa đồng bộ" });
 }
 
 export function ProjectReportTable({ projects, period, unit }: ProjectReportTableProps) {

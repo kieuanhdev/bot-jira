@@ -2,14 +2,7 @@
  * Helpers for formatting job stats, cron schedules, and operational labels.
  */
 
-export function formatDuration(ms: number | null | undefined): string {
-  if (ms == null) return "—";
-  if (ms < 1000) return `${ms} ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
-  const min = Math.floor(ms / 60_000);
-  const sec = Math.round((ms % 60_000) / 1000);
-  return `${min}m ${sec}s`;
-}
+export { formatDurationMs as formatDuration } from "@/lib/format/time";
 
 export function formatNumber(n: number | null | undefined): string {
   if (n == null) return "0";

@@ -178,22 +178,7 @@ export function getCategoryConfig(type: string): NotificationCategory {
   };
 }
 
-export function formatRelativeTimeVi(dateStr: string): string {
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return "—";
-  const diff = Date.now() - d.getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return "Vừa xong";
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m} phút trước`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} giờ trước`;
-  const days = Math.floor(h / 24);
-  if (days === 1) return "Hôm qua";
-  if (days < 7) return `${days} ngày trước`;
-  if (days < 30) return `${Math.floor(days / 7)} tuần trước`;
-  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
+export { formatRelativeTimeVi } from "@/lib/format/time";
 
 export function formatFullTimeVi(dateStr: string): string {
   const d = new Date(dateStr);

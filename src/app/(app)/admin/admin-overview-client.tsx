@@ -21,6 +21,7 @@ import { api, getErrorMessage } from "@/lib/api-client";
 import { adminKeys } from "@/lib/query-keys";
 import { maskSecrets } from "@/lib/admin/mask-secrets";
 import { cn, timeAgo } from "@/lib/utils";
+import { formatAge } from "@/lib/format/time";
 import { PageHeader } from "@/components/shared/page-header";
 import { MetricCard } from "@/components/shared/metric-card";
 import { MetricGrid } from "@/components/shared/metric-grid";
@@ -127,11 +128,6 @@ function serviceDotColor(p: Ping): string {
   return "bg-rose-500";
 }
 
-function formatAge(ms: number | null): string {
-  if (ms == null) return "chưa có";
-  const min = Math.round(ms / 60_000);
-  return min < 1 ? "< 1 phút" : min < 60 ? `${min} phút` : `${Math.round(min / 60)} giờ`;
-}
 
 export function AdminOverviewClient() {
   const [errorSheetType, setErrorSheetType] = useState<"sentry" | "outbox" | null>(null);

@@ -80,16 +80,4 @@ export function labelList(v: unknown): string {
   return v ? String(v) : "—";
 }
 
-export function formatSecondsToJira(seconds: unknown): string {
-  if (typeof seconds !== "number" || Number.isNaN(seconds) || seconds <= 0) return "—";
-  const hours = Math.floor(seconds / 3600);
-  const days = Math.floor(hours / 8);
-  const remainingHours = hours % 8;
-  const minutes = Math.floor((seconds % 3600) / 60);
-
-  const parts: string[] = [];
-  if (days > 0) parts.push(`${days}d`);
-  if (remainingHours > 0) parts.push(`${remainingHours}h`);
-  if (minutes > 0) parts.push(`${minutes}m`);
-  return parts.join(" ") || `${seconds}s`;
-}
+export { formatSecondsToJira } from "@/lib/format/time";
