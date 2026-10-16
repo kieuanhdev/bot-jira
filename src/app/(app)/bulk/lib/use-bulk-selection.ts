@@ -32,6 +32,8 @@ export interface UseBulkSelectionOptions {
   onProjectChange?: () => void;
 }
 
+const EMPTY_SELECTED_SET = new Set<string>();
+
 export function useBulkSelection({
   searchParams,
   sessionUsername,
@@ -230,14 +232,14 @@ export function useBulkSelection({
     [filterProject, initialKeys, projectIssues]
   );
 
-  const filteredIssues = useMemo(
+  const baseFilteredIssues = useMemo(
     () =>
       filterAndSortIssues(displayProjectIssues, {
         filterProject,
         taskFilters,
         jiraUsername: sessionUsername,
-        filterOnlySelected,
-        selected,
+        filterOnlySelected: false,
+        selected: EMPTY_SELECTED_SET,
         sortOption,
         initialKeyIndexMap,
         quickFilter,
@@ -247,13 +249,16 @@ export function useBulkSelection({
       displayProjectIssues,
       taskFilters,
       sessionUsername,
-      filterOnlySelected,
       sortOption,
-      selected,
       initialKeyIndexMap,
       quickFilter,
     ]
   );
+
+  const filteredIssues = useMemo(() => {
+    if (!filterOnlySelected) return baseFilteredIssues;
+    return baseFilteredIssues.filter((issue) => selected.has(issue.jiraKey));
+  }, [baseFilteredIssues, filterOnlySelected, selected]);
 
   const allSelected = filteredIssues.length > 0 && filteredIssues.every((i) => selected.has(i.jiraKey));
   const effectiveCount = selectionMode === "filter" ? filteredIssues.length : selected.size;
