@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -15,8 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { Unplug } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { releasesKeys } from "@/lib/query-keys";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { meKeys, releasesKeys } from "@/lib/query-keys";
 import { api, getErrorMessage } from "@/lib/api-client";
 import { useSaveCredentials, useDisconnectCredential } from "@/hooks/use-settings";
 
@@ -31,7 +31,12 @@ type Integrations = {
 
 export function MyIntegrations() {
   const queryClient = useQueryClient();
-  const [data, setData] = useState<Integrations | null>(null);
+  const { data } = useQuery<Integrations>({
+    queryKey: meKeys.integrations,
+    queryFn: () => api<Integrations>("/api/me/integrations"),
+    staleTime: 60_000,
+    retry: 0,
+  });
   const [formError, setFormError] = useState<string | null>(null);
 
   const [jiraUser, setJiraUser] = useState("");
@@ -54,7 +59,7 @@ export function MyIntegrations() {
         if (service === "jira") {
           queryClient.invalidateQueries({ queryKey: releasesKeys.permissionsAll() });
         }
-        load();
+        queryClient.invalidateQueries({ queryKey: meKeys.integrations });
         setSaveMsg({ ok: true, text: `Đã ngắt kết nối ${service === "jira" ? "Jira" : "Bitbucket"}.` });
       },
       onError: (err) => {
@@ -63,19 +68,6 @@ export function MyIntegrations() {
       onSettled: () => setDisconnecting(null),
     });
   }
-
-  async function load() {
-    try {
-      const d = await api<Integrations>("/api/me/integrations");
-      setData(d);
-    } catch {
-      /* ignore */
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
 
   function save(e: React.FormEvent) {
     e.preventDefault();
@@ -126,7 +118,7 @@ export function MyIntegrations() {
           }
           setJiraToken("");
           setBbToken("");
-          load();
+          queryClient.invalidateQueries({ queryKey: meKeys.integrations });
         },
         onError: (err) => {
           setFormError(getErrorMessage(err, "Lưu thất bại"));
