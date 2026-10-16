@@ -2,6 +2,7 @@ import { projectBoardIds, boardBacklogColumns, projectColumns } from "@/lib/env"
 import type { JiraBoard, JiraBoardConfiguration } from "./types";
 import { JiraRequestError } from "./client";
 import { createBoardCachePolicy } from "./board-cache-policy";
+import { classifyStatusCategory } from "@/lib/status-groups";
 
 export type CategoryKey = "new" | "indeterminate" | "done";
 
@@ -62,13 +63,10 @@ export function normalizeCategory(key?: string): CategoryKey {
 
 /**
  * Infer category from column label when Jira status category is not directly available.
+ * // Divergent by design pending D9: "In Review" is "new" in board mode but "indeterminate" in workflow mode.
  */
 export function categoryFromLabel(label: string): CategoryKey {
-  const l = label.toLowerCase();
-  if (/(^|\s)(done|closed|resolved|complete|completed|released|deploy(?:ed)?|finish(?:ed)?)\b/.test(l) || l === "done")
-    return "done";
-  if (/(progress|doing|working|active)/.test(l)) return "indeterminate";
-  return "new";
+  return classifyStatusCategory(label, { mode: "board" });
 }
 
 /**

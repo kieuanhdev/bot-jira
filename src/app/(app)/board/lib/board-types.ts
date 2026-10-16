@@ -34,24 +34,12 @@ export const PRIORITY_NEUTRAL = { rail: "bg-transparent", badge: "bg-muted text-
 
 export { AVATAR_PALETTE } from "@/lib/avatar";
 
-export const CATEGORY_DOTS: Record<string, string[]> = {
-  new: ["bg-sky-400", "bg-cyan-500", "bg-blue-400", "bg-indigo-400", "bg-teal-400", "bg-sky-600", "bg-cyan-400", "bg-blue-500"],
-  indeterminate: ["bg-primary", "bg-cyan-500", "bg-sky-600", "bg-blue-500", "bg-indigo-500", "bg-primary/70"],
-  done: ["bg-emerald-500", "bg-green-500", "bg-teal-500", "bg-lime-500", "bg-emerald-400", "bg-green-400"],
-};
-export const CATEGORY_TEXT: Record<string, string> = {
-  new: "text-sky-600 dark:text-sky-400",
-  indeterminate: "text-primary",
-  done: "text-emerald-600 dark:text-emerald-400",
-};
-
-export const CATEGORY_ORDER = ["new", "indeterminate", "done"] as const;
-
-export const CATEGORY_DOT_MAP: Record<string, string> = {
-  new: "bg-slate-400",
-  indeterminate: "bg-amber-400",
-  done: "bg-emerald-500",
-};
+export {
+  CATEGORY_DOTS,
+  CATEGORY_TEXT,
+  CATEGORY_ORDER,
+  CATEGORY_DOT_MAP,
+} from "@/lib/status-style";
 
 export type BoardSyncState = "idle" | "enqueueing" | "queued" | "running" | "succeeded" | "failed";
 

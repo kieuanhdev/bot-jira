@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { projectColumns } from "@/lib/env";
+import { classifyStatusCategory } from "@/lib/status-groups";
 
 export type CategoryKey = "new" | "indeterminate" | "done" | "unknown";
 
@@ -28,18 +29,12 @@ export function normalizeWorkflowCategory(raw?: string): CategoryKey {
   return "unknown";
 }
 
+/**
+ * Infer category from column label when Jira status category is not directly available.
+ * // Divergent by design pending D9: "In Review" is "indeterminate" in workflow mode but "new" in board mode.
+ */
 export function inferCategoryFromLabel(label: string): CategoryKey {
-  const l = (label || "").toLowerCase().trim();
-  if (/(^|\s)(done|closed|resolved|complete|completed|released|deploy(?:ed)?|finish(?:ed)?)\b/.test(l) || l === "done") {
-    return "done";
-  }
-  if (/(progress|doing|working|active|review|qa|test)/.test(l)) {
-    return "indeterminate";
-  }
-  if (/(backlog|plan|todo|to do|open|ready|selected)/.test(l)) {
-    return "new";
-  }
-  return "unknown";
+  return classifyStatusCategory(label, { mode: "workflow" });
 }
 
 export function getWorkflowRank(name: string, category: string): number {

@@ -30,6 +30,60 @@ export function statusGroup(status: string): StatusGroup {
   return "To Do";
 }
 
+export interface ClassifyStatusCategoryOptions {
+  mode?: "workflow" | "board" | "standard";
+}
+
+/**
+ * Classify a status label into a category ("new" | "indeterminate" | "done").
+ * Mode controls handling of "In Review", "QA", "Test":
+ * - "board": review/qa/test -> "new" (matches categoryFromLabel)
+ * - "workflow": review/qa/test -> "indeterminate" (matches inferCategoryFromLabel)
+ * - "standard": review/qa/test -> "indeterminate"
+ * // Divergent by design pending D9 approval
+ */
+export function classifyStatusCategory(
+  label: string,
+  options: { mode: "workflow" }
+): "new" | "indeterminate" | "done" | "unknown";
+export function classifyStatusCategory(
+  label: string,
+  options?: { mode?: "board" | "standard" }
+): "new" | "indeterminate" | "done";
+export function classifyStatusCategory(
+  label: string,
+  options?: ClassifyStatusCategoryOptions
+): "new" | "indeterminate" | "done" | "unknown" {
+  const l = (label || "").toLowerCase().trim();
+  const mode = options?.mode ?? "standard";
+
+  if (
+    /(^|\s)(done|closed|resolved|complete|completed|released|deploy(?:ed)?|finish(?:ed)?)\b/.test(l) ||
+    l === "done"
+  ) {
+    return "done";
+  }
+
+  if (mode === "board") {
+    // Divergent by design pending D9: board mode keeps review in "new"
+    if (/(progress|doing|working|active)/.test(l)) return "indeterminate";
+    return "new";
+  }
+
+  if (/(progress|doing|working|active|review|qa|test)/.test(l)) {
+    return "indeterminate";
+  }
+
+  if (mode === "workflow") {
+    if (/(backlog|plan|todo|to do|open|ready|selected)/.test(l)) {
+      return "new";
+    }
+    return "unknown";
+  }
+
+  return "new";
+}
+
 /** Accent + dot color per group, used for the column header and summary tiles. */
 export const STATUS_GROUP_STYLE: Record<StatusGroup, { dot: string; text: string }> = {
   Backlog: { dot: "bg-muted-foreground/50", text: "text-muted-foreground" },

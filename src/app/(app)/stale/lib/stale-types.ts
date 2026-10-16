@@ -174,13 +174,7 @@ export const SEVERITY_LABEL: Record<Severity, string> = {
   high: "Khẩn cấp",
 };
 
-export const GROUP_DOT: Record<string, string> = {
-  Backlog: "bg-muted-foreground/50",
-  "To Do": "bg-sky-500",
-  "In Progress": "bg-primary",
-  "In Review": "bg-amber-500",
-  Done: "bg-emerald-500",
-};
+export { GROUP_DOT } from "@/lib/status-style";
 
 export const ACTION_BY_REASON: Record<string, string> = {
   no_assignee: "Chỉ định người xử lý",
