@@ -123,7 +123,7 @@ export function AdminSentryClient() {
     mutationFn: (input: { ids: string[]; decision: "approve" | "reject" | "reopen" }) =>
       api<{ updated: number; queued: boolean }>("/api/admin/sentry-import/review", {
         method: "POST",
-        body: JSON.stringify(input),
+        body: input,
       }),
     onMutate: (input) => {
       setFeedback(null);
@@ -149,7 +149,7 @@ export function AdminSentryClient() {
 
   const retry = useMutation({
     mutationFn: (id: string) =>
-      api("/api/admin/sentry-import", { method: "POST", body: JSON.stringify({ id }) }),
+      api("/api/admin/sentry-import", { method: "POST", body: { id } }),
     onMutate: (id) => {
       setFeedback(null);
       setBusyId(id);

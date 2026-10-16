@@ -18,7 +18,7 @@ export async function api<T = unknown>(
   path: string,
   options: {
     method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
-    body?: unknown;
+    body?: object;
     revalidate?: boolean | number;
   } = {}
 ): Promise<T> {

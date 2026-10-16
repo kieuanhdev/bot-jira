@@ -106,12 +106,12 @@ export function ErrorSheet({
       if (type === "sentry") {
         return api("/api/admin/sentry-import", {
           method: "POST",
-          body: JSON.stringify({ id }),
+          body: { id },
         });
       }
       return api("/api/admin/outbox/retry", {
         method: "POST",
-        body: JSON.stringify({ ids: [id] }),
+        body: { ids: [id] },
       });
     },
     onSuccess: () => {
@@ -132,14 +132,14 @@ export function ErrorSheet({
         for (const item of items) {
           await api("/api/admin/sentry-import", {
             method: "POST",
-            body: JSON.stringify({ id: item.id }),
+            body: { id: item.id },
           });
         }
         return { count: items.length };
       }
       return api<{ count: number }>("/api/admin/outbox/retry", {
         method: "POST",
-        body: JSON.stringify({}),
+        body: {},
       });
     },
     onSuccess: (data) => {
