@@ -9,7 +9,8 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState } from "@/components/shared/async-state";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ListSkeleton } from "@/components/shared/skeleton";
-import { RefreshCw, AlertCircle, ChevronLeft, ChevronRight, Inbox, GitBranch } from "lucide-react";
+import { PaginationFooter } from "@/components/shared/pagination-footer";
+import { RefreshCw, AlertCircle, Inbox, GitBranch } from "lucide-react";
 
 import { getErrorMessage } from "@/lib/api-client";
 import {
@@ -264,37 +265,15 @@ export function BranchesClient() {
           )}
 
           {/* Pagination Controls */}
-          {activePage && activePage.totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-border pt-4 text-xs">
-              <span className="text-muted-foreground">
-                Trang {activePage.index} / {activePage.totalPages} ({activePage.totalItems.toLocaleString()}{" "}
-                mục)
-              </span>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={activePage.index <= 1}
-                  onClick={() => updateFilters({ page: activePage.index - 1 })}
-                  className="h-8 gap-1 text-xs cursor-pointer"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                  Trước
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={activePage.index >= activePage.totalPages}
-                  onClick={() => updateFilters({ page: activePage.index + 1 })}
-                  className="h-8 gap-1 text-xs cursor-pointer"
-                >
-                  Sau
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
+          {activePage && (
+            <PaginationFooter
+              page={activePage.index}
+              totalPages={activePage.totalPages}
+              totalItems={activePage.totalItems}
+              itemLabel="mục"
+              onPageChange={(page) => updateFilters({ page })}
+              className="border-t border-border pt-4"
+            />
           )}
         </>
       )}

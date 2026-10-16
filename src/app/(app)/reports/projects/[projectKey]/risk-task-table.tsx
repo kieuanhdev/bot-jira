@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { PaginationFooter } from "@/components/shared/pagination-footer";
 import {
   AlertOctagon,
   AlertTriangle,
@@ -231,31 +232,11 @@ export function RiskTaskTable({
       )}
 
       {/* Pagination controls */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between pt-2">
-          <div className="text-xs text-muted-foreground">
-            Trang {currentPage} / {totalPages}
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              disabled={offset <= 0}
-              onClick={() => onPageChange?.(Math.max(0, offset - limit))}
-              className="px-2.5 py-1 text-xs rounded-md border border-border bg-card text-foreground hover:bg-accent disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
-            >
-              Trước
-            </button>
-            <button
-              type="button"
-              disabled={offset + limit >= total}
-              onClick={() => onPageChange?.(offset + limit)}
-              className="px-2.5 py-1 text-xs rounded-md border border-border bg-card text-foreground hover:bg-accent disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
-            >
-              Sau
-            </button>
-          </div>
-        </div>
-      )}
+      <PaginationFooter
+        page={currentPage}
+        totalPages={totalPages}
+        onPageChange={(newPage) => onPageChange?.((newPage - 1) * limit)}
+      />
     </div>
   );
 }
