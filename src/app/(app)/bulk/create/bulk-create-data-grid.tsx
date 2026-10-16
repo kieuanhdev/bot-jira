@@ -24,6 +24,7 @@ import {
   filterBlankPlaceholderItems,
 } from "@/lib/bulk/client-ref";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { type ParentCandidate } from "./parent-combobox";
 
 interface BulkCreateDataGridProps {
   metadata: BulkCreateProjectMetadata;
@@ -84,6 +85,25 @@ export function BulkCreateDataGrid({
     [metadata.issueTypes]
   );
 
+  const parentCandidates = useMemo(() => {
+    const list: ParentCandidate[] = [];
+    for (const item of items) {
+      const ref = (item.clientRef || "").trim();
+      if (!ref) continue;
+      if (item.issueTypeId && subtaskIssueTypeIds.has(item.issueTypeId)) continue;
+      list.push({ clientRef: ref, summary: item.summary });
+    }
+    return list;
+  }, [items, subtaskIssueTypeIds]);
+
+  const effectiveIssueTypeMap = useMemo(() => {
+    const map = new Map<string | number, { name: string; isInherited: boolean } | null>();
+    items.forEach((item, idx) => {
+      map.set(item.clientRef || idx, getEffectiveIssueTypeName(item, defaults, metadata));
+    });
+    return map;
+  }, [items, defaults, metadata]);
+
   // Validate all rows
   const validationSummary = useMemo(
     () => validateAllRows(items, defaults, metadata),
@@ -129,11 +149,22 @@ export function BulkCreateDataGrid({
     [visibleColumns]
   );
 
-  function updateItem(idx: number, patch: Partial<BulkCreateRowInput>) {
-    const next = [...items];
-    next[idx] = { ...next[idx], ...patch };
-    onChange(next);
-  }
+  const handleToggleExpand = useCallback((idx: number) => {
+    setExpandedRowIndex((curr) => (curr === idx ? null : idx));
+  }, []);
+
+  const handleOpenDetailSheet = useCallback((idx: number) => {
+    setDetailSheetIndex(idx);
+  }, []);
+
+  const updateItem = useCallback(
+    (idx: number, patch: Partial<BulkCreateRowInput>) => {
+      const next = [...items];
+      next[idx] = { ...next[idx], ...patch };
+      onChange(next);
+    },
+    [items, onChange]
+  );
 
   function handleAddRow(afterIndex?: number) {
     if (items.length >= MAX_BULK_CREATE_ITEMS) return;
@@ -295,14 +326,14 @@ export function BulkCreateDataGrid({
               defaults={defaults}
               allItems={items}
               subtaskIssueTypeIds={subtaskIssueTypeIds}
-              effectiveIssueTypeName={getEffectiveIssueTypeName(item, defaults, metadata)}
+              effectiveIssueTypeName={effectiveIssueTypeMap.get(item.clientRef || idx) ?? null}
               onUpdateItem={updateItem}
               onToggleSelection={toggleRowSelection}
               onPasteSummary={handlePasteOnSummary}
               onDuplicateRow={handleDuplicateRow}
               onDeleteRow={handleDeleteRow}
-              onToggleExpand={(i) => setExpandedRowIndex(expandedRowIndex === i ? null : i)}
-              onOpenDetailSheet={(i) => setDetailSheetIndex(i)}
+              onToggleExpand={handleToggleExpand}
+              onOpenDetailSheet={handleOpenDetailSheet}
             />
           ))}
         </div>
@@ -333,9 +364,11 @@ export function BulkCreateDataGrid({
                   metadata={metadata}
                   projectKey={projectKey}
                   defaults={defaults}
+                  itemsLength={items.length}
+                  parentCandidates={parentCandidates}
                   items={items}
                   subtaskIssueTypeIds={subtaskIssueTypeIds}
-                  effectiveIssueTypeName={getEffectiveIssueTypeName(item, defaults, metadata)}
+                  effectiveIssueTypeName={effectiveIssueTypeMap.get(item.clientRef || idx) ?? null}
                   isColVisible={isColVisible}
                   onUpdateItem={updateItem}
                   onToggleSelection={toggleRowSelection}
@@ -343,8 +376,8 @@ export function BulkCreateDataGrid({
                   onAddRow={handleAddRow}
                   onDuplicateRow={handleDuplicateRow}
                   onDeleteRow={handleDeleteRow}
-                  onToggleExpand={(i) => setExpandedRowIndex(expandedRowIndex === i ? null : i)}
-                  onOpenDetailSheet={(i) => setDetailSheetIndex(i)}
+                  onToggleExpand={handleToggleExpand}
+                  onOpenDetailSheet={handleOpenDetailSheet}
                 />
               ))}
             </tbody>

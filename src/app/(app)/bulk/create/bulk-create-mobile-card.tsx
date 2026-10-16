@@ -48,7 +48,7 @@ export interface BulkCreateMobileCardProps {
   onOpenDetailSheet: (idx: number) => void;
 }
 
-export function BulkCreateMobileCard({
+export const BulkCreateMobileCard = React.memo(function BulkCreateMobileCard({
   item,
   idx,
   rowVal,
@@ -218,4 +218,4 @@ export function BulkCreateMobileCard({
       )}
     </div>
   );
-}
+});

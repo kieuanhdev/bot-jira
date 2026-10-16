@@ -9,10 +9,17 @@ import { cn } from "@/lib/utils";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { BulkParentRef, BulkCreateRowInput } from "@/lib/bulk/create-types";
 
-interface ParentComboboxProps {
+export type ParentCandidate = {
+  clientRef: string;
+  summary?: string;
+};
+
+export interface ParentComboboxProps {
   projectKey: string;
   value: BulkParentRef | null | undefined;
   onChange: (parent: BulkParentRef | null) => void;
+  /** Candidates in the batch for parent options (computed once at grid level) */
+  parentCandidates?: ParentCandidate[];
   /** All items in the batch for "in batch" parent options. */
   batchItems?: BulkCreateRowInput[];
   /** The clientRef of the current row (to exclude self). */
@@ -36,6 +43,7 @@ export function ParentCombobox({
   projectKey,
   value,
   onChange,
+  parentCandidates,
   batchItems = [],
   currentClientRef = "",
   subtaskIssueTypeIds = new Set(),
@@ -77,24 +85,36 @@ export function ParentCombobox({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  // Filter batch items that can be parents
-  const batchParentOptions = batchItems
-    .filter((item) => {
-      if (item.clientRef === currentClientRef) return false;
-      const ref = (item.clientRef || "").trim();
-      if (!ref) return false;
-      // Exclude subtasks from being parents
-      if (item.issueTypeId && subtaskIssueTypeIds.has(item.issueTypeId)) return false;
-      // If query is set, filter by summary
-      if (query && query.length >= 2) {
-        const q = query.toLowerCase();
-        const matchesSummary = (item.summary || "").toLowerCase().includes(q);
-        const matchesRef = ref.toLowerCase().includes(q);
-        if (!matchesSummary && !matchesRef) return false;
-      }
-      return true;
-    })
-    .slice(0, 10);
+  // Filter batch items that can be parents - only compute when combobox is open
+  const batchParentOptions = open
+    ? (parentCandidates
+        ? parentCandidates.filter((item) => {
+            if (item.clientRef === currentClientRef) return false;
+            const ref = (item.clientRef || "").trim();
+            if (!ref) return false;
+            if (query && query.length >= 2) {
+              const q = query.toLowerCase();
+              const matchesSummary = (item.summary || "").toLowerCase().includes(q);
+              const matchesRef = ref.toLowerCase().includes(q);
+              if (!matchesSummary && !matchesRef) return false;
+            }
+            return true;
+          })
+        : batchItems.filter((item) => {
+            if (item.clientRef === currentClientRef) return false;
+            const ref = (item.clientRef || "").trim();
+            if (!ref) return false;
+            if (item.issueTypeId && subtaskIssueTypeIds.has(item.issueTypeId)) return false;
+            if (query && query.length >= 2) {
+              const q = query.toLowerCase();
+              const matchesSummary = (item.summary || "").toLowerCase().includes(q);
+              const matchesRef = ref.toLowerCase().includes(q);
+              if (!matchesSummary && !matchesRef) return false;
+            }
+            return true;
+          })
+      ).slice(0, 10)
+    : [];
 
   function selectBatchParent(clientRef: string) {
     onChange({ type: "batch", clientRef });

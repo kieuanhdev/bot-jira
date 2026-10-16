@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AssigneeCombobox } from "./assignee-combobox";
-import { ParentCombobox } from "./parent-combobox";
+import { ParentCombobox, type ParentCandidate } from "./parent-combobox";
 import { LabelCombobox } from "./label-combobox";
 import { ComponentsCombobox } from "./components-combobox";
 import { type ColumnId } from "./lib/column-definitions";
@@ -44,7 +44,9 @@ export interface BulkCreateTableRowProps {
   metadata: BulkCreateProjectMetadata;
   projectKey: string;
   defaults: BulkCreateFieldDefaults;
-  items: BulkCreateRowInput[];
+  itemsLength?: number;
+  parentCandidates?: ParentCandidate[];
+  items?: BulkCreateRowInput[];
   subtaskIssueTypeIds: Set<string>;
   effectiveIssueTypeName: { name: string; isInherited: boolean } | null;
   isColVisible: (colId: ColumnId) => boolean;
@@ -58,7 +60,7 @@ export interface BulkCreateTableRowProps {
   onOpenDetailSheet: (idx: number) => void;
 }
 
-export function BulkCreateTableRow({
+export const BulkCreateTableRow = React.memo(function BulkCreateTableRow({
   item,
   idx,
   rowVal,
@@ -68,6 +70,8 @@ export function BulkCreateTableRow({
   metadata,
   projectKey,
   defaults,
+  itemsLength,
+  parentCandidates,
   items,
   subtaskIssueTypeIds,
   effectiveIssueTypeName,
@@ -81,6 +85,7 @@ export function BulkCreateTableRow({
   onToggleExpand,
   onOpenDetailSheet,
 }: BulkCreateTableRowProps) {
+  const totalItems = itemsLength ?? items?.length ?? 0;
   const hasErrors = (rowVal?.errors.length ?? 0) > 0;
   const stickyCellBg = isSelected
     ? "bg-primary/10 group-hover:bg-primary/15"
@@ -214,6 +219,7 @@ export function BulkCreateTableRow({
             projectKey={projectKey}
             value={item.parent}
             onChange={(parent) => onUpdateItem(idx, { parent })}
+            parentCandidates={parentCandidates}
             batchItems={items}
             currentClientRef={item.clientRef}
             subtaskIssueTypeIds={subtaskIssueTypeIds}
@@ -443,7 +449,7 @@ export function BulkCreateTableRow({
             variant="ghost"
             size="sm"
             onClick={() => onDuplicateRow(idx)}
-            disabled={items.length >= MAX_BULK_CREATE_ITEMS}
+            disabled={totalItems >= MAX_BULK_CREATE_ITEMS}
             title="Nhân bản dòng (Ctrl+D)"
             className="h-7 w-7 p-0 cursor-pointer text-muted-foreground hover:text-foreground"
           >
@@ -456,7 +462,7 @@ export function BulkCreateTableRow({
             variant="ghost"
             size="sm"
             onClick={() => onDeleteRow(idx)}
-            disabled={items.length <= 1}
+            disabled={totalItems <= 1}
             title="Xoá dòng"
             className="h-7 w-7 p-0 cursor-pointer text-muted-foreground hover:text-destructive"
           >
@@ -466,4 +472,4 @@ export function BulkCreateTableRow({
       </td>
     </tr>
   );
-}
+});
