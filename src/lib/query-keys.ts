@@ -213,5 +213,6 @@ export const adminKeys = {
   all: ["admin"] as const,
   projects: ["admin", "projects"] as const,
   overview: ["admin", "overview"] as const,
+  overviewErrors: (type: "sentry" | "outbox") => ["admin", "overview", "errors", type] as const,
   sentry: ["admin", "sentry"] as const,
 };

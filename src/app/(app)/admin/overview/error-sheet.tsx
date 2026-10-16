@@ -81,19 +81,14 @@ export function ErrorSheet({
   const [retryingId, setRetryingId] = React.useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = React.useState<string | null>(null);
 
-  const queryKey = React.useMemo(
-    () => [...adminKeys.overview, "errors", type],
-    [type]
-  );
-
   const sentryQuery = useQuery({
-    queryKey,
+    queryKey: adminKeys.overviewErrors("sentry"),
     queryFn: () => api<{ items: SentryFailedItem[] }>("/api/admin/sentry-import?state=failed"),
     enabled: open && type === "sentry",
   });
 
   const outboxQuery = useQuery({
-    queryKey,
+    queryKey: adminKeys.overviewErrors("outbox"),
     queryFn: () => api<{ items: OutboxFailedItem[] }>("/api/admin/outbox?state=failed"),
     enabled: open && type === "outbox",
   });
@@ -116,7 +111,7 @@ export function ErrorSheet({
     },
     onSuccess: () => {
       setActionFeedback("Đã xếp hàng thử lại thành công.");
-      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: adminKeys.overviewErrors(type) });
       queryClient.invalidateQueries({ queryKey: adminKeys.overview });
       setTimeout(() => setActionFeedback(null), 3500);
     },
@@ -144,7 +139,7 @@ export function ErrorSheet({
     },
     onSuccess: (data) => {
       setActionFeedback(`Đã xếp hàng thử lại ${data?.count ?? "tất cả"} bản ghi.`);
-      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: adminKeys.overviewErrors(type) });
       queryClient.invalidateQueries({ queryKey: adminKeys.overview });
       setTimeout(() => setActionFeedback(null), 3500);
     },
