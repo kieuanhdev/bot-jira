@@ -99,7 +99,7 @@ export function LeaderboardClient() {
               variant="outline"
               size="sm"
               onClick={() => setShowRealmsModal(true)}
-              className="cursor-pointer gap-1.5 text-xs border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20"
+              className="cursor-pointer gap-1.5 text-xs border-warning/40 bg-warning/10 text-warning hover:bg-warning/20"
             >
               <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Sổ Cảnh Giới Tu Tiên</span>

@@ -27,7 +27,7 @@ export function LeaderboardRealmsModal({
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-6">
         <DialogHeader className="space-y-1">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-amber-500" aria-hidden="true" />
+            <Sparkles className="h-5 w-5 text-warning" aria-hidden="true" />
             <DialogTitle className="text-lg font-bold">
               Sổ Cảnh Giới Tu Tiên Tông Môn
             </DialogTitle>

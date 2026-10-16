@@ -43,22 +43,22 @@ export function TierIcon({
 export function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) {
     return (
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/20 text-amber-500 ring-2 ring-amber-500/40 font-bold text-sm shadow-sm shadow-amber-500/20">
+      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-warning/20 text-warning ring-2 ring-warning/40 font-bold text-sm shadow-sm shadow-warning/20">
         <Crown className="h-4 w-4" aria-hidden="true" />
       </div>
     );
   }
   if (rank === 2) {
     return (
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700/50 text-slate-700 dark:text-slate-200 ring-2 ring-slate-400/50 font-bold text-sm">
-        <Zap className="h-4 w-4 text-sky-600 dark:text-sky-400" aria-hidden="true" />
+      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-foreground ring-2 ring-border font-bold text-sm">
+        <Zap className="h-4 w-4 text-info" aria-hidden="true" />
       </div>
     );
   }
   if (rank === 3) {
     return (
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/15 dark:bg-amber-800/30 text-amber-700 dark:text-amber-300 ring-2 ring-amber-600/40 font-bold text-sm">
-        <Flame className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-warning/15 text-warning ring-2 ring-warning/40 font-bold text-sm">
+        <Flame className="h-4 w-4 text-warning" aria-hidden="true" />
       </div>
     );
   }

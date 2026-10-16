@@ -23,7 +23,7 @@ export function LeaderboardPersonalBanner({
           <div className="relative">
             <div className="flex h-13 w-13 items-center justify-center rounded-full bg-primary/20 text-primary font-bold text-lg ring-2 ring-primary">
               {myPerformance.rank <= 3 ? (
-                <Crown className="h-6 w-6 text-amber-500" aria-hidden="true" />
+                <Crown className="h-6 w-6 text-warning" aria-hidden="true" />
               ) : (
                 `#${myPerformance.rank}`
               )}
@@ -77,7 +77,7 @@ export function LeaderboardPersonalBanner({
           {/* Progress bar */}
           <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full bg-gradient-to-r from-primary to-teal-400 transition-all duration-500 ease-out"
+              className="h-full bg-primary transition-all duration-500 ease-out"
               style={{ width: `${myPerformance.tierProgressPercent}%` }}
             />
           </div>

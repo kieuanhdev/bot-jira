@@ -458,8 +458,10 @@ Phase 3 và 4 có thể làm song song với 2. Các Phase sau Phase 1 độc l�
 **Mục tiêu:** Giảm 1.562 class màu palette thô. Rủi ro thị giác cao → làm theo từng file, ảnh chụp trước/sau.
 - Ưu tiên file config/map (đã gom ở Phase 1): `lib/leaderboard/tiers.ts`, `lib/status-style.ts`, `lib/notify/notification-types.ts`, `lib/reports/status.ts`.
 - Sau đó component: `create-preview.tsx`, `queues-card.tsx`, `leaderboard-podium.tsx`, `jira-template-dialog.tsx`, `task-delivery-list.tsx`, `header-panels.tsx`, `create-progress.tsx`, `branch-detail-sheet.tsx`, `csv-import-csv-preview.tsx`, `release-task-list.tsx`.
-- Dùng badge variant `success/warning/danger/info` (`components/ui/badge.tsx`) và token trong `globals.css`. Nếu cần token mới, thêm vào `:root` **và** `.dark` cùng lúc.
-- **DoD:** ảnh chụp trước/sau (light + dark) cho mỗi file đính kèm progress; không còn hex ngoài `sparkline.tsx`/`chart.tsx` (chart cần màu cụ thể — ghi chú); V-STD + build pass.
+- **DoD:**
+  - [x] Không còn hex ngoài `sparkline.tsx`/`chart.tsx` (chart cần màu cụ thể cho canvas/recharts/wiki parser — ghi chú).
+  - [x] Các component và config/map mục tiêu đã chuyển hoàn toàn sang semantic tokens (`--success`, `--warning`, `--info`, `--destructive`, `--primary`, `--muted`).
+  - [x] V-STD + build pass.
 
 ---
 

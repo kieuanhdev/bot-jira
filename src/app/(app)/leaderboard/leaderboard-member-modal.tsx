@@ -70,7 +70,7 @@ export function LeaderboardMemberModal({
               <div className="text-[11px] text-muted-foreground">Nhiệm vụ hoàn thành</div>
             </div>
             <div className="rounded-lg bg-muted/60 p-2.5 text-center border border-border">
-              <div className="text-lg font-bold text-amber-500 tabular-nums">
+              <div className="text-lg font-bold text-warning tabular-nums">
                 {member.inProgressPoints}
               </div>
               <div className="text-[11px] text-muted-foreground">Điểm đang làm</div>

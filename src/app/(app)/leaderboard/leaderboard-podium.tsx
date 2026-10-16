@@ -36,7 +36,7 @@ export function LeaderboardPodium({
     <Card className="border bg-gradient-to-b from-card via-card to-muted/30 shadow-xs overflow-hidden">
       <div className="p-5 border-b bg-muted/20 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-amber-500" aria-hidden="true" />
+          <Sparkles className="h-4 w-4 text-warning" aria-hidden="true" />
           <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">
             Bảng Phong Thần (Top 3 Tu Vi Đỉnh Phong)
           </h2>
@@ -54,10 +54,10 @@ export function LeaderboardPodium({
                   username={top2.jiraUsername}
                   displayName={top2.displayName}
                   size="xl"
-                  className="h-16 w-16 ring-4 ring-slate-300 dark:ring-slate-600 shadow-md text-xl"
+                  className="h-16 w-16 ring-4 ring-muted-foreground/30 shadow-md text-xl"
                 />
-                <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-6.5 items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 px-2.5 text-[11px] font-bold text-slate-800 dark:text-slate-200 shadow-sm whitespace-nowrap">
-                  <Zap className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400 shrink-0" aria-hidden="true" />
+                <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-6.5 items-center gap-1 rounded-full bg-muted border border-border px-2.5 text-[11px] font-bold text-foreground shadow-sm whitespace-nowrap">
+                  <Zap className="h-3.5 w-3.5 text-info shrink-0" aria-hidden="true" />
                   <span>TIÊN TÔN #2</span>
                 </div>
               </div>
@@ -71,7 +71,7 @@ export function LeaderboardPodium({
               </div>
 
               {/* Pedestal Box */}
-              <div className="mt-4 w-full rounded-t-xl border border-b-0 border-slate-400/30 bg-gradient-to-t from-slate-400/20 to-slate-400/5 p-4 text-center">
+              <div className="mt-4 w-full rounded-t-xl border border-b-0 border-border bg-gradient-to-t from-muted/50 to-muted/10 p-4 text-center">
                 <div className="text-2xl font-black text-foreground tabular-nums">
                   {top2.completedPoints}
                 </div>
@@ -98,15 +98,15 @@ export function LeaderboardPodium({
           {/* Rank 1 (Đạo Tổ / Chí Tôn) - Elevated Center Column */}
           <div className="flex flex-col items-center order-1 md:order-2">
             <div className="relative mb-5 flex flex-col items-center">
-              <Crown className="h-7 w-7 text-amber-500 animate-bounce mb-1" aria-hidden="true" />
+              <Crown className="h-7 w-7 text-warning animate-bounce mb-1" aria-hidden="true" />
               <JiraAvatar
                 username={top1.jiraUsername}
                 displayName={top1.displayName}
                 size="xl"
-                className="h-20 w-20 ring-4 ring-amber-300 dark:ring-amber-500/60 shadow-xl shadow-amber-500/25 text-2xl"
+                className="h-20 w-20 ring-4 ring-warning/60 shadow-xl shadow-warning/25 text-2xl"
               />
-              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-7 items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-500 border border-amber-300 dark:border-amber-400 px-3 text-[11px] font-black text-slate-950 shadow-md whitespace-nowrap">
-                <Crown className="h-3.5 w-3.5 text-slate-950 shrink-0" aria-hidden="true" />
+              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-7 items-center gap-1.5 rounded-full bg-gradient-to-r from-warning/80 via-warning to-warning border border-warning/60 px-3 text-[11px] font-black text-warning-foreground shadow-md whitespace-nowrap">
+                <Crown className="h-3.5 w-3.5 text-warning-foreground shrink-0" aria-hidden="true" />
                 <span>ĐẠO TỔ #1</span>
               </div>
             </div>
@@ -121,8 +121,8 @@ export function LeaderboardPodium({
             </div>
 
             {/* Pedestal Box (Tallest) */}
-            <div className="mt-4 w-full rounded-t-xl border border-b-0 border-amber-500/40 bg-gradient-to-t from-amber-500/25 via-amber-500/10 to-amber-500/5 p-5 text-center shadow-lg shadow-amber-500/10">
-              <div className="text-3xl font-black text-amber-500 tabular-nums">
+            <div className="mt-4 w-full rounded-t-xl border border-b-0 border-warning/40 bg-gradient-to-t from-warning/25 via-warning/10 to-warning/5 p-5 text-center shadow-lg shadow-warning/10">
+              <div className="text-3xl font-black text-warning tabular-nums">
                 {top1.completedPoints}
               </div>
               <div className="text-xs font-semibold text-foreground">Tu Vi Đỉnh Phong</div>
@@ -133,7 +133,7 @@ export function LeaderboardPodium({
                 variant="outline"
                 size="sm"
                 onClick={() => onSelectMember(top1)}
-                className="mt-3 h-8 cursor-pointer border-amber-500/50 bg-amber-500/10 text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-500/20"
+                className="mt-3 h-8 cursor-pointer border-warning/50 bg-warning/10 text-xs font-bold text-warning hover:bg-warning/20"
               >
                 Xem nhiệm vụ đóng góp
               </Button>

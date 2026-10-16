@@ -111,10 +111,10 @@ export function QueuesCard({
   const releaseSegments: BarSegment[] = React.useMemo(() => {
     const base = [
       { label: "Bản nháp", count: releases.draft ?? 0, color: "bg-muted-foreground/40", dotColor: "bg-muted-foreground/40" },
-      { label: "Đang mở", count: (releases.open ?? 0) + (releases.active ?? 0), color: "bg-sky-500", dotColor: "bg-sky-500" },
-      { label: "Sẵn sàng", count: releases.ready ?? 0, color: "bg-emerald-500", dotColor: "bg-emerald-500" },
-      { label: "Đã phát hành", count: releases.released ?? 0, color: "bg-teal-500", dotColor: "bg-teal-500" },
-      { label: "Đã đóng", count: releases.closed ?? 0, color: "bg-slate-500", dotColor: "bg-slate-500" },
+      { label: "Đang mở", count: (releases.open ?? 0) + (releases.active ?? 0), color: "bg-info", dotColor: "bg-info" },
+      { label: "Sẵn sàng", count: releases.ready ?? 0, color: "bg-success", dotColor: "bg-success" },
+      { label: "Đã phát hành", count: releases.released ?? 0, color: "bg-primary", dotColor: "bg-primary" },
+      { label: "Đã đóng", count: releases.closed ?? 0, color: "bg-muted-foreground/60", dotColor: "bg-muted-foreground/60" },
     ].filter((s) => s.count > 0);
 
     if (base.length > 0) return base;
@@ -127,12 +127,12 @@ export function QueuesCard({
   const bulkSegments: BarSegment[] = React.useMemo(() => {
     const base = [
       { label: "Xem trước", count: bulkOps.preview ?? 0, color: "bg-muted-foreground/40", dotColor: "bg-muted-foreground/40" },
-      { label: "Hàng đợi", count: bulkOps.queued ?? 0, color: "bg-sky-500", dotColor: "bg-sky-500" },
-      { label: "Đang chạy", count: bulkOps.running ?? 0, color: "bg-indigo-500", dotColor: "bg-indigo-500" },
-      { label: "Hoàn tất", count: bulkOps.completed ?? 0, color: "bg-emerald-500", dotColor: "bg-emerald-500" },
-      { label: "Lỗi một phần", count: bulkOps.partially_failed ?? 0, color: "bg-amber-500", dotColor: "bg-amber-500" },
-      { label: "Lỗi", count: bulkOps.failed ?? 0, color: "bg-rose-500", dotColor: "bg-rose-500" },
-      { label: "Đã hủy", count: bulkOps.cancelled ?? 0, color: "bg-slate-400", dotColor: "bg-slate-400" },
+      { label: "Hàng đợi", count: bulkOps.queued ?? 0, color: "bg-info", dotColor: "bg-info" },
+      { label: "Đang chạy", count: bulkOps.running ?? 0, color: "bg-primary/80", dotColor: "bg-primary/80" },
+      { label: "Hoàn tất", count: bulkOps.completed ?? 0, color: "bg-success", dotColor: "bg-success" },
+      { label: "Lỗi một phần", count: bulkOps.partially_failed ?? 0, color: "bg-warning", dotColor: "bg-warning" },
+      { label: "Lỗi", count: bulkOps.failed ?? 0, color: "bg-destructive", dotColor: "bg-destructive" },
+      { label: "Đã hủy", count: bulkOps.cancelled ?? 0, color: "bg-muted-foreground/40", dotColor: "bg-muted-foreground/40" },
     ].filter((s) => s.count > 0);
 
     if (base.length > 0) return base;
@@ -148,8 +148,8 @@ export function QueuesCard({
     const fallback = ai.fallbackScores ?? 0;
 
     return [
-      { label: "AI thật", count: real, color: "bg-teal-500", dotColor: "bg-teal-500" },
-      { label: "Mặc định", count: fallback, color: "bg-amber-500", dotColor: "bg-amber-500" },
+      { label: "AI thật", count: real, color: "bg-primary", dotColor: "bg-primary" },
+      { label: "Mặc định", count: fallback, color: "bg-warning", dotColor: "bg-warning" },
     ].filter((s) => s.count > 0);
   }, [ai]);
 
@@ -193,9 +193,9 @@ export function QueuesCard({
                   ) : null
                 }
                 segments={[
-                  { label: "Chờ", count: outbox.pending ?? 0, color: "bg-sky-500", dotColor: "bg-sky-500" },
-                  { label: "Đã gửi", count: outbox.sent ?? 0, color: "bg-emerald-500", dotColor: "bg-emerald-500" },
-                  { label: "Lỗi", count: outbox.failed ?? 0, color: "bg-rose-500", dotColor: "bg-rose-500" },
+                  { label: "Chờ", count: outbox.pending ?? 0, color: "bg-info", dotColor: "bg-info" },
+                  { label: "Đã gửi", count: outbox.sent ?? 0, color: "bg-success", dotColor: "bg-success" },
+                  { label: "Lỗi", count: outbox.failed ?? 0, color: "bg-destructive", dotColor: "bg-destructive" },
                 ]}
               />
 
@@ -217,12 +217,12 @@ export function QueuesCard({
                   {
                     label: "Chờ duyệt",
                     count: (sentry.review ?? 0) + (sentry.pending ?? 0),
-                    color: "bg-amber-500",
-                    dotColor: "bg-amber-500",
+                    color: "bg-warning",
+                    dotColor: "bg-warning",
                   },
-                  { label: "Đang tạo", count: sentry.approved ?? 0, color: "bg-sky-500", dotColor: "bg-sky-500" },
-                  { label: "Đã tạo", count: sentry.created ?? 0, color: "bg-emerald-500", dotColor: "bg-emerald-500" },
-                  { label: "Lỗi", count: sentry.failed ?? 0, color: "bg-rose-500", dotColor: "bg-rose-500" },
+                  { label: "Đang tạo", count: sentry.approved ?? 0, color: "bg-info", dotColor: "bg-info" },
+                  { label: "Đã tạo", count: sentry.created ?? 0, color: "bg-success", dotColor: "bg-success" },
+                  { label: "Lỗi", count: sentry.failed ?? 0, color: "bg-destructive", dotColor: "bg-destructive" },
                   {
                     label: "Bỏ qua",
                     count: (sentry.ignored ?? 0) + (sentry.rejected ?? 0),
@@ -276,10 +276,10 @@ export function QueuesCard({
                   {gateEntries.map(([gateName, stateMap]) => {
                     const label = getReleaseGateLabel(gateName);
                     const segments: BarSegment[] = [
-                      { label: "Đạt", count: stateMap.passed ?? 0, color: "bg-emerald-500", dotColor: "bg-emerald-500" },
-                      { label: "Lỗi", count: stateMap.failed ?? 0, color: "bg-rose-500", dotColor: "bg-rose-500" },
-                      { label: "Không rõ", count: stateMap.unknown ?? 0, color: "bg-amber-500", dotColor: "bg-amber-500" },
-                      { label: "Ghi đè", count: stateMap.overridden ?? 0, color: "bg-purple-500", dotColor: "bg-purple-500" },
+                      { label: "Đạt", count: stateMap.passed ?? 0, color: "bg-success", dotColor: "bg-success" },
+                      { label: "Lỗi", count: stateMap.failed ?? 0, color: "bg-destructive", dotColor: "bg-destructive" },
+                      { label: "Không rõ", count: stateMap.unknown ?? 0, color: "bg-warning", dotColor: "bg-warning" },
+                      { label: "Ghi đè", count: stateMap.overridden ?? 0, color: "bg-primary/80", dotColor: "bg-primary/80" },
                     ];
 
                     return (

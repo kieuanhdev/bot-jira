@@ -175,7 +175,7 @@ export function LeaderboardTable({
                     {/* In Progress Points */}
                     <td className="py-3.5 px-4 text-right align-middle">
                       {member.inProgressPoints > 0 ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 tabular-nums">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-warning tabular-nums">
                           <Zap className="h-3 w-3" aria-hidden="true" />
                           {member.inProgressPoints} pts
                         </span>
