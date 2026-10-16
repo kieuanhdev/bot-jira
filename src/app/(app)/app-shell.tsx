@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -21,7 +21,7 @@ import {
   PanelLeftOpen,
   ShieldCheck,
 } from "lucide-react";
-import { useUnreadCount } from "@/hooks/use-notifications";
+import { UnreadBadge } from "./unread-badge";
 import { FreshnessBanner } from "./freshness-banner";
 import { ReconnectBanner } from "./reconnect-banner";
 import { GlobalSyncIndicator } from "./global-sync-indicator";
@@ -53,9 +53,13 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const nav = isAdmin ? [...baseNav, adminNavItem] : baseNav;
-  const unreadCount = useUnreadCount();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const collapsedRef = useRef(collapsed);
+
+  useEffect(() => {
+    collapsedRef.current = collapsed;
+  }, [collapsed]);
 
   // Sync cookie if only localStorage had legacy state (one-time migration)
   useEffect(() => {
@@ -69,18 +73,16 @@ export function AppShell({
     }
   }, []);
 
-  const toggleSidebar = () => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        document.cookie = `sidebar_collapsed=${next}; path=/; max-age=31536000; SameSite=Lax`;
-        localStorage.setItem("sidebar_collapsed", String(next));
-      } catch {
-        // ignore
-      }
-      return next;
-    });
-  };
+  const toggleSidebar = useCallback(() => {
+    const next = !collapsedRef.current;
+    setCollapsed(next);
+    try {
+      document.cookie = `sidebar_collapsed=${next}; path=/; max-age=31536000; SameSite=Lax`;
+      localStorage.setItem("sidebar_collapsed", String(next));
+    } catch {
+      // ignore
+    }
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -99,7 +101,7 @@ export function AppShell({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [toggleSidebar]);
 
   return (
     <div className="flex min-h-screen">
@@ -181,11 +183,7 @@ export function AppShell({
                   <>
                     <item.icon className={cn("h-4.5 w-4.5 shrink-0", active && "text-primary")} aria-hidden="true" />
                     <span className="sr-only">{item.label}</span>
-                    {isNotification && unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white tabular-nums ring-2 ring-card">
-                        {unreadCount > 99 ? "99+" : unreadCount}
-                      </span>
-                    )}
+                    {isNotification && <UnreadBadge variant="collapsed" />}
                   </>
                 ) : (
                   <>
@@ -193,11 +191,7 @@ export function AppShell({
                       <item.icon className={cn("h-4 w-4 shrink-0", active && "text-primary")} aria-hidden="true" />
                       <span className="truncate">{item.label}</span>
                     </div>
-                    {isNotification && unreadCount > 0 && (
-                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white tabular-nums">
-                        {unreadCount > 99 ? "99+" : unreadCount}
-                      </span>
-                    )}
+                    {isNotification && <UnreadBadge variant="inline" />}
                   </>
                 )}
               </Link>
@@ -248,11 +242,7 @@ export function AppShell({
               aria-label="Thông báo"
             >
               <Bell className="h-4.5 w-4.5" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white tabular-nums">
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
-              )}
+              <UnreadBadge variant="mobile-bell" />
             </Link>
             <button
               type="button"
@@ -289,11 +279,7 @@ export function AppShell({
                       <item.icon className={cn("h-4 w-4", active && "text-primary")} />
                       <span>{item.label}</span>
                     </div>
-                    {isNotification && unreadCount > 0 && (
-                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white tabular-nums">
-                        {unreadCount > 99 ? "99+" : unreadCount}
-                      </span>
-                    )}
+                    {isNotification && <UnreadBadge variant="inline" />}
                   </Link>
                 );
               })}
