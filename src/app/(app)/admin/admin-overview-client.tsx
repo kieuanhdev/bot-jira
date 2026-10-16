@@ -2,55 +2,33 @@
 
 import { useState, useMemo } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Activity,
-  AlertTriangle,
-  Bell,
-  CheckCircle2,
-  Cpu,
-  Database,
-  ListChecks,
-  RefreshCw,
-  Server,
-  TriangleAlert,
-  XCircle,
-} from "lucide-react";
+import { Activity, RefreshCw } from "lucide-react";
 import { api, getErrorMessage } from "@/lib/api-client";
 import { adminKeys } from "@/lib/query-keys";
-import { maskSecrets } from "@/lib/admin/mask-secrets";
-import { cn, timeAgo } from "@/lib/utils";
-import { formatAge } from "@/lib/format/time";
+import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
-import { MetricCard } from "@/components/shared/metric-card";
-import { MetricGrid } from "@/components/shared/metric-grid";
-import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { ErrorState } from "@/components/shared/async-state";
-import { ListSkeleton } from "@/components/shared/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useNow } from "@/hooks/use-now";
 
 import { JobsCard, type ExtendedJobState } from "./overview/jobs-card";
 import { QueuesCard } from "./overview/queues-card";
 import { WebhooksCard, type WebhookSourceMetric } from "./overview/webhooks-card";
 import { PgBossCard, type QueueMetric } from "./overview/pg-boss-card";
 import { AuditCard } from "./overview/audit-card";
-import { CopyButton } from "./overview/error-sheet";
-import { Sparkline } from "./overview/sparkline";
+import { StaleIndicator } from "./overview/stale-indicator";
+import { SystemStatusBanner, type SystemStatusData } from "./overview/system-status-banner";
+import { MetricCardsRow } from "./overview/metric-cards-row";
+import { ServicesCard, SERVICE_LABEL, type Ping, type ServiceKey } from "./overview/services-card";
 
 const ErrorSheet = dynamic(
   () => import("./overview/error-sheet").then((m) => m.ErrorSheet),
   { ssr: false }
 );
 
-type Ping = { ok: boolean; ms: number; error?: string; history?: number[] };
-
-type Health = {
+export type Health = {
   status: string;
-  services: Record<"db" | "jira" | "bitbucket" | "sentry" | "openai" | "ollama", Ping>;
+  services: Record<ServiceKey, Ping>;
   worker: {
     status: "healthy" | "degraded" | "down" | "unknown";
     workerAgeMs: number | null;
@@ -68,7 +46,7 @@ type Health = {
   schedules?: Record<string, { cron: string; label: string }>;
 };
 
-type AdminMetrics = {
+export type AdminMetrics = {
   generatedAt: string;
   worker: {
     status: "healthy" | "degraded" | "down" | "unknown";
@@ -93,15 +71,6 @@ type AdminMetrics = {
   };
 };
 
-const SERVICE_LABEL: Record<keyof Health["services"], string> = {
-  db: "Cơ sở dữ liệu",
-  jira: "Jira",
-  bitbucket: "Bitbucket",
-  sentry: "Sentry",
-  openai: "OpenAI",
-  ollama: "Ollama",
-};
-
 const WORKER_STATUS: Record<
   Health["worker"]["status"],
   { label: string; tone: "success" | "warning" | "danger" | "neutral" }
@@ -111,23 +80,6 @@ const WORKER_STATUS: Record<
   down: { label: "Ngừng", tone: "danger" },
   unknown: { label: "Không rõ", tone: "neutral" },
 };
-
-function serviceBadge(p: Ping) {
-  if (p.error === "not configured") return <Badge variant="secondary">Chưa cấu hình</Badge>;
-  if (!p.ok) return <Badge variant="danger">Lỗi</Badge>;
-  if (p.ms < 1000) return <Badge variant="success">{p.ms} ms</Badge>;
-  if (p.ms <= 3000) return <Badge variant="warning">{p.ms} ms (Chậm)</Badge>;
-  return <Badge variant="danger">{p.ms} ms (Rất chậm)</Badge>;
-}
-
-function serviceDotColor(p: Ping): string {
-  if (p.error === "not configured") return "bg-muted-foreground/30";
-  if (!p.ok) return "bg-rose-500";
-  if (p.ms < 1000) return "bg-emerald-500";
-  if (p.ms <= 3000) return "bg-amber-500";
-  return "bg-rose-500";
-}
-
 
 export function AdminOverviewClient() {
   const [errorSheetType, setErrorSheetType] = useState<"sentry" | "outbox" | null>(null);
@@ -167,10 +119,6 @@ export function AdminOverviewClient() {
   const isRefreshing = health.isFetching || metrics.isFetching;
   const lastUpdated = health.dataUpdatedAt || null;
 
-  const now = useNow();
-
-  const isStale = Boolean(lastUpdated && now > 0 && now - lastUpdated > 90_000);
-
   const handleRefresh = async () => {
     await Promise.all([health.refetch(), metrics.refetch()]);
   };
@@ -182,7 +130,7 @@ export function AdminOverviewClient() {
     el.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth" });
   };
 
-  const systemStatus = useMemo(() => {
+  const systemStatus: SystemStatusData | null = useMemo(() => {
     if (!h) return null;
     const issues: Array<{ text: string; sectionId?: string; href?: string }> = [];
 
@@ -203,7 +151,7 @@ export function AdminOverviewClient() {
       issues.push({ text: "Cơ sở dữ liệu mất kết nối", sectionId: "services" });
     }
 
-    const failingServices = (Object.keys(h.services) as Array<keyof Health["services"]>).filter(
+    const failingServices = (Object.keys(h.services) as ServiceKey[]).filter(
       (k) => !h.services[k].ok && h.services[k].error !== "not configured" && k !== "db"
     );
     if (failingServices.length > 0) {
@@ -213,7 +161,7 @@ export function AdminOverviewClient() {
       });
     }
 
-    const slowServices = (Object.keys(h.services) as Array<keyof Health["services"]>).filter(
+    const slowServices = (Object.keys(h.services) as ServiceKey[]).filter(
       (k) => h.services[k].ok && h.services[k].ms >= 1000
     );
     if (slowServices.length > 0) {
@@ -237,7 +185,6 @@ export function AdminOverviewClient() {
       });
     }
 
-    // Webhook errors count
     const webhookErrorCount = Object.values(webhooks).reduce((sum, w) => sum + w.errors24h, 0);
     if (webhookErrorCount > 0) {
       issues.push({
@@ -246,7 +193,6 @@ export function AdminOverviewClient() {
       });
     }
 
-    // Overloaded pg-boss queue
     if (pgBossQueues) {
       const overloaded = pgBossQueues.find((q) => q.readyCount > 50);
       if (overloaded) {
@@ -257,7 +203,6 @@ export function AdminOverviewClient() {
       }
     }
 
-    // Release gate failures count
     if (m?.gatesByState) {
       let gateFailures = 0;
       for (const st of Object.values(m.gatesByState)) {
@@ -282,10 +227,10 @@ export function AdminOverviewClient() {
     const isWarning = !isDanger && issues.length > 0;
     const tone: "destructive" | "warning" | "success" = isDanger ? "destructive" : isWarning ? "warning" : "success";
 
-    const configuredServicesCount = (Object.keys(h.services) as Array<keyof Health["services"]>).filter(
+    const configuredServicesCount = (Object.keys(h.services) as ServiceKey[]).filter(
       (k) => h.services[k].error !== "not configured"
     ).length;
-    const okServicesCount = (Object.keys(h.services) as Array<keyof Health["services"]>).filter(
+    const okServicesCount = (Object.keys(h.services) as ServiceKey[]).filter(
       (k) => h.services[k].ok
     ).length;
     const okJobsCount = jobs.length - failingJobs.length;
@@ -303,19 +248,7 @@ export function AdminOverviewClient() {
         icon={Activity}
         title="Tổng quan hệ thống"
         description="Tình trạng worker, các dịch vụ tích hợp và hàng đợi thông báo."
-        meta={
-          lastUpdated ? (
-            <span className="flex items-center gap-1.5">
-              <span>• Cập nhật {timeAgo(new Date(lastUpdated).toISOString())}</span>
-              {isStale && (
-                <Badge variant="warning" className="gap-1 text-[11px]">
-                  <TriangleAlert className="h-3 w-3" aria-hidden="true" />
-                  Dữ liệu cũ
-                </Badge>
-              )}
-            </span>
-          ) : undefined
-        }
+        meta={lastUpdated ? <StaleIndicator lastUpdated={lastUpdated} /> : undefined}
         actions={
           <Button
             variant="outline"
@@ -333,46 +266,7 @@ export function AdminOverviewClient() {
         }
       />
 
-      {systemStatus && (
-        <FeedbackBanner
-          tone={systemStatus.tone}
-          icon={systemStatus.tone === "destructive" ? XCircle : systemStatus.tone === "warning" ? AlertTriangle : CheckCircle2}
-          role={systemStatus.tone === "success" ? "status" : "alert"}
-        >
-          {systemStatus.tone === "success" ? (
-            <span className="font-medium">{systemStatus.summaryOk}</span>
-          ) : (
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-              <span className="font-semibold">{systemStatus.issues.length} vấn đề cần lưu ý:</span>
-              <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                {systemStatus.issues.slice(0, 4).map((issue, idx) => (
-                  <span key={idx} className="inline-flex items-center gap-1">
-                    {idx > 0 && <span aria-hidden="true">·</span>}
-                    {issue.sectionId ? (
-                      <button
-                        type="button"
-                        onClick={() => scrollToSection(issue.sectionId!)}
-                        className="cursor-pointer font-medium underline-offset-2 hover:underline"
-                      >
-                        {issue.text}
-                      </button>
-                    ) : issue.href ? (
-                      <Link href={issue.href} className="cursor-pointer font-medium underline-offset-2 hover:underline">
-                        {issue.text}
-                      </Link>
-                    ) : (
-                      <span>{issue.text}</span>
-                    )}
-                  </span>
-                ))}
-                {systemStatus.issues.length > 4 && (
-                  <span className="text-muted-foreground">+{systemStatus.issues.length - 4} vấn đề khác</span>
-                )}
-              </div>
-            </div>
-          )}
-        </FeedbackBanner>
-      )}
+      <SystemStatusBanner status={systemStatus} onScrollToSection={scrollToSection} />
 
       {health.error ? (
         <ErrorState
@@ -381,122 +275,30 @@ export function AdminOverviewClient() {
           onRetry={() => health.refetch()}
         />
       ) : (
-        <MetricGrid columns={4}>
-          <MetricCard
-            label="Worker"
-            value={worker?.label ?? "—"}
-            description={h ? `Heartbeat ${formatAge(h.worker.workerAgeMs)} trước` : undefined}
-            icon={Cpu}
-            tone={worker?.tone ?? "neutral"}
-            loading={health.isLoading}
-          />
-          <MetricCard
-            label="Đồng bộ Jira cũ nhất"
-            value={h?.worker.jiraSyncPaused ? "Tạm dừng" : h ? formatAge(h.worker.jiraSyncAgeMs) : "—"}
-            description={
-              h?.worker.staleProjects && h.worker.staleProjects.length > 0 ? (
-                <Link href="/admin/sync" className="cursor-pointer font-medium text-amber-600 hover:underline dark:text-amber-400">
-                  {h.worker.staleProjects.length} dự án chậm
-                </Link>
-              ) : (
-                <Link href="/admin/sync" className="cursor-pointer underline-offset-2 hover:underline">
-                  Quản lý đồng bộ dự án
-                </Link>
-              )
-            }
-            icon={Database}
-            tone={h?.worker.staleProjects && h.worker.staleProjects.length > 0 ? "warning" : "primary"}
-            loading={health.isLoading}
-          />
-          <MetricCard
-            label="Job đang lỗi"
-            value={failingJobs.length}
-            description={stuckJobs.length > 0 ? `${stuckJobs.length} job treo · trên ${jobs.length} job` : `trên ${jobs.length} job`}
-            icon={ListChecks}
-            tone={failingJobs.length > 0 || stuckJobs.length > 0 ? "danger" : "success"}
-            loading={health.isLoading}
-            onClick={() => scrollToSection("jobs")}
-          />
-          <MetricCard
-            label="Thông báo lỗi"
-            value={outbox.failed ?? 0}
-            description={`${outbox.pending ?? 0} chờ · ${outbox.sent ?? 0} đã gửi`}
-            icon={Bell}
-            tone={(outbox.failed ?? 0) > 0 ? "danger" : "neutral"}
-            loading={metrics.isLoading}
-            onClick={() => scrollToSection("queues")}
-          />
-        </MetricGrid>
+        <MetricCardsRow
+          worker={worker}
+          workerAgeMs={h?.worker.workerAgeMs}
+          jiraSyncAgeMs={h?.worker.jiraSyncAgeMs}
+          jiraSyncPaused={h?.worker.jiraSyncPaused}
+          staleProjectsCount={h?.worker.staleProjects?.length ?? 0}
+          failingJobsCount={failingJobs.length}
+          stuckJobsCount={stuckJobs.length}
+          totalJobsCount={jobs.length}
+          outbox={outbox}
+          isHealthLoading={health.isLoading}
+          isMetricsLoading={metrics.isLoading}
+          onScrollToSection={scrollToSection}
+        />
       )}
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* Services Card */}
-        <Card id="services">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Server className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              Dịch vụ tích hợp
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {health.isLoading ? (
-              <ListSkeleton rows={6} />
-            ) : health.error ? (
-              <ErrorState
-                title="Không thể tải tình trạng dịch vụ"
-                message={getErrorMessage(health.error)}
-                onRetry={() => health.refetch()}
-              />
-            ) : h ? (
-              <ul className="divide-y text-sm">
-                {(Object.keys(SERVICE_LABEL) as Array<keyof Health["services"]>).map((k) => {
-                  const ping = h.services[k];
-                  const hasInlineError = !ping.ok && ping.error && ping.error !== "not configured";
+        <ServicesCard
+          services={h?.services}
+          isLoading={health.isLoading}
+          error={health.error}
+          onRetry={() => health.refetch()}
+        />
 
-                  return (
-                    <li key={k} className="flex flex-col gap-1 py-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={cn("h-2 w-2 rounded-full", serviceDotColor(ping))}
-                            aria-hidden="true"
-                          />
-                          <span className={cn(ping.error === "not configured" && "text-muted-foreground")}>
-                            {SERVICE_LABEL[k]}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {ping.history && ping.history.length >= 4 && (
-                            <Sparkline
-                              data={ping.history}
-                              width={60}
-                              height={18}
-                              minPoints={4}
-                              unit="ms"
-                              tone={!ping.ok ? "rose" : ping.ms > 1000 ? "amber" : "emerald"}
-                              ariaLabel={`Xu hướng độ trễ của ${SERVICE_LABEL[k]}`}
-                            />
-                          )}
-                          {serviceBadge(ping)}
-                        </div>
-                      </div>
-                      {hasInlineError && (
-                        <div className="mt-1 flex items-start justify-between gap-2 rounded bg-destructive/10 p-2 text-xs text-destructive">
-                          <p className="font-mono text-[11px] leading-relaxed">
-                            {maskSecrets(ping.error)}
-                          </p>
-                          <CopyButton text={maskSecrets(ping.error)} />
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        {/* Jobs Card */}
         <JobsCard
           jobs={jobs}
           failingJobs={failingJobs}
