@@ -133,14 +133,14 @@ export function AdminOverviewClient() {
   const [errorSheetType, setErrorSheetType] = useState<"sentry" | "outbox" | null>(null);
 
   const health = useQuery({
-    queryKey: [...adminKeys.overview, "health"],
+    queryKey: adminKeys.health,
     queryFn: () => api<Health>("/api/health"),
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
   });
 
   const metrics = useQuery({
-    queryKey: [...adminKeys.overview, "metrics"],
+    queryKey: adminKeys.metrics,
     queryFn: () => api<AdminMetrics>("/api/admin/metrics"),
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,

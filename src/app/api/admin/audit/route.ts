@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getSession, isAdmin } from "@/lib/session";
+import { listAuditEntries } from "@/lib/admin/audit";
+
+export { listAuditEntries };
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -13,25 +15,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const limitParam = parseInt(url.searchParams.get("limit") ?? "20", 10);
-  const limit = Math.max(1, Math.min(100, Number.isNaN(limitParam) ? 20 : limitParam));
+  const data = await listAuditEntries(limitParam);
 
-  const items = await prisma.auditLog.findMany({
-    orderBy: { createdAt: "desc" },
-    take: limit,
-    select: {
-      id: true,
-      createdAt: true,
-      actorEmail: true,
-      action: true,
-      target: true,
-      source: true,
-    },
-  });
-
-  return NextResponse.json({
-    items: items.map((i) => ({
-      ...i,
-      createdAt: i.createdAt.toISOString(),
-    })),
-  });
+  return NextResponse.json(data);
 }

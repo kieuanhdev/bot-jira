@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import type { ImportState } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { env } from "@/lib/env";
 import { getSession, isAdmin } from "@/lib/session";
-import { getJiraIssueUrl } from "@/lib/utils";
+import { listSentryImports } from "@/lib/admin/sentry";
 
-const STATES: ImportState[] = ["review", "pending", "approved", "created", "rejected", "failed", "ignored"];
+export { listSentryImports };
 
 /**
  * Admin view of the Sentry import queue: the review list (new Sentry issues
@@ -17,54 +15,10 @@ export async function GET(req: Request) {
   if (!isAdmin(session)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const url = new URL(req.url);
-  const requested = (url.searchParams.get("state") ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s): s is ImportState => (STATES as string[]).includes(s));
-  if (requested.includes("review")) requested.push("pending");
+  const stateParam = url.searchParams.get("state") ?? undefined;
+  const data = await listSentryImports(stateParam);
 
-  const [items, grouped] = await Promise.all([
-    prisma.sentryIssueImported.findMany({
-      where: requested.length ? { state: { in: requested } } : undefined,
-      orderBy: [{ lastSeen: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
-      take: 200,
-    }),
-    prisma.sentryIssueImported.groupBy({ by: ["state"], _count: { _all: true } }),
-  ]);
-
-  const counts: Record<string, number> = {};
-  for (const g of grouped) {
-    const key = g.state === "pending" ? "review" : g.state;
-    counts[key] = (counts[key] ?? 0) + g._count._all;
-  }
-
-  return NextResponse.json({
-    counts,
-    requireApproval: env.sentryImportRequireApproval,
-    items: items.map((r) => ({
-      id: r.id,
-      sentryProject: r.sentryProject,
-      sentryIssueId: r.sentryIssueId,
-      shortId: r.shortId,
-      title: r.title,
-      level: r.level,
-      permalinkUrl: r.permalinkUrl,
-      eventCount: r.eventCount,
-      firstSeen: r.firstSeen,
-      lastSeen: r.lastSeen,
-      targetProject: r.targetProject,
-      jiraKey: r.jiraKey,
-      jiraUrl: getJiraIssueUrl(env.jiraBaseUrl, r.jiraKey),
-      state: r.state === "pending" ? "review" : r.state,
-      attemptCount: r.attemptCount,
-      lastError: r.lastError,
-      lastAttemptAt: r.lastAttemptAt,
-      importedAt: r.importedAt,
-      reviewedBy: r.reviewedBy,
-      reviewedAt: r.reviewedAt,
-      createdAt: r.createdAt,
-    })),
-  });
+  return NextResponse.json(data);
 }
 
 /**

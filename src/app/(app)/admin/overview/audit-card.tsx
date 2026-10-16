@@ -31,7 +31,7 @@ type AuditEntry = {
 
 export function AuditCard() {
   const { data, isLoading } = useQuery({
-    queryKey: [...adminKeys.overview, "audit"],
+    queryKey: adminKeys.audit,
     queryFn: () => api<{ items: AuditEntry[] }>("/api/admin/audit?limit=20"),
     staleTime: 60_000,
   });
