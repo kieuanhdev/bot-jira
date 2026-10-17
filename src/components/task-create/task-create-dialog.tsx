@@ -233,7 +233,7 @@ export function TaskCreateDialog({
   const headerExtra =
     showAiPanel && row ? (
       <div className="space-y-2">
-        <AiIdeaPanel projectKey={projectKey} current={row} disabled={busy} onApply={handleAiApply} />
+        <AiIdeaPanel key={projectKey} projectKey={projectKey} current={row} disabled={busy} onApply={handleAiApply} />
         {extraActions}
       </div>
     ) : (
