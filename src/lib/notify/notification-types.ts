@@ -317,7 +317,7 @@ export const TYPE_DETAILS: Record<string, NotificationTypeDetail> = {
     category: "system",
     categoryLabel: "AI & Hệ thống",
     label: "Gợi ý điểm story point từ AI",
-    desc: "Khi mô hình AI (OpenAI / Ollama) hoàn tất phân tích yêu cầu và đề xuất điểm ước lượng cho task mới.",
+    desc: "Khi mô hình AI (OpenAI) hoàn tất phân tích yêu cầu và đề xuất điểm ước lượng cho task mới.",
     icon: Cpu,
     colorClass: "text-indigo-600 dark:text-indigo-400",
     bgClass: "bg-indigo-500/10 border-indigo-500/20",

@@ -3,7 +3,7 @@ import { SERVICE_KEYS, getServiceHealthBadge } from "./settings-model";
 
 describe("settings-model", () => {
   it("defines expected service keys", () => {
-    expect(SERVICE_KEYS).toEqual(["db", "jira", "bitbucket", "sentry", "openai", "ollama"]);
+    expect(SERVICE_KEYS).toEqual(["db", "jira", "bitbucket", "sentry", "openai"]);
   });
 
   it("returns correct badge variants and localized labels", () => {

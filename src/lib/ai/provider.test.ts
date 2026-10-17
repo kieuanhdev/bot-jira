@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { OpenAIProvider } from "./openai";
-import { OllamaProvider } from "./ollama";
 import { createProvider } from "./index";
 import { AiProviderError, AiUnavailableError, isAiUnavailable } from "./errors";
 import { env } from "@/lib/env";
@@ -143,112 +142,7 @@ describe("AI Providers & Boundary", () => {
     });
   });
 
-  describe("OllamaProvider", () => {
-    it("has expected provider name formatted with model", () => {
-      const provider = new OllamaProvider();
-      expect(provider.name).toBe(`ollama:${env.ollamaModel}`);
-    });
-
-    it("successfully generates estimate from valid Ollama response", async () => {
-      const provider = new OllamaProvider();
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          response: JSON.stringify({
-            suggestedPoints: 3,
-            confidence: 0.9,
-            reasoning: "Small bug fix",
-            missingInformation: [],
-            risks: [],
-            similarTasks: [],
-          }),
-        }),
-      });
-
-      const res = await provider.estimate({
-        key: "PROJ-20",
-        summary: "Fix typo",
-        description: "Simple text fix",
-      });
-
-      expect(res.suggestedPoints).toBe(3);
-      expect(res.confidence).toBe(0.9);
-      expect(res.reasoning).toBe("Small bug fix");
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it("successfully runs releaseCheck with Ollama", async () => {
-      const provider = new OllamaProvider();
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          response: JSON.stringify({
-            ready: true,
-            blockers: [],
-          }),
-        }),
-      });
-
-      const res = await provider.releaseCheck({ version: "2.0.0" }, [
-        { jiraKey: "PROJ-20", summary: "Typo fix", description: "fix" },
-      ]);
-
-      expect(res.ready).toBe(true);
-      expect(res.blockers).toEqual([]);
-    });
-
-    it("wraps unconfigured error into AiUnavailableError on estimate", async () => {
-      const originalBase = env.ollamaBaseUrl;
-      try {
-        (env as { ollamaBaseUrl: string }).ollamaBaseUrl = "";
-        const provider = new OllamaProvider();
-        await expect(
-          provider.estimate({ key: "PROJ-2", summary: "x", description: "y" })
-        ).rejects.toThrow(AiUnavailableError);
-      } finally {
-        (env as { ollamaBaseUrl: string }).ollamaBaseUrl = originalBase;
-      }
-    });
-
-    it("throws AiUnavailableError when Ollama returns empty response", async () => {
-      const provider = new OllamaProvider();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ response: "" }),
-      });
-
-      await expect(
-        provider.estimate({ key: "PROJ-2", summary: "x", description: "y" })
-      ).rejects.toThrow("Ollama returned empty response");
-    });
-
-    it("throws AiUnavailableError on 500 error after 3 retries", async () => {
-      const provider = new OllamaProvider();
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-        text: async () => "Internal server crash",
-      });
-
-      await expect(
-        provider.estimate({ key: "PROJ-2", summary: "x", description: "y" })
-      ).rejects.toThrow("Ollama 500: Internal server crash");
-      expect(mockFetch).toHaveBeenCalledTimes(3);
-    });
-  });
-
   describe("createProvider factory", () => {
-    it("creates OllamaProvider when llmProvider is ollama", () => {
-      const orig = env.llmProvider;
-      try {
-        (env as { llmProvider: string }).llmProvider = "ollama";
-        const p = createProvider();
-        expect(p).toBeInstanceOf(OllamaProvider);
-      } finally {
-        (env as { llmProvider: string }).llmProvider = orig;
-      }
-    });
-
     it("creates OpenAIProvider by default or when llmProvider is openai", () => {
       const orig = env.llmProvider;
       try {

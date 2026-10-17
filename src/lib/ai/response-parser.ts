@@ -35,21 +35,6 @@ export function extractOpenAiContent(data: unknown): string {
 }
 
 /**
- * Extract text response from an Ollama generate JSON payload.
- */
-export function extractOllamaContent(data: unknown): string {
-  if (!data || typeof data !== "object") {
-    throw new Error("Ollama returned invalid response payload");
-  }
-  const payload = data as { response?: unknown };
-  const response = payload.response;
-  if (typeof response !== "string" || !response.trim()) {
-    throw new Error("Ollama returned empty response");
-  }
-  return response;
-}
-
-/**
  * Parse a possibly-messy LLM reply into a clean AiScoreOutput. Throws when unusable.
  */
 export function parseAiScore(raw: string): AiScoreOutput {

@@ -19,7 +19,7 @@ web cung cấp board, automation, release gate và notification.
 | 1 | Đồng bộ Jira (poll issue + comment vào cache) | ✅ Incremental sync + cursor + reconciliation + webhook |
 | 2 | Kanban board (thay Jira), search, filter | ✅ |
 | 3 | Sửa metadata task + **bulk sửa nhiều task** | ✅ M4: 10 action (assign, labels, points, priority, transition, fix-version, comment, create-branches), preview → confirm → worker, max 500 task |
-| 4 | **AI chấm task point** (OpenAI-compatible / Ollama) | ✅ M7: estimate giải thích được (confidence, missing info, similar tasks) + human review Accept/Edit/Reject, chỉ ghi Jira sau khi xác nhận + metrics |
+| 4 | **AI chấm task point** (OpenAI-compatible) | ✅ M7: estimate giải thích được (confidence, missing info, similar tasks) + human review Accept/Edit/Reject, chỉ ghi Jira sau khi xác nhận + metrics |
 | 5 | **Release management** + ready-check (rule + AI) + cảnh báo | ✅ M3: 8 gate engine (non_empty, task_status, critical_bugs, sentry, branches, pull_requests, data_freshness, ai_advisory), Fail-safe: unknown ≠ ready, release rỗng luôn blocked |
 | 6 | **Tự tạo task Jira từ Sentry** (cron) | ✅ M2: Idempotent qua `SentryIssueImported` mapping, phục hồi qua label, backoff + failed sau 5 lần |
 | 7 | **Check nhánh chưa merge** (Bitbucket DC + Jira comment) | ✅ M2 + parse-comment: `check-branches` (API, cần token) + `parse-comment-branches` (parse Jira comment, không cần token) |
@@ -36,12 +36,12 @@ web cung cấp board, automation, release gate và notification.
 - **pg-boss** — 17 queue và 11 schedule chạy trên Postgres; connection lifecycle,
   registry, schedules và enqueue API được tách riêng.
 - **LLM qua API công ty cấp** (OpenAI-compatible) — qua interface `LLMProvider`, đổi provider/model bằng env.
-  Mặc định `openai` (OpenAI/Azure/vLLM/litellm); chọn `ollama` nếu muốn self-host.
+  Dùng `openai` (OpenAI/Azure/vLLM/litellm).
 - **NextAuth** với Jira PAT là luồng chính; email/password + bcrypt chỉ là
   break-glass khi `LEGACY_PASSWORD_LOGIN=1`; session dùng JWT `HttpOnly`.
 - **Web Push** (service worker + VAPID) + in-app notification center.
 - **Tailwind CSS** + **shadcn/ui**-style components.
-- Deploy: **Podman Compose** (`web`, `worker`, `db`). AI dùng API cty cấp — **không** self-host Ollama.
+- Deploy: **Podman Compose** (`web`, `worker`, `db`). AI dùng API cty cấp.
 
 ## Kiến trúc hiện tại và mục tiêu
 
@@ -100,7 +100,7 @@ podman run -d --name teamweb-pg \
   docker.io/library/postgres:16-alpine
 
 # 2) Config
-cp .env.example .env   # sửa DATABASE_URL + các token Jira/Bitbucket/Sentry/Ollama
+cp .env.example .env   # sửa DATABASE_URL + các token Jira/Bitbucket/Sentry/OpenAI
 
 # 3) Dependency + DB
 npm install
@@ -136,7 +136,7 @@ podman compose up -d --build
 - `web` — build từ `Dockerfile`, publish port 3100. Boot chạy migration, seed và Next.js.
 - `worker` — target riêng từ cùng `Dockerfile`, đăng ký schedule và consume pg-boss jobs.
 - Mạng nội bộ: web gọi Jira/Bitbucket/Sentry bằng URL thật trong env; `DATABASE_URL` trỏ tới service `db`.
-- **AI**: web gọi **API LLM do công ty cấp** (OpenAI-compatible) bằng `OPENAI_BASE_URL` + `OPENAI_API_KEY` + `OPENAI_MODEL`. Không cần container Ollama.
+- **AI**: web gọi **API LLM do công ty cấp** (OpenAI-compatible) bằng `OPENAI_BASE_URL` + `OPENAI_API_KEY` + `OPENAI_MODEL`.
 
 ## Biến môi trường
 
@@ -186,7 +186,7 @@ xác nhận các mục sau và cập nhật `.env`:
    (branches, pull-requests). Nếu version khác thì sửa `src/lib/bitbucket/client.ts`.
  3. **LLM API (cty cấp)** — đặt `OPENAI_BASE_URL` + `OPENAI_API_KEY` + `OPENAI_MODEL` cho
     endpoint OpenAI-compatible của cty. AI lỗi trả `unavailable` (503), không fabricate
-    estimate. Muốn self-host Ollama: đặt `LLM_PROVIDER=ollama`.
+    estimate.
  4. **Sentry** — self-hosted hay SaaS (đặt `SENTRY_BASE_URL`), org + project + token đọc issues.
     Sentry import idempotent: mỗi Sentry issue chỉ tạo tối đa 1 Jira issue.
  5. **Release theo Jira Fix Version** — release gắn theo Jira Fix Version (không dùng label).

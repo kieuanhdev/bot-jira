@@ -4,7 +4,7 @@ import { getSession, isAdmin } from "@/lib/session";
 import { jira, hasJiraCredentials } from "@/lib/jira/client";
 import { bitbucket } from "@/lib/bitbucket/client";
 import { sentry } from "@/lib/sentry/client";
-import { env, hasBitbucketConfig, hasSentryConfig, hasOllamaConfig, hasOpenAiConfig } from "@/lib/env";
+import { env, hasBitbucketConfig, hasSentryConfig, hasOpenAiConfig } from "@/lib/env";
 import { getWorkerHealth, isJiraFresh } from "@/lib/health/worker-health";
 import { getJobSchedules } from "@/lib/queue/schedules";
 import { withTimeout } from "@/lib/async/with-timeout";
@@ -78,16 +78,6 @@ export async function GET() {
     return ping("sentry", () => sentry.listUnresolvedIssues(1));
   };
 
-  const pingOllama = async (): Promise<PingResult> => {
-    if (!hasOllamaConfig()) {
-      return { ok: false, ms: 0, error: "not configured" };
-    }
-    return ping("ollama", async () => {
-      const r = await fetch(`${env.ollamaBaseUrl.replace(/\/$/, "")}/api/tags`);
-      if (!r.ok) throw new Error(`ollama ${r.status}`);
-    });
-  };
-
   const pingOpenai = async (): Promise<PingResult> => {
     if (!hasOpenAiConfig()) {
       return { ok: false, ms: 0, error: "not configured" };
@@ -106,7 +96,6 @@ export async function GET() {
     jiraSettled,
     bitbucketSettled,
     sentrySettled,
-    ollamaSettled,
     openaiSettled,
   ] = await Promise.allSettled([
     pingDb(),
@@ -114,7 +103,6 @@ export async function GET() {
     pingJira(),
     pingBitbucket(),
     pingSentry(),
-    pingOllama(),
     pingOpenai(),
   ]);
 
@@ -156,11 +144,6 @@ export async function GET() {
       ? sentrySettled.value
       : { ok: false, ms: 0, error: (sentrySettled.reason as Error)?.message ?? "sentry check failed" };
 
-  const ollamaHealth: PingResult =
-    ollamaSettled.status === "fulfilled"
-      ? ollamaSettled.value
-      : { ok: false, ms: 0, error: (ollamaSettled.reason as Error)?.message ?? "ollama check failed" };
-
   const openaiHealth: PingResult =
     openaiSettled.status === "fulfilled"
       ? openaiSettled.value
@@ -177,7 +160,6 @@ export async function GET() {
       sentryConfigured: hasSentryConfig(),
       llmProvider: env.llmProvider,
       openaiConfigured: hasOpenAiConfig(),
-      ollamaConfigured: hasOllamaConfig(),
     },
     services: {
       db,
@@ -185,7 +167,6 @@ export async function GET() {
       bitbucket: bitbucketHealth,
       sentry: sentryHealth,
       openai: openaiHealth,
-      ollama: ollamaHealth,
     },
     worker: {
       status: workerHealth.status,

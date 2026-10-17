@@ -15,7 +15,6 @@ import {
 import { sanitizeAiErrorMessage } from "./sanitizer";
 import {
   extractOpenAiContent,
-  extractOllamaContent,
   extractJsonObject,
   parseAiScore,
   parseReleaseCheck,
@@ -30,7 +29,6 @@ export {
   isAiUnavailable,
   sanitizeAiErrorMessage,
   extractOpenAiContent,
-  extractOllamaContent,
   extractJsonObject,
   parseAiScore,
   parseReleaseCheck,

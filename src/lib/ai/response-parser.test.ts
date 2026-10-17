@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   extractOpenAiContent,
-  extractOllamaContent,
   extractJsonObject,
   parseAiScore,
   parseReleaseCheck,
@@ -36,24 +35,6 @@ describe("extractOpenAiContent", () => {
     expect(() => extractOpenAiContent("not an object")).toThrow(
       "OpenAI returned invalid response payload"
     );
-  });
-});
-
-describe("extractOllamaContent", () => {
-  it("extracts response from valid Ollama structure", () => {
-    const payload = { response: "{\"ready\": true}" };
-    expect(extractOllamaContent(payload)).toBe("{\"ready\": true}");
-  });
-
-  it("throws when response property is missing or empty", () => {
-    expect(() => extractOllamaContent({})).toThrow("Ollama returned empty response");
-    expect(() => extractOllamaContent({ response: "" })).toThrow("Ollama returned empty response");
-    expect(() => extractOllamaContent({ response: "  \n  " })).toThrow("Ollama returned empty response");
-  });
-
-  it("throws when payload is null or not an object", () => {
-    expect(() => extractOllamaContent(null)).toThrow("Ollama returned invalid response payload");
-    expect(() => extractOllamaContent(123)).toThrow("Ollama returned invalid response payload");
   });
 });
 

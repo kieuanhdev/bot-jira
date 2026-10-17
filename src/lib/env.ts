@@ -133,16 +133,12 @@ export const env = {
   // them; false restores the old behaviour of filing every issue automatically.
   sentryImportRequireApproval: bool("SENTRY_IMPORT_REQUIRE_APPROVAL", true),
 
-  // AI / LLM. LLM_PROVIDER selects the active provider: "openai" (default)
-  // or "ollama".
+  // AI / LLM. LLM_PROVIDER names the active provider (only "openai").
   llmProvider: str("LLM_PROVIDER", "openai"),
   // OpenAI-compatible API (OpenAI, Azure OpenAI, vLLM, LM Studio, litellm…).
   openaiBaseUrl: str("OPENAI_BASE_URL", "https://api.openai.com/v1"),
   openaiApiKey: str("OPENAI_API_KEY"),
   openaiModel: str("OPENAI_MODEL", "gpt-4o-mini"),
-  // Ollama (only used when LLM_PROVIDER=ollama)
-  ollamaBaseUrl: str("OLLAMA_BASE_URL", "http://localhost:11434"),
-  ollamaModel: str("OLLAMA_MODEL", "llama3.1:8b"),
   // Comma-separated allowed point values, e.g. "1,2,3,5,8,13"
   pointScale: str("POINT_SCALE", "1,2,3,5,8,13"),
   // When true, the ai-score cron auto-scores new unscored issues.
@@ -371,17 +367,13 @@ export const releaseRequiredApprovals: string[] = env.releaseRequiredApprovals
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
 
-export function hasOllamaConfig(): boolean {
-  return Boolean(env.ollamaBaseUrl && env.ollamaModel);
-}
-
 export function hasOpenAiConfig(): boolean {
   return Boolean(env.openaiBaseUrl && env.openaiApiKey && env.openaiModel);
 }
 
-/** Whether the selected LLM provider has the config it needs. */
+/** Whether the LLM provider has the config it needs. */
 export function hasLLMConfig(): boolean {
-  return env.llmProvider === "ollama" ? hasOllamaConfig() : hasOpenAiConfig();
+  return hasOpenAiConfig();
 }
 
 // M2 — re-export the Sentry project-mapping helpers so consumers can import

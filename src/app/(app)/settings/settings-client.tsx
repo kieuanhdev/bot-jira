@@ -38,7 +38,7 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
           <CardHeader>
             <CardTitle>Tình trạng dịch vụ</CardTitle>
             <CardDescription>
-              Kiểm tra kết nối Postgres, Jira, Bitbucket, Sentry và Ollama. Khởi động tác vụ định kỳ.
+              Kiểm tra kết nối Postgres, Jira, Bitbucket, Sentry và OpenAI. Khởi động tác vụ định kỳ.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">

@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   jiraMe: vi.fn(),
   hasBitbucketConfig: vi.fn(),
   hasSentryConfig: vi.fn(),
-  hasOllamaConfig: vi.fn(),
   hasOpenAiConfig: vi.fn(),
   getJobSchedules: vi.fn(),
   withTimeout: vi.fn(),
@@ -54,7 +53,6 @@ vi.mock("@/lib/env", () => ({
   env: { pollIntervalMs: 60000 },
   hasBitbucketConfig: mocks.hasBitbucketConfig,
   hasSentryConfig: mocks.hasSentryConfig,
-  hasOllamaConfig: mocks.hasOllamaConfig,
   hasOpenAiConfig: mocks.hasOpenAiConfig,
 }));
 
@@ -82,7 +80,6 @@ describe("GET /api/health", () => {
     mocks.jiraMe.mockResolvedValue({ name: "JiraBot" });
     mocks.hasBitbucketConfig.mockReturnValue(false);
     mocks.hasSentryConfig.mockReturnValue(false);
-    mocks.hasOllamaConfig.mockReturnValue(false);
     mocks.hasOpenAiConfig.mockReturnValue(false);
     mocks.getJobSchedules.mockReturnValue({});
     mocks.withTimeout.mockImplementation((p: Promise<unknown>) => p);

@@ -13,7 +13,7 @@ import { CopyButton } from "./error-sheet";
 
 export type Ping = { ok: boolean; ms: number; error?: string; history?: number[] };
 
-export type ServiceKey = "db" | "jira" | "bitbucket" | "sentry" | "openai" | "ollama";
+export type ServiceKey = "db" | "jira" | "bitbucket" | "sentry" | "openai";
 
 export const SERVICE_LABEL: Record<ServiceKey, string> = {
   db: "Cơ sở dữ liệu",
@@ -21,7 +21,6 @@ export const SERVICE_LABEL: Record<ServiceKey, string> = {
   bitbucket: "Bitbucket",
   sentry: "Sentry",
   openai: "OpenAI",
-  ollama: "Ollama",
 };
 
 export function serviceBadge(p: Ping) {

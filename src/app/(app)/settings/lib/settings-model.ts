@@ -15,12 +15,11 @@ export type Health = {
     jiraConfigured: boolean;
     bitbucketConfigured: boolean;
     sentryConfigured: boolean;
-    ollamaConfigured: boolean;
   };
   services: Record<string, { ok: boolean; ms: number; error?: string }>;
 };
 
-export const SERVICE_KEYS = ["db", "jira", "bitbucket", "sentry", "openai", "ollama"] as const;
+export const SERVICE_KEYS = ["db", "jira", "bitbucket", "sentry", "openai"] as const;
 export type ServiceKey = (typeof SERVICE_KEYS)[number];
 
 export function getServiceHealthBadge(ok: boolean): { variant: "success" | "danger"; label: string } {

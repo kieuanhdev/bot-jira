@@ -4,7 +4,6 @@ import {
   hasBitbucketConfig,
   hasSentryConfig,
   hasSentryWebhookConfig,
-  hasOllamaConfig,
   hasOpenAiConfig,
   hasLLMConfig,
 } from "@/lib/env";
@@ -31,7 +30,6 @@ export {
   hasBitbucketConfig,
   hasSentryConfig,
   hasSentryWebhookConfig,
-  hasOllamaConfig,
   hasOpenAiConfig,
   hasLLMConfig,
 };
