@@ -8,25 +8,34 @@ import { api, getErrorMessage } from "@/lib/api-client";
 import { formatBytes } from "@/lib/format-bytes";
 import { issuesKeys } from "@/lib/query-keys";
 import { cn, formatDateTime } from "@/lib/utils";
+import { ImageLightbox } from "@/components/issues/image-lightbox";
 import type { AttachmentItem } from "@/lib/jira/attachment-route-service";
 
 const fileUrl = (key: string, id: string, download = false) =>
   `/api/jira/attachment?key=${encodeURIComponent(key)}&id=${encodeURIComponent(id)}${download ? "&download=1" : ""}`;
 
-function ImageTile({ issueKey, item }: { issueKey: string; item: AttachmentItem }) {
+function ImageTile({
+  issueKey,
+  item,
+  onOpen,
+}: {
+  issueKey: string;
+  item: AttachmentItem;
+  onOpen: () => void;
+}) {
   const [failed, setFailed] = useState(false);
   return (
     <li className="min-w-0">
-      <a
-        href={fileUrl(issueKey, item.id)}
-        target="_blank"
-        rel="noopener noreferrer"
-        title={item.filename}
-        className="group block cursor-pointer overflow-hidden rounded-md border bg-muted/20 transition-colors duration-150 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      <button
+        type="button"
+        onClick={onOpen}
+        disabled={failed}
+        title={`Xem ${item.filename}`}
+        className="group block w-full cursor-pointer overflow-hidden rounded-md border bg-muted/20 text-left transition-colors duration-150 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
       >
-        <div className="flex aspect-video items-center justify-center bg-muted/40">
+        <div className="flex min-h-24 items-center justify-center bg-muted/40 p-1">
           {failed ? (
-            <span className="flex flex-col items-center gap-1 text-[11px] text-muted-foreground">
+            <span className="flex flex-col items-center gap-1 py-4 text-[11px] text-muted-foreground">
               <ImageOff className="h-5 w-5" aria-hidden="true" />
               Không tải được ảnh
             </span>
@@ -37,7 +46,7 @@ function ImageTile({ issueKey, item }: { issueKey: string; item: AttachmentItem 
               alt={item.filename}
               loading="lazy"
               onError={() => setFailed(true)}
-              className="h-full w-full object-cover transition-transform duration-200 motion-safe:group-hover:scale-[1.03]"
+              className="h-auto max-h-72 w-auto max-w-full object-contain"
             />
           )}
         </div>
@@ -48,7 +57,7 @@ function ImageTile({ issueKey, item }: { issueKey: string; item: AttachmentItem 
             {item.created ? ` · ${formatDateTime(item.created)}` : ""}
           </p>
         </div>
-      </a>
+      </button>
     </li>
   );
 }
@@ -89,6 +98,8 @@ export function IssueAttachments({ jiraKey, className }: { jiraKey: string; clas
     retry: 1,
   });
 
+  const [viewer, setViewer] = useState<number | null>(null);
+
   const items = data?.items ?? [];
   const images = items.filter((i) => i.isImage);
   const files = items.filter((i) => !i.isImage);
@@ -106,9 +117,9 @@ export function IssueAttachments({ jiraKey, className }: { jiraKey: string; clas
       </div>
 
       {isPending ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <Skeleton className="aspect-video w-full" />
-          <Skeleton className="aspect-video w-full" />
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
         </div>
       ) : error ? (
         <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-2 text-xs text-destructive">
@@ -127,9 +138,9 @@ export function IssueAttachments({ jiraKey, className }: { jiraKey: string; clas
       ) : (
         <div className="space-y-2">
           {images.length > 0 && (
-            <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {images.map((item) => (
-                <ImageTile key={item.id} issueKey={jiraKey} item={item} />
+            <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {images.map((item, i) => (
+                <ImageTile key={item.id} issueKey={jiraKey} item={item} onOpen={() => setViewer(i)} />
               ))}
             </ul>
           )}
@@ -141,6 +152,19 @@ export function IssueAttachments({ jiraKey, className }: { jiraKey: string; clas
             </ul>
           )}
         </div>
+      )}
+
+      {viewer !== null && (
+        <ImageLightbox
+          images={images.map((i) => ({
+            src: fileUrl(jiraKey, i.id),
+            alt: i.filename,
+            downloadHref: fileUrl(jiraKey, i.id, true),
+          }))}
+          index={viewer}
+          onIndexChange={setViewer}
+          onClose={() => setViewer(null)}
+        />
       )}
     </section>
   );

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, type SyntheticEvent } from "react";
+import { useMemo, useRef, useState, type MouseEvent, type SyntheticEvent } from "react";
 import { cn } from "@/lib/utils";
 import { wikiToHtml } from "@/lib/wiki";
+import { ImageLightbox, type LightboxImage } from "@/components/issues/image-lightbox";
 
 /** What the attachment proxy answered, turned into something a user can act on. */
 export function describeImageFailure(status: number, code: string | null): string {
@@ -46,6 +47,21 @@ export function WikiContent({
   className?: string;
 }) {
   const html = useMemo(() => wikiToHtml(source, { issueKey }), [source, issueKey]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [viewer, setViewer] = useState<{ images: LightboxImage[]; index: number } | null>(null);
+
+  // Open images in the in-page viewer, paging through every image in this block.
+  function onClick(e: MouseEvent<HTMLDivElement>) {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // keep "open in new tab"
+    const clicked = (e.target as HTMLElement).closest("img");
+    if (!clicked || !containerRef.current) return;
+    const all = Array.from(containerRef.current.querySelectorAll("img"));
+    e.preventDefault();
+    setViewer({
+      images: all.map((img) => ({ src: img.currentSrc || img.src, alt: img.alt || "Ảnh", downloadHref: img.currentSrc || img.src })),
+      index: Math.max(0, all.indexOf(clicked)),
+    });
+  }
 
   // `error` does not bubble, but React still sees it in the capture phase.
   function onImageError(e: SyntheticEvent<HTMLDivElement>) {
@@ -63,10 +79,22 @@ export function WikiContent({
   }
 
   return (
-    <div
-      className={cn("wiki-content", className)}
-      onErrorCapture={onImageError}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    <>
+      <div
+        ref={containerRef}
+        className={cn("wiki-content", className)}
+        onErrorCapture={onImageError}
+        onClick={onClick}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+      {viewer && (
+        <ImageLightbox
+          images={viewer.images}
+          index={viewer.index}
+          onIndexChange={(index) => setViewer({ ...viewer, index })}
+          onClose={() => setViewer(null)}
+        />
+      )}
+    </>
   );
 }

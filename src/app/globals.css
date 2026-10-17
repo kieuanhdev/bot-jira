@@ -215,6 +215,7 @@
 .wiki-content a { color: var(--primary); text-decoration: underline; }
 .wiki-content img {
   display: inline-block;
+  cursor: zoom-in;
   max-width: 100%;
   height: auto;
   border-radius: 6px;
