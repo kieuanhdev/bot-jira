@@ -1,4 +1,4 @@
-import { env, hasSentryConfig } from "../../guard";
+import { env, hasSentryConfig, hasSentryWebhookConfig } from "../../guard";
 import {
   sentryIdKey,
   sentryProjectSlug,
@@ -22,7 +22,7 @@ export async function handleSentryWebhook(
   payload: unknown
 ): Promise<Record<string, unknown>> {
   const webhook = payload as SentryWebhookPayload;
-  if (!hasSentryConfig()) {
+  if (!hasSentryConfig() && !hasSentryWebhookConfig()) {
     return { skipped: true, reason: "sentry not configured" };
   }
   const issue = webhook.issue;

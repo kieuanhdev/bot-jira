@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { sentry, type SentryIssue } from "@/lib/sentry/client";
 import { seedSentryIssue } from "@/lib/sentry/review-queue";
 import { jira } from "@/lib/jira/client";
+import { sentryWith } from "@/lib/sentry/client";
+import { encrypt } from "@/lib/crypto";
 import * as guardModule from "../guard";
 import * as jiraClientModule from "@/lib/jira/client";
 import * as projectCatalogModule from "@/lib/jira/project-catalog";
@@ -18,6 +20,10 @@ vi.mock("@/lib/prisma", () => ({
     issueCache: {
       findUnique: vi.fn(),
     },
+    user: {
+      findMany: vi.fn(),
+      update: vi.fn(),
+    },
   },
 }));
 
@@ -26,6 +32,8 @@ vi.mock("@/lib/sentry/client", () => ({
     listUnresolvedIssues: vi.fn(),
     getIssue: vi.fn(),
   },
+  sentryWith: vi.fn(),
+  sanitizeSentryErrorMessage: (m: string) => m,
 }));
 
 vi.mock("@/lib/jira/client", () => ({
@@ -55,6 +63,8 @@ describe("runSentryImport worker", () => {
     vi.spyOn(guardModule, "hasSentryConfig").mockReturnValue(true);
     vi.spyOn(jiraClientModule, "hasJiraCredentials").mockResolvedValue(true);
     vi.mocked(projectCatalogModule.listSyncEnabledProjectKeys).mockResolvedValue(["EPM"]);
+    vi.mocked(prisma.user.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.user.update).mockResolvedValue({} as never);
     vi.mocked(sentry.listUnresolvedIssues).mockResolvedValue([]);
     vi.mocked(prisma.sentryIssueImported.findMany).mockResolvedValue([]);
     vi.mocked(prisma.sentryIssueImported.updateMany).mockResolvedValue({ count: 1 });
@@ -239,6 +249,80 @@ describe("runSentryImport worker", () => {
     expect(result.ok).toBe(false);
     expect(result.errors).toEqual(["discover: Sentry 502"]);
     expect(result.stats).toEqual({ discovered: 0, imported: 1, recovered: 0, failed: 0 });
+  });
+  describe("per-user Sentry tokens", () => {
+    function sentryUser(id: string, mappings: string, token = "tok-" + id) {
+      return {
+        id,
+        sentryOrg: "my-org",
+        sentryMappings: mappings,
+        sentryTokenEnc: encrypt(token),
+        sentryLastError: null,
+      };
+    }
+
+    beforeEach(() => {
+      process.env.CRED_ENCRYPTION_KEY = "test-key-for-sentry-import";
+      vi.spyOn(guardModule, "hasSentryConfig").mockReturnValue(false);
+    });
+
+    it("runs when only a user has a token, seeding into that user's Jira project", async () => {
+      vi.mocked(prisma.user.findMany).mockResolvedValue([sentryUser("u1", "mobile-app:EPM")] as never);
+      const list = vi.fn().mockResolvedValue([{ id: 1, shortId: "A-1", title: "Boom" }]);
+      vi.mocked(sentryWith).mockReturnValue({ listUnresolvedIssues: list });
+
+      const result = await runSentryImport();
+
+      expect(result.skipped).toBeUndefined();
+      expect(result.stats).toMatchObject({ discovered: 1 });
+      expect(seedSentryIssue).toHaveBeenCalledWith(
+        { id: 1, shortId: "A-1", title: "Boom" },
+        { projectSlug: "mobile-app", targetProject: "EPM" }
+      );
+    });
+
+    it("polls a shared (org, slug) only once across users", async () => {
+      vi.mocked(prisma.user.findMany).mockResolvedValue([
+        sentryUser("u1", "mobile-app:EPM"),
+        sentryUser("u2", "mobile-app:MHRM"),
+      ] as never);
+      const list = vi.fn().mockResolvedValue([]);
+      vi.mocked(sentryWith).mockReturnValue({ listUnresolvedIssues: list });
+
+      await runSentryImport();
+
+      expect(sentryWith).toHaveBeenCalledTimes(1);
+    });
+
+    it("skips a failing user, records the error and still files approved rows", async () => {
+      vi.mocked(prisma.user.findMany).mockResolvedValue([
+        sentryUser("bad", "bad-app:EPM"),
+        sentryUser("good", "good-app:EPM"),
+      ] as never);
+      vi.mocked(sentryWith).mockImplementation(({ project }) => ({
+        listUnresolvedIssues:
+          project === "bad-app"
+            ? vi.fn().mockRejectedValue(new Error("Sentry issues/ -> 401"))
+            : vi.fn().mockResolvedValue([{ id: 2, shortId: "G-2", title: "ok" }]),
+      }));
+      vi.mocked(prisma.sentryIssueImported.findMany).mockResolvedValueOnce([
+        row({ sentryIssueId: "900", targetProject: "EPM", title: "t" }),
+      ]);
+      vi.mocked(jira.createIssue).mockResolvedValue({ key: "EPM-9" } as never);
+      vi.mocked(jira.getIssue).mockResolvedValue({ key: "EPM-9" } as never);
+
+      const result = await runSentryImport();
+
+      expect(result.stats).toMatchObject({ discovered: 1 });
+      expect(result.errors?.some((e) => e.includes("user bad"))).toBe(true);
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "bad" },
+          data: { sentryLastError: expect.stringContaining("401") },
+        })
+      );
+      expect(jira.createIssue).toHaveBeenCalled();
+    });
   });
 });
 

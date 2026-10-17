@@ -40,18 +40,22 @@ export function sanitizeSentryErrorMessage(raw: string): string {
   return sanitized.slice(0, 300);
 }
 
+/** Org/project/token a Sentry request is made with. Base URL is always the server's. */
+export type SentryCreds = { org: string; project: string; token: string };
+
 export async function requestSentry<T>(
   path: string,
-  options?: SentryRequestOptions
+  options?: SentryRequestOptions,
+  creds: SentryCreds = { org: env.sentryOrg, project: env.sentryProject, token: env.sentryToken }
 ): Promise<T> {
   const base = env.sentryBaseUrl.replace(/\/$/, "");
-  const url = `${base}/api/0/projects/${encodeURIComponent(env.sentryOrg)}/${encodeURIComponent(env.sentryProject)}/${path}`;
+  const url = `${base}/api/0/projects/${encodeURIComponent(creds.org)}/${encodeURIComponent(creds.project)}/${path}`;
 
   const signal = options?.signal ?? AbortSignal.timeout(options?.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
   const res = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${env.sentryToken}`,
+      Authorization: `Bearer ${creds.token}`,
       Accept: "application/json",
     },
     signal,
@@ -85,3 +89,19 @@ export const sentry = {
     return requestSentry<SentryIssue & { body?: string }>(`issues/${issueId}/`, options);
   },
 };
+
+/** Sentry client bound to one user's own org/project/token. */
+export function sentryWith(creds: SentryCreds) {
+  return {
+    async listUnresolvedIssues(
+      limit = 25,
+      options?: SentryRequestOptions
+    ): Promise<SentryIssue[]> {
+      return requestSentry<SentryIssue[]>(
+        `issues/?query=is%3Aunresolved&limit=${limit}&sort=-newest`,
+        options,
+        creds
+      );
+    },
+  };
+}

@@ -1,5 +1,6 @@
 import { safeDecrypt } from "@/lib/crypto";
 import type { JiraAuth } from "@/lib/jira/client";
+import { parseSentryMappings, type SentryMapping } from "@/lib/sentry/mapping";
 
 export type UserWithCreds = {
   jiraUsername?: string | null;
@@ -8,6 +9,9 @@ export type UserWithCreds = {
   jiraAuth?: string | null;
   bitbucketUserEnc?: string | null;
   bitbucketTokenEnc?: string | null;
+  sentryOrg?: string | null;
+  sentryMappings?: string | null;
+  sentryTokenEnc?: string | null;
 };
 
 export function userJiraUsername(user: UserWithCreds | null | undefined): string | null {
@@ -50,4 +54,22 @@ export function userBitbucketCreds(
   const username = safeDecrypt(user.bitbucketUserEnc);
   if (!token || !username) return null;
   return { user: username, token };
+}
+
+export type UserSentryCreds = {
+  org: string;
+  token: string;
+  /** Sentry project slug -> Jira project key, as entered by the user. */
+  mappings: SentryMapping[];
+};
+
+/** Build Sentry polling config only from this user's stored credential. */
+export function userSentryCreds(user: UserWithCreds | null | undefined): UserSentryCreds | null {
+  if (!user) return null;
+  const token = safeDecrypt(user.sentryTokenEnc);
+  const org = user.sentryOrg?.trim();
+  if (!token || !org) return null;
+  const mappings = parseSentryMappings(user.sentryMappings ?? "");
+  if (mappings.length === 0) return null;
+  return { org, token, mappings };
 }

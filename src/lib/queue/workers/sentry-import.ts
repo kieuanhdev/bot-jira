@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { sentry } from "@/lib/sentry/client";
+import { sentry, sentryWith, sanitizeSentryErrorMessage } from "@/lib/sentry/client";
+import { userSentryCreds } from "@/lib/user-creds";
 import { jira, hasJiraCredentials } from "@/lib/jira/client";
 import { upsertJiraIssue } from "@/lib/issues/cache";
-import { guard, hasSentryConfig } from "../guard";
+import { guard, hasSentryConfig, hasSentryWebhookConfig } from "../guard";
 import { jiraProjectList, env, parseSentryMappings, resolveJiraProject } from "@/lib/env";
 import type { WorkerLog } from "../guard";
 import type { JiraIssue } from "@/lib/jira/types";
@@ -11,6 +12,11 @@ import { seedSentryIssue } from "@/lib/sentry/review-queue";
 import { sentryLabel, isBackoffElapsed } from "@/lib/sentry/idempotency";
 
 const DISCOVER_BATCH = 25;
+// The job expires after 120s: cap per-user polling so a pile of slow or broken
+// tokens cannot starve the Jira filing step.
+const USER_POLL_MAX_PAIRS = 12;
+const USER_POLL_CONCURRENCY = 4;
+const USER_POLL_TIMEOUT_MS = 8_000;
 const CREATE_BATCH = 10;
 const MAX_ATTEMPTS = 5;
 
@@ -112,8 +118,113 @@ async function fileRow(row: ImportRow): Promise<{ recovered: boolean }> {
   return { recovered };
 }
 
+type PollUser = {
+  id: string;
+  sentryOrg: string | null;
+  sentryMappings: string | null;
+  sentryTokenEnc: string | null;
+  sentryLastError: string | null;
+};
+
+type PollTarget = {
+  userId: string;
+  org: string;
+  token: string;
+  slug: string;
+  jiraProject: string;
+};
+
+async function loadSentryUsers(): Promise<PollUser[]> {
+  try {
+    return await prisma.user.findMany({
+      where: { sentryTokenEnc: { not: null } },
+      select: {
+        id: true,
+        sentryOrg: true,
+        sentryMappings: true,
+        sentryTokenEnc: true,
+        sentryLastError: true,
+      },
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** One (org, slug) pair is polled once even if several users configured it. */
+function buildPollTargets(users: PollUser[]): PollTarget[] {
+  const seen = new Set<string>();
+  const targets: PollTarget[] = [];
+  for (const user of users) {
+    const creds = userSentryCreds(user);
+    if (!creds) continue;
+    for (const m of creds.mappings) {
+      const key = `${creds.org}/${m.sentryProject}`.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      targets.push({
+        userId: user.id,
+        org: creds.org,
+        token: creds.token,
+        slug: m.sentryProject,
+        jiraProject: m.jiraProject,
+      });
+    }
+  }
+  return targets.slice(0, USER_POLL_MAX_PAIRS);
+}
+
+/** Poll every user-configured Sentry project; a failing user never aborts the rest. */
+async function discoverFromUsers(
+  users: PollUser[]
+): Promise<{ discovered: number; errors: string[] }> {
+  const targets = buildPollTargets(users);
+  const failedUsers = new Set<string>();
+  const errors: string[] = [];
+  let discovered = 0;
+
+  for (let i = 0; i < targets.length; i += USER_POLL_CONCURRENCY) {
+    const batch = targets.slice(i, i + USER_POLL_CONCURRENCY);
+    await Promise.all(
+      batch.map(async (t) => {
+        try {
+          const issues = await sentryWith({ org: t.org, project: t.slug, token: t.token })
+            .listUnresolvedIssues(DISCOVER_BATCH, { timeoutMs: USER_POLL_TIMEOUT_MS });
+          for (const issue of issues) {
+            await seedSentryIssue(issue, { projectSlug: t.slug, targetProject: t.jiraProject });
+            discovered++;
+          }
+        } catch (e) {
+          failedUsers.add(t.userId);
+          const message = sanitizeSentryErrorMessage((e as Error).message);
+          errors.push(`user ${t.userId} ${t.slug}: ${message}`);
+          await prisma.user
+            .update({ where: { id: t.userId }, data: { sentryLastError: message.slice(0, 200) } })
+            .catch(() => undefined);
+        }
+      })
+    );
+  }
+
+  // Clear a stale error once the user's token works again.
+  for (const user of users) {
+    if (user.sentryLastError && !failedUsers.has(user.id) && userSentryCreds(user)) {
+      await prisma.user
+        .update({ where: { id: user.id }, data: { sentryLastError: null, sentryVerifiedAt: new Date() } })
+        .catch(() => undefined);
+    }
+  }
+  return { discovered, errors };
+}
+
 export async function runSentryImport(): Promise<WorkerLog> {
-  if (!hasSentryConfig()) return guard(hasSentryConfig(), "Sentry not configured");
+  // Polling needs an API token (system or per-user); webhook-only mode (signing
+  // secret) still files approved rows into Jira, it just skips discovery.
+  const canPoll = hasSentryConfig();
+  const sentryUsers = await loadSentryUsers();
+  if (!canPoll && !hasSentryWebhookConfig() && sentryUsers.length === 0) {
+    return guard(false, "Sentry not configured");
+  }
   if (!(await hasJiraCredentials())) return guard(false, "Jira not configured");
 
   let discovered = 0;
@@ -124,7 +235,7 @@ export async function runSentryImport(): Promise<WorkerLog> {
   let discoverError: string | null = null;
 
   // 1. Discover: record new unresolved Sentry issues in the review queue.
-  try {
+  if (canPoll) try {
     const issues = await sentry.listUnresolvedIssues(DISCOVER_BATCH);
     for (const issue of issues) {
       await seedSentryIssue(issue);
@@ -133,6 +244,13 @@ export async function runSentryImport(): Promise<WorkerLog> {
   } catch (e) {
     discoverError = (e as Error).message.slice(0, 500);
     errors.push(`discover: ${discoverError}`);
+  }
+
+  // 1b. Per-user tokens entered in Settings.
+  if (sentryUsers.length > 0) {
+    const fromUsers = await discoverFromUsers(sentryUsers);
+    discovered += fromUsers.discovered;
+    errors.push(...fromUsers.errors);
   }
 
   // 2. File: create Jira tasks for approved rows (and failed rows past backoff).

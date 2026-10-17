@@ -24,6 +24,13 @@ type Status = { ok: boolean; detail?: string };
 type Integrations = {
   jira: { linked: boolean; status: Status; verifiedAt: string | null };
   bitbucket: { linked: boolean; status: Status; verifiedAt: string | null };
+  sentry?: {
+    linked: boolean;
+    org: string | null;
+    mappings: string | null;
+    verifiedAt: string | null;
+    lastError: string | null;
+  };
   syncAvailable: { jira: boolean; bitbucket: boolean };
   bitbucketRepo: string | null;
   bitbucketRepoCount?: number;
@@ -44,14 +51,22 @@ export function MyIntegrations() {
   const [jiraAuth, setJiraAuth] = useState<"Bearer" | "basic">("Bearer");
   const [bbUser, setBbUser] = useState("");
   const [bbToken, setBbToken] = useState("");
+  // null => show the saved value; a string => the user's edit.
+  const [sentryOrgEdit, setSentryOrgEdit] = useState<string | null>(null);
+  const [sentryMapEdit, setSentryMapEdit] = useState<string | null>(null);
+  const [sentryToken, setSentryToken] = useState("");
+  const sentryOrg = sentryOrgEdit ?? data?.sentry?.org ?? "";
+  const sentryMappings = sentryMapEdit ?? data?.sentry?.mappings ?? "";
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [disconnecting, setDisconnecting] = useState<"jira" | "bitbucket" | null>(null);
+  const [disconnecting, setDisconnecting] = useState<"jira" | "bitbucket" | "sentry" | null>(null);
 
   const saveMutation = useSaveCredentials();
   const disconnectMutation = useDisconnectCredential();
 
-  function disconnect(service: "jira" | "bitbucket") {
-    if (!confirm(`Ngắt kết nối ${service === "jira" ? "Jira" : "Bitbucket"}?`)) return;
+  const serviceLabel = { jira: "Jira", bitbucket: "Bitbucket", sentry: "Sentry" } as const;
+
+  function disconnect(service: "jira" | "bitbucket" | "sentry") {
+    if (!confirm(`Ngắt kết nối ${serviceLabel[service]}?`)) return;
     setDisconnecting(service);
     setSaveMsg(null);
     disconnectMutation.mutate(service, {
@@ -60,7 +75,12 @@ export function MyIntegrations() {
           queryClient.invalidateQueries({ queryKey: releasesKeys.permissionsAll() });
         }
         queryClient.invalidateQueries({ queryKey: meKeys.integrations });
-        setSaveMsg({ ok: true, text: `Đã ngắt kết nối ${service === "jira" ? "Jira" : "Bitbucket"}.` });
+        if (service === "sentry") {
+          setSentryOrgEdit(null);
+          setSentryMapEdit(null);
+          setSentryToken("");
+        }
+        setSaveMsg({ ok: true, text: `Đã ngắt kết nối ${serviceLabel[service]}.` });
       },
       onError: (err) => {
         setFormError(getErrorMessage(err, "Ngắt kết nối thất bại"));
@@ -85,6 +105,9 @@ export function MyIntegrations() {
         jiraAuth,
         bitbucketUser: bbToken ? bbUser : null,
         bitbucketToken: bbToken || null,
+        sentryOrg: sentryOrg || null,
+        sentryMappings: sentryMappings || null,
+        sentryToken: sentryToken || null,
       },
       {
         onSuccess: (result) => {
@@ -118,6 +141,7 @@ export function MyIntegrations() {
           }
           setJiraToken("");
           setBbToken("");
+          setSentryToken("");
           queryClient.invalidateQueries({ queryKey: meKeys.integrations });
         },
         onError: (err) => {
@@ -261,6 +285,73 @@ export function MyIntegrations() {
               Hệ thống đang cấu hình đồng bộ <strong>{data.bitbucketRepoCount} repositories</strong>.
             </p>
           ) : null}
+        </div>
+
+        {/* Sentry */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-semibold">Sentry (tùy chọn)</Label>
+            <div className="flex items-center gap-2">
+              <Badge variant={data?.sentry?.linked ? "success" : "secondary"}>
+                {data?.sentry?.linked ? "đã liên kết" : "chưa kết nối"}
+              </Badge>
+              {data?.sentry?.linked && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1.5 text-destructive hover:text-destructive"
+                  onClick={() => disconnect("sentry")}
+                  disabled={disconnecting === "sentry"}
+                >
+                  <Unplug className="h-3.5 w-3.5" />
+                  {disconnecting === "sentry" ? "Đang ngắt kết nối…" : "Ngắt kết nối"}
+                </Button>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Hệ thống dùng token của bạn để lấy lỗi chưa giải quyết từ Sentry (mỗi 5 phút), chờ duyệt
+            rồi tạo task Jira. Token cần quyền đọc dự án và issue (<code>project:read</code>, <code>event:read</code>).
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_2fr]">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground">Organization slug</Label>
+              <Input
+                value={sentryOrg}
+                onChange={(e) => setSentryOrgEdit(e.target.value)}
+                placeholder="my-org"
+                autoComplete="off"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground">
+                Dự án Sentry → project Jira (slug:KEY, cách nhau bởi dấu phẩy)
+              </Label>
+              <Input
+                value={sentryMappings}
+                onChange={(e) => setSentryMapEdit(e.target.value)}
+                placeholder="mobile-app:EPM,employee-app:MHRM"
+                autoComplete="off"
+              />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground">
+              Sentry token {data?.sentry?.linked ? "(để trống để giữ nguyên)" : ""}
+            </Label>
+            <Input
+              type="password"
+              value={sentryToken}
+              onChange={(e) => setSentryToken(e.target.value)}
+              placeholder={data?.sentry?.linked ? "•••• (giữ nguyên hiện tại)" : "Dán Sentry token của bạn"}
+              autoComplete="off"
+            />
+          </div>
+          {data?.sentry?.lastError && (
+            <FeedbackBanner tone="warning">
+              Lần lấy lỗi gần nhất thất bại: {data.sentry.lastError}. Hãy nhập lại token.
+            </FeedbackBanner>
+          )}
         </div>
 
         {formError && <FeedbackBanner tone="destructive">{formError}</FeedbackBanner>}

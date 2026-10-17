@@ -22,6 +22,9 @@ export type SaveCredentialsBody = {
   jiraAuth: "Bearer" | "basic";
   bitbucketUser: string | null;
   bitbucketToken: string | null;
+  sentryOrg?: string | null;
+  sentryMappings?: string | null;
+  sentryToken?: string | null;
 };
 
 export type SaveCredentialsResult = {
@@ -32,6 +35,7 @@ export type SaveCredentialsResult = {
   };
   jiraLinked: boolean;
   bitbucketLinked: boolean;
+  sentryLinked?: boolean;
   /** What a freshly saved token unlocked (repos/projects nobody could read before). */
   discovery?: {
     bitbucket?: { readable: number; newRepos: string[] };
@@ -48,10 +52,15 @@ export function useSaveCredentials() {
 
 export function useDisconnectCredential() {
   return useMutation({
-    mutationFn: (service: "jira" | "bitbucket") =>
+    mutationFn: (service: "jira" | "bitbucket" | "sentry") =>
       api("/api/me/credentials", {
         method: "PUT",
-        body: service === "jira" ? { disconnectJira: true } : { disconnectBitbucket: true },
+        body:
+          service === "jira"
+            ? { disconnectJira: true }
+            : service === "sentry"
+              ? { disconnectSentry: true }
+              : { disconnectBitbucket: true },
       }),
   });
 }

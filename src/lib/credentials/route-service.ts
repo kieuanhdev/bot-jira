@@ -27,7 +27,51 @@ type Body = {
   disconnectJira?: boolean;
   /** When true, remove the stored Bitbucket token (disconnect). */
   disconnectBitbucket?: boolean;
+  sentryOrg?: string | null;
+  /** "sentry-slug:JIRAKEY,..." — same format as SENTRY_PROJECT_MAPPINGS. */
+  sentryMappings?: string | null;
+  sentryToken?: string | null;
+  /** When true, remove the stored Sentry config (disconnect). */
+  disconnectSentry?: boolean;
 };
+
+/**
+ * Validate a user's Sentry config before it is persisted: every mapped Jira key
+ * must be a catalog project (issues are filed with the system Jira account, so
+ * this stops a user routing tasks anywhere), and the token must be able to read
+ * each Sentry project. Returns an error message, or null when valid.
+ */
+async function validateSentryConfig(input: {
+  org: string;
+  mappings: string;
+  token: string;
+}): Promise<string | null> {
+  const { parseSentryMappings, invalidSentryMappings } = await import("@/lib/sentry/mapping");
+  if (invalidSentryMappings(input.mappings).length > 0) {
+    return "Định dạng dự án Sentry không hợp lệ. Dùng: slug-sentry:KEYJIRA, cách nhau bởi dấu phẩy.";
+  }
+  const pairs = parseSentryMappings(input.mappings);
+  if (pairs.length === 0) return "Cần ít nhất một cặp slug-sentry:KEYJIRA.";
+  if (pairs.length > 10) return "Tối đa 10 dự án Sentry cho mỗi người dùng.";
+
+  const { isCatalogProject } = await import("@/lib/jira/project-catalog");
+  for (const pair of pairs) {
+    if (!(await isCatalogProject(pair.jiraProject))) {
+      return `Project Jira "${pair.jiraProject}" chưa có trong danh mục của hệ thống.`;
+    }
+  }
+
+  const { sentryWith } = await import("@/lib/sentry/client");
+  for (const pair of pairs) {
+    try {
+      await sentryWith({ org: input.org, project: pair.sentryProject, token: input.token })
+        .listUnresolvedIssues(1);
+    } catch (e) {
+      return `Không đọc được dự án Sentry "${pair.sentryProject}": ${cleanError((e as Error).message)}`;
+    }
+  }
+  return null;
+}
 
 /**
  * Save (or clear) the current user's own Jira & Bitbucket tokens.
@@ -90,7 +134,35 @@ export async function handleCredentialsUpdateRequest(req: Request) {
     }
   }
 
+  // Sentry: validate before persisting; a failed attempt keeps the old config.
+  const sentryToken = (body.sentryToken ?? "").trim();
+  const sentryOrg = (body.sentryOrg ?? "").trim();
+  const sentryMappings = (body.sentryMappings ?? "").trim();
+  const touchesSentry = !body.disconnectSentry && Boolean(sentryToken || sentryOrg || sentryMappings);
+  let sentryTokenToStore: string | null = null;
+  if (touchesSentry) {
+    const stored = await prisma.user.findUnique({ where: { id }, select: { sentryTokenEnc: true } });
+    const { safeDecrypt } = await import("@/lib/crypto");
+    const token = sentryToken || safeDecrypt(stored?.sentryTokenEnc) || "";
+    if (!sentryOrg || !sentryMappings || !token) {
+      return NextResponse.json(
+        { ok: false, error: "Sentry cần đủ: organization, danh sách dự án và token." },
+        { status: 400 }
+      );
+    }
+    const problem = await validateSentryConfig({ org: sentryOrg, mappings: sentryMappings, token });
+    if (problem) {
+      return NextResponse.json({ ok: false, error: problem }, { status: 422 });
+    }
+    sentryTokenToStore = token;
+  }
+
   const data: {
+    sentryOrg?: string | null;
+    sentryMappings?: string | null;
+    sentryTokenEnc?: string | null;
+    sentryVerifiedAt?: Date | null;
+    sentryLastError?: string | null;
     jiraUserEnc?: string | null;
     jiraTokenEnc?: string | null;
     jiraAuth?: string | null;
@@ -129,6 +201,21 @@ export async function handleCredentialsUpdateRequest(req: Request) {
     data.jiraAuth = undefined;
   }
 
+  // Sentry
+  if (body.disconnectSentry) {
+    data.sentryOrg = null;
+    data.sentryMappings = null;
+    data.sentryTokenEnc = null;
+    data.sentryVerifiedAt = null;
+    data.sentryLastError = null;
+  } else if (sentryTokenToStore) {
+    data.sentryOrg = sentryOrg;
+    data.sentryMappings = sentryMappings;
+    data.sentryTokenEnc = encrypt(sentryTokenToStore);
+    data.sentryVerifiedAt = new Date();
+    data.sentryLastError = null;
+  }
+
   // Bitbucket
   if (body.disconnectBitbucket) {
     data.bitbucketUserEnc = null;
@@ -154,6 +241,7 @@ export async function handleCredentialsUpdateRequest(req: Request) {
       jiraUsername: true,
       bitbucketUserEnc: true,
       bitbucketTokenEnc: true,
+      sentryTokenEnc: true,
     },
   });
 
@@ -183,6 +271,7 @@ export async function handleCredentialsUpdateRequest(req: Request) {
     // Never echo tokens back. Report which services are now linked.
     jiraLinked: Boolean(user.jiraTokenEnc),
     bitbucketLinked: Boolean(user.bitbucketTokenEnc),
+    sentryLinked: Boolean(user.sentryTokenEnc),
   });
 }
 

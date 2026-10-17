@@ -42,6 +42,15 @@ model User {
   jiraVerifiedAt    DateTime?
   bitbucketVerifiedAt DateTime?
 
+  // Per-user Sentry polling config. `sentryMappings` uses the same
+  // "sentrySlug:JIRAKEY,..." format as SENTRY_PROJECT_MAPPINGS; the Jira key
+  // is validated against the project catalog on save.
+  sentryOrg           String?
+  sentryMappings      String?
+  sentryTokenEnc      String?
+  sentryVerifiedAt    DateTime?
+  sentryLastError     String?
+
   preferences NotificationPreference?
 
   // Preferred project keys to show on this user's board.

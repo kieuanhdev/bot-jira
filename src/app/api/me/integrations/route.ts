@@ -26,6 +26,11 @@ export async function GET() {
       bitbucketTokenEnc: true,
       jiraVerifiedAt: true,
       bitbucketVerifiedAt: true,
+      sentryOrg: true,
+      sentryMappings: true,
+      sentryTokenEnc: true,
+      sentryVerifiedAt: true,
+      sentryLastError: true,
     },
   });
   if (!user) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -76,6 +81,14 @@ export async function GET() {
   return NextResponse.json({
     jira: { linked: jiraLinked, status: jiraStatus, verifiedAt: user.jiraVerifiedAt },
     bitbucket: { linked: bbLinked, status: bbStatus, verifiedAt: user.bitbucketVerifiedAt },
+    // Org/mappings are not secret and are echoed so the form can be edited; the token never is.
+    sentry: {
+      linked: Boolean(user.sentryTokenEnc),
+      org: user.sentryOrg,
+      mappings: user.sentryMappings,
+      verifiedAt: user.sentryVerifiedAt,
+      lastError: user.sentryLastError,
+    },
     // System credentials may sync shared data, but are never a user fallback.
     syncAvailable: { jira: systemJiraAvailable, bitbucket: hasBitbucketConfig() },
     bitbucketRepo: bitbucketRepoList[0] ?? null,

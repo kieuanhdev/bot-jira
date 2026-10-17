@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   updateUser: vi.fn(),
   verifyJira: vi.fn(),
   verifyBitbucket: vi.fn(),
+  isCatalogProject: vi.fn(),
+  listIssues: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getSession: mocks.session }));
@@ -17,7 +19,10 @@ vi.mock("@/lib/prisma", () => ({
     },
   },
 }));
-vi.mock("@/lib/crypto", () => ({ encrypt: (value: string) => `enc:${value}` }));
+vi.mock("@/lib/crypto", () => ({
+  encrypt: (value: string) => `enc:${value}`,
+  safeDecrypt: (value: string | null | undefined) => (value ? value.replace(/^enc:/, "") : null),
+}));
 vi.mock("@/lib/env", () => ({
   env: {
     jiraBaseUrl: "https://jira.example.test",
@@ -37,6 +42,10 @@ vi.mock("@/lib/jira/auth-service", () => ({
 vi.mock("@/lib/user-creds", () => ({
   userJiraAuth: () => null,
   userBitbucketCreds: () => null,
+}));
+vi.mock("@/lib/jira/project-catalog", () => ({ isCatalogProject: mocks.isCatalogProject }));
+vi.mock("@/lib/sentry/client", () => ({
+  sentryWith: () => ({ listUnresolvedIssues: mocks.listIssues }),
 }));
 vi.mock("@/lib/queue/boss", () => ({
   enqueueCheckBranches: vi.fn(),
@@ -109,6 +118,7 @@ describe("PUT /api/me/credentials", () => {
       discovery: {},
       jiraLinked: false,
       bitbucketLinked: false,
+      sentryLinked: false,
     });
     expect(mocks.updateUser).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -119,5 +129,65 @@ describe("PUT /api/me/credentials", () => {
         }),
       })
     );
+  });
+
+  describe("Sentry credential", () => {
+    const put = (body: object) =>
+      PUT(
+        new Request("http://localhost/api/me/credentials", {
+          method: "PUT",
+          body: JSON.stringify(body),
+        })
+      );
+    const valid = { sentryOrg: "my-org", sentryMappings: "mobile-app:EPM", sentryToken: "sntrys_x" };
+
+    beforeEach(() => {
+      mocks.isCatalogProject.mockResolvedValue(true);
+      mocks.listIssues.mockResolvedValue([]);
+    });
+
+    it("does not persist a Sentry token that fails verification", async () => {
+      mocks.listIssues.mockRejectedValue(new Error("Sentry issues/ -> 403: forbidden"));
+      const response = await put(valid);
+
+      expect(response.status).toBe(422);
+      expect(mocks.updateUser).not.toHaveBeenCalled();
+    });
+
+    it("rejects a mapping to a Jira project outside the catalog", async () => {
+      mocks.isCatalogProject.mockResolvedValue(false);
+      const response = await put(valid);
+
+      expect(response.status).toBe(422);
+      await expect(response.json()).resolves.toMatchObject({
+        error: expect.stringContaining("EPM"),
+      });
+      expect(mocks.listIssues).not.toHaveBeenCalled();
+      expect(mocks.updateUser).not.toHaveBeenCalled();
+    });
+
+    it("rejects a partial config with no stored token to fall back on", async () => {
+      const response = await put({ sentryOrg: "my-org", sentryMappings: "mobile-app:EPM" });
+
+      expect(response.status).toBe(400);
+      expect(mocks.updateUser).not.toHaveBeenCalled();
+    });
+
+    it("stores the token encrypted and never echoes it", async () => {
+      const response = await put(valid);
+
+      expect(response.status).toBe(200);
+      expect(mocks.updateUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "user-1" },
+          data: expect.objectContaining({
+            sentryOrg: "my-org",
+            sentryMappings: "mobile-app:EPM",
+            sentryTokenEnc: "enc:sntrys_x",
+          }),
+        })
+      );
+      expect(JSON.stringify(await response.json())).not.toContain("sntrys_x");
+    });
   });
 });

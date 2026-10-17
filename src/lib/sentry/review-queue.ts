@@ -54,11 +54,16 @@ export function sentrySnapshot(issue: SentryIssueLike) {
  * has no Jira mapping. An existing row only gets its snapshot refreshed, so a
  * human decision is never overwritten.
  */
-export async function seedSentryIssue(issue: SentryIssueLike): Promise<void> {
+export async function seedSentryIssue(
+  issue: SentryIssueLike,
+  /** Per-user polling: the polled slug and the user's own Jira target. */
+  override?: { projectSlug: string; targetProject: string }
+): Promise<void> {
   const sentryIssueId = sentryIdKey(issue);
   if (!sentryIssueId) return;
-  const sentryProject = sentryProjectSlug(issue, env.sentryProject);
-  const targetProject = resolveJiraProject(sentryProject, mappings, fallbackProject);
+  const sentryProject = override?.projectSlug ?? sentryProjectSlug(issue, env.sentryProject);
+  const targetProject =
+    override?.targetProject ?? resolveJiraProject(sentryProject, mappings, fallbackProject);
   const snapshot = sentrySnapshot(issue);
 
   await prisma.sentryIssueImported.upsert({

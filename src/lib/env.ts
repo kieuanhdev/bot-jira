@@ -342,6 +342,11 @@ export function hasSentryConfig(): boolean {
   return Boolean(env.sentryOrg && env.sentryProject && env.sentryToken);
 }
 
+/** Webhook-only mode: a signing secret is enough to receive Sentry issues. */
+export function hasSentryWebhookConfig(): boolean {
+  return Boolean(env.sentryWebhookSecret);
+}
+
 /** Jira status category keys that count as "done" for release gates. */
 export const releaseDoneCategories: string[] = env.releaseDoneCategories
   .split(",")
