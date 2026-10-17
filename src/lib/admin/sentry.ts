@@ -42,6 +42,8 @@ export async function listSentryImports(stateParam?: string) {
       firstSeen: r.firstSeen,
       lastSeen: r.lastSeen,
       targetProject: r.targetProject,
+      draftSummary: r.draftSummary,
+      draftDescription: r.draftDescription,
       jiraKey: r.jiraKey,
       jiraUrl: getJiraIssueUrl(env.jiraBaseUrl, r.jiraKey),
       state: r.state === "pending" ? "review" : r.state,

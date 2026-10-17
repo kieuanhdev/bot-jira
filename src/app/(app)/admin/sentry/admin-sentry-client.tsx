@@ -18,6 +18,7 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SentryRow, type SentryRowItem, type SentryFilter, type RowState, FILTER_STATES, EMPTY, VALID_FILTERS } from "./sentry-row";
 import { SentryBulkBar } from "./sentry-bulk-bar";
+import { SentryApproveDialog } from "./sentry-approve-dialog";
 import { SentryFilterTabs } from "./sentry-filter-tabs";
 
 export type { SentryRowItem, SentryFilter, RowState };
@@ -32,6 +33,8 @@ export function AdminSentryClient() {
 
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Rows awaiting the admin's confirmation in the preview dialog.
+  const [confirmRows, setConfirmRows] = useState<SentryRowItem[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tone: FeedbackTone; text: string } | null>(null);
 
@@ -64,7 +67,7 @@ export function AdminSentryClient() {
   };
 
   const decide = useMutation({
-    mutationFn: (input: { ids: string[]; decision: "approve" | "reject" | "reopen" }) =>
+    mutationFn: (input: { ids: string[]; decision: "approve" | "reject" | "reopen"; summary?: string; description?: string }) =>
       api<{ updated: number; queued: boolean }>("/api/admin/sentry-import/review", { method: "POST", body: input }),
     onMutate: (input) => {
       setFeedback(null);
@@ -82,7 +85,10 @@ export function AdminSentryClient() {
       setFeedback({ tone: "destructive", text: getErrorMessage(err) });
       refresh();
     },
-    onSettled: () => setBusyId(null),
+    onSettled: () => {
+      setBusyId(null);
+      setConfirmRows(null);
+    },
   });
 
   const retry = useMutation({
@@ -132,7 +138,7 @@ export function AdminSentryClient() {
           selectedCount={visibleSelected.length}
           showReject={filter === "review"}
           busy={busy}
-          onApprove={() => decide.mutate({ ids: visibleSelected.map((r) => r.id), decision: "approve" })}
+          onApprove={() => setConfirmRows(visibleSelected)}
           onReject={() => decide.mutate({ ids: visibleSelected.map((r) => r.id), decision: "reject" })}
         />
       )}
@@ -175,7 +181,7 @@ export function AdminSentryClient() {
                 isBusy={busyId === row.id}
                 isDecidingApprove={decide.variables?.decision === "approve"}
                 onToggleSelect={(checked) => toggleSelectOne(row.id, checked)}
-                onApprove={() => decide.mutate({ ids: [row.id], decision: "approve" })}
+                onApprove={() => setConfirmRows([row])}
                 onReject={() => decide.mutate({ ids: [row.id], decision: "reject" })}
                 onReopen={() => decide.mutate({ ids: [row.id], decision: "reopen" })}
                 onRetry={() => retry.mutate(row.id)}
@@ -188,6 +194,13 @@ export function AdminSentryClient() {
           </div>
         </Card>
       </AsyncState>
+
+      <SentryApproveDialog
+        rows={confirmRows}
+        pending={decide.isPending}
+        onCancel={() => setConfirmRows(null)}
+        onConfirm={(edits) => confirmRows && decide.mutate({ ids: confirmRows.map((r) => r.id), decision: "approve", ...edits })}
+      />
     </div>
   );
 }

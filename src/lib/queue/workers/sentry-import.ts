@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { sentry, sentryWith, sanitizeSentryErrorMessage } from "@/lib/sentry/client";
 import { userSentryCreds } from "@/lib/user-creds";
+import { buildSentryTaskDraft } from "@/lib/sentry/task-draft";
 import { jira, hasJiraCredentials } from "@/lib/jira/client";
 import { upsertJiraIssue } from "@/lib/issues/cache";
 import { guard, hasSentryConfig, hasSentryWebhookConfig } from "../guard";
@@ -69,22 +70,13 @@ async function fileRow(row: ImportRow): Promise<{ recovered: boolean }> {
     if (!targetProject) {
       throw new Error(`no Jira project mapping for Sentry project "${row.sentryProject}"`);
     }
-    const ref = row.shortId ?? row.sentryIssueId;
-    const description = [
-      "Auto-created from Sentry.",
-      "",
-      `Sentry issue: ${row.permalinkUrl ?? ref}`,
-      `Level: ${row.level ?? "unknown"}`,
-      `Count: ${row.eventCount ?? "n/a"}`,
-      `First seen: ${row.firstSeen?.toISOString() ?? "n/a"}`,
-      `Last seen: ${row.lastSeen?.toISOString() ?? "n/a"}`,
-    ].join("\n");
+    const draft = buildSentryTaskDraft(row);
 
     const created = await jira.createIssue({
       projectKey: targetProject,
-      summary: `[Sentry] ${ref}: ${row.title ?? "Sentry issue"}`,
-      description,
-      issueType: "Bug",
+      summary: row.draftSummary ?? draft.summary,
+      description: row.draftDescription ?? draft.description,
+      issueType: draft.issueType,
       labels: ["sentry", label],
     });
     jiraKey = created.key;

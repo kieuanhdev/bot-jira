@@ -74,4 +74,39 @@ describe("POST /api/admin/sentry-import/review", () => {
     expect(res.status).toBe(409);
     expect(mocks.audit).not.toHaveBeenCalled();
   });
+
+  describe("edits to the generated Jira task", () => {
+    beforeEach(() => mocks.updateMany.mockResolvedValue({ count: 1 }));
+
+    it("stores an edited summary and description for a single approval", async () => {
+      const res = await post({ ids: ["a"], decision: "approve", summary: "  Lỗi thanh toán  ", description: "Chi tiết" });
+
+      expect(res.status).toBe(200);
+      expect(mocks.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ draftSummary: "Lỗi thanh toán", draftDescription: "Chi tiết" }),
+        })
+      );
+      expect(mocks.audit).toHaveBeenCalledWith(
+        expect.objectContaining({ after: expect.objectContaining({ edited: true }) })
+      );
+    });
+
+    it("ignores edits on a bulk approval and on other decisions", async () => {
+      await post({ ids: ["a", "b"], decision: "approve", summary: "x" });
+      await post({ ids: ["a"], decision: "reject", summary: "x" });
+
+      for (const call of mocks.updateMany.mock.calls) {
+        expect(call[0].data).not.toHaveProperty("draftSummary");
+      }
+    });
+
+    it("rejects an empty, multi-line or oversized summary and an oversized description", async () => {
+      for (const summary of ["   ", "a\nb", "x".repeat(256)]) {
+        expect((await post({ ids: ["a"], decision: "approve", summary })).status).toBe(400);
+      }
+      expect((await post({ ids: ["a"], decision: "approve", description: "x".repeat(30_001) })).status).toBe(400);
+      expect(mocks.updateMany).not.toHaveBeenCalled();
+    });
+  });
 });

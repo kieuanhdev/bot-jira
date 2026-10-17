@@ -148,6 +148,29 @@ describe("runSentryImport worker", () => {
     });
   });
 
+  it("files the admin-edited summary and description instead of the generated ones", async () => {
+    vi.mocked(prisma.sentryIssueImported.findMany).mockResolvedValueOnce([
+      row({
+        sentryIssueId: "302",
+        title: "Original",
+        targetProject: "EPM",
+        draftSummary: "Tiêu đề đã sửa",
+        draftDescription: "Mô tả đã sửa",
+      }),
+    ]);
+    vi.mocked(jira.createIssue).mockResolvedValue({ id: "1", key: "EPM-1", self: "x" });
+
+    await runSentryImport();
+
+    expect(jira.createIssue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: "Tiêu đề đã sửa",
+        description: "Mô tả đã sửa",
+        issueType: "Bug",
+      })
+    );
+  });
+
   it("recovers an existing Jira issue by label without creating a new one", async () => {
     vi.mocked(prisma.sentryIssueImported.findMany).mockResolvedValueOnce([
       row({ sentryIssueId: "201", targetProject: "EPM" }),
@@ -349,6 +372,8 @@ function row(overrides: Partial<Row> = {}): Row {
     targetProject: null,
     reviewedBy: null,
     reviewedAt: null,
+    draftSummary: null,
+    draftDescription: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,

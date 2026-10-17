@@ -21,6 +21,8 @@ export type SentryRowItem = {
   firstSeen: string | null;
   lastSeen: string | null;
   targetProject: string | null;
+  draftSummary?: string | null;
+  draftDescription?: string | null;
   jiraKey: string | null;
   jiraUrl: string | null;
   state: RowState;

@@ -500,6 +500,9 @@ model SentryIssueImported {
   targetProject String?
   reviewedBy    String?
   reviewedAt    DateTime?
+  // Admin edits made in the approve dialog; override the generated Jira task.
+  draftSummary     String?
+  draftDescription String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 

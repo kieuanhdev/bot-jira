@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { getSession, isAdmin } from "@/lib/session";
 import { audit } from "@/lib/audit";
 
+// Jira's own limits for a summary (255) and a description (~32k).
+const MAX_SUMMARY = 255;
+const MAX_DESCRIPTION = 30_000;
+
 type Decision = "approve" | "reject" | "reopen";
 
 // Allowed source states per decision; the target state is applied atomically
@@ -24,7 +28,7 @@ export async function POST(req: Request) {
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!isAdmin(session)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  let body: { ids?: unknown; decision?: unknown };
+  let body: { ids?: unknown; decision?: unknown; summary?: unknown; description?: unknown };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -39,6 +43,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "decision must be approve, reject or reopen" }, { status: 400 });
   }
 
+  // Edits to the generated Jira task apply to a single approved issue only.
+  const edits: { draftSummary?: string; draftDescription?: string } = {};
+  if (decision === "approve" && ids.length === 1) {
+    if (typeof body.summary === "string") {
+      const summary = body.summary.trim();
+      if (!summary || summary.length > MAX_SUMMARY || /[\r\n]/.test(summary)) {
+        return NextResponse.json(
+          { error: `Tiêu đề phải có 1 dòng, dài tối đa ${MAX_SUMMARY} ký tự` },
+          { status: 400 }
+        );
+      }
+      edits.draftSummary = summary;
+    }
+    if (typeof body.description === "string") {
+      if (body.description.length > MAX_DESCRIPTION) {
+        return NextResponse.json(
+          { error: `Mô tả dài tối đa ${MAX_DESCRIPTION} ký tự` },
+          { status: 400 }
+        );
+      }
+      edits.draftDescription = body.description;
+    }
+  }
+
   const { from, to } = TRANSITIONS[decision];
   const result = await prisma.sentryIssueImported.updateMany({
     where: { id: { in: ids }, state: { in: from } },
@@ -47,6 +75,7 @@ export async function POST(req: Request) {
       reviewedBy: session.user.email ?? session.user.id,
       reviewedAt: new Date(),
       ...(decision === "approve" ? { attemptCount: 0, lastError: null, lastAttemptAt: null } : {}),
+      ...edits,
     },
   });
 
@@ -59,7 +88,7 @@ export async function POST(req: Request) {
     actorEmail: session.user.email,
     action: `admin.sentry.${decision}`,
     target: ids.join(",").slice(0, 500),
-    after: { state: to, count: result.count },
+    after: { state: to, count: result.count, edited: Object.keys(edits).length > 0 },
     source: "web",
   });
 
