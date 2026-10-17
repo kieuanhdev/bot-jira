@@ -18,8 +18,7 @@ import {
 } from "lucide-react";
 import { ExpandedRowEditor } from "./expanded-row-editor";
 import { type RowValidationResult } from "./lib/client-validation";
-import { IssueTypeField } from "./fields/issue-type-field";
-import { PriorityField } from "./fields/priority-field";
+import { IssueTypeField, PriorityField } from "@/components/task-fields";
 
 export interface BulkCreateMobileCardProps {
   item: BulkCreateRowInput;

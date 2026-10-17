@@ -24,7 +24,7 @@ import {
   filterBlankPlaceholderItems,
 } from "@/lib/bulk/client-ref";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { type ParentCandidate } from "./parent-combobox";
+import { type ParentCandidate } from "@/components/task-fields";
 
 interface BulkCreateDataGridProps {
   metadata: BulkCreateProjectMetadata;

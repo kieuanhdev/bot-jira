@@ -14,10 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { LabelCombobox } from "./label-combobox";
-import { AssigneeCombobox } from "./assignee-combobox";
-import { ComponentsCombobox } from "./components-combobox";
-import { ParentCombobox } from "./parent-combobox";
+import {
+  LabelCombobox,
+  AssigneeCombobox,
+  ComponentsCombobox,
+  ParentCombobox,
+} from "@/components/task-fields";
 import { X, User, Tag, Calendar, Trash2, Eraser, Layers, FolderKanban } from "lucide-react";
 
 interface BulkSelectionToolbarProps {

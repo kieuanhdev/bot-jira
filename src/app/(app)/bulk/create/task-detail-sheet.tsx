@@ -9,19 +9,21 @@ import { Sheet } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { AssigneeCombobox } from "./assignee-combobox";
-import { ParentCombobox } from "./parent-combobox";
-import { LabelCombobox } from "./label-combobox";
-import { DynamicCustomFields } from "./dynamic-custom-fields";
+import {
+  AssigneeCombobox,
+  ParentCombobox,
+  LabelCombobox,
+  DynamicCustomFields,
+  IssueTypeField,
+  PriorityField,
+  FixVersionField,
+  ComponentsField,
+  PointsField,
+  EstimateField,
+  DueDateField,
+  DescriptionEditor,
+} from "@/components/task-fields";
 import { FileText } from "lucide-react";
-import { IssueTypeField } from "./fields/issue-type-field";
-import { PriorityField } from "./fields/priority-field";
-import { FixVersionField } from "./fields/fix-version-field";
-import { ComponentsField } from "./fields/components-field";
-import { PointsField } from "./fields/points-field";
-import { EstimateField } from "./fields/estimate-field";
-import { DueDateField } from "./fields/due-date-field";
-import { DescriptionEditor } from "./description-editor";
 
 interface TaskDetailSheetProps {
   open: boolean;

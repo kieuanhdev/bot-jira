@@ -8,20 +8,22 @@ import {
 } from "@/lib/bulk/create-types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AssigneeCombobox } from "./assignee-combobox";
-import { ParentCombobox } from "./parent-combobox";
-import { LabelCombobox } from "./label-combobox";
-import { DynamicCustomFields } from "./dynamic-custom-fields";
+import {
+  AssigneeCombobox,
+  ParentCombobox,
+  LabelCombobox,
+  DynamicCustomFields,
+  IssueTypeField,
+  PriorityField,
+  FixVersionField,
+  ComponentsField,
+  PointsField,
+  EstimateField,
+  DueDateField,
+  DescriptionEditor,
+} from "@/components/task-fields";
 import { ChevronUp, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { IssueTypeField } from "./fields/issue-type-field";
-import { PriorityField } from "./fields/priority-field";
-import { FixVersionField } from "./fields/fix-version-field";
-import { ComponentsField } from "./fields/components-field";
-import { PointsField } from "./fields/points-field";
-import { EstimateField } from "./fields/estimate-field";
-import { DueDateField } from "./fields/due-date-field";
-import { DescriptionEditor } from "./description-editor";
 
 interface ExpandedRowEditorProps {
   item: BulkCreateRowInput;

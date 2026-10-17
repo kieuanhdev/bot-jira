@@ -24,10 +24,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AssigneeCombobox } from "./assignee-combobox";
-import { LabelCombobox } from "./label-combobox";
-import { ComponentsCombobox } from "./components-combobox";
-import { DynamicCustomFields } from "./dynamic-custom-fields";
+import {
+  AssigneeCombobox,
+  LabelCombobox,
+  ComponentsCombobox,
+  DynamicCustomFields,
+} from "@/components/task-fields";
 import { SlidersHorizontal, RotateCcw, Check } from "lucide-react";
 
 interface BulkCreateDefaultsDialogProps {

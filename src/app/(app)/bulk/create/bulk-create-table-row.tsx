@@ -18,19 +18,22 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AssigneeCombobox } from "./assignee-combobox";
-import { ParentCombobox, type ParentCandidate } from "./parent-combobox";
-import { LabelCombobox } from "./label-combobox";
+import {
+  AssigneeCombobox,
+  ParentCombobox,
+  type ParentCandidate,
+  LabelCombobox,
+  IssueTypeField,
+  PriorityField,
+  FixVersionField,
+  ComponentsField,
+  PointsField,
+  EstimateField,
+  DueDateField,
+} from "@/components/task-fields";
 import { type ColumnId } from "./lib/column-definitions";
 import { type GridDensity } from "./lib/editor-preferences";
 import { type RowValidationResult } from "./lib/client-validation";
-import { IssueTypeField } from "./fields/issue-type-field";
-import { PriorityField } from "./fields/priority-field";
-import { FixVersionField } from "./fields/fix-version-field";
-import { ComponentsField } from "./fields/components-field";
-import { PointsField } from "./fields/points-field";
-import { EstimateField } from "./fields/estimate-field";
-import { DueDateField } from "./fields/due-date-field";
 
 export interface BulkCreateTableRowProps {
   item: BulkCreateRowInput;
