@@ -183,18 +183,6 @@ export function QuickPanel({
         />
 
         <QuickPanelActions
-          status={status}
-          dotClass={dotClass}
-          transitions={transitionList}
-          onTransition={handleTransition}
-          assigneeJira={assigneeJira}
-          assignees={assignees}
-          meName={me?.jiraName}
-          onAssign={(a) => mutateField({ assignee: a })}
-          points={points}
-          onSetPoints={(p) => mutateField({ points: p })}
-          priority={priority}
-          onSetPriority={(p) => mutateField({ priority: p })}
           creatingBranch={creatingBranch}
           onCreateBranch={() => void handleCreateBranch(refetchBranches)}
           branchMsg={branchMsg}

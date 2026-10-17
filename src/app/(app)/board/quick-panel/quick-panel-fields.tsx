@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
-import { ExternalLink, GitBranch, Pencil, Plus, X } from "lucide-react";
+import { ChevronDown, ExternalLink, GitBranch, Pencil, Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,14 @@ import {
 import { cn, timeAgo, formatDateTime, getBitbucketBranchUrl } from "@/lib/utils";
 import { JiraAvatar } from "@/components/jira-avatar";
 import { PRIORITIES, toName } from "../lib/quick-panel-utils";
+
+/** Shared look for an editable value: bordered chip + chevron so it reads as a control. */
+const EDIT_TRIGGER =
+  "flex h-7 max-w-full cursor-pointer items-center gap-1.5 rounded-md border border-border/70 bg-background px-2 text-left text-sm font-medium transition-colors duration-150 hover:border-primary/50 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+
+function Chevron() {
+  return <ChevronDown className="ml-auto h-3 w-3 shrink-0 opacity-60" aria-hidden />;
+}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -97,15 +105,16 @@ function PersonPicker({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex max-w-full cursor-pointer items-center gap-1.5 text-left hover:underline">
+        <button className={EDIT_TRIGGER}>
           {value ? (
             <>
               <JiraAvatar username={value} size="xs" />
               <span className="truncate">{value}</span>
             </>
           ) : (
-            "—"
+            <span className="text-muted-foreground">—</span>
           )}
+          <Chevron />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52 max-h-64 overflow-y-auto">
@@ -137,8 +146,9 @@ function DueDatePicker({
   return (
     <DropdownMenu onOpenChange={(open) => open && setDraft(current)}>
       <DropdownMenuTrigger asChild>
-        <button className="cursor-pointer text-left hover:underline">
-          {value ? new Date(value).toLocaleDateString("vi-VN") : "—"}
+        <button className={EDIT_TRIGGER}>
+          <span className="truncate">{value ? new Date(value).toLocaleDateString("vi-VN") : "—"}</span>
+          <Chevron />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-48 p-2">
@@ -278,9 +288,10 @@ export function QuickPanelFields({
         <Field label="Status">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1 hover:underline text-left">
-                <span className={cn("h-2 w-2 rounded-full inline-block mr-1", dotClass)} />
-                {status}
+              <button className={EDIT_TRIGGER}>
+                <span className={cn("h-2 w-2 shrink-0 rounded-full", dotClass)} />
+                <span className="truncate">{status}</span>
+                <Chevron />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-48">
@@ -300,8 +311,9 @@ export function QuickPanelFields({
         <Field label="Priority">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1 hover:underline text-left">
-                {priority || "—"}
+              <button className={EDIT_TRIGGER}>
+                <span className="truncate">{priority || "—"}</span>
+                <Chevron />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-36">
@@ -317,15 +329,16 @@ export function QuickPanelFields({
         <Field label="Assignee">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1.5 hover:underline text-left">
+              <button className={EDIT_TRIGGER}>
                 {assigneeJira ? (
                   <>
-                    <JiraAvatar username={assigneeJira} size="sm" />
+                    <JiraAvatar username={assigneeJira} size="xs" />
                     <span className="truncate">{assigneeJira}</span>
                   </>
                 ) : (
-                  "Unassigned"
+                  <span className="truncate text-muted-foreground">Unassigned</span>
                 )}
+                <Chevron />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-52 max-h-64 overflow-y-auto">
@@ -353,8 +366,9 @@ export function QuickPanelFields({
         <Field label="Points">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="hover:underline text-left">
-                {points != null ? `${points} pt` : "—"}
+              <button className={EDIT_TRIGGER}>
+                <span className="truncate">{points != null ? `${points} pt` : "—"}</span>
+                <Chevron />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-36">
