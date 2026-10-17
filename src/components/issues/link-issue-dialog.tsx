@@ -29,7 +29,7 @@ type LinkChoice = { value: string; label: string; typeName: string; direction: "
 
 type SearchHit = { jiraKey: string; summary: string; status: string };
 
-interface QuickPanelLinkDialogProps {
+interface LinkIssueDialogProps {
   jiraKey: string;
   open: boolean;
   linking: boolean;
@@ -46,14 +46,14 @@ function choicesOf(types: IssueLinkType[]): LinkChoice[] {
 }
 
 /** Jira-style "Link issue": pick the relation phrase, then the task it points at. */
-export function QuickPanelLinkDialog({
+export function LinkIssueDialog({
   jiraKey,
   open,
   linking,
   error,
   onOpenChange,
   onConfirm,
-}: QuickPanelLinkDialogProps) {
+}: LinkIssueDialogProps) {
   const [choiceValue, setChoiceValue] = useState("");
   const [query, setQuery] = useState("");
   const [targetKey, setTargetKey] = useState("");

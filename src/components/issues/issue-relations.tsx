@@ -1,7 +1,12 @@
+"use client";
+
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowUpRight, GitFork, Layers3, Link2, Network } from "lucide-react";
+import { ArrowUpRight, GitFork, Layers3, Link2, Network, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FeedbackBanner } from "@/components/shared/feedback-banner";
+import { CreateChildDialog, type CreatedChild } from "@/components/issues/create-child-dialog";
 import { cn } from "@/lib/utils";
 import type { IssueRelationships, LinkedIssue, RelatedIssue } from "@/lib/issues/relationships";
 
@@ -33,32 +38,56 @@ function RelationRow({ issue, label }: { issue: RelatedIssue; label?: string }) 
   );
 }
 
+function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex cursor-pointer items-center gap-1 text-[11px] font-medium normal-case tracking-normal text-primary transition-colors duration-150 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <Plus className="h-3 w-3" aria-hidden="true" /> {label}
+    </button>
+  );
+}
+
 function RelationGroup({
   icon,
   title,
   issues,
+  action,
+  emptyHint,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   issues: Array<RelatedIssue | LinkedIssue>;
+  /** Jira-style "+" control; keeps the group visible while it is empty. */
+  action?: ReactNode;
+  emptyHint?: string;
 }) {
-  if (issues.length === 0) return null;
+  if (issues.length === 0 && !action) return null;
   return (
     <div>
       <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         {icon}
         <span>{title}</span>
-        <span className="tabular-nums">({issues.length})</span>
+        {issues.length > 0 && <span className="tabular-nums">({issues.length})</span>}
+        {action && <span className="ml-auto">{action}</span>}
       </div>
-      <div className="space-y-1.5">
-        {issues.map((issue) => (
-          <RelationRow
-            key={`${"relation" in issue ? issue.relation : title}-${issue.jiraKey}`}
-            issue={issue}
-            label={"relation" in issue ? issue.relation : undefined}
-          />
-        ))}
-      </div>
+      {issues.length === 0 ? (
+        <p className="rounded-md border border-dashed bg-muted/20 px-2.5 py-2 text-xs text-muted-foreground">
+          {emptyHint}
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          {issues.map((issue) => (
+            <RelationRow
+              key={`${"relation" in issue ? issue.relation : title}-${issue.jiraKey}`}
+              issue={issue}
+              label={"relation" in issue ? issue.relation : undefined}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -67,11 +96,26 @@ export function IssueRelations({
   relationships,
   loading,
   className,
+  issueKey,
+  issueType,
+  onLinkIssue,
+  onChanged,
 }: {
   relationships?: IssueRelationships;
   loading: boolean;
   className?: string;
+  /** Enables the "+" controls; without it the list is read-only. */
+  issueKey?: string;
+  /** Issue type name: an Epic gets "task in Epic", anything else gets a sub-task. */
+  issueType?: string;
+  /** Opens the view's link dialog. Omit to hide "+ Liên kết". */
+  onLinkIssue?: () => void;
+  /** Called after a child was created, so the view can reload. */
+  onChanged?: () => void | Promise<void>;
 }) {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [created, setCreated] = useState<CreatedChild | null>(null);
+
   if (loading) {
     return (
       <section className={cn(className)} aria-label="Đang tải liên kết công việc">
@@ -90,6 +134,22 @@ export function IssueRelations({
     (relationships?.children.length ?? 0) +
     (relationships?.links.length ?? 0);
 
+  const isEpic = issueType?.trim().toLowerCase() === "epic";
+  // `parent` is only set for a non-epic parent, i.e. this issue is a sub-task, and
+  // Jira cannot nest those further.
+  const canCreateChild = Boolean(issueKey) && !relationships?.parent;
+  const canAct = Boolean(issueKey);
+  const childAction = canCreateChild ? (
+    <AddButton
+      label={isEpic ? "Tạo task trong Epic" : "Tạo sub-task"}
+      onClick={() => {
+        setCreated(null);
+        setCreateOpen(true);
+      }}
+    />
+  ) : undefined;
+  const linkAction = onLinkIssue ? <AddButton label="Liên kết task" onClick={onLinkIssue} /> : undefined;
+
   return (
     <section className={cn(className)} aria-labelledby="work-relations-title">
       <div className="mb-3 flex items-center gap-2">
@@ -102,7 +162,24 @@ export function IssueRelations({
         )}
       </div>
 
-      {relationCount === 0 ? (
+      {created && (
+        <FeedbackBanner
+          tone={created.linkError ? "warning" : "success"}
+          className="mb-3 text-xs"
+          action={
+            <Link href={`/issue/${encodeURIComponent(created.key)}`} className="cursor-pointer underline underline-offset-2">
+              Mở {created.key}
+            </Link>
+          }
+        >
+          <span className="min-w-0 break-words">
+            Đã tạo {created.key}.
+            {created.linkError ? ` Chưa gắn được vào Epic: ${created.linkError}` : ""}
+          </span>
+        </FeedbackBanner>
+      )}
+
+      {relationCount === 0 && !childAction && !linkAction ? (
         <div className="flex items-center gap-3 rounded-md border border-dashed bg-muted/20 p-3">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
             <Link2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -128,13 +205,29 @@ export function IssueRelations({
             icon={<GitFork className="h-3.5 w-3.5" aria-hidden="true" />}
             title="Task con"
             issues={relationships?.children ?? []}
+            action={childAction}
+            emptyHint={isEpic ? "Chưa có task nào trong Epic này." : "Chưa có sub-task."}
           />
           <RelationGroup
             icon={<Link2 className="h-3.5 w-3.5" aria-hidden="true" />}
             title="Issue links"
             issues={relationships?.links ?? []}
+            action={linkAction}
+            emptyHint="Chưa liên kết với task nào."
           />
         </div>
+      )}
+
+      {canAct && issueKey && (
+        <CreateChildDialog
+          jiraKey={issueKey}
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          onCreated={async (child) => {
+            setCreated(child);
+            await onChanged?.();
+          }}
+        />
       )}
     </section>
   );

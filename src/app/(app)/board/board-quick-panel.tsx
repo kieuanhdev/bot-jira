@@ -251,6 +251,10 @@ export function QuickPanel({
           <IssueRelations
             relationships={d?.relationships}
             loading={detailLoading}
+            issueKey={issue.jiraKey}
+            issueType={type}
+            onLinkIssue={link.openLinkDialog}
+            onChanged={invalidate}
             className="mt-4 border-t pt-4"
           />
 

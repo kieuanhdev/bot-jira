@@ -9,6 +9,8 @@ import { wikiToHtml } from "@/lib/wiki";
 import { formatJiraDuration } from "@/lib/worklogs/schema";
 import { IssueDependencies } from "@/components/issue-dependencies";
 import { IssueRelations } from "@/components/issues/issue-relations";
+import { LinkIssueDialog } from "@/components/issues/link-issue-dialog";
+import { useLinkIssue } from "@/components/issues/use-link-issue";
 import type { IssueDetail } from "./lib/issue-detail-types";
 import { IssueDetailHeader } from "./issue-detail-header";
 import { IssueDetailActions } from "./issue-detail-actions";
@@ -29,6 +31,7 @@ export function IssueDetailClient({
 }) {
   const {
     issue,
+    refreshIssue,
     watched,
     busy,
     msg,
@@ -74,6 +77,8 @@ export function IssueDetailClient({
     onAiDecision,
     onAddComment,
   } = useIssueDetailController(initial, refreshOnMount);
+
+  const link = useLinkIssue({ jiraKey: issue.jiraKey, onLinked: () => void refreshIssue().catch(() => {}) });
 
   const jiraUrl = getJiraIssueUrl(jiraBaseUrl, issue.jiraKey);
   const primaryBranch = branches?.items?.find((b) => b.linkState === "confirmed") || branches?.items?.[0];
@@ -177,7 +182,14 @@ export function IssueDetailClient({
 
           <Card>
             <CardContent className="pt-6">
-              <IssueRelations relationships={issue.relationships} loading={false} />
+              <IssueRelations
+                relationships={issue.relationships}
+                loading={false}
+                issueKey={issue.jiraKey}
+                issueType={issue.type}
+                onLinkIssue={link.openLinkDialog}
+                onChanged={() => refreshIssue().catch(() => {})}
+              />
             </CardContent>
           </Card>
 
@@ -230,6 +242,17 @@ export function IssueDetailClient({
           />
         </TabsContent>
       </Tabs>
+
+      {link.linkOpen && (
+        <LinkIssueDialog
+          jiraKey={issue.jiraKey}
+          open={link.linkOpen}
+          linking={link.linking}
+          error={link.linkError}
+          onOpenChange={link.setLinkOpen}
+          onConfirm={link.handleLinkIssue}
+        />
+      )}
 
       <LogWorkDialog
         open={logWorkOpen}

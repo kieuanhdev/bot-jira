@@ -352,6 +352,7 @@ export function useIssueDetailController(initialIssue: IssueDetail, refreshOnMou
 
   return {
     issue,
+    refreshIssue,
     watched,
     busy,
     msg,

@@ -2,7 +2,7 @@
 
 import { QuickPanelCloneDialog } from "./quick-panel-clone-dialog";
 import { QuickPanelDeleteDialog } from "./quick-panel-delete-dialog";
-import { QuickPanelLinkDialog } from "./quick-panel-link-dialog";
+import { LinkIssueDialog } from "@/components/issues/link-issue-dialog";
 import { LogWorkDialog } from "@/components/issues/log-work-dialog";
 import type { useQuickPanelClone } from "./hooks/use-quick-panel-clone";
 import type { useQuickPanelDelete } from "./hooks/use-quick-panel-delete";
@@ -55,7 +55,7 @@ export function QuickPanelDialogs({
       )}
 
       {link.linkOpen && (
-        <QuickPanelLinkDialog
+        <LinkIssueDialog
           jiraKey={jiraKey}
           open={link.linkOpen}
           linking={link.linking}
