@@ -36,4 +36,12 @@ describe("wikiToHtml images", () => {
     const html = wikiToHtml('!"><script>.png!', { issueKey: "ABC-1" });
     expect(html).not.toContain("<script>");
   });
+
+  it("handles the markup Jira generates for pasted screenshots", () => {
+    const md = '!image-20261009-134921.png|width=1011,height=466,alt="image-20261009-134921.png"!';
+    const html = wikiToHtml(`Lỗi như hình:\n${md}`, { issueKey: "ECM-512" });
+    expect(html).toContain("name=image-20261009-134921.png");
+    expect(html).toContain('width="1011"');
+    expect(html).not.toContain("!image");
+  });
 });

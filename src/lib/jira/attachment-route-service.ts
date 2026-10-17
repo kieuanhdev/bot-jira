@@ -6,7 +6,7 @@ import { getSystemJiraAuth, jiraWith, type JiraAuth } from "@/lib/jira/client";
 import { isJiraOrigin } from "@/lib/jira/avatar-route-service";
 import { env } from "@/lib/env";
 import { checkAuthRateLimit } from "@/lib/rate-limit";
-import { logSwallowed } from "@/lib/logger";
+import { logger, logSwallowed } from "@/lib/logger";
 
 // Pasted screenshots are often a few MB; anything larger is not worth inlining.
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -16,6 +16,7 @@ type JiraAttachment = {
   id?: string;
   filename?: string;
   mimeType?: string;
+  content?: string;
   size?: number;
   created?: string;
 };
@@ -95,36 +96,53 @@ export async function handleAttachmentRequest(req: Request) {
     return new Response(null, { status: 304, headers: cacheHeaders });
   }
 
-  try {
-    // Built from our own base URL rather than `content`, whose host follows Jira's
-    // configured base URL and may not match the address this app reaches Jira on.
-    const contentUrl = `${base}/secure/attachment/${encodeURIComponent(attachment.id)}/${encodeURIComponent(attachment.filename)}`;
-    const res = await fetch(contentUrl, {
-      headers: { Authorization: authHeaderValue(auth), Accept: "image/*" },
-      signal: AbortSignal.timeout(15000),
-    });
-    // Never follow a redirect off the Jira origin with credentials attached.
-    if (!res.ok || !isJiraOrigin(res.url || contentUrl, base)) {
-      return NextResponse.json({ error: "attachment_fetch_failed" }, { status: 502 });
+  // Candidate download URLs, always on our own base URL: Jira's `content` host
+  // follows its configured base URL and may differ from the address we reach it on.
+  const candidates = [
+    `${base}/secure/attachment/${encodeURIComponent(attachment.id)}/${encodeURIComponent(attachment.filename)}`,
+  ];
+  if (attachment.content) {
+    try {
+      const c = new URL(attachment.content);
+      const viaContent = `${base}${c.pathname}${c.search}`;
+      if (!candidates.includes(viaContent)) candidates.push(viaContent);
+    } catch {
+      // Malformed content URL: the constructed one is still tried.
     }
-    const contentType = (res.headers.get("content-type") ?? attachment.mimeType ?? "").split(";")[0].trim();
-    if (!isProxiableImage(contentType)) {
-      return NextResponse.json({ error: "not_an_image" }, { status: 415 });
-    }
-    const data = await res.arrayBuffer();
-    if (data.byteLength > MAX_ATTACHMENT_BYTES) {
-      return NextResponse.json({ error: "attachment_too_large" }, { status: 413 });
-    }
-    return new Response(data, {
-      status: 200,
-      headers: {
-        ...cacheHeaders,
-        "Content-Type": contentType,
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
-  } catch (err) {
-    logSwallowed("jira_attachment_fetch", err, { key });
-    return NextResponse.json({ error: "attachment_fetch_failed" }, { status: 502 });
   }
+
+  for (const target of candidates) {
+    try {
+      const res = await fetch(target, {
+        headers: { Authorization: authHeaderValue(auth), Accept: "image/*" },
+        signal: AbortSignal.timeout(15000),
+      });
+      // Never accept a response that ended up off the Jira origin.
+      if (!res.ok || !isJiraOrigin(res.url || target, base)) {
+        logger.warn({ message: "Jira attachment download failed", key, status: res.status, target: new URL(target).pathname });
+        continue;
+      }
+      const contentType = (res.headers.get("content-type") ?? attachment.mimeType ?? "").split(";")[0].trim();
+      if (!isProxiableImage(contentType)) {
+        // Usually a login/error page returned with 200.
+        logger.warn({ message: "Jira attachment was not an image", key, contentType, target: new URL(target).pathname });
+        continue;
+      }
+      const data = await res.arrayBuffer();
+      if (data.byteLength > MAX_ATTACHMENT_BYTES) {
+        return NextResponse.json({ error: "attachment_too_large" }, { status: 413 });
+      }
+      return new Response(data, {
+        status: 200,
+        headers: {
+          ...cacheHeaders,
+          "Content-Type": contentType,
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    } catch (err) {
+      logSwallowed("jira_attachment_fetch", err, { key });
+    }
+  }
+  return NextResponse.json({ error: "attachment_fetch_failed" }, { status: 502 });
 }
