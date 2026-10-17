@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatJiraDuration } from "@/lib/worklogs/schema";
+import { PointStepGrid } from "@/components/point-step-grid";
 import { PRIORITIES } from "./lib/issue-detail-utils";
 
 interface IssueDetailActionsProps {
@@ -29,6 +30,7 @@ interface IssueDetailActionsProps {
   priority?: string | null;
   onSetPriority: (priority: string) => void;
   points?: number | null;
+  aiPoints?: number | null;
   onSetPoints: (points: number | null) => void;
   timeSpentSeconds?: number | null;
   onOpenLogWork: () => void;
@@ -44,6 +46,7 @@ export function IssueDetailActions({
   priority,
   onSetPriority,
   points,
+  aiPoints,
   onSetPoints,
   timeSpentSeconds,
   onOpenLogWork,
@@ -128,21 +131,9 @@ export function IssueDetailActions({
             <ChevronDown className="h-3 w-3 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-40">
+        <DropdownMenuContent align="start" className="w-44">
           <DropdownMenuLabel className="text-xs">Story Points</DropdownMenuLabel>
-          <div className="grid grid-cols-4 gap-1 p-1">
-            {[1, 2, 3, 5, 8, 13, 21].map((p) => (
-              <Button
-                key={p}
-                variant={points === p ? "default" : "outline"}
-                size="sm"
-                className="h-7 px-0 text-xs"
-                onClick={() => onSetPoints(p)}
-              >
-                {p}
-              </Button>
-            ))}
-          </div>
+          <PointStepGrid value={points} aiPoints={aiPoints} onChange={onSetPoints} />
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => onSetPoints(null)} className="text-xs text-destructive">
             Xóa điểm (None)

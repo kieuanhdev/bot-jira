@@ -107,6 +107,7 @@ export function BoardListRow({
           <PointsCell
             jiraKey={issue.jiraKey}
             value={issue.points}
+            aiPoints={issue.aiScore?.points}
             onChange={(points) => onEdit(issue, { points }, { points })}
           />
         </td>

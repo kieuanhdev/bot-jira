@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn, timeAgo, formatDateTime, getBitbucketBranchUrl } from "@/lib/utils";
 import { JiraAvatar } from "@/components/jira-avatar";
+import { PointStepGrid } from "@/components/point-step-grid";
 import { PRIORITIES, toName } from "../lib/quick-panel-utils";
 
 /** Shared look for an editable value: bordered chip + chevron so it reads as a control. */
@@ -206,6 +207,7 @@ interface QuickPanelFieldsProps {
   meName?: string | null;
   onAssign: (assignee: string | null) => void;
   points?: number | null;
+  aiPoints?: number | null;
   onSetPoints: (points: number | null) => void;
   type: string;
   updatedAt?: string | null;
@@ -244,6 +246,7 @@ export function QuickPanelFields({
   meName,
   onAssign,
   points,
+  aiPoints,
   onSetPoints,
   type,
   updatedAt,
@@ -371,20 +374,8 @@ export function QuickPanelFields({
                 <Chevron />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-36">
-              <div className="grid grid-cols-4 gap-1 p-1">
-                {[1, 2, 3, 5, 8, 13, 21].map((p) => (
-                  <Button
-                    key={p}
-                    variant={points === p ? "default" : "outline"}
-                    size="sm"
-                    className="h-7 px-0 text-xs"
-                    onClick={() => onSetPoints(p)}
-                  >
-                    {p}
-                  </Button>
-                ))}
-              </div>
+            <DropdownMenuContent align="start" className="w-44">
+              <PointStepGrid value={points} aiPoints={aiPoints} onChange={onSetPoints} />
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => onSetPoints(null)} className="text-xs text-destructive">
                 Xóa điểm

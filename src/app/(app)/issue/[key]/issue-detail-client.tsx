@@ -109,6 +109,7 @@ export function IssueDetailClient({
         priority={issue.priority}
         onSetPriority={handleSetPriority}
         points={issue.points}
+        aiPoints={issue.aiScore?.points}
         onSetPoints={handleSetPoints}
         timeSpentSeconds={issue.timeSpentSeconds}
         onOpenLogWork={() => {

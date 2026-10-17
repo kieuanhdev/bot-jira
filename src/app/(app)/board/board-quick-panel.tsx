@@ -233,6 +233,7 @@ export function QuickPanel({
             meName={me?.jiraName}
             onAssign={(a) => mutateField({ assignee: a })}
             points={points}
+            aiPoints={aiScore?.points}
             onSetPoints={(p) => mutateField({ points: p })}
             type={type}
             updatedAt={updatedAt}

@@ -16,9 +16,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PointStepGrid } from "@/components/point-step-grid";
 import { toName } from "./lib/quick-panel-utils";
-
-const POINT_STEPS = [1, 2, 3, 5, 8, 13, 21];
 
 function CellTrigger({ children, label }: { children: ReactNode; label: string }) {
   return (
@@ -230,10 +229,12 @@ export function PointsCell({
   value,
   onChange,
   display,
+  aiPoints,
 }: {
   jiraKey: string;
   value: number | null;
   onChange: (points: number | null) => void;
+  aiPoints?: number | null;
   display?: ReactNode;
 }) {
   return (
@@ -241,20 +242,8 @@ export function PointsCell({
       <CellTrigger label={`Đổi điểm ${jiraKey}`}>
         <span className="tabular-nums">{display ?? value ?? "—"}</span>
       </CellTrigger>
-      <DropdownMenuContent align="start" className="w-40">
-        <div className="grid grid-cols-4 gap-1 p-1">
-          {POINT_STEPS.map((p) => (
-            <Button
-              key={p}
-              variant={value === p ? "default" : "outline"}
-              size="sm"
-              className="h-7 px-0 text-xs"
-              onClick={() => onChange(p)}
-            >
-              {p}
-            </Button>
-          ))}
-        </div>
+      <DropdownMenuContent align="start" className="w-44">
+        <PointStepGrid value={value} aiPoints={aiPoints} onChange={onChange} />
         <DropdownMenuSeparator />
         <DropdownMenuItem className="text-xs text-destructive" onClick={() => onChange(null)}>
           Xóa điểm
