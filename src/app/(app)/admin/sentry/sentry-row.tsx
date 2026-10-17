@@ -1,11 +1,12 @@
 "use client";
 
-import { CheckCircle2, ExternalLink, Loader2, RefreshCw, RotateCcw, XCircle } from "lucide-react";
+import { CheckCircle2, ExternalLink, Lightbulb, Loader2, RefreshCw, RotateCcw, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { maskSecrets } from "@/lib/admin/mask-secrets";
 import { cn, timeAgo, formatNumber } from "@/lib/utils";
+import { triageIssue, type TriageTier } from "@/lib/sentry/triage";
 
 export type RowState = "review" | "approved" | "created" | "rejected" | "failed" | "ignored";
 
@@ -72,6 +73,12 @@ export function levelVariant(level: string | null): "danger" | "warning" | "info
   return "secondary";
 }
 
+const TIER_STRIPE: Record<TriageTier, string> = {
+  critical: "border-l-destructive",
+  normal: "border-l-warning",
+  noise: "border-l-border",
+};
+
 export interface SentryRowProps {
   row: SentryRowItem;
   isSelected: boolean;
@@ -101,9 +108,17 @@ export function SentryRow({
 }: SentryRowProps) {
   const badge = STATE_BADGE[row.state] ?? STATE_BADGE.review;
   const error = maskSecrets(row.lastError);
+  const triage = triageIssue(row);
+  const isReview = row.state === "review";
 
   return (
-    <li className="flex flex-col gap-3 p-4 transition-colors duration-150 sm:flex-row sm:items-start">
+    <li
+      className={cn(
+        "flex flex-col gap-3 border-l-4 p-4 transition-colors duration-150 hover:bg-muted/30 sm:flex-row sm:items-start",
+        isReview ? TIER_STRIPE[triage.tier] : "border-l-transparent",
+        isReview && triage.tier === "noise" && "bg-muted/10"
+      )}
+    >
       <div className="flex min-w-0 flex-1 items-start gap-3">
         {selectable && (
           <div className="pt-0.5">
@@ -119,11 +134,18 @@ export function SentryRow({
             <Badge variant={levelVariant(row.level)} className="uppercase">
               {row.level ?? "?"}
             </Badge>
-            <span className="line-clamp-2 text-sm font-medium text-foreground">
+            <span className={cn("line-clamp-2 text-sm font-medium", isReview && triage.tier === "noise" ? "text-muted-foreground" : "text-foreground")}>
               {row.title ?? `Sentry issue #${row.sentryIssueId}`}
             </span>
             {filter !== "review" && <Badge variant={badge.variant}>{badge.label}</Badge>}
           </div>
+
+          {isReview && triage.reason && (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Lightbulb className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              Có thể không phải lỗi: {triage.reason}
+            </p>
+          )}
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
             {row.permalinkUrl ? (
@@ -142,7 +164,7 @@ export function SentryRow({
             <span>
               {row.sentryProject} → {row.targetProject ?? "chưa map"}
             </span>
-            {row.eventCount !== null && <span>{formatNumber(row.eventCount)} lần xảy ra</span>}
+            {row.eventCount !== null && <span className="font-semibold text-foreground">{formatNumber(row.eventCount)} lần xảy ra</span>}
             <span>lần cuối {timeAgo(row.lastSeen ?? row.createdAt)}</span>
             {row.reviewedBy && row.reviewedAt && (
               <span>

@@ -3,10 +3,11 @@
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bug, CheckCircle2, Inbox, RefreshCw } from "lucide-react";
+import { Bug, CheckCircle2, Inbox, RefreshCw, Siren, Sparkles } from "lucide-react";
 import { api, getErrorMessage } from "@/lib/api-client";
 import { adminKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
+import { compareTriage, triageIssue } from "@/lib/sentry/triage";
 import { PageHeader } from "@/components/shared/page-header";
 import { AsyncState, ErrorState } from "@/components/shared/async-state";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -23,6 +24,8 @@ import { SentryFilterTabs } from "./sentry-filter-tabs";
 
 export type { SentryRowItem, SentryFilter, RowState };
 
+type TriageView = "actionable" | "noise" | "all";
+
 export function AdminSentryClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -32,6 +35,7 @@ export function AdminSentryClient() {
   const filter: SentryFilter = rawFilter && VALID_FILTERS.has(rawFilter) ? (rawFilter as SentryFilter) : "review";
 
   const [page, setPage] = useState(1);
+  const [view, setView] = useState<TriageView>("actionable");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Rows awaiting the admin's confirmation in the preview dialog.
   const [confirmRows, setConfirmRows] = useState<SentryRowItem[] | null>(null);
@@ -47,13 +51,27 @@ export function AdminSentryClient() {
   });
 
   const counts = query.data?.counts ?? {};
-  const items = useMemo(() => query.data?.items ?? [], [query.data?.items]);
+  const allItems = useMemo(() => query.data?.items ?? [], [query.data?.items]);
+  const triaged = filter === "review";
+  const noiseItems = useMemo(() => allItems.filter((r) => triageIssue(r).tier === "noise"), [allItems]);
+  const actionableCount = allItems.length - noiseItems.length;
+  const items = useMemo(() => {
+    if (!triaged) return allItems;
+    const pool = view === "all" ? allItems : view === "noise" ? noiseItems : allItems.filter((r) => triageIssue(r).tier !== "noise");
+    return [...pool].sort(compareTriage);
+  }, [allItems, noiseItems, triaged, view]);
   const visibleSelected = useMemo(() => items.filter((r) => selected.has(r.id)), [items, selected]);
   const selectable = filter === "review" || filter === "rejected";
 
   const totalPages = Math.max(1, Math.ceil(items.length / 50));
   const paginatedItems = useMemo(() => items.slice((page - 1) * 50, page * 50), [items, page]);
   const allPageSelected = paginatedItems.length > 0 && paginatedItems.every((r) => selected.has(r.id));
+
+  const changeView = (next: TriageView) => {
+    setPage(1);
+    setSelected(new Set());
+    setView(next);
+  };
 
   const changeFilter = (next: SentryFilter) => {
     setPage(1);
@@ -133,6 +151,45 @@ export function AdminSentryClient() {
       <SentryFilterTabs filter={filter} onChange={changeFilter} counts={counts} isLoading={query.isLoading} />
       {feedback && <FeedbackBanner tone={feedback.tone}>{feedback.text}</FeedbackBanner>}
 
+      {triaged && !query.isLoading && allItems.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div role="tablist" aria-label="Lọc theo mức độ cần xử lý" className="inline-flex gap-1 rounded-lg bg-muted p-1">
+            {([
+              { id: "actionable", label: "Cần xem xét", count: actionableCount, icon: Siren },
+              { id: "noise", label: "Có thể là nhiễu", count: noiseItems.length, icon: Sparkles },
+              { id: "all", label: "Tất cả", count: allItems.length, icon: Inbox },
+            ] as const).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={view === t.id}
+                onClick={() => changeView(t.id)}
+                className={cn(
+                  "inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  view === t.id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <t.icon className="h-4 w-4" aria-hidden="true" />
+                {t.label}
+                <span className="rounded-full bg-muted-foreground/15 px-1.5 text-xs tabular-nums">{t.count}</span>
+              </button>
+            ))}
+          </div>
+          {view === "noise" && noiseItems.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="cursor-pointer gap-1.5"
+              disabled={busy}
+              onClick={() => decide.mutate({ ids: noiseItems.map((r) => r.id), decision: "reject" })}
+            >
+              Bỏ qua tất cả {noiseItems.length} issue nhiễu
+            </Button>
+          )}
+        </div>
+      )}
+
       {selectable && (
         <SentryBulkBar
           selectedCount={visibleSelected.length}
@@ -149,7 +206,7 @@ export function AdminSentryClient() {
         empty={items.length === 0}
         loadingFallback={<ListSkeleton rows={5} />}
         errorFallback={<ErrorState message={getErrorMessage(query.error)} onRetry={() => query.refetch()} />}
-        emptyFallback={<EmptyState icon={filter === "problem" ? CheckCircle2 : Inbox} {...EMPTY[filter]} />}
+        emptyFallback={<EmptyState icon={filter === "problem" ? CheckCircle2 : Inbox} {...(triaged && allItems.length > 0 ? { title: "Không có issue trong nhóm này", hint: "Chuyển sang nhóm khác để xem các issue còn lại." } : EMPTY[filter])} />}
       >
         <Card className="overflow-hidden">
           <div className="flex items-center justify-between border-b bg-muted/20 px-4 py-2 text-xs font-medium text-muted-foreground">
@@ -165,7 +222,7 @@ export function AdminSentryClient() {
                   aria-label="Chọn tất cả issue đang hiển thị trên trang này"
                 />
               )}
-              <span>Issue Sentry</span>
+              <span>Issue Sentry{triaged ? " · lỗi nghiêm trọng xếp trước" : ""}</span>
             </div>
             <span>Thao tác</span>
           </div>
