@@ -15,8 +15,36 @@ import {
   blockOrphanWaitingItems,
 } from "./create-parent-resolver";
 import { processCreateItem } from "./create-item-executor";
+import { upsertJiraIssue } from "@/lib/issues/cache";
+import { markSentryRowFromBulkOp } from "@/lib/sentry/bulk-completion";
 
 export const MAX_ROUNDS = 10;
+
+/**
+ * Best-effort: pull freshly created issues into the local issue cache so they
+ * show up on the board without waiting for the next Jira poll.
+ */
+export async function syncCreatedIssuesToCache(
+  jira: Pick<ReturnType<typeof jiraWith>, "getIssue">,
+  jiraKeys: string[]
+): Promise<void> {
+  for (const key of jiraKeys) {
+    try {
+      const full = await jira.getIssue(key);
+      await upsertJiraIssue(full);
+    } catch {
+      // Cache sync is best-effort; the Jira issue exists and polling will catch up
+    }
+  }
+}
+
+async function markSentryRowSafely(operationId: string): Promise<void> {
+  try {
+    await markSentryRowFromBulkOp(operationId);
+  } catch {
+    // Best-effort: never fail the bulk operation because of the Sentry link
+  }
+}
 
 /**
  * Notify user of bulk create operation result.
@@ -204,6 +232,7 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
       },
     });
 
+    await markSentryRowSafely(operationId);
     await notifyCreateResult(op, "failed", 0, op.total);
     return;
   }
@@ -239,6 +268,7 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
   let totalRounds = 0;
   let slowItemCount = 0;
   const itemLatenciesMs: number[] = [];
+  const createdJiraKeys: string[] = [];
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const pendingItems = await prisma.bulkCreateItem.findMany({
@@ -287,6 +317,7 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
           select: { jiraKey: true, clientRef: true },
         });
         if (parentItem?.jiraKey) {
+          createdJiraKeys.push(parentItem.jiraKey);
           await unlockChildren(operationId, result.clientRef, parentItem.jiraKey);
         }
       } else {
@@ -330,6 +361,11 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
       completedAt: terminal ? new Date() : undefined,
     },
   });
+
+  await syncCreatedIssuesToCache(jira, createdJiraKeys);
+  if (terminal) {
+    await markSentryRowSafely(operationId);
+  }
 
   const durationMs = Date.now() - execStartTime;
   recordExecutionMetrics({

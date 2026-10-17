@@ -1,5 +1,6 @@
 import {
   type BulkCreateRequest,
+  type BulkCreateSource,
   type BulkCreateFieldDefaults,
   type BulkCreateRowInput,
   type CanonicalCreateItem,
@@ -66,7 +67,12 @@ export function validateBulkCreateBatch(raw: unknown): BatchValidationResult {
     });
   }
 
-  if (errors.length > 0) {
+  const source = parseBulkCreateSource(body.source);
+  if (!source.ok) {
+    errors.push({ field: "source", message: source.message });
+  }
+
+  if (errors.length > 0 || !source.ok) {
     return { ok: false, errors };
   }
 
@@ -103,9 +109,53 @@ export function validateBulkCreateBatch(raw: unknown): BatchValidationResult {
       defaults: body.defaults,
       items,
       metadataFingerprint: body.metadataFingerprint,
-      source: body.source,
+      source: source.value,
     },
   };
+}
+
+const LEGACY_SOURCE_TYPES = new Set(["grid", "paste", "csv", "excel"]);
+
+function parseBulkCreateSource(
+  raw: unknown
+): { ok: true; value: BulkCreateSource | undefined } | { ok: false; message: string } {
+  if (raw === undefined || raw === null) return { ok: true, value: undefined };
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, message: "Nguồn tạo task (source) không hợp lệ" };
+  }
+  const src = raw as Record<string, unknown>;
+  const type = src.type;
+
+  if (typeof type === "string" && LEGACY_SOURCE_TYPES.has(type)) {
+    const fileName = src.fileName;
+    if (fileName !== undefined && fileName !== null && typeof fileName !== "string") {
+      return { ok: false, message: "Tên file nguồn không hợp lệ" };
+    }
+    return {
+      ok: true,
+      value: {
+        type: type as "grid" | "paste" | "csv" | "excel",
+        ...(fileName !== undefined ? { fileName } : {}),
+      },
+    };
+  }
+
+  if (type === "single") {
+    if (src.origin !== "board") {
+      return { ok: false, message: "Nguồn tạo task đơn lẻ không hợp lệ" };
+    }
+    return { ok: true, value: { type: "single", origin: "board" } };
+  }
+
+  if (type === "sentry") {
+    const id = typeof src.sentryImportId === "string" ? src.sentryImportId.trim() : "";
+    if (!id) {
+      return { ok: false, message: "Thiếu sentryImportId cho nguồn Sentry" };
+    }
+    return { ok: true, value: { type: "sentry", sentryImportId: id } };
+  }
+
+  return { ok: false, message: "Loại nguồn tạo task (source.type) không hợp lệ" };
 }
 
 /**

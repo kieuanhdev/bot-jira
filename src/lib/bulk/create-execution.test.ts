@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => ({
   blockChildren: vi.fn(),
   blockOrphanWaitingItems: vi.fn(),
   recordExecutionMetrics: vi.fn(),
+  getIssue: vi.fn(),
+  upsertJiraIssue: vi.fn(),
+  markSentryRowFromBulkOp: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -72,6 +75,18 @@ vi.mock("./create-parent-resolver", () => ({
 
 vi.mock("./create-item-executor", () => ({
   processCreateItem: mocks.processCreateItem,
+}));
+
+vi.mock("@/lib/jira/client", () => ({
+  jiraWith: () => ({ getIssue: mocks.getIssue }),
+}));
+
+vi.mock("@/lib/issues/cache", () => ({
+  upsertJiraIssue: mocks.upsertJiraIssue,
+}));
+
+vi.mock("@/lib/sentry/bulk-completion", () => ({
+  markSentryRowFromBulkOp: mocks.markSentryRowFromBulkOp,
 }));
 
 import {
@@ -199,6 +214,70 @@ describe("create-execution", () => {
           severity: "success",
           title: expect.stringContaining("hoàn tất thành công"),
         })
+      );
+    });
+
+    it("syncs created issues to the cache and marks the sentry row on completion", async () => {
+      mocks.bulkOperationFindUnique.mockResolvedValue({
+        id: "op-cache",
+        requestedBy: "user-1",
+        state: "queued",
+        total: 1,
+        payload: { projectKey: "PROJ", source: { type: "sentry", sentryImportId: "r1" } },
+        createItems: [],
+      });
+      mocks.bulkOperationUpdateMany.mockResolvedValue({ count: 1 });
+      mocks.userFindUnique.mockResolvedValue({ id: "user-1" });
+      mocks.userJiraAuth.mockReturnValue({ user: "alice", token: "tok-1", authMode: "Bearer" });
+      mocks.bulkCreateItemFindMany
+        .mockResolvedValueOnce([{ id: "item-1", rowIndex: 0, clientRef: "single-1", status: "pending" }])
+        .mockResolvedValueOnce([]);
+      mocks.processCreateItem.mockResolvedValueOnce(true);
+      mocks.bulkCreateItemFindUnique.mockResolvedValue({ id: "item-1", jiraKey: "PROJ-7", clientRef: "single-1" });
+      mocks.bulkCreateItemGroupBy.mockResolvedValue([{ status: "succeeded", _count: { _all: 1 } }]);
+      const full = { key: "PROJ-7", fields: {} };
+      mocks.getIssue.mockResolvedValue(full);
+      mocks.upsertJiraIssue.mockResolvedValue({ applied: true });
+
+      await executeBulkCreateOperation("op-cache");
+
+      expect(mocks.getIssue).toHaveBeenCalledWith("PROJ-7");
+      expect(mocks.upsertJiraIssue).toHaveBeenCalledWith(full);
+      expect(mocks.markSentryRowFromBulkOp).toHaveBeenCalledWith("op-cache");
+    });
+
+    it("does not fail the operation when cache sync or sentry marking throws", async () => {
+      mocks.bulkOperationFindUnique.mockResolvedValue({
+        id: "op-cache-fail",
+        requestedBy: "user-1",
+        state: "queued",
+        total: 1,
+        payload: { projectKey: "PROJ" },
+        createItems: [],
+      });
+      mocks.bulkOperationUpdateMany.mockResolvedValue({ count: 1 });
+      mocks.userFindUnique.mockResolvedValue({ id: "user-1" });
+      mocks.userJiraAuth.mockReturnValue({ user: "alice", token: "tok-1", authMode: "Bearer" });
+      mocks.bulkCreateItemFindMany
+        .mockResolvedValueOnce([{ id: "item-1", rowIndex: 0, clientRef: "row-1", status: "pending" }])
+        .mockResolvedValueOnce([]);
+      mocks.processCreateItem.mockResolvedValueOnce(true);
+      mocks.bulkCreateItemFindUnique.mockResolvedValue({ id: "item-1", jiraKey: "PROJ-8", clientRef: "row-1" });
+      mocks.bulkCreateItemGroupBy.mockResolvedValue([{ status: "succeeded", _count: { _all: 1 } }]);
+      mocks.getIssue.mockRejectedValue(new Error("jira down"));
+      mocks.markSentryRowFromBulkOp.mockRejectedValue(new Error("db down"));
+
+      await expect(executeBulkCreateOperation("op-cache-fail")).resolves.toBeUndefined();
+
+      expect(mocks.upsertJiraIssue).not.toHaveBeenCalled();
+      expect(mocks.bulkOperationUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "op-cache-fail" },
+          data: expect.objectContaining({ state: "completed", succeeded: 1 }),
+        })
+      );
+      expect(mocks.audit).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "bulk.create.completed", target: "op-cache-fail" })
       );
     });
 

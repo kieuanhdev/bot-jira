@@ -60,11 +60,13 @@ export type BulkCreateRequest = {
   defaults?: BulkCreateFieldDefaults;
   items: BulkCreateRowInput[];
   metadataFingerprint?: string;
-  source?: {
-    type: "grid" | "paste" | "csv" | "excel";
-    fileName?: string | null;
-  };
+  source?: BulkCreateSource;
 };
+
+export type BulkCreateSource =
+  | { type: "grid" | "paste" | "csv" | "excel"; fileName?: string | null }
+  | { type: "single"; origin: "board" }
+  | { type: "sentry"; sentryImportId: string };
 
 export type CanonicalCreateItem = {
   clientRef: string;

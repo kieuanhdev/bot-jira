@@ -119,6 +119,48 @@ describe("Bulk Create - Validator and Normalizer", () => {
     expect(valid.ok).toBe(true);
   });
 
+  describe("source validation", () => {
+    const base = { projectKey: "EPM", items: [{ summary: "Task 1" }] };
+
+    it("accepts legacy grid/paste/csv/excel sources", () => {
+      for (const type of ["grid", "paste", "csv", "excel"] as const) {
+        const res = validateBulkCreateBatch({ ...base, source: { type, fileName: "a.csv" } });
+        expect(res.ok).toBe(true);
+        if (res.ok) expect(res.data.source).toEqual({ type, fileName: "a.csv" });
+      }
+      expect(validateBulkCreateBatch({ ...base, source: { type: "grid" } }).ok).toBe(true);
+      expect(validateBulkCreateBatch(base).ok).toBe(true);
+    });
+
+    it("accepts a sentry source with sentryImportId", () => {
+      const res = validateBulkCreateBatch({
+        ...base,
+        source: { type: "sentry", sentryImportId: "abc" },
+      });
+      expect(res.ok).toBe(true);
+      if (res.ok) expect(res.data.source).toEqual({ type: "sentry", sentryImportId: "abc" });
+    });
+
+    it("rejects a sentry source without sentryImportId", () => {
+      expect(validateBulkCreateBatch({ ...base, source: { type: "sentry" } }).ok).toBe(false);
+      expect(
+        validateBulkCreateBatch({ ...base, source: { type: "sentry", sentryImportId: "  " } }).ok
+      ).toBe(false);
+    });
+
+    it("accepts a single source from board", () => {
+      const res = validateBulkCreateBatch({ ...base, source: { type: "single", origin: "board" } });
+      expect(res.ok).toBe(true);
+      if (res.ok) expect(res.data.source).toEqual({ type: "single", origin: "board" });
+    });
+
+    it("rejects unknown source shapes", () => {
+      expect(validateBulkCreateBatch({ ...base, source: { type: "single" } }).ok).toBe(false);
+      expect(validateBulkCreateBatch({ ...base, source: { type: "bogus" } }).ok).toBe(false);
+      expect(validateBulkCreateBatch({ ...base, source: "grid" }).ok).toBe(false);
+    });
+  });
+
   it("merges defaults with row overrides correctly", () => {
     const merged = mergeDefaultsWithRow(
       {
