@@ -54,6 +54,10 @@ export function buildSentryBulkRequest(
  * True when a confirmed (queued/running) bulk op already targets this Sentry
  * row. `excludeOperationId` skips the op being confirmed right now.
  */
+// A queued/running op older than this is treated as stuck (e.g. enqueue failed)
+// so it cannot block the Sentry row forever.
+export const INFLIGHT_OP_MAX_AGE_MS = 15 * 60_000;
+
 export async function hasInflightSentryOp(
   sentryImportId: string,
   excludeOperationId?: string,
@@ -63,6 +67,7 @@ export async function hasInflightSentryOp(
     where: {
       type: "create-issues",
       state: { in: [...INFLIGHT_OP_STATES] },
+      createdAt: { gte: new Date(Date.now() - INFLIGHT_OP_MAX_AGE_MS) },
       payload: { path: ["source", "sentryImportId"], equals: sentryImportId },
       ...(excludeOperationId ? { id: { not: excludeOperationId } } : {}),
     },

@@ -29,6 +29,7 @@ import {
   buildSentryBulkRequest,
   confirmSentryCreate,
   hasInflightSentryOp,
+  INFLIGHT_OP_MAX_AGE_MS,
   MSG_INFLIGHT,
   MSG_NO_PROJECT,
   MSG_NOT_OPEN,
@@ -84,6 +85,7 @@ describe("hasInflightSentryOp", () => {
       where: {
         type: "create-issues",
         state: { in: ["queued", "running"] },
+        createdAt: { gte: expect.any(Date) },
         payload: { path: ["source", "sentryImportId"], equals: "r1" },
       },
       select: { id: true },
@@ -96,6 +98,19 @@ describe("hasInflightSentryOp", () => {
     const where = mocks.findFirst.mock.calls[0][0].where;
     expect(where.state.in).not.toContain("completed");
     expect(where.state.in).not.toContain("preview");
+  });
+
+  it("ignores ops older than the max age so a stuck op cannot block the row", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-17T10:00:00Z"));
+    try {
+      mocks.findFirst.mockResolvedValue(null);
+      await hasInflightSentryOp("r1");
+      const where = mocks.findFirst.mock.calls[0][0].where;
+      expect(where.createdAt.gte.getTime()).toBe(Date.parse("2026-10-17T10:00:00Z") - INFLIGHT_OP_MAX_AGE_MS);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("excludes the operation being confirmed", async () => {
@@ -137,7 +152,7 @@ describe("confirmSentryCreate", () => {
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
     expect(mocks.queryRaw).toHaveBeenCalledTimes(1);
     expect((mocks.queryRaw.mock.calls[0][0] as string[]).join("")).toMatch(
-      /FROM "SentryIssueImported".*FOR UPDATE/s
+      /FROM "SentryIssueImported"[\s\S]*FOR UPDATE/
     );
     expect(mocks.findFirst.mock.calls[0][0].where.id).toEqual({ not: "op-1" });
     expect(mocks.updateMany).toHaveBeenCalledWith({
