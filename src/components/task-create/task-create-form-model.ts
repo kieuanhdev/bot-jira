@@ -191,3 +191,48 @@ export function duplicateKeyFromWarning(
   if (warning.existingDuplicateKey) return warning.existingDuplicateKey;
   return warning.message.match(JIRA_KEY_RE)?.[1] ?? null;
 }
+
+const AI_OVERWRITE_KEYS = ["summary", "description"] as const;
+
+function hasText(value: string | undefined): boolean {
+  return Boolean(value && value.trim());
+}
+
+/** Whether applying an AI prefill would replace summary/description the user already wrote. */
+export function aiOverwriteNeedsConfirm(row: BulkCreateRowInput, prefill: TaskCreatePrefill): boolean {
+  return AI_OVERWRITE_KEYS.some((key) => hasText(prefill[key]) && hasText(row[key]));
+}
+
+/**
+ * Merge an AI suggestion into the form. Summary and description are replaced
+ * (callers confirm first via `aiOverwriteNeedsConfirm`); every other field is
+ * only filled when empty. The project's default issue type counts as empty, and
+ * locked labels are ignored when deciding whether labels are empty, then kept.
+ */
+export function mergeAiPrefill(
+  row: BulkCreateRowInput,
+  prefill: TaskCreatePrefill,
+  opts: { lockedLabels?: readonly string[]; defaultIssueTypeId?: string | null } = {}
+): BulkCreateRowInput {
+  const next: BulkCreateRowInput = { ...row };
+  const locked = new Set(opts.lockedLabels ?? []);
+
+  for (const [key, value] of Object.entries(prefill)) {
+    if (key === "clientRef" || isEmptyValue(value)) continue;
+    const field = key as keyof TaskCreatePrefill;
+    let fillable: boolean;
+    if (field === "summary" || field === "description") {
+      fillable = true;
+    } else if (field === "issueTypeId") {
+      fillable = !row.issueTypeId || row.issueTypeId === opts.defaultIssueTypeId;
+    } else if (field === "labels") {
+      fillable = (row.labels ?? []).every((label) => locked.has(label));
+    } else {
+      fillable = isEmptyValue(row[field]);
+    }
+    if (fillable) (next as Record<string, unknown>)[field] = value;
+  }
+
+  next.labels = dedupe(next.labels ?? []);
+  return withLockedLabels(next, opts.lockedLabels);
+}

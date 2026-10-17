@@ -7,6 +7,15 @@ const MAX_ERROR_LENGTH = 500;
  */
 export function sanitizeAiErrorMessage(raw: string): string {
   if (!raw) return "";
+  return redactSecrets(raw).slice(0, MAX_ERROR_LENGTH);
+}
+
+/**
+ * Redact API keys, bearer tokens, URL credentials and webhook secrets from free
+ * text without truncating it. Use on any user text before sending it to the LLM.
+ */
+export function redactSecrets(raw: string): string {
+  if (!raw) return "";
   let sanitized = raw;
 
   // Redact OpenAI API keys (sk-..., sk-proj-..., etc.)
@@ -30,5 +39,5 @@ export function sanitizeAiErrorMessage(raw: string): string {
     "$1[REDACTED_WEBHOOK_TOKEN]"
   );
 
-  return sanitized.slice(0, MAX_ERROR_LENGTH);
+  return sanitized;
 }

@@ -373,7 +373,15 @@ export function normalizeAiDraftItem(
     const matched = metadata.issueTypes.find(
       (t) => t.name.toLowerCase() === rawItem.issueTypeName!.toLowerCase()
     );
-    if (matched) issueTypeId = matched.id;
+    if (matched) {
+      issueTypeId = matched.id;
+    } else {
+      warnings.push({
+        field: "issueTypeId",
+        code: "UNKNOWN_ISSUE_TYPE",
+        message: `Loại task "${rawItem.issueTypeName}" không có trong dự án, đã bỏ qua.`,
+      });
+    }
   }
 
   let priorityId: string | undefined = rawItem.priorityId;
@@ -381,7 +389,15 @@ export function normalizeAiDraftItem(
     const matched = metadata.priorityOptions.find(
       (p) => p.name.toLowerCase() === rawItem.priorityName!.toLowerCase()
     );
-    if (matched) priorityId = matched.id;
+    if (matched) {
+      priorityId = matched.id;
+    } else {
+      warnings.push({
+        field: "priorityId",
+        code: "UNKNOWN_PRIORITY",
+        message: `Độ ưu tiên "${rawItem.priorityName}" không có trong dự án, đã bỏ qua.`,
+      });
+    }
   }
 
   // 11. Component mapping
@@ -392,7 +408,15 @@ export function normalizeAiDraftItem(
     const matchedIds: string[] = [];
     rawItem.componentNames.forEach((name) => {
       const matched = metadata.components!.find((c) => c.name.toLowerCase() === name.toLowerCase());
-      if (matched) matchedIds.push(matched.id);
+      if (matched) {
+        matchedIds.push(matched.id);
+      } else {
+        warnings.push({
+          field: "componentIds",
+          code: "UNKNOWN_COMPONENT",
+          message: `Component "${name}" không có trong dự án, đã bỏ qua.`,
+        });
+      }
     });
     componentIds = matchedIds;
   }

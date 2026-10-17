@@ -359,6 +359,7 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
         onOpenChange={setCreateOpen}
         projectKey={picker.selectedProject}
         source={BOARD_CREATE_SOURCE}
+        aiAssist
       />
     </div>
   );

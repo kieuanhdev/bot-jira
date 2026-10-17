@@ -26,11 +26,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TaskCreateForm } from "./task-create-form";
 import { useSingleTaskCreate } from "./use-single-task-create";
+import { AiIdeaPanel } from "./ai-idea-panel";
+import { useAiEnabled } from "@/hooks/use-ai-enabled";
 import {
   applyPrefill,
   canSubmit,
   duplicateKeyFromWarning,
   emptyRow,
+  mergeAiPrefill,
   resolveIssueTypeIdByName,
   splitPreviewErrors,
   type TaskCreatePrefill,
@@ -59,6 +62,11 @@ export type TaskCreateDialogProps = {
   endpoint?: string;
   /** Slot under the title for AI actions. */
   extraActions?: ReactNode;
+  /**
+   * Show "Viết bằng AI" (rough idea → form fields) under the title when the
+   * server has AI configured. The suggestion is merged with `mergeAiPrefill`.
+   */
+  aiAssist?: boolean;
   onCreated?(jiraKey: string): void;
 };
 
@@ -93,10 +101,12 @@ export function TaskCreateDialog({
   source,
   endpoint,
   extraActions,
+  aiAssist = false,
   onCreated,
 }: TaskCreateDialogProps): React.JSX.Element {
   const [draft, setDraft] = useState<{ projectKey: string; row: BulkCreateRowInput } | null>(null);
   const toast = useFlashMessage<string>(DONE_TOAST_MS);
+  const aiEnabled = useAiEnabled();
 
   const metadataQuery = useQuery({
     queryKey: bulkKeys.createMetadata(projectKey),
@@ -148,6 +158,13 @@ export function TaskCreateDialog({
     setDraft({ projectKey, row: next });
     // A pending duplicate confirmation refers to the previewed row; edits make it stale.
     if (phase.kind === "duplicate") create.reset();
+  }
+
+  function handleAiApply(prefill: TaskCreatePrefill) {
+    if (!row || !metadata) return;
+    handleChange(
+      mergeAiPrefill(row, prefill, { lockedLabels, defaultIssueTypeId: metadata.defaultIssueTypeId })
+    );
   }
 
   function handleOpenChange(next: boolean) {
@@ -211,6 +228,17 @@ export function TaskCreateDialog({
       </div>
     );
   }
+
+  const showAiPanel = aiAssist && aiEnabled && Boolean(row && metadata?.canCreate);
+  const headerExtra =
+    showAiPanel && row ? (
+      <div className="space-y-2">
+        <AiIdeaPanel projectKey={projectKey} current={row} disabled={busy} onApply={handleAiApply} />
+        {extraActions}
+      </div>
+    ) : (
+      extraActions
+    );
 
   const footer = (
     <div className="space-y-3">
@@ -334,7 +362,7 @@ export function TaskCreateDialog({
         onOpenChange={handleOpenChange}
         title={title}
         description={metadata ? `${metadata.project.name} (${projectKey})` : projectKey}
-        headerExtra={extraActions}
+        headerExtra={headerExtra}
         footer={footer}
         className="max-w-xl"
       >

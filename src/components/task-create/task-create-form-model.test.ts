@@ -10,6 +10,8 @@ import {
   canSubmit,
   duplicateKeyFromWarning,
   emptyRow,
+  aiOverwriteNeedsConfirm,
+  mergeAiPrefill,
   resolveIssueTypeIdByName,
   splitPreviewErrors,
   withLockedLabels,
@@ -251,5 +253,79 @@ describe("resolveIssueTypeIdByName", () => {
   it("skips subtask types with the same name", () => {
     const subBug = meta({ issueTypes: [{ id: "10005", name: "Bug", subtask: true }] });
     expect(resolveIssueTypeIdByName(subBug, "Bug")).toBeUndefined();
+  });
+});
+
+describe("mergeAiPrefill", () => {
+  const ai = {
+    summary: "Thêm nút xuất Excel",
+    description: "Bối cảnh\n- A",
+    issueTypeId: "10003",
+    priorityId: "p1",
+    componentIds: ["c1"],
+    labels: ["ui"],
+  };
+
+  it("fills a fresh row, replacing the default issue type", () => {
+    const row = mergeAiPrefill(emptyRow(meta()), ai, { defaultIssueTypeId: "10001" });
+    expect(row).toMatchObject(ai);
+    expect(row.clientRef).toBe(SINGLE_CLIENT_REF);
+  });
+
+  it("keeps fields the user already filled but overwrites summary and description", () => {
+    const current = {
+      ...emptyRow(meta()),
+      summary: "Cũ",
+      description: "Mô tả cũ",
+      issueTypeId: "10009",
+      priorityId: "p2",
+      componentIds: ["c9"],
+      labels: ["mine"],
+    };
+    const row = mergeAiPrefill(current, ai, { defaultIssueTypeId: "10001" });
+    expect(row.summary).toBe(ai.summary);
+    expect(row.description).toBe(ai.description);
+    expect(row.issueTypeId).toBe("10009");
+    expect(row.priorityId).toBe("p2");
+    expect(row.componentIds).toEqual(["c9"]);
+    expect(row.labels).toEqual(["mine"]);
+  });
+
+  it("keeps the current summary/description when the prefill omits them", () => {
+    const current = { ...emptyRow(meta()), summary: "Cũ", description: "Mô tả cũ" };
+    const row = mergeAiPrefill(current, { priorityId: "p1" });
+    expect(row.summary).toBe("Cũ");
+    expect(row.description).toBe("Mô tả cũ");
+    expect(row.priorityId).toBe("p1");
+  });
+
+  it("treats locked-only labels as empty and keeps locked labels", () => {
+    const current = withLockedLabels(emptyRow(meta()), ["sentry"]);
+    const row = mergeAiPrefill(current, { labels: ["ui"] }, { lockedLabels: ["sentry"] });
+    expect(row.labels).toEqual(["ui", "sentry"]);
+  });
+
+  it("does not touch unrelated fields", () => {
+    const current = { ...emptyRow(meta()), points: 3, dueDate: "2026-10-20" };
+    const row = mergeAiPrefill(current, ai);
+    expect(row.points).toBe(3);
+    expect(row.dueDate).toBe("2026-10-20");
+  });
+});
+
+describe("aiOverwriteNeedsConfirm", () => {
+  it("is false for an empty form", () => {
+    expect(aiOverwriteNeedsConfirm(emptyRow(meta()), { summary: "x", description: "y" })).toBe(false);
+  });
+
+  it("is true when summary or description would be replaced", () => {
+    const row = { ...emptyRow(meta()), summary: "Cũ" };
+    expect(aiOverwriteNeedsConfirm(row, { summary: "x" })).toBe(true);
+    expect(aiOverwriteNeedsConfirm({ ...emptyRow(meta()), description: "d" }, { description: "y" })).toBe(true);
+  });
+
+  it("is false when the prefill does not carry the filled field", () => {
+    const row = { ...emptyRow(meta()), summary: "Cũ" };
+    expect(aiOverwriteNeedsConfirm(row, { description: "y" })).toBe(false);
   });
 });
