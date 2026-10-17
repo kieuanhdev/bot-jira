@@ -9,6 +9,7 @@ import { WikiContent } from "@/components/issues/wiki-content";
 import { formatJiraDuration } from "@/lib/worklogs/schema";
 import { IssueDependencies } from "@/components/issue-dependencies";
 import { IssueRelations } from "@/components/issues/issue-relations";
+import { IssueAttachments } from "@/components/issues/issue-attachments";
 import { LinkIssueDialog } from "@/components/issues/link-issue-dialog";
 import { useLinkIssue } from "@/components/issues/use-link-issue";
 import type { IssueDetail } from "./lib/issue-detail-types";
@@ -174,6 +175,12 @@ export function IssueDetailClient({
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <IssueAttachments jiraKey={issue.jiraKey} />
             </CardContent>
           </Card>
 

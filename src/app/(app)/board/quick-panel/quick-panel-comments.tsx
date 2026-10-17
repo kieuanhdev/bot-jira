@@ -29,6 +29,8 @@ interface QuickPanelCommentsProps {
   jiraKey: string;
   description?: string | null;
   onSaveDescription: (description: string) => void;
+  /** Rendered between the description and the comments (the Attachments panel). */
+  afterDescription?: ReactNode;
   comments?: CommentItem[];
   onAddComment: (body: string) => Promise<void>;
   commentsDisabled?: boolean;
@@ -38,6 +40,7 @@ export function QuickPanelComments({
   jiraKey,
   description,
   onSaveDescription,
+  afterDescription,
   comments = [],
   onAddComment,
   commentsDisabled = false,
@@ -119,6 +122,8 @@ export function QuickPanelComments({
           <p className="text-sm italic text-muted-foreground">No description.</p>
         )}
       </Section>
+
+      {afterDescription}
 
       <Section title={`Comments (${commentCount})`}>
         {commentsDisabled && (

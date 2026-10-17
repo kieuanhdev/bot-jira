@@ -14,6 +14,7 @@ import { QuickPanelFields } from "./quick-panel/quick-panel-fields";
 import { QuickPanelComments } from "./quick-panel/quick-panel-comments";
 import { QuickPanelFooter } from "./quick-panel/quick-panel-footer";
 import { IssueRelations } from "@/components/issues/issue-relations";
+import { IssueAttachments } from "@/components/issues/issue-attachments";
 import { useFlashMessage } from "@/hooks/use-flash-message";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useQuickPanelQueries } from "./quick-panel/hooks/use-quick-panel-queries";
@@ -262,6 +263,7 @@ export function QuickPanel({
             jiraKey={issue.jiraKey}
             description={description}
             onSaveDescription={(value) => mutateField({ description: value })}
+            afterDescription={<IssueAttachments jiraKey={issue.jiraKey} className="mt-5" />}
             comments={d?.comments}
             onAddComment={addComment}
             commentsDisabled={commentsDisabled}

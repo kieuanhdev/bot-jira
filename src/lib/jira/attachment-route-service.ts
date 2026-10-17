@@ -10,6 +10,8 @@ import { logger, logSwallowed } from "@/lib/logger";
 
 // Pasted screenshots are often a few MB; anything larger is not worth inlining.
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+// Explicit downloads are streamed, so they can be much larger.
+const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024;
 const ISSUE_KEY_RE = /^[A-Z][A-Z0-9_]*-\d+$/;
 
 type JiraAttachment = {
@@ -19,7 +21,32 @@ type JiraAttachment = {
   content?: string;
   size?: number;
   created?: string;
+  author?: { displayName?: string; name?: string };
 };
+
+/** What the Attachments panel shows for one file. */
+export type AttachmentItem = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  created: string | null;
+  author: string;
+  isImage: boolean;
+};
+
+export function toAttachmentItem(a: JiraAttachment): AttachmentItem | null {
+  if (!a.id || !a.filename) return null;
+  return {
+    id: a.id,
+    filename: a.filename,
+    mimeType: a.mimeType ?? "application/octet-stream",
+    size: a.size ?? 0,
+    created: a.created ?? null,
+    author: a.author?.displayName || a.author?.name || "",
+    isImage: isProxiableImage(a.mimeType),
+  };
+}
 
 /** Lowercase, URL-decoded, with runs of spaces/underscores collapsed: Jira markup and
  * stored filenames disagree on those often enough to matter. */
@@ -61,25 +88,29 @@ function authHeaderValue(auth: JiraAuth): string {
     : `Bearer ${auth.token}`;
 }
 
-/**
- * Stream an image attached to a Jira issue, looked up by filename, so wiki
- * markup like `!image-1.png|thumbnail!` renders without exposing Jira auth.
- */
-export async function handleAttachmentRequest(req: Request) {
+/** Header-safe Content-Disposition for a download, with an ASCII fallback name. */
+export function downloadDisposition(filename: string): string {
+  const ascii = filename.replace(/[^\w.\- ]+/g, "_").replace(/"/g, "");
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+type Resolved =
+  | { ok: true; auth: JiraAuth; key: string; userId: string }
+  | { ok: false; response: Response };
+
+/** Session, rate limit, issue key and Jira auth: the preamble both handlers share. */
+async function resolveRequest(rawKey: string): Promise<Resolved> {
   const session = await getSession();
-  if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
+  if (!session?.user?.id) {
+    return { ok: false, response: NextResponse.json({ error: "unauthorized" }, { status: 401 }) };
+  }
   if (!checkAuthRateLimit(`attachment:${session.user.id}`, 120, 60 * 1000)) {
-    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
+    return { ok: false, response: NextResponse.json({ error: "rate_limited" }, { status: 429 }) };
   }
-
-  const url = new URL(req.url);
-  const key = url.searchParams.get("key")?.trim().toUpperCase() ?? "";
-  const name = url.searchParams.get("name")?.trim() ?? "";
-  if (!ISSUE_KEY_RE.test(key) || !name || name.length > 255) {
-    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  const key = rawKey.trim().toUpperCase();
+  if (!ISSUE_KEY_RE.test(key)) {
+    return { ok: false, response: NextResponse.json({ error: "invalid_request" }, { status: 400 }) };
   }
-
   // Same policy as issue detail: the user's own token, else the system token.
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
@@ -87,28 +118,70 @@ export async function handleAttachmentRequest(req: Request) {
   });
   const auth = userJiraAuth(user) || (await getSystemJiraAuth());
   if (!auth?.token) {
-    return NextResponse.json({ error: "Jira authentication unavailable" }, { status: 401 });
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Jira authentication unavailable" }, { status: 401 }),
+    };
+  }
+  return { ok: true, auth, key, userId: session.user.id };
+}
+
+async function loadAttachments(auth: JiraAuth, key: string): Promise<JiraAttachment[] | null> {
+  try {
+    const issue = await jiraWith(auth).getIssue(key, "attachment");
+    return (issue.fields as { attachment?: JiraAttachment[] }).attachment ?? [];
+  } catch (err) {
+    logSwallowed("jira_attachment_lookup", err, { key });
+    return null;
+  }
+}
+
+/** Every file attached to the issue, newest first, for the Attachments panel. */
+export async function handleAttachmentListRequest(rawKey: string) {
+  const ctx = await resolveRequest(rawKey);
+  if (!ctx.ok) return ctx.response;
+  const list = await loadAttachments(ctx.auth, ctx.key);
+  if (!list) return NextResponse.json({ error: "issue_unavailable" }, { status: 404 });
+  const items = list
+    .map(toAttachmentItem)
+    .filter((item): item is AttachmentItem => item !== null)
+    .sort((x, y) => (y.created ?? "").localeCompare(x.created ?? ""));
+  return NextResponse.json({ items });
+}
+
+/**
+ * Stream one file attached to a Jira issue without exposing Jira auth. Picked by
+ * `id`, or by `name` for wiki markup like `!image-1.png|thumbnail!`. Images are
+ * served inline; `download=1` serves any file as an attachment.
+ */
+export async function handleAttachmentRequest(req: Request) {
+  const url = new URL(req.url);
+  const ctx = await resolveRequest(url.searchParams.get("key") ?? "");
+  if (!ctx.ok) return ctx.response;
+  const { auth, key } = ctx;
+
+  const id = url.searchParams.get("id")?.trim() ?? "";
+  const name = url.searchParams.get("name")?.trim() ?? "";
+  const download = url.searchParams.get("download") === "1";
+  if ((!id && !name) || id.length > 32 || name.length > 255) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
 
   const base = env.jiraBaseUrl.replace(/\/$/, "");
-  let attachment: JiraAttachment | null = null;
-  try {
-    const issue = await jiraWith(auth).getIssue(key, "attachment");
-    const list = (issue.fields as { attachment?: JiraAttachment[] }).attachment ?? [];
-    attachment = pickAttachment(list, name);
-  } catch (err) {
-    logSwallowed("jira_attachment_lookup", err, { key });
-    return NextResponse.json({ error: "issue_unavailable" }, { status: 404 });
-  }
+  const list = await loadAttachments(auth, key);
+  if (!list) return NextResponse.json({ error: "issue_unavailable" }, { status: 404 });
+  // The id must belong to this issue's own list, so it cannot reach other issues' files.
+  const attachment = id ? (list.find((a) => a.id === id) ?? null) : pickAttachment(list, name);
 
-  if (!attachment?.id || !attachment.filename || !isProxiableImage(attachment.mimeType)) {
+  if (!attachment?.id || !attachment.filename || (!download && !isProxiableImage(attachment.mimeType))) {
     return NextResponse.json({ error: "attachment_not_found" }, { status: 404 });
   }
-  if ((attachment.size ?? 0) > MAX_ATTACHMENT_BYTES) {
+  const limit = download ? MAX_DOWNLOAD_BYTES : MAX_ATTACHMENT_BYTES;
+  if ((attachment.size ?? 0) > limit) {
     return NextResponse.json({ error: "attachment_too_large" }, { status: 413 });
   }
 
-  const etag = `"att-${attachment.id}"`;
+  const etag = `"att-${attachment.id}${download ? "-dl" : ""}"`;
   const cacheHeaders = { ETag: etag, "Cache-Control": "private, max-age=3600" };
   if (req.headers.get("if-none-match") === etag) {
     return new Response(null, { status: 304, headers: cacheHeaders });
@@ -129,11 +202,12 @@ export async function handleAttachmentRequest(req: Request) {
     }
   }
 
+  const expectsHtml = (attachment.mimeType ?? "").toLowerCase().includes("html");
   for (const target of candidates) {
     try {
       const res = await fetch(target, {
-        headers: { Authorization: authHeaderValue(auth), Accept: "image/*" },
-        signal: AbortSignal.timeout(15000),
+        headers: { Authorization: authHeaderValue(auth), Accept: download ? "*/*" : "image/*" },
+        signal: AbortSignal.timeout(download ? 60000 : 15000),
       });
       // Never accept a response that ended up off the Jira origin.
       if (!res.ok || !isJiraOrigin(res.url || target, base)) {
@@ -141,10 +215,27 @@ export async function handleAttachmentRequest(req: Request) {
         continue;
       }
       const contentType = (res.headers.get("content-type") ?? attachment.mimeType ?? "").split(";")[0].trim();
-      if (!isProxiableImage(contentType)) {
-        // Usually a login/error page returned with 200.
-        logger.warn({ message: "Jira attachment was not an image", key, contentType, target: new URL(target).pathname });
+      // A login or error page arrives as 200 HTML where a real file was expected.
+      const wrongKind = download
+        ? contentType.toLowerCase() === "text/html" && !expectsHtml
+        : !isProxiableImage(contentType);
+      if (wrongKind) {
+        logger.warn({ message: "Jira attachment was not the expected file", key, contentType, target: new URL(target).pathname });
         continue;
+      }
+      if (download) {
+        const length = Number(res.headers.get("content-length") ?? 0);
+        if (length > MAX_DOWNLOAD_BYTES) return NextResponse.json({ error: "attachment_too_large" }, { status: 413 });
+        return new Response(res.body, {
+          status: 200,
+          headers: {
+            ...cacheHeaders,
+            "Content-Type": "application/octet-stream",
+            "Content-Disposition": downloadDisposition(attachment.filename),
+            "X-Content-Type-Options": "nosniff",
+            ...(length > 0 ? { "Content-Length": String(length) } : {}),
+          },
+        });
       }
       const data = await res.arrayBuffer();
       if (data.byteLength > MAX_ATTACHMENT_BYTES) {
@@ -152,11 +243,7 @@ export async function handleAttachmentRequest(req: Request) {
       }
       return new Response(data, {
         status: 200,
-        headers: {
-          ...cacheHeaders,
-          "Content-Type": contentType,
-          "X-Content-Type-Options": "nosniff",
-        },
+        headers: { ...cacheHeaders, "Content-Type": contentType, "X-Content-Type-Options": "nosniff" },
       });
     } catch (err) {
       logSwallowed("jira_attachment_fetch", err, { key });

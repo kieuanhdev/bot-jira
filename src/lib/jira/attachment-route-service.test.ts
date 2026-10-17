@@ -111,3 +111,78 @@ describe("handleAttachmentRequest", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("attachments by id, listing and download", () => {
+  const BASE = "https://jira.example.test";
+  const files = [
+    { id: "10", filename: "shot.png", mimeType: "image/png", size: 4, created: "2026-03-01T00:00:00.000+0700", author: { displayName: "An" } },
+    { id: "11", filename: "báo cáo.pdf", mimeType: "application/pdf", size: 8, created: "2026-04-01T00:00:00.000+0700" },
+  ];
+
+  async function setup(fetchImpl: (u: string) => Promise<Response> = async () => new Response("x")) {
+    vi.resetModules();
+    vi.doMock("@/lib/session", () => ({ getSession: async () => ({ user: { id: "u1" } }) }));
+    vi.doMock("@/lib/prisma", () => ({ prisma: { user: { findUnique: async () => ({}) } } }));
+    vi.doMock("@/lib/user-creds", () => ({ userJiraAuth: () => ({ user: "u", token: "t", authMode: "Bearer" }) }));
+    vi.doMock("@/lib/env", () => ({ env: { jiraBaseUrl: BASE } }));
+    vi.doMock("@/lib/rate-limit", () => ({ checkAuthRateLimit: () => true }));
+    vi.doMock("@/lib/jira/client", () => ({
+      getSystemJiraAuth: async () => null,
+      jiraWith: () => ({ getIssue: async () => ({ fields: { attachment: files } }) }),
+    }));
+    vi.stubGlobal("fetch", async (u: string) => fetchImpl(String(u)));
+    return import("./attachment-route-service");
+  }
+  const get = (qs: string) => new Request(`http://app/api/jira/attachment?${qs}`);
+
+  it("lists files newest first with an image flag", async () => {
+    const { handleAttachmentListRequest } = await setup();
+    const body = await (await handleAttachmentListRequest("abc-1")).json();
+    expect(body.items.map((i: { id: string }) => i.id)).toEqual(["11", "10"]);
+    expect(body.items[0]).toMatchObject({ filename: "báo cáo.pdf", isImage: false });
+    expect(body.items[1]).toMatchObject({ isImage: true, author: "An" });
+  });
+
+  it("rejects an invalid issue key when listing", async () => {
+    const { handleAttachmentListRequest } = await setup();
+    expect((await handleAttachmentListRequest("nope")).status).toBe(400);
+  });
+
+  it("serves an image inline by id", async () => {
+    const { handleAttachmentRequest } = await setup(
+      async () => new Response(new Uint8Array([1]), { headers: { "content-type": "image/png" } })
+    );
+    const res = await handleAttachmentRequest(get("key=ABC-1&id=10"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-disposition")).toBeNull();
+  });
+
+  it("refuses to show a non-image inline", async () => {
+    const { handleAttachmentRequest } = await setup();
+    expect((await handleAttachmentRequest(get("key=ABC-1&id=11"))).status).toBe(404);
+  });
+
+  it("serves any file as a download with a safe filename", async () => {
+    const { handleAttachmentRequest } = await setup(
+      async () => new Response("pdfbytes", { headers: { "content-type": "application/pdf" } })
+    );
+    const res = await handleAttachmentRequest(get("key=ABC-1&id=11&download=1"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/octet-stream");
+    const disposition = res.headers.get("content-disposition") ?? "";
+    expect(disposition).toContain("attachment;");
+    expect(disposition).toContain("filename*=UTF-8''b%C3%A1o%20c%C3%A1o.pdf");
+  });
+
+  it("treats a login page returned for a download as a failure", async () => {
+    const { handleAttachmentRequest } = await setup(
+      async () => new Response("<html>login</html>", { headers: { "content-type": "text/html" } })
+    );
+    expect((await handleAttachmentRequest(get("key=ABC-1&id=11&download=1"))).status).toBe(502);
+  });
+
+  it("does not serve an id that is not on this issue", async () => {
+    const { handleAttachmentRequest } = await setup();
+    expect((await handleAttachmentRequest(get("key=ABC-1&id=999&download=1"))).status).toBe(404);
+  });
+});
