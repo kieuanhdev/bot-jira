@@ -10,6 +10,7 @@ import {
   canSubmit,
   duplicateKeyFromWarning,
   emptyRow,
+  resolveIssueTypeIdByName,
   splitPreviewErrors,
   withLockedLabels,
 } from "./task-create-form-model";
@@ -225,5 +226,30 @@ describe("duplicateKeyFromWarning", () => {
 
   it("returns null when there is no key", () => {
     expect(duplicateKeyFromWarning({ code: "DUPLICATE_SUMMARY_BATCH", message: "Trùng trong batch" })).toBeNull();
+  });
+});
+
+describe("resolveIssueTypeIdByName", () => {
+  const withBug = meta({
+    issueTypes: [
+      { id: "10001", name: "Task", subtask: false },
+      { id: "10004", name: "Bug", subtask: false },
+    ],
+  });
+
+  it("matches case-insensitively and ignores surrounding spaces", () => {
+    expect(resolveIssueTypeIdByName(withBug, "bug")).toBe("10004");
+    expect(resolveIssueTypeIdByName(withBug, " BUG ")).toBe("10004");
+  });
+
+  it("returns undefined when the type is absent or no name is given", () => {
+    expect(resolveIssueTypeIdByName(meta(), "Bug")).toBeUndefined();
+    expect(resolveIssueTypeIdByName(withBug, undefined)).toBeUndefined();
+    expect(resolveIssueTypeIdByName(withBug, "  ")).toBeUndefined();
+  });
+
+  it("skips subtask types with the same name", () => {
+    const subBug = meta({ issueTypes: [{ id: "10005", name: "Bug", subtask: true }] });
+    expect(resolveIssueTypeIdByName(subBug, "Bug")).toBeUndefined();
   });
 });

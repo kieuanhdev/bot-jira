@@ -19,10 +19,16 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SentryRow, type SentryRowItem, type SentryFilter, type RowState, FILTER_STATES, EMPTY, VALID_FILTERS } from "./sentry-row";
 import { SentryBulkBar } from "./sentry-bulk-bar";
-import { SentryApproveDialog } from "./sentry-approve-dialog";
+import { SentryApproveDialog, SentryTaskCreateDialog } from "./sentry-approve-dialog";
 import { SentryFilterTabs } from "./sentry-filter-tabs";
 
 export type { SentryRowItem, SentryFilter, RowState };
+
+type MappedSentryRow = SentryRowItem & { targetProject: string };
+
+function hasTargetProject(row: SentryRowItem): row is MappedSentryRow {
+  return Boolean(row.targetProject);
+}
 
 type TriageView = "actionable" | "noise" | "all";
 
@@ -39,6 +45,10 @@ export function AdminSentryClient() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Rows awaiting the admin's confirmation in the preview dialog.
   const [confirmRows, setConfirmRows] = useState<SentryRowItem[] | null>(null);
+  // Single mapped issue approved through the full task form. The row stays set after
+  // closing so an in-flight create keeps its dialog (and success toast) mounted.
+  const [formRow, setFormRow] = useState<MappedSentryRow | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tone: FeedbackTone; text: string } | null>(null);
 
@@ -85,7 +95,7 @@ export function AdminSentryClient() {
   };
 
   const decide = useMutation({
-    mutationFn: (input: { ids: string[]; decision: "approve" | "reject" | "reopen"; summary?: string; description?: string }) =>
+    mutationFn: (input: { ids: string[]; decision: "approve" | "reject" | "reopen" }) =>
       api<{ updated: number; queued: boolean }>("/api/admin/sentry-import/review", { method: "POST", body: input }),
     onMutate: (input) => {
       setFeedback(null);
@@ -116,6 +126,24 @@ export function AdminSentryClient() {
     onError: (err) => setFeedback({ tone: "destructive", text: getErrorMessage(err) }),
     onSettled: () => setBusyId(null),
   });
+
+  // One issue with a mapped project → full task form; otherwise the list confirm.
+  const startApprove = (rows: SentryRowItem[]) => {
+    const only = rows.length === 1 ? rows[0] : null;
+    if (only && hasTargetProject(only)) {
+      setFeedback(null);
+      setFormRow(only);
+      setFormOpen(true);
+      return;
+    }
+    setConfirmRows(rows);
+  };
+
+  const handleFormCreated = (jiraKey: string) => {
+    setFeedback({ tone: "success", text: `Đã tạo task ${jiraKey} từ lỗi Sentry.` });
+    setSelected(new Set());
+    refresh();
+  };
 
   const toggleSelectOne = (id: string, checked: boolean) => {
     setSelected((prev) => {
@@ -195,7 +223,7 @@ export function AdminSentryClient() {
           selectedCount={visibleSelected.length}
           showReject={filter === "review"}
           busy={busy}
-          onApprove={() => setConfirmRows(visibleSelected)}
+          onApprove={() => startApprove(visibleSelected)}
           onReject={() => decide.mutate({ ids: visibleSelected.map((r) => r.id), decision: "reject" })}
         />
       )}
@@ -238,7 +266,7 @@ export function AdminSentryClient() {
                 isBusy={busyId === row.id}
                 isDecidingApprove={decide.variables?.decision === "approve"}
                 onToggleSelect={(checked) => toggleSelectOne(row.id, checked)}
-                onApprove={() => setConfirmRows([row])}
+                onApprove={() => startApprove([row])}
                 onReject={() => decide.mutate({ ids: [row.id], decision: "reject" })}
                 onReopen={() => decide.mutate({ ids: [row.id], decision: "reopen" })}
                 onRetry={() => retry.mutate(row.id)}
@@ -256,8 +284,18 @@ export function AdminSentryClient() {
         rows={confirmRows}
         pending={decide.isPending}
         onCancel={() => setConfirmRows(null)}
-        onConfirm={(edits) => confirmRows && decide.mutate({ ids: confirmRows.map((r) => r.id), decision: "approve", ...edits })}
+        onConfirm={() => confirmRows && decide.mutate({ ids: confirmRows.map((r) => r.id), decision: "approve" })}
       />
+
+      {formRow && (
+        <SentryTaskCreateDialog
+          key={formRow.id}
+          row={formRow}
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          onCreated={handleFormCreated}
+        />
+      )}
     </div>
   );
 }

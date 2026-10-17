@@ -57,6 +57,19 @@ export function applyPrefill(
   return withLockedLabels(next, lockedLabels);
 }
 
+/**
+ * Id of the non-subtask issue type whose name matches (trimmed, case-insensitive),
+ * e.g. "Bug" for Sentry. Undefined when absent so the project default applies.
+ */
+export function resolveIssueTypeIdByName(
+  meta: Pick<BulkCreateProjectMetadata, "issueTypes">,
+  name: string | undefined
+): string | undefined {
+  const wanted = name?.trim().toLowerCase();
+  if (!wanted) return undefined;
+  return meta.issueTypes.find((t) => !t.subtask && t.name.trim().toLowerCase() === wanted)?.id;
+}
+
 export function effectiveIssueTypeId(
   row: BulkCreateRowInput,
   meta: BulkCreateProjectMetadata

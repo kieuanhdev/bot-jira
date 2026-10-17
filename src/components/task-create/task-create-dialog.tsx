@@ -31,6 +31,7 @@ import {
   canSubmit,
   duplicateKeyFromWarning,
   emptyRow,
+  resolveIssueTypeIdByName,
   splitPreviewErrors,
   type TaskCreatePrefill,
 } from "./task-create-form-model";
@@ -47,6 +48,11 @@ export type TaskCreateDialogProps = {
   /** Sheet title; defaults to "Tạo task". */
   title?: string;
   prefill?: TaskCreatePrefill;
+  /**
+   * Issue type to preselect by name (case-insensitive, e.g. "Bug") once metadata
+   * loads. Ignored when `prefill.issueTypeId` is set or the user already edited the form.
+   */
+  prefillIssueTypeName?: string;
   /** Always merged into labels and cannot be removed (Sentry dedup labels). */
   lockedLabels?: string[];
   source: NonNullable<BulkCreateRequest["source"]>;
@@ -82,6 +88,7 @@ export function TaskCreateDialog({
   projectKey,
   title = "Tạo task",
   prefill,
+  prefillIssueTypeName,
   lockedLabels,
   source,
   endpoint,
@@ -121,7 +128,15 @@ export function TaskCreateDialog({
     draft && draft.projectKey === projectKey
       ? draft.row
       : metadata
-        ? applyPrefill(emptyRow(metadata), prefill, lockedLabels)
+        ? applyPrefill(
+            emptyRow(metadata),
+            {
+              ...prefill,
+              issueTypeId:
+                prefill?.issueTypeId ?? resolveIssueTypeIdByName(metadata, prefillIssueTypeName),
+            },
+            lockedLabels
+          )
         : null;
 
   const busy = phase.kind === "previewing" || phase.kind === "creating" || phase.kind === "queued-slow";
