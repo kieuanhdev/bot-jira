@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { boardKeys, bulkKeys } from "@/lib/query-keys";
 import {
@@ -10,6 +11,7 @@ import {
   type BulkCreatePreviewResult,
   type BulkCreateProjectMetadata,
 } from "@/lib/bulk/create-types";
+import { readHandoff } from "@/lib/bulk/handoff";
 import { getStoredEditorMode, setStoredEditorMode } from "./editor-preferences";
 import {
   createInitialRows,
@@ -21,7 +23,15 @@ import {
 
 export type Step = "input" | "preview" | "progress";
 
+export const HANDOFF_MISSING_MESSAGE = "Không tìm thấy danh sách sub-task, hãy thử lại";
+
 export function useBulkCreateController() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const urlProject = searchParams.get("project")?.trim().toUpperCase() ?? "";
+  const handoffId = searchParams.get("handoff");
+
   const [userSelectedProject, setUserSelectedProject] = useState<string>("");
   const [step, setStep] = useState<Step>("input");
   const [defaults, setDefaults] = useState<BulkCreateFieldDefaults>({});
@@ -40,6 +50,15 @@ export function useBulkCreateController() {
   const draftRestoredRef = useRef(false);
   const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Rows handed over via `?handoff=<id>` (AI sub-task split). While active, the
+  // saved draft `bulk-create-draft:<project>` is left untouched: no restore
+  // banner, no autosave, no removal on confirm. The ref is read by effects in
+  // the same commit; the state drives rendering. Cleared on project change.
+  const handoffModeRef = useRef(false);
+  const handledHandoffRef = useRef<string | null>(null);
+  const [handoffActive, setHandoffActive] = useState(false);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
+
   // Project change confirmation state
   const [pendingProjectKey, setPendingProjectKey] = useState<string | null>(null);
   const [confirmProjectDialogOpen, setConfirmProjectDialogOpen] = useState(false);
@@ -55,7 +74,11 @@ export function useBulkCreateController() {
     return (projectsData?.items ?? []).map((p) => p.key);
   }, [projectsData?.items]);
 
-  const projectKey = userSelectedProject || availableProjects[0] || "";
+  const projectKey =
+    userSelectedProject ||
+    (urlProject && availableProjects.includes(urlProject) ? urlProject : "") ||
+    availableProjects[0] ||
+    "";
   const draftKey = `bulk-create-draft:${projectKey}`;
 
   const saveDraft = useCallback((itemsToSave: BulkCreateRowInput[], defaultsToSave: BulkCreateFieldDefaults) => {
@@ -80,9 +103,43 @@ export function useBulkCreateController() {
     }, 1000);
   }, [draftKey]);
 
+  // Consume `?handoff=<id>` once (read-once storage; the ref also guards the
+  // Strict Mode double effect run). Declared before the draft effects so they
+  // already see `handoffModeRef` in the same commit.
+  useEffect(() => {
+    if (!handoffId || handledHandoffRef.current === handoffId) return;
+    handledHandoffRef.current = handoffId;
+    const handoff = readHandoff(handoffId);
+    if (handoff) {
+      handoffModeRef.current = true;
+      draftRestoredRef.current = true;
+      if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    }
+    queueMicrotask(() => {
+      if (handoff) {
+        setUserSelectedProject(handoff.projectKey);
+        setItems(handoff.items);
+        setDefaults({});
+        setStep("input");
+        setPreviewData(null);
+        setActiveOperationId(null);
+        setDraftAvailable(false);
+        setIsSavingDraft(false);
+        setHandoffActive(true);
+        setHandoffError(null);
+      } else {
+        setHandoffError(HANDOFF_MISSING_MESSAGE);
+      }
+    });
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("handoff");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [handoffId, searchParams, router, pathname]);
+
   // Restore draft on project change
   useEffect(() => {
-    if (!projectKey || draftRestoredRef.current) return;
+    if (!projectKey || draftRestoredRef.current || handoffModeRef.current) return;
     draftRestoredRef.current = true;
     try {
       const raw = localStorage.getItem(draftKey);
@@ -103,7 +160,7 @@ export function useBulkCreateController() {
 
   // Auto-save draft on items/defaults change
   useEffect(() => {
-    if (step !== "input") return;
+    if (step !== "input" || handoffModeRef.current) return;
     if (draftRestoredRef.current) {
       saveDraft(items, defaults);
     }
@@ -181,7 +238,14 @@ export function useBulkCreateController() {
     onSuccess: (data) => {
       setActiveOperationId(data.operationId);
       setStep("progress");
-      localStorage.removeItem(draftKey);
+      // Handoff rows were never saved as the draft; keep the user's draft.
+      if (!handoffModeRef.current) {
+        try {
+          localStorage.removeItem(draftKey);
+        } catch {
+          /* unavailable */
+        }
+      }
     },
   });
 
@@ -216,13 +280,20 @@ export function useBulkCreateController() {
       setConfirmProjectDialogOpen(true);
     } else {
       setUserSelectedProject(newKey);
+      exitHandoffMode();
       draftRestoredRef.current = false;
       setDraftAvailable(false);
     }
   }
 
+  function exitHandoffMode() {
+    handoffModeRef.current = false;
+    setHandoffActive(false);
+  }
+
   function applyProjectChange(newKey: string) {
     setUserSelectedProject(newKey);
+    exitHandoffMode();
     setDefaults({});
     setDraftAvailable(false);
     draftRestoredRef.current = false;
@@ -259,6 +330,9 @@ export function useBulkCreateController() {
     handleDiscardDraft,
     isSavingDraft,
     draftSavedTime,
+    handoffActive,
+    handoffError,
+    dismissHandoffError: () => setHandoffError(null),
     metadata,
     metadataLoading,
     metadataError,

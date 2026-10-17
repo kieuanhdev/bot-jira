@@ -10,8 +10,8 @@ import {
   type BulkCreateValidationWarning,
 } from "@/lib/bulk/create-types";
 import { normalizeAiDraftBatch, type RawAiDraftTaskItem } from "@/lib/bulk/ai-draft-normalizer";
-import { getDefaultWorkCriteriaPolicy, type JiraWorkCriteriaPolicy } from "@/lib/bulk/work-criteria-policy";
 import { redactSecrets } from "./sanitizer";
+import { isRecord, listOrNone, optionalString, quietDraftPolicy, stringArray } from "./draft-shared";
 
 export const TASK_DRAFT_PROMPT_VERSION = "task-draft-v1";
 
@@ -39,10 +39,6 @@ export type TaskDraftPrefill = Partial<
 >;
 
 type DraftMetadata = Pick<BulkCreateProjectMetadata, "issueTypes" | "priorityOptions" | "components">;
-
-function listOrNone(values: string[]): string {
-  return values.length > 0 ? values.map((v) => `"${v}"`).join(", ") : "(không có)";
-}
 
 /** Name lists the prompt may choose from. Sub-task types are excluded: they need a parent. */
 export function taskDraftPromptLists(
@@ -108,24 +104,6 @@ export function buildTaskDraftPrompt(input: TaskDraftPromptInput): string {
   ].join("\n");
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function optionalString(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : undefined;
-}
-
-function stringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value
-    .filter((v): v is string => typeof v === "string")
-    .map((v) => v.trim())
-    .filter(Boolean);
-}
-
 /**
  * Validate the LLM object. Throws when `summary` is missing so `generateJson`
  * retries. Only known keys survive; the summary is collapsed to one line.
@@ -149,16 +127,6 @@ export function parseTaskDraft(obj: unknown): RawAiDraftTaskItem {
   return item;
 }
 
-/** No work-criteria noise: no required fields, no category label. */
-function draftPolicy(): JiraWorkCriteriaPolicy {
-  const policy = getDefaultWorkCriteriaPolicy("off");
-  return {
-    ...policy,
-    requiredAtCreation: [],
-    workCategoryMapping: { ...policy.workCategoryMapping, strategy: "issueType" },
-  };
-}
-
 function labelKey(label: string): string {
   return label.trim().toLowerCase().replace(/\s+/g, "-").slice(0, MAX_LABEL_LENGTH);
 }
@@ -175,7 +143,7 @@ export function buildTaskDraftPrefill(
 ): { prefill: TaskDraftPrefill; warnings: BulkCreateValidationWarning[] } {
   const result = normalizeAiDraftBatch({
     items: [{ ...raw, issueTypeId: undefined, priorityId: undefined, componentIds: undefined }],
-    policy: draftPolicy(),
+    policy: quietDraftPolicy(),
     metadata: {
       issueTypes: metadata.issueTypes.filter((t) => !t.subtask),
       priorityOptions: metadata.priorityOptions,

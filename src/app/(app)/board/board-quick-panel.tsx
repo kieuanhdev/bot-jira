@@ -14,6 +14,7 @@ import { QuickPanelFields } from "./quick-panel/quick-panel-fields";
 import { QuickPanelComments } from "./quick-panel/quick-panel-comments";
 import { QuickPanelFooter } from "./quick-panel/quick-panel-footer";
 import { IssueRelations } from "@/components/issues/issue-relations";
+import { AiSplitButton } from "@/components/task-create/ai-split-button";
 import { IssueAttachments } from "@/components/issues/issue-attachments";
 import { useFlashMessage } from "@/hooks/use-flash-message";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
@@ -197,6 +198,9 @@ export function QuickPanel({
           onLinkIssue={link.openLinkDialog}
           onDelete={del.openDeleteDialog}
           onCopyLink={jiraUrl ? () => void copyToClipboard(jiraUrl, "Đã sao chép liên kết Jira.") : undefined}
+          extraActions={
+            <AiSplitButton key={issue.jiraKey} projectKey={issue.projectKey} parentKey={issue.jiraKey} />
+          }
         />
 
         <QuickPanelDialogs

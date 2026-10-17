@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { CopyPlus, Flag, GitBranch, Link as LinkIcon, Link2, RefreshCw, Timer, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,8 @@ interface QuickPanelActionsProps {
   onDelete: () => void;
   /** Omitted when the Jira URL is unknown. */
   onCopyLink?: () => void;
+  /** Extra actions rendered after the built-in ones (e.g. AI sub-task split). */
+  extraActions?: ReactNode;
 }
 
 function ActionMessage({ message }: { message: QuickPanelActionMessage | null }) {
@@ -68,6 +71,7 @@ export function QuickPanelActions({
   onLinkIssue,
   onDelete,
   onCopyLink,
+  extraActions,
 }: QuickPanelActionsProps) {
   return (
     <>
@@ -136,6 +140,8 @@ export function QuickPanelActions({
           )}
           {creatingBranch ? "Đang tạo…" : "Tạo nhánh Git"}
         </Button>
+
+        {extraActions}
 
         <Button
           variant="outline"

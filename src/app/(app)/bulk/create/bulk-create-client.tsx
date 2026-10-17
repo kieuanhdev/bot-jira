@@ -25,6 +25,8 @@ import {
   Edit3,
   Maximize2,
   Sparkles,
+  ListTree,
+  X,
 } from "lucide-react";
 import { BulkCreateStepper } from "./bulk-create-stepper";
 import { BulkCreateProjectDialog } from "./bulk-create-project-dialog";
@@ -55,6 +57,9 @@ export function BulkCreateClient() {
     handleDiscardDraft,
     isSavingDraft,
     draftSavedTime,
+    handoffActive,
+    handoffError,
+    dismissHandoffError,
     metadata,
     metadataLoading,
     metadataError,
@@ -168,6 +173,34 @@ export function BulkCreateClient() {
       {/* Step 1: Input & Defaults */}
       {step === "input" && (
         <div className="space-y-4">
+          {/* AI sub-task handoff missing or expired */}
+          {handoffError && (
+            <FeedbackBanner
+              tone="warning"
+              action={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={dismissHandoffError}
+                  aria-label="Đóng thông báo"
+                  className="h-7 w-7 cursor-pointer p-0"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </Button>
+              }
+            >
+              {handoffError}
+            </FeedbackBanner>
+          )}
+
+          {/* Rows handed over from "Tách sub-task bằng AI" */}
+          {handoffActive && (
+            <FeedbackBanner tone="info" icon={ListTree}>
+              Danh sách sub-task do AI đề xuất. Kiểm tra lại trước khi tạo; danh sách này không được lưu thành bản nháp.
+            </FeedbackBanner>
+          )}
+
           {/* Skeleton while projects are loading */}
           {isProjectsLoading && (
             <div className="space-y-3">

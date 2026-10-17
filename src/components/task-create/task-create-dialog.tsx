@@ -28,6 +28,7 @@ import { TaskCreateForm } from "./task-create-form";
 import { useSingleTaskCreate } from "./use-single-task-create";
 import type { SingleCreatePhase } from "./single-create-model";
 import { AiIdeaPanel } from "./ai-idea-panel";
+import { AiSplitButton } from "./ai-split-button";
 import { useAiEnabled } from "@/hooks/use-ai-enabled";
 import {
   applyPrefill,
@@ -128,7 +129,7 @@ export function TaskCreateDialog({
   onCreated,
 }: TaskCreateDialogProps): React.JSX.Element {
   const [draft, setDraft] = useState<{ projectKey: string; row: BulkCreateRowInput } | null>(null);
-  const toast = useFlashMessage<string>(DONE_TOAST_MS);
+  const toast = useFlashMessage<{ jiraKey: string; projectKey: string }>(DONE_TOAST_MS);
   const aiEnabled = useAiEnabled();
 
   const metadataQuery = useQuery({
@@ -147,7 +148,7 @@ export function TaskCreateDialog({
     source,
     endpoint,
     onCreated: (jiraKey) => {
-      toast.show(jiraKey);
+      toast.show({ jiraKey, projectKey });
       setDraft(null);
       create.reset();
       onOpenChange(false);
@@ -414,16 +415,30 @@ export function TaskCreateDialog({
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-4 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-border bg-popover px-4 py-2 text-sm font-medium text-popover-foreground shadow-lg"
+          className="fixed bottom-4 left-1/2 z-[60] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center gap-2 rounded-lg border border-border bg-popover px-4 py-2 text-sm font-medium text-popover-foreground shadow-lg"
         >
           <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden="true" />
           <span>Đã tạo task</span>
           <Link
-            href={`/issue/${toast.message}`}
+            href={`/issue/${toast.message.jiraKey}`}
             className="cursor-pointer text-primary underline-offset-4 transition-colors duration-150 hover:underline"
           >
-            {toast.message}
+            {toast.message.jiraKey}
           </Link>
+          {source.type === "single" && (
+            <AiSplitButton
+              key={toast.message.jiraKey}
+              projectKey={toast.message.projectKey}
+              parentKey={toast.message.jiraKey}
+              // Keep the toast open while the AI works and while an error is shown.
+              onBusyChange={(splitting) => {
+                if (splitting && toast.message) toast.show(toast.message, 0);
+              }}
+              onErrorChange={(error) => {
+                if (error && toast.message) toast.show(toast.message, 0);
+              }}
+            />
+          )}
           <button
             type="button"
             onClick={toast.clear}
