@@ -3,7 +3,7 @@
  *
  * Jira Cloud/DC descriptions use a small wiki dialect (h1.–h6., *bold*,
  * //italic//, {{code}}, {{code-block}}, ----, # bullets, 1. numbered,
- * {color:..}text, {code}.., [text|url], and {panel}..). This converts the
+ * {color:..}text, {code}.., [text|url], !image.png|thumbnail!, and {panel}..). This converts the
  * common subset to HTML and escapes everything else so no raw user text is
  * emitted as markup. It is intentionally dependency-free.
  */
@@ -49,7 +49,53 @@ function inline(s: string): string {
     .replace(/~~([^~]+?)~~/g, "<del>$1</del>");
 }
 
-export function wikiToHtml(input: string): string {
+export type WikiOptions = {
+  /** Issue the markup belongs to; lets `!file.png!` resolve to its attachment. */
+  issueKey?: string;
+};
+
+// !target! or !target|thumbnail,width=300! — target must not start with a space,
+// which keeps prose like "Done! Next!" from being read as an image.
+const IMAGE_RE = /!([^!\s|][^!\n|]*?)(?:\|([^!\n]*))?!/g;
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp)$/i;
+
+function imageHtml(target: string, params: string | undefined, opts: WikiOptions): string | null {
+  const isUrl = /^https?:\/\//i.test(target);
+  if (!isUrl && !IMAGE_EXT_RE.test(target)) return null;
+  let src: string;
+  if (isUrl) {
+    src = target;
+  } else if (opts.issueKey) {
+    src = `/api/jira/attachment?key=${encodeURIComponent(opts.issueKey)}&name=${encodeURIComponent(target)}`;
+  } else {
+    return `<code>${esc(target)}</code>`;
+  }
+  const width = params?.match(/(?:^|,)\s*width=(\d{1,4})/)?.[1];
+  const thumb = params ? /(?:^|,)\s*thumbnail\s*(?:,|$)/.test(params) : false;
+  const attrs = [
+    `src="${esc(src)}"`,
+    `alt="${esc(target.split("/").pop() ?? target)}"`,
+    `loading="lazy"`,
+    width ? `width="${width}"` : thumb ? `width="200"` : "",
+  ].filter(Boolean).join(" ");
+  return `<a href="${esc(src)}" target="_blank" rel="noopener noreferrer"><img ${attrs}/></a>`;
+}
+
+// Images are matched on raw text (before escaping) so filenames with `&` or `<`
+// round-trip into the URL intact; everything between them goes through inline().
+function renderInline(text: string, opts: WikiOptions): string {
+  let out = "";
+  let last = 0;
+  for (const m of text.matchAll(IMAGE_RE)) {
+    const html = imageHtml(m[1].trim(), m[2], opts);
+    if (html === null) continue;
+    out += inline(esc(text.slice(last, m.index))) + html;
+    last = m.index + m[0].length;
+  }
+  return out + inline(esc(text.slice(last)));
+}
+
+export function wikiToHtml(input: string, opts: WikiOptions = {}): string {
   if (!input || !input.trim()) return "";
   const lines = input.replace(/\r\n/g, "\n").split("\n");
   const out: string[] = [];
@@ -100,7 +146,7 @@ export function wikiToHtml(input: string): string {
     if (h) {
       closeList();
       const lvl = h[1][1];
-      out.push(`<h${lvl}>${inline(esc(h[2]))}</h${lvl}>`);
+      out.push(`<h${lvl}>${renderInline(h[2], opts)}</h${lvl}>`);
       continue;
     }
 
@@ -112,7 +158,7 @@ export function wikiToHtml(input: string): string {
         out.push("<ul>");
         list = "ul";
       }
-      out.push(`<li>${inline(esc(bullet[1]))}</li>`);
+      out.push(`<li>${renderInline(bullet[1], opts)}</li>`);
       continue;
     }
 
@@ -124,13 +170,13 @@ export function wikiToHtml(input: string): string {
         out.push("<ol>");
         list = "ol";
       }
-      out.push(`<li>${inline(esc(num[1]))}</li>`);
+      out.push(`<li>${renderInline(num[1], opts)}</li>`);
       continue;
     }
 
     // Plain paragraph
     closeList();
-    out.push(`<p>${inline(esc(line))}</p>`);
+    out.push(`<p>${renderInline(line, opts)}</p>`);
   }
 
   if (inCodeBlock && code.length) out.push(`<pre><code>${esc(code.join("\n"))}</code></pre>`);

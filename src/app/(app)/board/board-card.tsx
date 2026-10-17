@@ -25,7 +25,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  Bot,
   GitBranch,
   CalendarClock,
 } from "lucide-react";
@@ -159,7 +158,7 @@ export function BoardCardBody({
           {issue.summary}
         </p>
 
-        {(issue.aiScore || stale || overdue || (issue.delivery && issue.delivery.branchCount > 0)) && (
+        {(stale || overdue || isHighPriority(issue.priority) || (issue.delivery && issue.delivery.branchCount > 0)) && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
             {issue.delivery && issue.delivery.branchCount > 0 && (
               <Badge
@@ -177,17 +176,6 @@ export function BoardCardBody({
                 <GitBranch className="h-2.5 w-2.5" />
                 {issue.delivery.branchCount}b
                 {issue.delivery.prMerged ? " ✓" : issue.delivery.prOpen ? " PR" : ""}
-              </Badge>
-            )}
-            {issue.aiScore && (
-              <Badge
-                variant={issue.aiDecision ? (issue.aiDecision.decision === "rejected" ? "danger" : "success") : "info"}
-                className="h-4 gap-1 px-1.5 text-[10px]"
-                title={issue.aiDecision ? `AI estimate ${issue.aiDecision.decision}` : "AI estimate (pending review)"}
-              >
-                <Bot className="h-2.5 w-2.5" />
-                {issue.aiScore.points}pt
-                {issue.aiScore.confidence != null ? ` ${Math.round(issue.aiScore.confidence * 100)}%` : ""}
               </Badge>
             )}
             {stale && (

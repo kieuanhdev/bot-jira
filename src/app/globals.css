@@ -213,4 +213,11 @@
   padding: 0;
 }
 .wiki-content a { color: var(--primary); text-decoration: underline; }
+.wiki-content img {
+  display: inline-block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
 .wiki-content strong { font-weight: 600; }

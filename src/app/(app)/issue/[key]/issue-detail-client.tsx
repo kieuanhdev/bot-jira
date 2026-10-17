@@ -145,7 +145,7 @@ export function IssueDetailClient({
               {issue.description ? (
                 <div
                   className="wiki-content text-sm"
-                  dangerouslySetInnerHTML={{ __html: wikiToHtml(issue.description) }}
+                  dangerouslySetInnerHTML={{ __html: wikiToHtml(issue.description, { issueKey: issue.jiraKey }) }}
                 />
               ) : (
                 <p className="text-sm text-muted-foreground">—</p>
@@ -198,6 +198,7 @@ export function IssueDetailClient({
 
         <TabsContent value="comments">
           <IssueDetailTabsComments
+            jiraKey={issue.jiraKey}
             comments={issue.comments}
             commentDraft={commentDraft}
             onCommentDraftChange={setCommentDraft}

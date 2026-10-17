@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { QueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
+import { api, getErrorMessage } from "@/lib/api-client";
 import { issuesKeys } from "@/lib/query-keys";
 import type { IssueItem } from "@/hooks/use-issues";
 import { applyOptimisticIssuePatch } from "../../lib/board-optimistic";
@@ -13,6 +13,7 @@ interface UseQuickPanelFieldMutationOptions {
   qc: QueryClient;
   onOptimisticUpdate?: (patch: Partial<IssueItem> & { jiraKey: string }) => void;
   flagged: boolean;
+  onError?: (message: string) => void;
 }
 
 export function useQuickPanelFieldMutation({
@@ -20,6 +21,7 @@ export function useQuickPanelFieldMutation({
   qc,
   onOptimisticUpdate,
   flagged,
+  onError,
 }: UseQuickPanelFieldMutationOptions) {
   const [optimisticOverrides, setOptimisticOverrides] = useState<Record<string, unknown>>({});
 
@@ -38,18 +40,24 @@ export function useQuickPanelFieldMutation({
       ...(patch.points !== undefined ? { points: patch.points as number | null } : {}),
       ...(patch.assignee !== undefined ? { assigneeJira: patch.assignee as string | null } : {}),
       ...(patch.priority !== undefined ? { priority: patch.priority as string } : {}),
+      ...(patch.summary !== undefined ? { summary: patch.summary as string } : {}),
+      ...(patch.reporter !== undefined ? { reporterJira: patch.reporter as string | null } : {}),
+      ...(patch.approver !== undefined ? { approverJira: patch.approver as string | null } : {}),
+      ...(patch.tester !== undefined ? { testerJira: patch.tester as string | null } : {}),
+      ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate as string | null } : {}),
     });
 
     try {
       await api(`/api/issues/${issue.jiraKey}`, { method: "PATCH", body: patch });
       void invalidate();
-    } catch {
+    } catch (error) {
       rollback();
       setOptimisticOverrides((prev) => {
         const next = { ...prev };
         for (const k of Object.keys(patch)) delete next[k];
         return next;
       });
+      onError?.(getErrorMessage(error, "Không cập nhật được task trên Jira."));
     }
   }
 

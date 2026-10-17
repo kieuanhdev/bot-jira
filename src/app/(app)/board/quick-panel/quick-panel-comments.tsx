@@ -1,15 +1,18 @@
-import { useState, type ReactNode } from "react";
-import { Send } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import { Pencil, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { wikiToHtml } from "@/lib/wiki";
 import { formatDateTime } from "@/lib/utils";
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
     <section className="mt-5">
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h3>
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </h3>
+        {action}
+      </div>
       {children}
     </section>
   );
@@ -23,20 +26,34 @@ interface CommentItem {
 }
 
 interface QuickPanelCommentsProps {
+  jiraKey: string;
   description?: string | null;
+  onSaveDescription: (description: string) => void;
   comments?: CommentItem[];
   onAddComment: (body: string) => Promise<void>;
   commentsDisabled?: boolean;
 }
 
 export function QuickPanelComments({
+  jiraKey,
   description,
+  onSaveDescription,
   comments = [],
   onAddComment,
   commentsDisabled = false,
 }: QuickPanelCommentsProps) {
   const [commentDraft, setCommentDraft] = useState("");
   const [commenting, setCommenting] = useState(false);
+  const [descDraft, setDescDraft] = useState<string | null>(null);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+
+  const closeDescription = (save: boolean) => {
+    if (descDraft === null) return;
+    if (save && descDraft !== (description ?? "")) onSaveDescription(descDraft);
+    setDescDraft(null);
+    // Keep focus inside the panel so its focus trap and Escape keep working.
+    requestAnimationFrame(() => editButtonRef.current?.focus());
+  };
 
   const handleSend = async () => {
     const text = commentDraft.trim();
@@ -54,11 +71,52 @@ export function QuickPanelComments({
 
   return (
     <>
-      <Section title="Description">
-        {description ? (
+      <Section
+        title="Description"
+        action={
+          descDraft === null && (
+            <button
+              ref={editButtonRef}
+              type="button"
+              onClick={() => setDescDraft(description ?? "")}
+              className="flex cursor-pointer items-center gap-1 text-[11px] text-primary transition-colors duration-150 hover:underline"
+            >
+              <Pencil className="h-3 w-3" aria-hidden /> Sửa
+            </button>
+          )
+        }
+      >
+        {descDraft !== null ? (
+          <div className="flex flex-col gap-2">
+            <textarea
+              autoFocus
+              data-escape-local
+              aria-label="Description"
+              value={descDraft}
+              onChange={(e) => setDescDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") closeDescription(true);
+                if (e.key === "Escape") closeDescription(false);
+              }}
+              rows={10}
+              className="min-h-[10rem] w-full resize-y rounded-md border bg-background px-2.5 py-1.5 font-mono text-xs leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-muted-foreground">Cú pháp Jira wiki · Ctrl+Enter để lưu</span>
+              <div className="flex gap-1.5">
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => closeDescription(false)}>
+                  Hủy
+                </Button>
+                <Button size="sm" className="h-7 text-xs" onClick={() => closeDescription(true)}>
+                  Lưu
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : description ? (
           <div
             className="wiki-content text-sm leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: wikiToHtml(description) }}
+            dangerouslySetInnerHTML={{ __html: wikiToHtml(description, { issueKey: jiraKey }) }}
           />
         ) : (
           <p className="text-sm italic text-muted-foreground">No description.</p>
@@ -104,7 +162,7 @@ export function QuickPanelComments({
                   </div>
                   <div
                     className="wiki-content text-sm"
-                    dangerouslySetInnerHTML={{ __html: wikiToHtml(c.body) }}
+                    dangerouslySetInnerHTML={{ __html: wikiToHtml(c.body, { issueKey: jiraKey }) }}
                   />
                 </div>
               ))}

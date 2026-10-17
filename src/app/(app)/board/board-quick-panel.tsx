@@ -73,6 +73,7 @@ export function QuickPanel({
     qc,
     onOptimisticUpdate,
     flagged,
+    onError: (text) => flashActionMsg({ type: "error", text }),
   });
   const { optimisticOverrides, mutateField, handleTransition, toggleFlag, addComment, invalidate } = mutation;
 
@@ -139,6 +140,11 @@ export function QuickPanel({
     optimisticOverrides.dueDate !== undefined
       ? (optimisticOverrides.dueDate as string | null)
       : (d?.dueDate ?? issue.dueDate);
+  const pick = (field: string, fallback: string | null | undefined) =>
+    optimisticOverrides[field] !== undefined ? (optimisticOverrides[field] as string | null) : fallback;
+  const reporterJira = pick("reporter", d?.reporterJira ?? issue.reporterJira);
+  const approverJira = pick("approver", d?.approverJira ?? issue.approverJira);
+  const testerJira = pick("tester", d?.testerJira ?? issue.testerJira);
   const timeSpentSeconds = d?.timeSpentSeconds ?? issue.timeSpent;
   const stale = d?.staleSnapshots?.[0] ?? null;
 
@@ -212,6 +218,7 @@ export function QuickPanel({
         <div className="flex-1 min-h-0 overflow-y-auto p-4">
           <QuickPanelFields
             summary={summary}
+            onSetSummary={(value) => mutateField({ summary: value })}
             status={status}
             dotClass={dotClass}
             transitions={transitionList}
@@ -219,10 +226,12 @@ export function QuickPanel({
             priority={priority}
             onSetPriority={(p) => mutateField({ priority: p })}
             assigneeJira={assigneeJira}
-            reporterJira={d?.reporterJira ?? issue.reporterJira}
-            approverJira={d?.approverJira ?? issue.approverJira}
-            testerJira={d?.testerJira ?? issue.testerJira}
-            dueDate={d?.dueDate ?? issue.dueDate}
+            reporterJira={reporterJira}
+            approverJira={approverJira}
+            testerJira={testerJira}
+            onSetPerson={(role, name) => mutateField({ [role]: name })}
+            dueDate={dueDate}
+            onSetDueDate={(value) => mutateField({ dueDate: value })}
             timeSpentSeconds={d?.timeSpentSeconds ?? issue.timeSpent}
             originalEstimateSeconds={d?.originalEstimateSeconds ?? issue.originalEstimateSeconds}
             assignees={assignees}
@@ -252,7 +261,9 @@ export function QuickPanel({
           />
 
           <QuickPanelComments
+            jiraKey={issue.jiraKey}
             description={description}
+            onSaveDescription={(value) => mutateField({ description: value })}
             comments={d?.comments}
             onAddComment={addComment}
             commentsDisabled={commentsDisabled}

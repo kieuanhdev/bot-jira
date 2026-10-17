@@ -28,6 +28,8 @@ export function useFocusTrap(
 
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
+        // Inline editors cancel their own edit on Escape instead of closing the dialog.
+        if ((e.target as HTMLElement | null)?.closest?.("[data-escape-local]")) return;
         e.preventDefault();
         onEscapeEvent();
         return;

@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { ExternalLink, GitBranch, Plus, X } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import { ExternalLink, GitBranch, Pencil, Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,8 +30,153 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+type PersonRole = "reporter" | "approver" | "tester";
+
+/** Click-to-edit title: Enter saves, Escape cancels without closing the panel. */
+function EditableSummary({ value, onSave }: { value: string; onSave: (summary: string) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  // Set once an edit has finished, so the blur fired on unmount can't save again.
+  const cancelled = useRef(false);
+
+  const finish = (save: boolean) => {
+    if (draft === null) return;
+    const next = draft.trim();
+    const skip = cancelled.current || !save;
+    cancelled.current = true;
+    setDraft(null);
+    // Keep focus inside the panel so its focus trap and Escape keep working.
+    requestAnimationFrame(() => triggerRef.current?.focus());
+    if (!skip && next && next !== value) onSave(next);
+  };
+
+  if (draft !== null) {
+    return (
+      <Input
+        autoFocus
+        data-escape-local
+        aria-label="Summary"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => finish(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") finish(true);
+          if (e.key === "Escape") finish(false);
+        }}
+        className="h-auto py-1 text-base font-semibold"
+      />
+    );
+  }
+
+  return (
+    <button
+      ref={triggerRef}
+      type="button"
+      onClick={() => {
+        cancelled.current = false;
+        setDraft(value);
+      }}
+      title="Nhấn để sửa tiêu đề"
+      className="group/summary flex w-full cursor-pointer items-start gap-1.5 rounded-md text-left transition-colors duration-150 hover:bg-muted/60"
+    >
+      <h2 className="text-base font-semibold leading-snug">{value}</h2>
+      <Pencil className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-150 group-hover/summary:opacity-100" aria-hidden />
+    </button>
+  );
+}
+
+function PersonPicker({
+  value,
+  people,
+  onChange,
+}: {
+  value?: string | null;
+  people: string[];
+  onChange: (name: string | null) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex max-w-full cursor-pointer items-center gap-1.5 text-left hover:underline">
+          {value ? (
+            <>
+              <JiraAvatar username={value} size="xs" />
+              <span className="truncate">{value}</span>
+            </>
+          ) : (
+            "—"
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52 max-h-64 overflow-y-auto">
+        <DropdownMenuItem onClick={() => onChange(null)} className="text-xs">
+          Bỏ trống
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {people.map((a) => (
+          <DropdownMenuItem key={a} onClick={() => onChange(a)} className="text-xs">
+            {a}
+            {a === value && <span className="ml-auto text-primary">•</span>}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function DueDatePicker({
+  value,
+  onChange,
+}: {
+  value?: string | null;
+  onChange: (date: string | null) => void;
+}) {
+  const current = value ? value.slice(0, 10) : "";
+  const [draft, setDraft] = useState(current);
+  // Commit once on "Lưu": a native date input changes on every typed segment.
+  return (
+    <DropdownMenu onOpenChange={(open) => open && setDraft(current)}>
+      <DropdownMenuTrigger asChild>
+        <button className="cursor-pointer text-left hover:underline">
+          {value ? new Date(value).toLocaleDateString("vi-VN") : "—"}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48 p-2">
+        <input
+          type="date"
+          aria-label="Due date"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter" && draft && draft !== current) onChange(draft);
+          }}
+          className="h-8 w-full rounded-md border bg-background px-2 text-xs"
+        />
+        <div className="mt-1 flex gap-1">
+          <DropdownMenuItem
+            disabled={!draft || draft === current}
+            onClick={() => onChange(draft)}
+            className="h-7 flex-1 justify-center text-xs font-medium text-primary"
+          >
+            Lưu
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!value}
+            onClick={() => onChange(null)}
+            className="h-7 flex-1 justify-center text-xs text-destructive"
+          >
+            Xóa ngày
+          </DropdownMenuItem>
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 interface QuickPanelFieldsProps {
   summary: string;
+  onSetSummary: (summary: string) => void;
   status: string;
   dotClass: string;
   transitions: { id: string; to?: { name?: string } | string }[];
@@ -42,7 +187,9 @@ interface QuickPanelFieldsProps {
   reporterJira?: string | null;
   approverJira?: string | null;
   testerJira?: string | null;
+  onSetPerson: (role: PersonRole, name: string | null) => void;
   dueDate?: string | null;
+  onSetDueDate: (date: string | null) => void;
   timeSpentSeconds?: number | null;
   originalEstimateSeconds?: number | null;
   assignees: string[];
@@ -67,6 +214,7 @@ interface QuickPanelFieldsProps {
 
 export function QuickPanelFields({
   summary,
+  onSetSummary,
   status,
   dotClass,
   transitions,
@@ -77,7 +225,9 @@ export function QuickPanelFields({
   reporterJira,
   approverJira,
   testerJira,
+  onSetPerson,
   dueDate,
+  onSetDueDate,
   timeSpentSeconds,
   originalEstimateSeconds,
   assignees,
@@ -122,7 +272,7 @@ export function QuickPanelFields({
 
   return (
     <>
-      <h2 className="text-base font-semibold leading-snug">{summary}</h2>
+      <EditableSummary value={summary} onSave={onSetSummary} />
 
       <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm xl:grid-cols-3">
         <Field label="Status">
@@ -229,37 +379,18 @@ export function QuickPanelFields({
           </DropdownMenu>
         </Field>
 
-        <Field label="Reporter">
-          {reporterJira ? (
-            <span className="flex items-center gap-1.5">
-              <JiraAvatar username={reporterJira} size="xs" />
-              <span className="truncate">{reporterJira}</span>
-            </span>
-          ) : (
-            "—"
-          )}
+        {([
+          ["Reporter", "reporter", reporterJira],
+          ["Approver", "approver", approverJira],
+          ["Tester", "tester", testerJira],
+        ] as const).map(([label, role, value]) => (
+          <Field key={role} label={label}>
+            <PersonPicker value={value} people={assignees} onChange={(name) => onSetPerson(role, name)} />
+          </Field>
+        ))}
+        <Field label="Due date">
+          <DueDatePicker value={dueDate} onChange={onSetDueDate} />
         </Field>
-        <Field label="Approver">
-          {approverJira ? (
-            <span className="flex items-center gap-1.5">
-              <JiraAvatar username={approverJira} size="xs" />
-              <span className="truncate">{approverJira}</span>
-            </span>
-          ) : (
-            "—"
-          )}
-        </Field>
-        <Field label="Tester">
-          {testerJira ? (
-            <span className="flex items-center gap-1.5">
-              <JiraAvatar username={testerJira} size="xs" />
-              <span className="truncate">{testerJira}</span>
-            </span>
-          ) : (
-            "—"
-          )}
-        </Field>
-        <Field label="Due date">{dueDate ? formatDateTime(dueDate) : "—"}</Field>
         <Field label="Đã làm / Ước tính">
           {timeSpentSeconds != null ? `${Math.round(timeSpentSeconds / 360) / 10}h` : "—"} / {originalEstimateSeconds != null ? `${Math.round(originalEstimateSeconds / 360) / 10}h` : "—"}
         </Field>

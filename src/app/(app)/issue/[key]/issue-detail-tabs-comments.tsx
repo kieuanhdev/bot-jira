@@ -7,6 +7,7 @@ import { wikiToHtml } from "@/lib/wiki";
 import type { IssueDetail } from "./lib/issue-detail-types";
 
 interface IssueDetailTabsCommentsProps {
+  jiraKey: string;
   comments: IssueDetail["comments"];
   commentDraft: string;
   onCommentDraftChange: (value: string) => void;
@@ -15,6 +16,7 @@ interface IssueDetailTabsCommentsProps {
 }
 
 export function IssueDetailTabsComments({
+  jiraKey,
   comments,
   commentDraft,
   onCommentDraftChange,
@@ -59,7 +61,7 @@ export function IssueDetailTabsComments({
             </div>
             <div
               className="wiki-content text-sm"
-              dangerouslySetInnerHTML={{ __html: wikiToHtml(c.body) }}
+              dangerouslySetInnerHTML={{ __html: wikiToHtml(c.body, { issueKey: jiraKey }) }}
             />
           </CardContent>
         </Card>

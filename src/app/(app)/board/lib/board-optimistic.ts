@@ -15,6 +15,11 @@ export type IssuePatch = {
   fixVersions?: string[];
   addFixVersion?: string;
   removeFixVersion?: string;
+  reporter?: string | null;
+  approver?: string | null;
+  tester?: string | null;
+  /** YYYY-MM-DD or null. */
+  dueDate?: string | null;
   [key: string]: unknown;
 };
 
@@ -63,6 +68,10 @@ export function applyOptimisticIssuePatch(
       ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
       ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
       ...(patch.description !== undefined ? { description: patch.description } : {}),
+      ...(patch.reporter !== undefined ? { reporterJira: patch.reporter } : {}),
+      ...(patch.approver !== undefined ? { approverJira: patch.approver } : {}),
+      ...(patch.tester !== undefined ? { testerJira: patch.tester } : {}),
+      ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate } : {}),
       labels: nextLabels,
       fixVersionNames: nextFixVersionNames,
     };
@@ -96,6 +105,10 @@ export function applyOptimisticIssuePatch(
       ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
       ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
       ...(patch.description !== undefined ? { description: patch.description } : {}),
+      ...(patch.reporter !== undefined ? { reporterJira: patch.reporter } : {}),
+      ...(patch.approver !== undefined ? { approverJira: patch.approver } : {}),
+      ...(patch.tester !== undefined ? { testerJira: patch.tester } : {}),
+      ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate } : {}),
       labels: nextLabels,
       fixVersions: nextFixVersions,
     };
