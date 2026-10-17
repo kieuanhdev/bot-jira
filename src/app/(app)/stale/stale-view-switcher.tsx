@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Clock3, ListChecks, User, Users } from "lucide-react";
 import type { StaleResponse } from "./lib/stale-types";
+import { TEAM_VIEW_ENABLED } from "./lib/stale-flags";
 
 type CountTone = "warning" | "danger" | "success" | "muted";
 
@@ -79,13 +80,15 @@ export function StaleViewSwitcher({
           count={showMyBadge ? (incompleteCount > 0 ? `${incompleteCount} thiếu chuẩn` : `${myStale} tồn đọng`) : undefined}
           tone={incompleteCount > 0 || myStale > 0 ? "warning" : "success"}
         />
-        <SegmentButton
-          active={viewMode === "team"}
-          onClick={() => onViewModeChange("team")}
-          icon={<Users className="h-3.5 w-3.5" aria-hidden />}
-          label="Toàn dự án"
-          count={data?.summary?.totalStale}
-        />
+        {TEAM_VIEW_ENABLED && (
+          <SegmentButton
+            active={viewMode === "team"}
+            onClick={() => onViewModeChange("team")}
+            icon={<Users className="h-3.5 w-3.5" aria-hidden />}
+            label="Toàn dự án"
+            count={data?.summary?.totalStale}
+          />
+        )}
       </div>
 
       {viewMode === "my-work" && (

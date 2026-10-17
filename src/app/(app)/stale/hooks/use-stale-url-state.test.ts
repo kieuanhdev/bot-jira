@@ -65,8 +65,9 @@ describe("useStaleUrlState", () => {
       })
     );
 
-    expect(hookResult.viewMode).toBe("team");
-    expect(hookResult.assignee).toBe(ALL);
+    // Team view is disabled (TEAM_VIEW_ENABLED = false): ?view=team falls back to my-work.
+    expect(hookResult.viewMode).toBe("my-work");
+    expect(hookResult.assignee).toBe("me");
     expect(hookResult.stdMissingFilter).toBe("ESTIMATION");
     expect(hookResult.stdProjectFilter).toBe("PROJ-1");
     expect(hookResult.stdStaleFilter).toBe("stale");

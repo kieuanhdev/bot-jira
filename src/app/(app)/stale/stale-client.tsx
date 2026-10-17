@@ -19,6 +19,7 @@ import { StaleScopeFilter } from "./stale-scope-filter";
 import { StaleViewSwitcher } from "./stale-view-switcher";
 import { StandardizationView } from "./stale-standardization-view";
 import { StaleAnalysisView } from "./stale-analysis-view";
+import { TEAM_VIEW_ENABLED } from "./lib/stale-flags";
 import { useStaleUrlState } from "./hooks/use-stale-url-state";
 
 export function StaleClient() {
@@ -211,7 +212,7 @@ export function StaleClient() {
           severity={severity}
           hasServerFilters={urlState.hasServerFilters}
           onClearScopeFilters={urlState.clearScopeFilters}
-          onViewTeam={() => urlState.setViewMode("team")}
+          onViewTeam={TEAM_VIEW_ENABLED ? () => urlState.setViewMode("team") : undefined}
           onViewStandardization={() => urlState.setActiveTab("standardization")}
         />
       )}

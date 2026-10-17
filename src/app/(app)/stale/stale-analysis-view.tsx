@@ -71,7 +71,7 @@ export interface StaleAnalysisViewProps {
   severity: string;
   hasServerFilters: boolean;
   onClearScopeFilters: () => void;
-  onViewTeam: () => void;
+  onViewTeam?: () => void;
   onViewStandardization: () => void;
 }
 

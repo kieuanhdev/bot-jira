@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ALL } from "../lib/stale-types";
+import { TEAM_VIEW_ENABLED } from "../lib/stale-flags";
 import {
   type StdMissingFilter,
   type StdSortMode,
@@ -38,7 +39,7 @@ export function useStaleUrlState() {
 
   // Read URL query parameters directly from searchParams (no window.location.search)
   const urlView = searchParams.get("view");
-  const viewMode: "team" | "my-work" = urlView === "team" ? "team" : "my-work";
+  const viewMode: "team" | "my-work" = TEAM_VIEW_ENABLED && urlView === "team" ? "team" : "my-work";
 
   const urlTab = searchParams.get("tab");
   const activeTab: "stale" | "standardization" = urlTab === "stale" ? "stale" : "standardization";
@@ -116,7 +117,7 @@ export function useStaleUrlState() {
   const setViewMode = useCallback(
     (mode: "my-work" | "team") => {
       updateUrl((p) => {
-        if (mode === "team") {
+        if (mode === "team" && TEAM_VIEW_ENABLED) {
           p.set("view", "team");
           p.delete("tab");
           if (p.get("assignee") === "me") p.delete("assignee");
@@ -224,7 +225,7 @@ export function useStaleUrlState() {
         if (val === "me") {
           p.delete("view");
           p.delete("assignee");
-        } else if (val === ALL) {
+        } else if (val === ALL && TEAM_VIEW_ENABLED) {
           p.set("view", "team");
           p.delete("tab");
           p.delete("assignee");

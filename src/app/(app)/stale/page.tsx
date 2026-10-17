@@ -6,6 +6,7 @@ import { staleKeys } from "@/lib/query-keys";
 import { parseStaleQueryParams } from "@/lib/stale/params";
 import { getStaleData } from "@/lib/stale/query";
 import { logSwallowed } from "@/lib/logger";
+import { TEAM_VIEW_ENABLED } from "./lib/stale-flags";
 import { StaleClient } from "./stale-client";
 import StaleLoading from "./loading";
 
@@ -23,7 +24,7 @@ export default async function StalePage(props: {
   if (session?.user?.id) {
     try {
       const viewParam = typeof searchParams?.view === "string" ? searchParams.view : undefined;
-      const isTeam = viewParam === "team";
+      const isTeam = TEAM_VIEW_ENABLED && viewParam === "team";
       const defaultAssignee = isTeam ? "ALL" : "me";
 
       const project = typeof searchParams?.project === "string" ? searchParams.project : "ALL";

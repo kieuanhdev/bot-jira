@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Filter } from "lucide-react";
 import { ALL, type StaleResponse } from "./lib/stale-types";
+import { TEAM_VIEW_ENABLED } from "./lib/stale-flags";
 
 interface StaleScopeFilterProps {
   project: string;
@@ -71,7 +72,7 @@ export function StaleScopeFilter({
                 <SelectValue placeholder="Tất cả người xử lý" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>Tất cả người xử lý</SelectItem>
+                {TEAM_VIEW_ENABLED && <SelectItem value={ALL}>Tất cả người xử lý</SelectItem>}
                 {jiraUsername && (
                   <SelectItem value="me">Của tôi (@{jiraUsername})</SelectItem>
                 )}

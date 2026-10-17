@@ -13,7 +13,7 @@ export function MyWorkHealthyState({
   onViewStandardization,
 }: {
   myWork?: MyWorkInfo;
-  onViewTeam: () => void;
+  onViewTeam?: () => void;
   onViewStandardization?: () => void;
 }) {
   const hasIncompleteStandardization =
@@ -38,15 +38,17 @@ export function MyWorkHealthyState({
               </p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onViewTeam}
-            className="cursor-pointer shrink-0 border-primary/30 text-primary hover:bg-primary/10 transition-colors"
-          >
-            Xem toàn dự án
-            <ArrowRight className="h-4 w-4 ml-1.5" aria-hidden="true" />
-          </Button>
+          {onViewTeam && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onViewTeam}
+              className="cursor-pointer shrink-0 border-primary/30 text-primary hover:bg-primary/10 transition-colors"
+            >
+              Xem toàn dự án
+              <ArrowRight className="h-4 w-4 ml-1.5" aria-hidden="true" />
+            </Button>
+          )}
         </div>
 
         {hasIncompleteStandardization && (
