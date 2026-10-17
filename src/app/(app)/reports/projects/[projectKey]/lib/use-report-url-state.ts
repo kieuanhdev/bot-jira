@@ -155,12 +155,12 @@ export function useReportUrlState() {
       statusGroup?: string;
       assignee?: string;
     }) => {
-      const nextActivity = filter.activity !== undefined ? filter.activity : activeActivity;
+      const nextActivity = filter.activity !== undefined ? filter.activity : "all";
       const nextStatusGroup =
         filter.statusGroup !== undefined
           ? (filter.statusGroup as ReportStatusGroup)
-          : activeStatusGroup;
-      const nextAssignee = filter.assignee !== undefined ? filter.assignee : activeAssignee;
+          : null;
+      const nextAssignee = filter.assignee !== undefined ? filter.assignee : "all";
 
       navigate(
         {
@@ -170,12 +170,13 @@ export function useReportUrlState() {
           activeActivity: nextActivity,
           activeStatusGroup: nextStatusGroup,
           activeAssignee: nextAssignee,
+          activeSearch: "",
           activeOffset: 0,
         },
         "push"
       );
     },
-    [activeActivity, activeStatusGroup, activeAssignee, currentState, navigate]
+    [currentState, navigate]
   );
 
   const handleNavigateToOverview = useCallback(() => {

@@ -3,6 +3,8 @@
 import { Filter, X, RotateCcw, ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { REPORT_STATUS_STYLE } from "@/lib/reports/status";
+import type { ReportStatusGroup } from "@/lib/reports/types";
 
 export interface ActiveFilterBannerProps {
   activity: string;
@@ -74,7 +76,10 @@ export function ActiveFilterBanner({
             variant="secondary"
             className="gap-1 font-normal bg-card text-foreground border border-border"
           >
-            Trạng thái: <strong className="font-semibold">{statusGroup}</strong>
+            Trạng thái:{" "}
+            <strong className="font-semibold">
+              {REPORT_STATUS_STYLE[statusGroup as ReportStatusGroup]?.label || statusGroup}
+            </strong>
             <button
               type="button"
               onClick={onClearStatusGroup}

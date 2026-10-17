@@ -17,7 +17,6 @@ export function StatusDonutView({
   selectedGroup,
   hoveredGroup,
   showSecondaryMetrics,
-  onSelectGroup,
   onHoverGroup,
   onGroupClick,
 }: {
@@ -31,7 +30,6 @@ export function StatusDonutView({
   selectedGroup?: ReportStatusGroup | null;
   hoveredGroup: ReportStatusGroup | null;
   showSecondaryMetrics: boolean;
-  onSelectGroup?: (group: ReportStatusGroup | null) => void;
   onHoverGroup: (group: ReportStatusGroup | null) => void;
   onGroupClick: (group: ReportStatusGroup) => void;
 }) {
@@ -74,7 +72,7 @@ export function StatusDonutView({
                   const group = (entry as { group?: ReportStatusGroup })?.group;
                   if (group) onGroupClick(group);
                 }}
-                className={onSelectGroup ? "cursor-pointer" : undefined}
+                className="cursor-pointer"
               >
                 {chartActiveItems.map((item) => {
                   const isSelected = selectedGroup === item.group;
@@ -148,11 +146,9 @@ export function StatusDonutView({
                         )}
                       </div>
 
-                      {onSelectGroup && (
-                        <p className="mt-1 text-[10px] text-teal-600 dark:text-teal-400 font-medium italic pt-1 border-t border-border/40">
-                          Nhấp để lọc danh sách task →
-                        </p>
-                      )}
+                      <p className="mt-1 text-[10px] text-teal-600 dark:text-teal-400 font-medium italic pt-1 border-t border-border/40">
+                        Nhấp để xem danh sách task →
+                      </p>
                     </div>
                   );
                 }}
@@ -200,8 +196,8 @@ export function StatusDonutView({
 
         <p className="mt-1 text-[11px] text-muted-foreground text-center">
           {focusedItem
-            ? "Nhấp vào phân đoạn để lọc công việc"
-            : "Rê chuột hoặc nhấp để xem chi tiết"}
+            ? "Nhấp vào phân đoạn để xem danh sách task"
+            : "Rê chuột hoặc nhấp để xem danh sách task"}
         </p>
       </div>
 

@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { ReportStatusGroup } from "@/lib/reports/types";
 import { formatHours, type DistributionTotals, type EnrichedStatusItem } from "./model";
@@ -45,7 +45,8 @@ export function StatusTableView({
             return (
               <tr
                 key={item.group}
-                className={`transition-colors hover:bg-muted/50 ${
+                onClick={() => onGroupClick(item.group)}
+                className={`transition-colors hover:bg-muted/50 cursor-pointer ${
                   isSelected ? "bg-teal-500/10 font-medium" : ""
                 }`}
               >
@@ -94,11 +95,14 @@ export function StatusTableView({
                 <td className="py-2.5 px-3 text-center">
                   <button
                     type="button"
-                    onClick={() => onGroupClick(item.group)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onGroupClick(item.group);
+                    }}
                     className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-teal-600 dark:text-teal-400 hover:bg-teal-500/10 cursor-pointer font-medium"
                   >
-                    <span>{isSelected ? "Bỏ lọc" : "Lọc task"}</span>
-                    <ExternalLink className="h-3 w-3" />
+                    <span>Xem task</span>
+                    <ArrowRight className="h-3 w-3" />
                   </button>
                 </td>
               </tr>

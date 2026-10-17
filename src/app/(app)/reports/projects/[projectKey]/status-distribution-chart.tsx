@@ -122,7 +122,9 @@ export function StatusDistributionChart({
   }, [focusedGroup, enrichedItems]);
 
   const handleGroupClick = (group: ReportStatusGroup) => {
-    if (selectedGroup === group) {
+    if (onDrillDownToTasks) {
+      onDrillDownToTasks(group);
+    } else if (selectedGroup === group) {
       onSelectGroup?.(null);
     } else {
       onSelectGroup?.(group);
@@ -242,7 +244,6 @@ export function StatusDistributionChart({
                 selectedGroup={selectedGroup}
                 hoveredGroup={hoveredGroup}
                 showSecondaryMetrics={preferences.showSecondaryMetrics}
-                onSelectGroup={onSelectGroup}
                 onHoverGroup={setHoveredGroup}
                 onGroupClick={handleGroupClick}
               />

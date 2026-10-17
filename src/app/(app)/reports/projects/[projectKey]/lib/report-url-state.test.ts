@@ -64,6 +64,26 @@ describe("report-url-state", () => {
     expect(params.get("offset")).toBe("20");
   });
 
+  it("builds URL search params for status group drill-down from overview chart", () => {
+    const params = buildReportUrlSearchParams({
+      period,
+      versionId: "all",
+      unit: "auto",
+      activeTab: "tasks",
+      activeActivity: "all",
+      activeStatusGroup: "In Progress",
+      activeAssignee: "all",
+      activeSearch: "",
+      activeOffset: 0,
+    });
+    expect(params.get("tab")).toBe("tasks");
+    expect(params.get("statusGroup")).toBe("In Progress");
+    expect(params.has("activity")).toBe(false);
+    expect(params.has("assignee")).toBe(false);
+    expect(params.has("search")).toBe(false);
+    expect(params.has("offset")).toBe(false);
+  });
+
   it("builds URL search params for members tab with selected member", () => {
     const params = buildReportUrlSearchParams({
       period,
