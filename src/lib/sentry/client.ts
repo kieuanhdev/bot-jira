@@ -5,6 +5,8 @@ export type SentryIssue = {
   shortId: string;
   title: string;
   permalinkUrl?: string;
+  // The REST issue list names the link `permalink`; webhooks use `permalinkUrl`.
+  permalink?: string;
   level?: string;
   status?: string;
   firstSeen?: string;
@@ -70,15 +72,19 @@ export async function requestSentry<T>(
   return res.json() as Promise<T>;
 }
 
+/** Fill `permalinkUrl` from the REST field `permalink` so callers read one name. */
+function withPermalink(issues: SentryIssue[]): SentryIssue[] {
+  return issues.map((i) => ({ ...i, permalinkUrl: i.permalinkUrl ?? i.permalink }));
+}
+
 export const sentry = {
-  /** List unresolved (new + ongoing) issues, newest first. */
+  /** List unresolved (new + ongoing) issues. Sentry's default order is most recently seen first. */
   async listUnresolvedIssues(
     limit = 50,
     options?: SentryRequestOptions
   ): Promise<SentryIssue[]> {
-    return requestSentry<SentryIssue[]>(
-      `issues/?query=is%3Aunresolved&limit=${limit}&sort=-newest`,
-      options
+    return withPermalink(
+      await requestSentry<SentryIssue[]>(`issues/?query=is%3Aunresolved&limit=${limit}`, options)
     );
   },
 
@@ -97,10 +103,12 @@ export function sentryWith(creds: SentryCreds) {
       limit = 25,
       options?: SentryRequestOptions
     ): Promise<SentryIssue[]> {
-      return requestSentry<SentryIssue[]>(
-        `issues/?query=is%3Aunresolved&limit=${limit}&sort=-newest`,
-        options,
-        creds
+      return withPermalink(
+        await requestSentry<SentryIssue[]>(
+          `issues/?query=is%3Aunresolved&limit=${limit}`,
+          options,
+          creds
+        )
       );
     },
   };

@@ -91,7 +91,8 @@ describe("Sentry client and error sanitization", () => {
 
       const res = await sentry.listUnresolvedIssues(15);
       expect(res).toEqual(fakeIssues);
-      expect(capturedUrl).toContain("issues/?query=is%3Aunresolved&limit=15&sort=-newest");
+      expect(capturedUrl).toContain("issues/?query=is%3Aunresolved&limit=15");
+      expect(capturedUrl).not.toContain("sort=");
     });
 
     it("getIssue targets the issue id path", async () => {
