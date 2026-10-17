@@ -32,6 +32,10 @@ export interface SentryAiSummaryButtonProps {
   usedEvent: boolean | null;
   /** A result waiting for the admin to apply or dismiss it. */
   proposal: SentryAiSummaryResult | null;
+  /** Whether applying the proposal also sets the priority (its name maps to a project priority). */
+  proposalSetsPriority: boolean;
+  /** Muted note from the last apply, e.g. an unmapped priority. */
+  note: string | null;
   onRun(): void;
   onApply(): void;
   onDismiss(): void;
@@ -43,6 +47,8 @@ export function SentryAiSummaryButton({
   error,
   usedEvent,
   proposal,
+  proposalSetsPriority,
+  note,
   onRun,
   onApply,
   onDismiss,
@@ -72,6 +78,13 @@ export function SentryAiSummaryButton({
         )}
       </div>
 
+      {note && !proposal && (
+        <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {note}
+        </p>
+      )}
+
       {error != null && !pending && (
         <p role="alert" className="flex items-start gap-1.5 text-xs text-destructive">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -87,7 +100,7 @@ export function SentryAiSummaryButton({
           <p className="flex items-start gap-1.5">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span>
-              Thay tiêu đề, mô tả{proposal.priorityName ? " và priority" : ""} bằng bản AI?{" "}
+              Thay tiêu đề, mô tả{proposalSetsPriority ? " và priority" : ""} bằng bản AI?{" "}
               <span className="text-muted-foreground">Các thay đổi khác trong form sẽ được đặt lại.</span>
             </span>
           </p>

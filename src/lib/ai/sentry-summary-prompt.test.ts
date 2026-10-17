@@ -114,6 +114,22 @@ describe("parseSentrySummary", () => {
     expect(out.description).toContain("Priority đề xuất: High");
   });
 
+  it("puts the suggested priority inside the Ảnh hưởng section", () => {
+    const out = parseSentrySummary(
+      {
+        summary: "Lỗi",
+        description: "## Hiện tượng\nA\n## Ảnh hưởng\nLevel error\n## Hướng điều tra\nB",
+        priorityName: "High",
+      },
+      row
+    );
+    const impact = out.description.indexOf("## Ảnh hưởng");
+    const line = out.description.indexOf("Priority đề xuất: High");
+    const next = out.description.indexOf("## Hướng điều tra");
+    expect(impact).toBeLessThan(line);
+    expect(line).toBeLessThan(next);
+  });
+
   it("ignores a non-string or empty priority", () => {
     expect(parseSentrySummary({ summary: "Lỗi", description: "x", priorityName: 3 }, row).priorityName)
       .toBeUndefined();

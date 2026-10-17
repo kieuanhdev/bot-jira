@@ -120,28 +120,39 @@ export function SentryTaskCreateDialog({ row, open, onOpenChange, onCreated }: S
   const [aiPrefill, setAiPrefill] = useState<TaskCreatePrefill | null>(null);
   // Bumped to remount TaskCreateDialog so it re-derives the form from the new prefill.
   const [formKey, setFormKey] = useState(0);
+  const [priorityNote, setPriorityNote] = useState<string | null>(null);
 
   function runAiSummary() {
     setProposal(null);
+    setPriorityNote(null);
     aiSummary.mutate(undefined, { onSuccess: (result) => setProposal(result) });
   }
 
-  function applyAiSummary() {
-    if (!proposal) return;
-    // Metadata is already cached by the open form; map the suggested priority by name if possible.
+  /** Priority id for the suggested name, from the metadata the open form already cached. */
+  function resolvePriorityId(name: string | undefined): string | undefined {
+    const wanted = name?.trim().toLowerCase();
+    if (!wanted) return undefined;
     const metadata = queryClient.getQueryData<BulkCreateProjectMetadata>(
       bulkKeys.createMetadata(row.targetProject)
     );
-    const wanted = proposal.priorityName?.trim().toLowerCase();
-    const priorityId = wanted
-      ? metadata?.priorityOptions.find((p) => p.name.trim().toLowerCase() === wanted)?.id
-      : undefined;
+    if (!metadata?.fieldCapabilities.priority.available) return undefined;
+    return metadata.priorityOptions.find((p) => p.name.trim().toLowerCase() === wanted)?.id;
+  }
+  const proposalPriorityId = resolvePriorityId(proposal?.priorityName);
+
+  function applyAiSummary() {
+    if (!proposal) return;
     setAiPrefill({
       ...basePrefill,
       summary: proposal.summary,
       description: proposal.description,
-      ...(priorityId ? { priorityId } : {}),
+      ...(proposalPriorityId ? { priorityId: proposalPriorityId } : {}),
     });
+    setPriorityNote(
+      proposal.priorityName && !proposalPriorityId
+        ? `Không tìm thấy priority "${proposal.priorityName}" trong project, giữ mặc định.`
+        : null
+    );
     setFormKey((k) => k + 1);
     setProposal(null);
   }
@@ -170,6 +181,8 @@ export function SentryTaskCreateDialog({ row, open, onOpenChange, onCreated }: S
           error={aiSummary.error}
           usedEvent={aiSummary.data?.usedEvent ?? null}
           proposal={proposal}
+          proposalSetsPriority={Boolean(proposalPriorityId)}
+          note={priorityNote}
           onRun={runAiSummary}
           onApply={applyAiSummary}
           onDismiss={() => setProposal(null)}

@@ -88,6 +88,17 @@ export function buildSentrySummaryPrompt(
   ].join("\n");
 }
 
+/** Put `text` at the end of the "Ảnh hưởng" section, or at the end of the body when it has none. */
+function insertIntoImpactSection(body: string, text: string): string {
+  const heading = /^#{1,6}\s*Ảnh hưởng.*$/m.exec(body);
+  if (!heading) return body ? `${body}\n\n${text}` : text;
+  const afterHeading = heading.index + heading[0].length;
+  const next = /^#{1,6}\s/m.exec(body.slice(afterHeading));
+  if (!next) return `${body}\n\n${text}`;
+  const cut = afterHeading + next.index;
+  return `${body.slice(0, cut).trimEnd()}\n${text}\n\n${body.slice(cut)}`;
+}
+
 function nonEmptyString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
@@ -116,14 +127,12 @@ export function parseSentrySummary(obj: unknown, row: SentryTaskSource): SentryS
   const summary = prefix + text.slice(0, MAX_SUMMARY_LENGTH - prefix.length).trim();
 
   const priorityName = nonEmptyString(raw.priorityName) ?? undefined;
-  const bodyParts = [raw.description.trim()];
-  if (priorityName) bodyParts.push(`Priority đề xuất: ${priorityName}`);
+  const aiBody = raw.description.trim();
+  const withPriority = priorityName
+    ? insertIntoImpactSection(aiBody, `Priority đề xuất: ${priorityName}`)
+    : aiBody;
   const original = `\n\n${ORIGINAL_HEADING}\n${buildSentryTaskDraft(row).description}`;
-  const body = bodyParts
-    .filter(Boolean)
-    .join("\n\n")
-    .slice(0, Math.max(0, MAX_DESCRIPTION_LENGTH - original.length))
-    .trimEnd();
+  const body = withPriority.slice(0, Math.max(0, MAX_DESCRIPTION_LENGTH - original.length)).trimEnd();
   const description = (body + original).trimStart();
 
   return priorityName ? { summary, description, priorityName } : { summary, description };
