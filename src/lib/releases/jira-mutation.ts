@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
-import { notifyEveryone } from "@/lib/notify";
+import { notifyUser } from "@/lib/notify";
 import { jiraWith, canCreateProjectVersion, JiraRequestError, type JiraAuth } from "@/lib/jira/client";
 import type { JiraVersion } from "@/lib/jira/types";
-import { userJiraAuth } from "@/lib/user-creds";
+import { userJiraAuth, jiraUsernameAliases } from "@/lib/user-creds";
 import { getReleaseReadiness } from "./release-readiness";
 import { findReleaseById, updateReleaseStatus, attachReleaseIssues } from "./repository";
 
@@ -13,6 +13,51 @@ export const JIRA_CREDENTIALS_REQUIRED_PAYLOAD = {
   error: "Bạn cần cấu hình token Jira cá nhân trong Settings.",
   code: "jira_credentials_required",
 };
+
+/**
+ * Resolve who should hear about a published release: users assigned to a task
+ * in the release, plus the user who published it.
+ */
+async function releaseStakeholderIds(
+  release: { id: string },
+  actorId: string | null | undefined
+): Promise<string[]> {
+  const tasks = await prisma.issueCache.findMany({
+    where: { releaseTasks: { some: { releaseId: release.id } } },
+    select: { assigneeJira: true },
+  });
+  const aliases = [
+    ...new Set(tasks.flatMap((t) => jiraUsernameAliases(t.assigneeJira))),
+  ];
+
+  const assignees =
+    aliases.length > 0
+      ? await prisma.user.findMany({ where: { jiraUsername: { in: aliases } }, select: { id: true } })
+      : [];
+
+  return [...new Set([...assignees.map((u) => u.id), ...(actorId ? [actorId] : [])])];
+}
+
+async function notifyReleaseStakeholders(
+  release: { id: string; version: string; projectKey: string },
+  actor: { id?: string | null; email?: string | null }
+) {
+  const userIds = await releaseStakeholderIds(release, actor.id).catch(() =>
+    actor.id ? [actor.id] : []
+  );
+  await Promise.all(
+    userIds.map((userId) =>
+      notifyUser(userId, {
+        type: "release",
+        title: `Bản phát hành ${release.version} đã được công bố`,
+        body: `Fix Version ${release.projectKey} được phát hành bởi ${actor.email ?? "release manager"}.`,
+        link: "/release",
+        severity: "success",
+        eventKey: `release:${release.id}:published`,
+      }).catch(() => null)
+    )
+  );
+}
 
 export type PublishReleaseActor = {
   id?: string | null;
@@ -229,14 +274,7 @@ export async function publishRelease(
     after: { status: "released", version: release.version },
   });
 
-  await notifyEveryone({
-    type: "release",
-    title: `Bản phát hành ${release.version} đã được công bố`,
-    body: `Fix Version ${release.projectKey} được phát hành bởi ${actorEmail ?? "release manager"}.`,
-    link: "/release",
-    severity: "success",
-    eventKey: `release:${release.id}:published`,
-  }).catch(() => null);
+  await notifyReleaseStakeholders(release, { id: actorId, email: actorEmail });
 
   return {
     status: 200,

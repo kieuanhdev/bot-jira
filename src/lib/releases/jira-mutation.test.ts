@@ -17,7 +17,7 @@ const {
   createVersionMock,
   getReleaseReadinessMock,
   auditMock,
-  notifyEveryoneMock,
+  notifyUserMock,
 } = vi.hoisted(() => {
   const releaseVersionMock = vi.fn();
   const getVersionMock = vi.fn();
@@ -36,7 +36,7 @@ const {
   const userJiraAuthMock = vi.fn();
   const getReleaseReadinessMock = vi.fn();
   const auditMock = vi.fn().mockResolvedValue("audit-1");
-  const notifyEveryoneMock = vi.fn().mockResolvedValue(undefined);
+  const notifyUserMock = vi.fn().mockResolvedValue(undefined);
 
   const prismaMock = {
     release: {
@@ -47,6 +47,7 @@ const {
     },
     user: {
       findUnique: vi.fn(),
+      findMany: vi.fn(),
     },
     issueCache: {
       findMany: vi.fn(),
@@ -67,14 +68,17 @@ const {
     createVersionMock,
     getReleaseReadinessMock,
     auditMock,
-    notifyEveryoneMock,
+    notifyUserMock,
   };
 });
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
-vi.mock("@/lib/user-creds", () => ({ userJiraAuth: userJiraAuthMock }));
+vi.mock("@/lib/user-creds", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/user-creds")>()),
+  userJiraAuth: userJiraAuthMock,
+}));
 vi.mock("@/lib/audit", () => ({ audit: auditMock }));
-vi.mock("@/lib/notify", () => ({ notifyEveryone: notifyEveryoneMock }));
+vi.mock("@/lib/notify", () => ({ notifyUser: notifyUserMock }));
 vi.mock("@/lib/releases/release-readiness", () => ({
   getReleaseReadiness: getReleaseReadinessMock,
 }));
@@ -91,6 +95,7 @@ beforeEach(() => {
   userJiraAuthMock.mockReturnValue({ user: "mgr", token: "tok", authMode: "Bearer" });
   prismaMock.user.findUnique.mockResolvedValue(null);
   prismaMock.issueCache.findMany.mockResolvedValue([]);
+  prismaMock.user.findMany.mockResolvedValue([]);
   prismaMock.releaseTask.createMany.mockResolvedValue({ count: 0 });
   getReleaseReadinessMock.mockResolvedValue({
     state: "ready",
@@ -312,7 +317,39 @@ describe("Jira Mutation Service", () => {
       expect(auditMock).toHaveBeenCalledWith(
         expect.objectContaining({ action: "release.publish" })
       );
-      expect(notifyEveryoneMock).toHaveBeenCalledTimes(1);
+      expect(notifyUserMock).toHaveBeenCalledTimes(1);
+      expect(notifyUserMock.mock.calls[0][0]).toBe("u1");
+    });
+
+    it("notifies only task assignees and the publisher", async () => {
+      prismaMock.release.findUnique.mockResolvedValue({
+        id: "r1",
+        version: "1.0",
+        projectKey: "EPM",
+        jiraVersionId: "v1",
+        status: "draft",
+      });
+      prismaMock.release.update.mockResolvedValue({
+        id: "r1",
+        version: "1.0",
+        status: "released",
+        releasedAt: new Date(),
+      });
+      prismaMock.issueCache.findMany.mockResolvedValue([
+        { assigneeJira: "alice" },
+        { assigneeJira: "alice" },
+        { assigneeJira: null },
+      ]);
+      prismaMock.user.findMany.mockResolvedValue([{ id: "ua" }, { id: "u1" }]);
+
+      await publishRelease("r1", { id: "u1", email: "mgr@test.io" });
+
+      const ids = notifyUserMock.mock.calls.map((c) => c[0]).sort();
+      expect(ids).toEqual(["u1", "ua"]);
+      expect(notifyUserMock.mock.calls[0][1]).toMatchObject({
+        type: "release",
+        eventKey: "release:r1:published",
+      });
     });
   });
 
