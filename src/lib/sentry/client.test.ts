@@ -3,6 +3,7 @@ import {
   sentry,
   requestSentry,
   sanitizeSentryErrorMessage,
+  getLatestEvent,
   type SentryIssue,
 } from "./client";
 import { env } from "@/lib/env";
@@ -169,6 +170,37 @@ describe("Sentry client and error sanitization", () => {
       await expect(
         sentry.listUnresolvedIssues(5, { signal: controller.signal })
       ).rejects.toThrowError("This operation was aborted");
+    });
+  });
+  describe("getLatestEvent", () => {
+    const creds = { org: "my org", project: "web", token: "sntrys_FAKEtoken0123456789" };
+
+    it("calls the org-scoped latest event endpoint with the given token", async () => {
+      let capturedUrl = "";
+      let capturedHeaders: Record<string, string> = {};
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        capturedUrl = url;
+        capturedHeaders = (init?.headers ?? {}) as Record<string, string>;
+        return { ok: true, json: async () => ({ eventID: "abc" }) };
+      });
+
+      await expect(getLatestEvent("4242", creds)).resolves.toEqual({ eventID: "abc" });
+      const base = env.sentryBaseUrl.replace(/\/$/, "");
+      expect(capturedUrl).toBe(`${base}/api/0/organizations/my%20org/issues/4242/events/latest/`);
+      expect(capturedHeaders["Authorization"]).toBe(`Bearer ${creds.token}`);
+    });
+
+    it("throws a sanitized error on a non-2xx response", async () => {
+      globalThis.fetch = vi.fn().mockImplementation(async () => ({
+        ok: false,
+        status: 403,
+        text: async () => "denied for Bearer sntrys_FAKEtoken0123456789",
+      }));
+
+      const err = await getLatestEvent("4242", creds).catch((e: Error) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toContain("403");
+      expect((err as Error).message).not.toContain("sntrys_FAKEtoken0123456789");
     });
   });
 });

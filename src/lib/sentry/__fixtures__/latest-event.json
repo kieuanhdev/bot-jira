@@ -1,0 +1,279 @@
+{
+  "eventID": "0123456789abcdef0123456789abcdef",
+  "id": "0123456789abcdef0123456789abcdef",
+  "groupID": "4242",
+  "title": "TypeError: Cannot read properties of undefined (reading 'total')",
+  "culprit": "app/screens/checkout in submitPayment",
+  "message": "Checkout failed for user@example.com with Authorization: Bearer sntrys_FAKEtoken0123456789abcdef",
+  "platform": "javascript",
+  "dateCreated": "2026-10-16T08:30:00Z",
+  "user": {
+    "id": "u-1",
+    "email": "user@example.com",
+    "ip_address": "203.0.113.7",
+    "username": "example-user"
+  },
+  "tags": [
+    {
+      "key": "environment",
+      "value": "production"
+    },
+    {
+      "key": "release",
+      "value": "mobile-app@2.4.1"
+    },
+    {
+      "key": "browser",
+      "value": "Chrome 129"
+    },
+    {
+      "key": "os",
+      "value": "Android 14"
+    },
+    {
+      "key": "url",
+      "value": "https://app.example.com/checkout?session=abc123&token=FAKEtoken0123456789#step-2"
+    },
+    {
+      "key": "transaction",
+      "value": "/checkout"
+    },
+    {
+      "key": "user",
+      "value": "email:user@example.com"
+    },
+    {
+      "key": "user.ip",
+      "value": "203.0.113.7"
+    },
+    {
+      "key": "level",
+      "value": "error"
+    }
+  ],
+  "entries": [
+    {
+      "type": "breadcrumbs",
+      "data": {
+        "values": [
+          {
+            "category": "navigation",
+            "message": "to /checkout",
+            "timestamp": "2026-10-16T08:29:58Z"
+          }
+        ]
+      }
+    },
+    {
+      "type": "exception",
+      "data": {
+        "values": [
+          {
+            "type": "NetworkError",
+            "value": "Request to https://api.example.com/pay failed",
+            "stacktrace": {
+              "frames": [
+                {
+                  "filename": "app/api.ts",
+                  "function": "post",
+                  "lineNo": 5,
+                  "inApp": true
+                }
+              ]
+            }
+          },
+          {
+            "type": "TypeError",
+            "value": "Cannot read properties of undefined (reading 'total') for admin@example.com api_key=FAKEkey0123456789abcdef",
+            "stacktrace": {
+              "frames": [
+                {
+                  "filename": null,
+                  "absPath": "/home/runner/node_modules/react-dom/cjs/react-dom-0.js",
+                  "module": "react-dom",
+                  "function": "frame0",
+                  "lineNo": 10,
+                  "colNo": 3,
+                  "inApp": false,
+                  "context": [],
+                  "vars": null
+                },
+                {
+                  "filename": "app/screens/checkout-1.tsx",
+                  "absPath": "webpack:///app/screens/checkout-1.tsx",
+                  "module": "app.screens.checkout1",
+                  "function": "frame1",
+                  "lineNo": 11,
+                  "colNo": 3,
+                  "inApp": true,
+                  "context": [],
+                  "vars": null
+                },
+                {
+                  "filename": "app/screens/checkout-2.tsx",
+                  "absPath": "webpack:///app/screens/checkout-2.tsx",
+                  "module": "app.screens.checkout2",
+                  "function": "frame2",
+                  "lineNo": 12,
+                  "colNo": 3,
+                  "inApp": true,
+                  "context": [],
+                  "vars": null
+                },
+                {
+                  "filename": "app/screens/checkout-3.tsx",
+                  "absPath": "webpack:///app/screens/checkout-3.tsx",
+                  "module": "app.screens.checkout3",
+                  "function": "frame3",
+                  "lineNo": 13,
+                  "colNo": 3,
+                  "inApp": true,
+                  "context": [],
+                  "vars": null
+                },
+                {
+                  "filename": null,
+                  "absPath": "/home/runner/node_modules/react-dom/cjs/react-dom-4.js",
+                  "module": "react-dom",
+                  "function": "frame4",
+                  "lineNo": 14,
+                  "colNo": 3,
+                  "inApp": false,
+                  "context": [],
+                  "vars": null
+                },
+                {
+                  "filename": "app/screens/checkout-5.tsx",
+                  "absPath": "webpack:///app/screens/checkout-5.tsx",
+                  "module": "app.screens.checkout5",
+                  "function": "frame5",
+                  "lineNo": 15,
+                  "colNo": 3,
+                  "inApp": true,
+                  "context": [],
+                  "vars": null
+                },
+                {
+                  "filename": "app/screens/checkout-6.tsx",
+                  "absPath": "webpack:///app/screens/checkout-6.tsx",
+                  "module": "app.screens.checkout6",
+                  "function": "frame6",
+                  "lineNo": 16,
+                  "colNo": 3,
+                  "inApp": true,
+                  "context": [],
+                  "vars": null
+                },
+                {
+                  "filename": "app/screens/checkout-7.tsx",
+                  "absPath": "webpack:///app/screens/checkout-7.tsx",
+                  "module": "app.screens.checkout7",
+                  "function": "frame7",
+                  "lineNo": 17,
+                  "colNo": 3,
+                  "inApp": true,
+                  "context": [],
+                  "vars": null
+                },
+                {
+                  "filename": null,
+                  "absPath": "/home/runner/node_modules/react-dom/cjs/react-dom-8.js",
+                  "module": "react-dom",
+                  "function": "frame8",
+                  "lineNo": 18,
+                  "colNo": 3,
+                  "inApp": false,
+                  "context": [],
+                  "vars": null
+                },
+                {
+                  "filename": "app/screens/checkout-9.tsx",
+                  "absPath": "webpack:///app/screens/checkout-9.tsx",
+                  "module": "app.screens.checkout9",
+                  "function": "frame9",
+                  "lineNo": 19,
+                  "colNo": 3,
+                  "inApp": true,
+                  "context": [],
+                  "vars": null
+                },
+                {
+                  "filename": "app/screens/checkout-10.tsx",
+                  "absPath": "webpack:///app/screens/checkout-10.tsx",
+                  "module": "app.screens.checkout10",
+                  "function": "frame10",
+                  "lineNo": 20,
+                  "colNo": 3,
+                  "inApp": true,
+                  "context": [],
+                  "vars": null
+                },
+                {
+                  "filename": "app/screens/checkout-11.tsx",
+                  "absPath": "webpack:///app/screens/checkout-11.tsx",
+                  "module": "app.screens.checkout11",
+                  "function": "frame11",
+                  "lineNo": 21,
+                  "colNo": 3,
+                  "inApp": true,
+                  "context": [],
+                  "vars": null
+                },
+                {
+                  "filename": null,
+                  "absPath": "/home/runner/node_modules/react-dom/cjs/react-dom-12.js",
+                  "module": "react-dom",
+                  "function": "frame12",
+                  "lineNo": 22,
+                  "colNo": 3,
+                  "inApp": false,
+                  "context": [],
+                  "vars": null
+                },
+                {
+                  "filename": "app/screens/checkout-13.tsx",
+                  "absPath": "webpack:///app/screens/checkout-13.tsx",
+                  "module": "app.screens.checkout13",
+                  "function": "frame13",
+                  "lineNo": 23,
+                  "colNo": 3,
+                  "inApp": true,
+                  "context": [],
+                  "vars": null
+                },
+                {
+                  "filename": null,
+                  "absPath": null,
+                  "module": "app.services.payment",
+                  "function": "submitPayment",
+                  "lineNo": 88,
+                  "colNo": 12,
+                  "inApp": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "request",
+      "data": {
+        "url": "https://app.example.com/checkout?session=abc123&token=FAKEtoken0123456789#step-2",
+        "method": "POST",
+        "headers": [
+          [
+            "Authorization",
+            "Bearer sntrys_FAKEtoken0123456789abcdef"
+          ]
+        ],
+        "cookies": [
+          [
+            "sid",
+            "FAKEcookie"
+          ]
+        ]
+      }
+    }
+  ]
+}

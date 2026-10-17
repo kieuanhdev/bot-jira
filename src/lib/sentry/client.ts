@@ -45,19 +45,21 @@ export function sanitizeSentryErrorMessage(raw: string): string {
 /** Org/project/token a Sentry request is made with. Base URL is always the server's. */
 export type SentryCreds = { org: string; project: string; token: string };
 
-export async function requestSentry<T>(
-  path: string,
-  options?: SentryRequestOptions,
-  creds: SentryCreds = { org: env.sentryOrg, project: env.sentryProject, token: env.sentryToken }
+/** GET `{base}/api/0/{fullPath}` with the timeout and secret-free error message every Sentry call uses. */
+async function fetchSentry<T>(
+  fullPath: string,
+  label: string,
+  token: string,
+  options?: SentryRequestOptions
 ): Promise<T> {
   const base = env.sentryBaseUrl.replace(/\/$/, "");
-  const url = `${base}/api/0/projects/${encodeURIComponent(creds.org)}/${encodeURIComponent(creds.project)}/${path}`;
+  const url = `${base}/api/0/${fullPath}`;
 
   const signal = options?.signal ?? AbortSignal.timeout(options?.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
   const res = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${creds.token}`,
+      Authorization: `Bearer ${token}`,
       Accept: "application/json",
     },
     signal,
@@ -66,10 +68,58 @@ export async function requestSentry<T>(
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     const safeText = sanitizeSentryErrorMessage(text);
-    throw new Error(`Sentry ${path} -> ${res.status}: ${safeText}`);
+    throw new Error(`Sentry ${label} -> ${res.status}: ${safeText}`);
   }
 
   return res.json() as Promise<T>;
+}
+
+export async function requestSentry<T>(
+  path: string,
+  options?: SentryRequestOptions,
+  creds: SentryCreds = { org: env.sentryOrg, project: env.sentryProject, token: env.sentryToken }
+): Promise<T> {
+  return fetchSentry<T>(
+    `projects/${encodeURIComponent(creds.org)}/${encodeURIComponent(creds.project)}/${path}`,
+    path,
+    creds.token,
+    options
+  );
+}
+
+/** Request a path under `/api/0/organizations/{org}/` (org-scoped endpoints). */
+export async function requestSentryOrg<T>(
+  path: string,
+  creds: Pick<SentryCreds, "org" | "token">,
+  options?: SentryRequestOptions
+): Promise<T> {
+  return fetchSentry<T>(`organizations/${encodeURIComponent(creds.org)}/${path}`, path, creds.token, options);
+}
+
+/** Raw event as returned by Sentry's event endpoints; only the fields we read are typed. */
+export type SentryEvent = {
+  eventID: string;
+  culprit?: string;
+  message?: string;
+  platform?: string;
+  tags?: { key: string; value: string }[];
+  entries?: { type: string; data: unknown }[];
+};
+
+/**
+ * Latest event of an issue. Needs the `event:read` scope.
+ * Path: GET /api/0/organizations/{org}/issues/{issueId}/events/latest/
+ */
+export async function getLatestEvent(
+  issueId: string,
+  creds: SentryCreds,
+  options?: SentryRequestOptions
+): Promise<SentryEvent> {
+  return requestSentryOrg<SentryEvent>(
+    `issues/${encodeURIComponent(issueId)}/events/latest/`,
+    creds,
+    options
+  );
 }
 
 /** Fill `permalinkUrl` from the REST field `permalink` so callers read one name. */
