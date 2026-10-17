@@ -9,6 +9,7 @@ import { jiraProjectList, env, parseSentryMappings, resolveJiraProject } from "@
 import type { WorkerLog } from "../guard";
 import type { JiraIssue } from "@/lib/jira/types";
 import { seedSentryIssue } from "@/lib/sentry/review-queue";
+import { hasInflightSentryOp } from "@/lib/sentry/create-from-form";
 
 import { sentryLabel, isBackoffElapsed } from "@/lib/sentry/idempotency";
 
@@ -266,6 +267,11 @@ export async function runSentryImport(): Promise<WorkerLog> {
   ].slice(0, CREATE_BATCH);
 
   for (const row of due) {
+    // A single-issue form op for this row is queued/running: filing it here too
+    // would duplicate the task. Skip before the claim so the row is untouched;
+    // a later run re-links the labelled task the op created.
+    if (await hasInflightSentryOp(row.id)) continue;
+
     // Optimistic claim: a concurrent run (cron + manual trigger) that touched
     // the row first wins, so the same issue is never filed twice.
     const claim = await prisma.sentryIssueImported.updateMany({

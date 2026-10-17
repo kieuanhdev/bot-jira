@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { BulkCreatePreviewItem, BulkCreatePreviewResult } from "@/lib/bulk/create-types";
 import {
   SLOW_QUEUE_MS,
+  STUCK_CREATE_MS,
+  isSpinning,
   singleCreateReducer,
   type SingleCreateOperation,
   type SingleCreatePhase,
@@ -191,5 +193,49 @@ describe("singleCreateReducer", () => {
 
   it("resets to idle", () => {
     expect(singleCreateReducer({ kind: "done", jiraKey: "ABC-1" }, { type: "reset" })).toEqual({ kind: "idle" });
+  });
+
+  it("moves to queued-slow after STUCK_CREATE_MS even when the op is running", () => {
+    expect(STUCK_CREATE_MS).toBe(120_000);
+    expect(singleCreateReducer(creating, { type: "tick", now: 1_000 + 119_999, opState: "running" })).toBe(creating);
+    const next = singleCreateReducer(creating, { type: "tick", now: 1_000 + 120_000, opState: "running" });
+    expect(next).toEqual({ kind: "queued-slow", operationId: "op-1" });
+  });
+
+  it("moves to queued-slow after STUCK_CREATE_MS whatever the op state", () => {
+    const next = singleCreateReducer(creating, { type: "tick", now: 1_000 + 120_000, opState: "failed" });
+    expect(next.kind).toBe("queued-slow");
+  });
+
+  it("carries the project captured at submit through to done", () => {
+    let s = singleCreateReducer({ kind: "idle" }, { type: "submit", projectKey: "AAA" });
+    s = singleCreateReducer(s, { type: "preview-ok", result: preview(previewItem()), now: 1_000 });
+    expect(s).toMatchObject({ kind: "creating", projectKey: "AAA" });
+    s = singleCreateReducer(s, { type: "tick", now: 1_000 + SLOW_QUEUE_MS, opState: "queued" });
+    expect(s).toMatchObject({ kind: "queued-slow", projectKey: "AAA" });
+    s = singleCreateReducer(s, {
+      type: "poll",
+      operation: op({ state: "completed", createItems: [{ jiraKey: "AAA-9", status: "succeeded", error: null }] }),
+    });
+    expect(s).toEqual({ kind: "done", jiraKey: "AAA-9", projectKey: "AAA" });
+  });
+
+  it("keeps the captured project through a duplicate force-confirm", () => {
+    let s = singleCreateReducer({ kind: "idle" }, { type: "submit", projectKey: "BBB" });
+    s = singleCreateReducer(s, {
+      type: "preview-ok",
+      result: preview(previewItem({ warnings: [{ code: "DUPLICATE_SUMMARY_JIRA", message: "dup" }] })),
+      now: 1_000,
+    });
+    expect(s).toMatchObject({ kind: "duplicate", projectKey: "BBB" });
+    s = singleCreateReducer(s, { type: "force-confirm", now: 2_000 });
+    expect(s).toMatchObject({ kind: "creating", projectKey: "BBB" });
+  });
+
+  it("stops the spinner once the create is slow or stuck", () => {
+    expect(isSpinning({ kind: "previewing" })).toBe(true);
+    expect(isSpinning(creating)).toBe(true);
+    expect(isSpinning({ kind: "queued-slow", operationId: "op-1" })).toBe(false);
+    expect(isSpinning({ kind: "done", jiraKey: "A-1" })).toBe(false);
   });
 });

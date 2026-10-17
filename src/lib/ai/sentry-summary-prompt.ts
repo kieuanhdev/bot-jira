@@ -4,12 +4,14 @@
 // left to the model.
 
 import { MAX_DESCRIPTION_LENGTH, MAX_SUMMARY_LENGTH } from "@/lib/bulk/create-types";
-import type { SentryEventDigest } from "@/lib/sentry/event-digest";
+import { scrubSentryText, type SentryEventDigest } from "@/lib/sentry/event-digest";
 import { buildSentryTaskDraft, type SentryTaskSource } from "@/lib/sentry/task-draft";
 
 export type SentrySummary = { summary: string; description: string; priorityName?: string };
 
 const ORIGINAL_HEADING = "## Thông tin gốc";
+// Same cap as the short event-digest fields; the title is Sentry text and may carry PII.
+const MAX_TITLE_IN_PROMPT = 300;
 const ANY_SENTRY_PREFIX = /^\s*\[sentry\]\s*[^:]*:\s*/i;
 
 function ref(row: SentryTaskSource): string {
@@ -31,7 +33,7 @@ function line(label: string, value: string | number | null | undefined): string[
 function issueFacts(row: SentryTaskSource): string[] {
   return [
     `- Mã issue: ${ref(row)}`,
-    ...line("Tiêu đề", row.title),
+    ...line("Tiêu đề", row.title ? scrubSentryText(row.title, MAX_TITLE_IN_PROMPT) : null),
     ...line("Level", row.level),
     ...line("Số lần xảy ra", row.eventCount),
     ...line("Lần đầu", iso(row.firstSeen)),

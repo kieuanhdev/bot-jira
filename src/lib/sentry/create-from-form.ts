@@ -54,8 +54,8 @@ export function buildSentryBulkRequest(
  * True when a confirmed (queued/running) bulk op already targets this Sentry
  * row. `excludeOperationId` skips the op being confirmed right now.
  */
-// A queued/running op older than this is treated as stuck (e.g. enqueue failed)
-// so it cannot block the Sentry row forever.
+// A queued/running op confirmed longer ago than this is treated as stuck (e.g.
+// enqueue failed) so it cannot block the Sentry row forever.
 export const INFLIGHT_OP_MAX_AGE_MS = 15 * 60_000;
 
 export async function hasInflightSentryOp(
@@ -63,11 +63,16 @@ export async function hasInflightSentryOp(
   excludeOperationId?: string,
   client: Pick<typeof prisma, "bulkOperation"> = prisma
 ): Promise<boolean> {
+  const since = new Date(Date.now() - INFLIGHT_OP_MAX_AGE_MS);
   const op = await client.bulkOperation.findFirst({
     where: {
       type: "create-issues",
       state: { in: [...INFLIGHT_OP_STATES] },
-      createdAt: { gte: new Date(Date.now() - INFLIGHT_OP_MAX_AGE_MS) },
+      // Age is measured from confirm, not preview: confirmBulkCreate sets
+      // `startedAt` when it queues the op and the executor claim keeps it.
+      // BulkOperation has no `updatedAt`; `createdAt` is only a fallback for a
+      // queued/running op that somehow has no `startedAt`.
+      OR: [{ startedAt: { gte: since } }, { startedAt: null, createdAt: { gte: since } }],
       payload: { path: ["source", "sentryImportId"], equals: sentryImportId },
       ...(excludeOperationId ? { id: { not: excludeOperationId } } : {}),
     },

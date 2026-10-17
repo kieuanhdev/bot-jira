@@ -9,12 +9,14 @@ const mocks = vi.hoisted(() => ({
   confirmBulkCreate: vi.fn(),
   userJiraAuth: vi.fn(),
   loggerError: vi.fn(),
+  opFindUnique: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getSession: mocks.session }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: { findUnique: mocks.user },
+    bulkOperation: { findUnique: mocks.opFindUnique },
   },
 }));
 vi.mock("@/lib/logger", () => ({
@@ -54,6 +56,7 @@ describe("POST /api/bulk/create", () => {
     mocks.userJiraAuth.mockReturnValue({ user: "alice", token: "tok", authMode: "Bearer" });
     mocks.probeJiraAuth.mockResolvedValue(true);
     mocks.enqueueBulkOperation.mockResolvedValue("job-123");
+    mocks.opFindUnique.mockResolvedValue({ payload: { projectKey: "EPM" } });
   });
 
   it("returns 401 without authenticated session", async () => {
@@ -194,5 +197,38 @@ describe("POST /api/bulk/create", () => {
         error: expect.stringContaining(sentinel),
       })
     );
+  });
+
+  it("rejects a Sentry-sourced preview (only the Sentry route may file Sentry rows)", async () => {
+    const res = await POST(
+      new Request("http://localhost/api/bulk/create", {
+        method: "POST",
+        body: JSON.stringify({
+          projectKey: "EPM",
+          items: [{ summary: "Task" }],
+          source: { type: "sentry", sentryImportId: "row-1" },
+        }),
+      })
+    );
+
+    expect(res.status).toBe(400);
+    expect(mocks.previewBulkCreate).not.toHaveBeenCalled();
+  });
+
+  it("refuses to confirm a Sentry-sourced op", async () => {
+    mocks.opFindUnique.mockResolvedValue({
+      payload: { projectKey: "EPM", source: { type: "sentry", sentryImportId: "row-1" } },
+    });
+
+    const res = await POST(
+      new Request("http://localhost/api/bulk/create", {
+        method: "POST",
+        body: JSON.stringify({ confirm: true, operationId: "op-sentry" }),
+      })
+    );
+
+    expect(res.status).toBe(400);
+    expect(mocks.confirmBulkCreate).not.toHaveBeenCalled();
+    expect(mocks.enqueueBulkOperation).not.toHaveBeenCalled();
   });
 });

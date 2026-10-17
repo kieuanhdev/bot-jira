@@ -7,6 +7,11 @@ import { enqueueBulkOperation } from "@/lib/queue/boss";
 import { previewBulkCreate, confirmBulkCreate } from "@/lib/bulk/create-ops";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 import { logger } from "@/lib/logger";
+import { sentryImportIdOfPayload } from "@/lib/sentry/create-from-form";
+
+// Sentry-sourced ops must go through /api/admin/sentry-import/[id]/create, which
+// locks the Sentry row (confirmSentryCreate) so the issue is filed only once.
+const MSG_SENTRY_SOURCE = "Task từ Sentry phải được tạo qua màn hình duyệt lỗi Sentry";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -17,6 +22,7 @@ export async function POST(req: Request) {
   const rawBody = (await req.json().catch(() => ({}))) as {
     confirm?: boolean;
     operationId?: string;
+    source?: unknown;
   };
 
   const user = await prisma.user.findUnique({
@@ -42,6 +48,15 @@ export async function POST(req: Request) {
         { error: "Token Jira của bạn không còn hợp lệ. Hãy cập nhật trong Settings." },
         { status: 400 }
       );
+    }
+
+    const existing = await prisma.bulkOperation.findUnique({
+      where: { id: rawBody.operationId },
+      select: { payload: true },
+    });
+    // A missing op falls through to confirmBulkCreate, which reports "không tìm thấy".
+    if (existing && sentryImportIdOfPayload(existing.payload) !== null) {
+      return NextResponse.json({ error: MSG_SENTRY_SOURCE }, { status: 400 });
     }
 
     try {
@@ -70,6 +85,10 @@ export async function POST(req: Request) {
   }
 
   // Preview flow
+  const source = rawBody.source as { type?: unknown } | null | undefined;
+  if (source && typeof source === "object" && source.type === "sentry") {
+    return NextResponse.json({ error: MSG_SENTRY_SOURCE }, { status: 400 });
+  }
   const jira = jiraWith(auth);
   try {
     const preview = await previewBulkCreate(session.user.id, jira, auth, rawBody);

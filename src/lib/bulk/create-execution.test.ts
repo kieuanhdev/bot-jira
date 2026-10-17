@@ -22,6 +22,9 @@ const mocks = vi.hoisted(() => ({
   getIssue: vi.fn(),
   upsertJiraIssue: vi.fn(),
   markSentryRowFromBulkOp: vi.fn(),
+  sentryFindUnique: vi.fn(),
+  loggerError: vi.fn(),
+  loggerWarn: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -42,7 +45,14 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.userFindUnique,
       findMany: mocks.userFindMany,
     },
+    sentryIssueImported: {
+      findUnique: mocks.sentryFindUnique,
+    },
   },
+}));
+
+vi.mock("@/lib/logger", () => ({
+  logger: { info: vi.fn(), warn: mocks.loggerWarn, error: mocks.loggerError },
 }));
 
 vi.mock("@/lib/user-creds", () => ({
@@ -98,6 +108,7 @@ import {
 describe("create-execution", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.sentryFindUnique.mockResolvedValue({ state: "review", jiraKey: null });
   });
 
   describe("executeBulkCreateOperation", () => {
@@ -217,7 +228,7 @@ describe("create-execution", () => {
       );
     });
 
-    it("syncs created issues to the cache and marks the sentry row on completion", async () => {
+    it("marks the sentry row on completion without a second cache sync (item executor refreshes it)", async () => {
       mocks.bulkOperationFindUnique.mockResolvedValue({
         id: "op-cache",
         requestedBy: "user-1",
@@ -235,18 +246,16 @@ describe("create-execution", () => {
       mocks.processCreateItem.mockResolvedValueOnce(true);
       mocks.bulkCreateItemFindUnique.mockResolvedValue({ id: "item-1", jiraKey: "PROJ-7", clientRef: "single-1" });
       mocks.bulkCreateItemGroupBy.mockResolvedValue([{ status: "succeeded", _count: { _all: 1 } }]);
-      const full = { key: "PROJ-7", fields: {} };
-      mocks.getIssue.mockResolvedValue(full);
-      mocks.upsertJiraIssue.mockResolvedValue({ applied: true });
 
       await executeBulkCreateOperation("op-cache");
 
-      expect(mocks.getIssue).toHaveBeenCalledWith("PROJ-7");
-      expect(mocks.upsertJiraIssue).toHaveBeenCalledWith(full);
+      expect(mocks.getIssue).not.toHaveBeenCalled();
+      expect(mocks.upsertJiraIssue).not.toHaveBeenCalled();
+      expect(mocks.processCreateItem).toHaveBeenCalledTimes(1);
       expect(mocks.markSentryRowFromBulkOp).toHaveBeenCalledWith("op-cache");
     });
 
-    it("does not fail the operation when cache sync or sentry marking throws", async () => {
+    it("does not fail the operation when sentry marking throws, and logs the error", async () => {
       mocks.bulkOperationFindUnique.mockResolvedValue({
         id: "op-cache-fail",
         requestedBy: "user-1",
@@ -279,6 +288,68 @@ describe("create-execution", () => {
       expect(mocks.audit).toHaveBeenCalledWith(
         expect.objectContaining({ action: "bulk.create.completed", target: "op-cache-fail" })
       );
+      expect(mocks.loggerError).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: "op-cache-fail", error: "db down" })
+      );
+    });
+
+    it.each([
+      ["approved for the sentry-import worker", { state: "approved", jiraKey: null }],
+      ["already created", { state: "created", jiraKey: "PROJ-1" }],
+      ["still open but already linked", { state: "review", jiraKey: "PROJ-2" }],
+    ])("cancels a Sentry op without creating when the row is %s", async (_label, sentryRow) => {
+      mocks.bulkOperationFindUnique.mockResolvedValue({
+        id: "op-sentry-dup",
+        requestedBy: "user-1",
+        state: "queued",
+        total: 1,
+        payload: { projectKey: "PROJ", source: { type: "sentry", sentryImportId: "r1" } },
+        createItems: [],
+      });
+      mocks.bulkOperationUpdateMany.mockResolvedValue({ count: 1 });
+      mocks.sentryFindUnique.mockResolvedValue(sentryRow);
+
+      await executeBulkCreateOperation("op-sentry-dup");
+
+      expect(mocks.sentryFindUnique).toHaveBeenCalledWith({
+        where: { id: "r1" },
+        select: { state: true, jiraKey: true },
+      });
+      expect(mocks.processCreateItem).not.toHaveBeenCalled();
+      expect(mocks.bulkCreateItemUpdateMany).toHaveBeenCalledWith({
+        where: { operationId: "op-sentry-dup", status: { in: ["pending", "waiting_for_parent"] } },
+        data: expect.objectContaining({
+          status: "failed",
+          errorCode: "SENTRY_ALREADY_FILED",
+          error: "Lỗi Sentry đã được tạo task ở luồng khác",
+          retryable: false,
+        }),
+      });
+      expect(mocks.bulkOperationUpdate).toHaveBeenCalledWith({
+        where: { id: "op-sentry-dup" },
+        data: expect.objectContaining({ state: "cancelled", failed: 1 }),
+      });
+      expect(mocks.markSentryRowFromBulkOp).not.toHaveBeenCalled();
+    });
+
+    it("does not look up a Sentry row for non-Sentry ops", async () => {
+      mocks.bulkOperationFindUnique.mockResolvedValue({
+        id: "op-plain",
+        requestedBy: "user-1",
+        state: "queued",
+        total: 0,
+        payload: { projectKey: "PROJ", source: { type: "grid" } },
+        createItems: [],
+      });
+      mocks.bulkOperationUpdateMany.mockResolvedValue({ count: 1 });
+      mocks.userFindUnique.mockResolvedValue({ id: "user-1" });
+      mocks.userJiraAuth.mockReturnValue({ user: "alice", token: "tok-1", authMode: "Bearer" });
+      mocks.bulkCreateItemFindMany.mockResolvedValueOnce([]);
+      mocks.bulkCreateItemGroupBy.mockResolvedValue([]);
+
+      await executeBulkCreateOperation("op-plain");
+
+      expect(mocks.sentryFindUnique).not.toHaveBeenCalled();
     });
 
     it("blocks child when parent fails in round 1", async () => {

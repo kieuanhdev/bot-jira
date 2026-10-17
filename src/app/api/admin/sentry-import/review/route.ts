@@ -3,6 +3,7 @@ import type { ImportState } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSession, isAdmin } from "@/lib/session";
 import { audit } from "@/lib/audit";
+import { hasInflightSentryOp, MSG_INFLIGHT } from "@/lib/sentry/create-from-form";
 
 // Jira's own limits for a summary (255) and a description (~32k).
 const MAX_SUMMARY = 255;
@@ -67,9 +68,21 @@ export async function POST(req: Request) {
     }
   }
 
+  // Approving a row whose single-issue form op is queued/running would make the
+  // sentry-import worker file it a second time; leave those rows to the op.
+  let targetIds = ids;
+  if (decision === "approve") {
+    const inflight = await Promise.all(ids.map((id) => hasInflightSentryOp(id)));
+    targetIds = ids.filter((_, i) => !inflight[i]);
+    if (targetIds.length === 0) {
+      return NextResponse.json({ error: MSG_INFLIGHT }, { status: 409 });
+    }
+  }
+  const skipped = ids.length - targetIds.length;
+
   const { from, to } = TRANSITIONS[decision];
   const result = await prisma.sentryIssueImported.updateMany({
-    where: { id: { in: ids }, state: { in: from } },
+    where: { id: { in: targetIds }, state: { in: from } },
     data: {
       state: to,
       reviewedBy: session.user.email ?? session.user.id,
@@ -87,8 +100,8 @@ export async function POST(req: Request) {
     actorId: session.user.id,
     actorEmail: session.user.email,
     action: `admin.sentry.${decision}`,
-    target: ids.join(",").slice(0, 500),
-    after: { state: to, count: result.count, edited: Object.keys(edits).length > 0 },
+    target: targetIds.join(",").slice(0, 500),
+    after: { state: to, count: result.count, skipped, edited: Object.keys(edits).length > 0 },
     source: "web",
   });
 
@@ -102,5 +115,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, updated: result.count, state: to, queued });
+  return NextResponse.json({ ok: true, updated: result.count, skipped, state: to, queued });
 }

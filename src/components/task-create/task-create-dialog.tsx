@@ -26,7 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TaskCreateForm } from "./task-create-form";
 import { useSingleTaskCreate } from "./use-single-task-create";
-import type { SingleCreatePhase } from "./single-create-model";
+import { isSpinning, type SingleCreatePhase } from "./single-create-model";
 import { AiIdeaPanel } from "./ai-idea-panel";
 import { AiSplitButton } from "./ai-split-button";
 import { useAiEnabled } from "@/hooks/use-ai-enabled";
@@ -147,8 +147,9 @@ export function TaskCreateDialog({
     projectKey,
     source,
     endpoint,
-    onCreated: (jiraKey) => {
-      toast.show({ jiraKey, projectKey });
+    // `createdProjectKey` is captured at submit; the prop may have changed since.
+    onCreated: (jiraKey, createdProjectKey) => {
+      toast.show({ jiraKey, projectKey: createdProjectKey });
       setDraft(null);
       create.reset();
       onOpenChange(false);
@@ -352,7 +353,7 @@ export function TaskCreateDialog({
       {phase.kind === "queued-slow" && (
         <p role="status" className="flex items-start gap-2 text-xs text-muted-foreground">
           <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          Đang chờ hàng đợi, task sẽ được tạo khi worker chạy. Bạn có thể đóng form.
+          Đang xử lý lâu hơn bình thường, task sẽ được tạo khi worker chạy xong. Bạn có thể đóng form.
         </p>
       )}
       {(phase.kind === "previewing" || phase.kind === "creating") && (
@@ -386,9 +387,10 @@ export function TaskCreateDialog({
               disabled={busy || !check?.ok}
               title={!busy && check && !check.ok ? check.reason : undefined}
             >
-              {busy && (
+              {isSpinning(phase) && (
                 <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
               )}
+              {phase.kind === "queued-slow" && <Clock aria-hidden="true" />}
               {busy ? "Đang tạo…" : "Tạo task"}
             </Button>
           )}

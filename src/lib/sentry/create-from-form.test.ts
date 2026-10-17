@@ -85,7 +85,10 @@ describe("hasInflightSentryOp", () => {
       where: {
         type: "create-issues",
         state: { in: ["queued", "running"] },
-        createdAt: { gte: expect.any(Date) },
+        OR: [
+          { startedAt: { gte: expect.any(Date) } },
+          { startedAt: null, createdAt: { gte: expect.any(Date) } },
+        ],
         payload: { path: ["source", "sentryImportId"], equals: "r1" },
       },
       select: { id: true },
@@ -100,14 +103,19 @@ describe("hasInflightSentryOp", () => {
     expect(where.state.in).not.toContain("preview");
   });
 
-  it("ignores ops older than the max age so a stuck op cannot block the row", async () => {
+  it("measures the max age from confirm (startedAt), not from preview (createdAt)", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-17T10:00:00Z"));
     try {
       mocks.findFirst.mockResolvedValue(null);
       await hasInflightSentryOp("r1");
       const where = mocks.findFirst.mock.calls[0][0].where;
-      expect(where.createdAt.gte.getTime()).toBe(Date.parse("2026-10-17T10:00:00Z") - INFLIGHT_OP_MAX_AGE_MS);
+      const since = Date.parse("2026-10-17T10:00:00Z") - INFLIGHT_OP_MAX_AGE_MS;
+      expect(where.createdAt).toBeUndefined();
+      expect(where.OR[0].startedAt.gte.getTime()).toBe(since);
+      // createdAt only counts for an op that was never stamped at confirm.
+      expect(where.OR[1].startedAt).toBeNull();
+      expect(where.OR[1].createdAt.gte.getTime()).toBe(since);
     } finally {
       vi.useRealTimers();
     }

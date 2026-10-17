@@ -20,6 +20,9 @@ vi.mock("@/lib/prisma", () => ({
     issueCache: {
       findUnique: vi.fn(),
     },
+    bulkOperation: {
+      findFirst: vi.fn(),
+    },
     user: {
       findMany: vi.fn(),
       update: vi.fn(),
@@ -69,6 +72,28 @@ describe("runSentryImport worker", () => {
     vi.mocked(prisma.sentryIssueImported.findMany).mockResolvedValue([]);
     vi.mocked(prisma.sentryIssueImported.updateMany).mockResolvedValue({ count: 1 });
     vi.mocked(jira.search).mockResolvedValue({ issues: [], total: 0, startAt: 0, maxResults: 1 });
+    vi.mocked(prisma.bulkOperation.findFirst).mockResolvedValue(null);
+  });
+
+  it("skips an approved row whose single-issue form op is still in flight", async () => {
+    vi.mocked(prisma.sentryIssueImported.findMany).mockResolvedValueOnce([
+      row({ id: "rec-inflight", sentryIssueId: "777", targetProject: "EPM" }),
+    ]);
+    vi.mocked(prisma.bulkOperation.findFirst).mockResolvedValue({ id: "op-1" } as never);
+
+    const result = await runSentryImport();
+
+    expect(prisma.bulkOperation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          payload: { path: ["source", "sentryImportId"], equals: "rec-inflight" },
+        }),
+      })
+    );
+    expect(prisma.sentryIssueImported.updateMany).not.toHaveBeenCalled();
+    expect(jira.createIssue).not.toHaveBeenCalled();
+    expect(prisma.sentryIssueImported.update).not.toHaveBeenCalled();
+    expect(result.stats).toEqual({ discovered: 0, imported: 0, recovered: 0, failed: 0 });
   });
 
   it("returns guard skipped status when Sentry is not configured", async () => {

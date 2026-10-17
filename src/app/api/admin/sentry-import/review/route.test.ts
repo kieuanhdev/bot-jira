@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   updateMany: vi.fn(),
   enqueue: vi.fn(),
   audit: vi.fn(),
+  hasInflight: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({
@@ -18,6 +19,10 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/queue/boss", () => ({ enqueueSentryImport: mocks.enqueue }));
 vi.mock("@/lib/audit", () => ({ audit: mocks.audit }));
+vi.mock("@/lib/sentry/create-from-form", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/sentry/create-from-form")>()),
+  hasInflightSentryOp: mocks.hasInflight,
+}));
 
 import { POST } from "./route";
 
@@ -30,6 +35,37 @@ describe("POST /api/admin/sentry-import/review", () => {
     mocks.session.mockResolvedValue({ user: { id: "admin-1", email: "admin@example.com", role: "admin" } });
     mocks.updateMany.mockResolvedValue({ count: 2 });
     mocks.enqueue.mockResolvedValue("job-1");
+    mocks.hasInflight.mockResolvedValue(false);
+  });
+
+  it("does not approve rows whose single-issue form op is still in flight", async () => {
+    mocks.hasInflight.mockImplementation(async (id: string) => id === "b");
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+
+    const res = await post({ ids: ["a", "b"], decision: "approve" });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json).toMatchObject({ updated: 1, skipped: 1, state: "approved" });
+    expect(mocks.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ["a"] }, state: { in: ["review", "pending", "rejected"] } } })
+    );
+  });
+
+  it("returns 409 when every row to approve has an in-flight form op", async () => {
+    mocks.hasInflight.mockResolvedValue(true);
+
+    const res = await post({ ids: ["a"], decision: "approve" });
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("Task cho lỗi này đang được tạo");
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("does not check in-flight ops for reject", async () => {
+    await post({ ids: ["a"], decision: "reject" });
+    expect(mocks.hasInflight).not.toHaveBeenCalled();
   });
 
   it("rejects non-admins", async () => {

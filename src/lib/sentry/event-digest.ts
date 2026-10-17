@@ -35,10 +35,11 @@ function str(v: unknown): string | undefined {
 }
 
 /**
- * Redact emails and secrets. The shared AI sanitizer caps its input, so it is
- * applied per line; a single line longer than its cap is truncated.
+ * Redact emails and secrets before Sentry text reaches the LLM. The shared AI
+ * sanitizer caps its input, so it is applied per line; a single line longer
+ * than its cap is truncated.
  */
-function scrub(text: string, max: number): string {
+export function scrubSentryText(text: string, max: number): string {
   return text
     .replace(EMAIL_RE, "[email]")
     .split("\n")
@@ -72,8 +73,8 @@ function inAppFrames(exc: RawException | undefined): SentryEventDigest["frames"]
     .map((f) => {
       const file = str(f.filename) ?? str(f.absPath) ?? str(f.module) ?? "?";
       const frame: SentryEventDigest["frames"][number] = {
-        file: scrub(file, MAX_FIELD),
-        fn: scrub(str(f.function) ?? "?", MAX_FIELD),
+        file: scrubSentryText(file, MAX_FIELD),
+        fn: scrubSentryText(str(f.function) ?? "?", MAX_FIELD),
       };
       if (typeof f.lineNo === "number") frame.line = f.lineNo;
       return frame;
@@ -85,12 +86,12 @@ export function digestSentryEvent(e: SentryEvent): SentryEventDigest {
 
   const exc = lastException(e);
   const type = str(exc?.type);
-  if (type) digest.exceptionType = scrub(type, MAX_FIELD);
+  if (type) digest.exceptionType = scrubSentryText(type, MAX_FIELD);
   const value = str(exc?.value) ?? str(e.message);
-  if (value) digest.exceptionValue = scrub(value, MAX_EXCEPTION_VALUE);
+  if (value) digest.exceptionValue = scrubSentryText(value, MAX_EXCEPTION_VALUE);
 
   const culprit = str(e.culprit);
-  if (culprit) digest.culprit = scrub(culprit, MAX_FIELD);
+  if (culprit) digest.culprit = scrubSentryText(culprit, MAX_FIELD);
 
   digest.frames = inAppFrames(exc);
 
@@ -98,12 +99,12 @@ export function digestSentryEvent(e: SentryEvent): SentryEventDigest {
     if (!tag || !TAG_WHITELIST.has(tag.key)) continue;
     const v = str(tag.value);
     if (!v) continue;
-    digest.tags[tag.key] = scrub(tag.key === "url" ? stripQuery(v) : v, MAX_FIELD);
+    digest.tags[tag.key] = scrubSentryText(tag.key === "url" ? stripQuery(v) : v, MAX_FIELD);
   }
 
   const request = entryData(e, "request") as { url?: unknown } | null | undefined;
   const url = str(request?.url);
-  if (url) digest.requestUrl = scrub(stripQuery(url), MAX_FIELD);
+  if (url) digest.requestUrl = scrubSentryText(stripQuery(url), MAX_FIELD);
 
   return digest;
 }

@@ -15,35 +15,41 @@ import {
   blockOrphanWaitingItems,
 } from "./create-parent-resolver";
 import { processCreateItem } from "./create-item-executor";
-import { upsertJiraIssue } from "@/lib/issues/cache";
 import { markSentryRowFromBulkOp } from "@/lib/sentry/bulk-completion";
+import { OPEN_SENTRY_STATES, sentryImportIdOfPayload } from "@/lib/sentry/create-from-form";
+import { logger } from "@/lib/logger";
 
 export const MAX_ROUNDS = 10;
 
-/**
- * Best-effort: pull freshly created issues into the local issue cache so they
- * show up on the board without waiting for the next Jira poll.
- */
-export async function syncCreatedIssuesToCache(
-  jira: Pick<ReturnType<typeof jiraWith>, "getIssue">,
-  jiraKeys: string[]
-): Promise<void> {
-  for (const key of jiraKeys) {
-    try {
-      const full = await jira.getIssue(key);
-      await upsertJiraIssue(full);
-    } catch {
-      // Cache sync is best-effort; the Jira issue exists and polling will catch up
-    }
-  }
-}
+export const MSG_SENTRY_ALREADY_FILED = "Lỗi Sentry đã được tạo task ở luồng khác";
 
 async function markSentryRowSafely(operationId: string): Promise<void> {
   try {
     await markSentryRowFromBulkOp(operationId);
-  } catch {
+  } catch (err) {
     // Best-effort: never fail the bulk operation because of the Sentry link
+    logger.error({
+      message: "Failed to mark Sentry row from bulk create op",
+      operationId,
+      error: (err as Error).message,
+    });
   }
+}
+
+/**
+ * For a Sentry-sourced op: true when its Sentry row was already filed or taken
+ * by another flow (approved for the sentry-import worker, created, ...), so
+ * running the op now would create a duplicate Jira task.
+ */
+async function sentryRowTakenElsewhere(payload: unknown): Promise<boolean> {
+  const sentryImportId = sentryImportIdOfPayload(payload);
+  if (!sentryImportId) return false;
+  const row = await prisma.sentryIssueImported.findUnique({
+    where: { id: sentryImportId },
+    select: { state: true, jiraKey: true },
+  });
+  if (!row) return false;
+  return Boolean(row.jiraKey) || !OPEN_SENTRY_STATES.includes(row.state);
 }
 
 /**
@@ -197,6 +203,28 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
   });
   if (claim.count === 0 && op.state !== "running") return;
 
+  // Re-check the Sentry row at execution time: the confirm-time guard cannot
+  // see a row approved/filed while this op sat in the queue (e.g. worker outage).
+  if (await sentryRowTakenElsewhere(op.payload)) {
+    await prisma.bulkCreateItem.updateMany({
+      where: { operationId, status: { in: ["pending", "waiting_for_parent"] } },
+      data: {
+        status: "failed",
+        errorCode: "SENTRY_ALREADY_FILED",
+        error: MSG_SENTRY_ALREADY_FILED,
+        retryable: false,
+      },
+    });
+    await prisma.bulkOperation.update({
+      where: { id: operationId },
+      data: { state: "cancelled", failed: op.total, completedAt: new Date() },
+    });
+    logger.warn({ message: "Skipped Sentry bulk create op: row already filed", operationId });
+    // The row is not marked: it belongs to the other flow now.
+    await notifyCreateResult(op, "failed", 0, op.total);
+    return;
+  }
+
   // Load user credentials
   const user = await prisma.user.findUnique({
     where: { id: op.requestedBy },
@@ -268,7 +296,6 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
   let totalRounds = 0;
   let slowItemCount = 0;
   const itemLatenciesMs: number[] = [];
-  const createdJiraKeys: string[] = [];
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const pendingItems = await prisma.bulkCreateItem.findMany({
@@ -317,7 +344,6 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
           select: { jiraKey: true, clientRef: true },
         });
         if (parentItem?.jiraKey) {
-          createdJiraKeys.push(parentItem.jiraKey);
           await unlockChildren(operationId, result.clientRef, parentItem.jiraKey);
         }
       } else {
@@ -362,7 +388,7 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
     },
   });
 
-  await syncCreatedIssuesToCache(jira, createdJiraKeys);
+  // The issue cache is refreshed per created item in processCreateItem.
   if (terminal) {
     await markSentryRowSafely(operationId);
   }

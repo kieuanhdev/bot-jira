@@ -32,7 +32,8 @@ export type UseSingleTaskCreateOptions = {
    * Both must answer preview with a `BulkCreatePreviewResult`.
    */
   endpoint?: string;
-  onCreated?: (jiraKey: string) => void;
+  /** `projectKey` is the project captured when the create was submitted. */
+  onCreated?: (jiraKey: string, projectKey: string) => void;
 };
 
 export type UseSingleTaskCreateResult = {
@@ -123,26 +124,28 @@ export function useSingleTaskCreate(opts: UseSingleTaskCreateOptions): UseSingle
   }, [phase.kind]);
 
   const doneKey = phase.kind === "done" ? phase.jiraKey : null;
+  // The project captured at submit, not the live prop (it may have changed since).
+  const doneProjectKey = phase.kind === "done" ? (phase.projectKey ?? projectKey) : null;
   const notifiedKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!doneKey || notifiedKeyRef.current === doneKey) return;
+    if (!doneKey || !doneProjectKey || notifiedKeyRef.current === doneKey) return;
     notifiedKeyRef.current = doneKey;
-    void queryClient.invalidateQueries({ predicate: issuesTouchingProjects([projectKey]) });
+    void queryClient.invalidateQueries({ predicate: issuesTouchingProjects([doneProjectKey]) });
     void queryClient.invalidateQueries({ queryKey: bulkKeys.operations });
     if (source.type === "sentry") {
       void queryClient.invalidateQueries({ queryKey: adminKeys.sentry });
     }
-    onCreated?.(doneKey);
-  }, [doneKey, projectKey, source.type, queryClient, onCreated]);
+    onCreated?.(doneKey, doneProjectKey);
+  }, [doneKey, doneProjectKey, source.type, queryClient, onCreated]);
 
   const submit = useCallback(
     (row: BulkCreateRowInput) => {
       if (phase.kind === "previewing" || activeOpId(phase)) return;
       lastOpStateRef.current = undefined;
-      dispatch({ type: "submit" });
+      dispatch({ type: "submit", projectKey });
       previewMutation.mutate({ row, generation: generationRef.current });
     },
-    [phase, previewMutation]
+    [phase, previewMutation, projectKey]
   );
 
   const forceConfirm = useCallback(() => {

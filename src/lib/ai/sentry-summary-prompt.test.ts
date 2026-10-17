@@ -39,6 +39,19 @@ const bareRow: SentryTaskSource = {
 };
 
 describe("buildSentrySummaryPrompt", () => {
+  it("redacts emails and secrets in the Sentry title and caps its length", () => {
+    const title =
+      "Login failed for jane.doe@example.com with Bearer abcdefghijklmnop1234 " + "x".repeat(600);
+    const prompt = buildSentrySummaryPrompt({ ...row, title }, null);
+    const titleLine = prompt.split("\n").find((l) => l.startsWith("- Tiêu đề: ")) ?? "";
+
+    expect(prompt).not.toContain("jane.doe@example.com");
+    expect(prompt).not.toContain("abcdefghijklmnop1234");
+    expect(titleLine).toContain("[email]");
+    expect(titleLine).toContain("Bearer [REDACTED_TOKEN]");
+    expect(titleLine.length - "- Tiêu đề: ".length).toBeLessThanOrEqual(300);
+  });
+
   it("includes the culprit and the first in-app frame when a digest is given", () => {
     const prompt = buildSentrySummaryPrompt(row, digest);
     expect(prompt).toContain("app/orders/checkout in submitOrder");
