@@ -22,6 +22,12 @@ describe("pickAttachment", () => {
     expect(pickAttachment([{ id: "9", filename: "Shot.PNG" }], "shot.png")?.id).toBe("9");
   });
 
+  it("matches names that differ in spaces, underscores or URL encoding", () => {
+    const list = [{ id: "7", filename: "Screenshot_from_2026-10-09.png" }];
+    expect(pickAttachment(list, "Screenshot from 2026-10-09.png")?.id).toBe("7");
+    expect(pickAttachment(list, "Screenshot%20from%202026-10-09.png")?.id).toBe("7");
+  });
+
   it("returns null when nothing matches", () => {
     expect(pickAttachment([{ id: "1", filename: "a.png" }], "b.png")).toBeNull();
   });

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { formatDateTime, timeAgo, getJiraIssueUrl, getBitbucketBranchUrl } from "@/lib/utils";
-import { wikiToHtml } from "@/lib/wiki";
+import { WikiContent } from "@/components/issues/wiki-content";
 import { formatJiraDuration } from "@/lib/worklogs/schema";
 import { IssueDependencies } from "@/components/issue-dependencies";
 import { IssueRelations } from "@/components/issues/issue-relations";
@@ -148,10 +148,7 @@ export function IssueDetailClient({
             <CardHeader><CardTitle>Mô tả</CardTitle></CardHeader>
             <CardContent>
               {issue.description ? (
-                <div
-                  className="wiki-content text-sm"
-                  dangerouslySetInnerHTML={{ __html: wikiToHtml(issue.description, { issueKey: issue.jiraKey }) }}
-                />
+                <WikiContent source={issue.description} issueKey={issue.jiraKey} className="text-sm" />
               ) : (
                 <p className="text-sm text-muted-foreground">—</p>
               )}

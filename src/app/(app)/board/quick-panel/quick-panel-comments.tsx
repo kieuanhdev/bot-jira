@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Pencil, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { wikiToHtml } from "@/lib/wiki";
+import { WikiContent } from "@/components/issues/wiki-content";
 import { formatDateTime } from "@/lib/utils";
 
 function Section({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
@@ -114,10 +114,7 @@ export function QuickPanelComments({
             </div>
           </div>
         ) : description ? (
-          <div
-            className="wiki-content text-sm leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: wikiToHtml(description, { issueKey: jiraKey }) }}
-          />
+          <WikiContent source={description} issueKey={jiraKey} className="text-sm leading-relaxed" />
         ) : (
           <p className="text-sm italic text-muted-foreground">No description.</p>
         )}
@@ -160,10 +157,7 @@ export function QuickPanelComments({
                     <span className="font-medium">{c.author}</span>
                     <span className="text-muted-foreground">{formatDateTime(c.createdAt)}</span>
                   </div>
-                  <div
-                    className="wiki-content text-sm"
-                    dangerouslySetInnerHTML={{ __html: wikiToHtml(c.body, { issueKey: jiraKey }) }}
-                  />
+                  <WikiContent source={c.body} issueKey={jiraKey} className="text-sm" />
                 </div>
               ))}
           </div>

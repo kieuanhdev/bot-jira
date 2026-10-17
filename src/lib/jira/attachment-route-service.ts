@@ -21,14 +21,32 @@ type JiraAttachment = {
   created?: string;
 };
 
-/** Latest attachment whose filename matches; Jira allows duplicate names. */
+/** Lowercase, URL-decoded, with runs of spaces/underscores collapsed: Jira markup and
+ * stored filenames disagree on those often enough to matter. */
+function looseName(name: string): string {
+  let decoded = name;
+  try {
+    decoded = decodeURIComponent(name);
+  } catch {
+    // Not URL-encoded: compare as is.
+  }
+  return decoded.trim().toLowerCase().replace(/[\s_]+/g, "_");
+}
+
+/** Latest attachment whose filename matches, trying progressively looser comparisons. */
 export function pickAttachment(attachments: JiraAttachment[], name: string): JiraAttachment | null {
-  const exact = attachments.filter((a) => a.filename === name);
-  const pool = exact.length > 0
-    ? exact
-    : attachments.filter((a) => a.filename?.toLowerCase() === name.toLowerCase());
-  if (pool.length === 0) return null;
-  return [...pool].sort((a, b) => (b.created ?? "").localeCompare(a.created ?? ""))[0];
+  const matchers = [
+    (a: JiraAttachment) => a.filename === name,
+    (a: JiraAttachment) => a.filename?.toLowerCase() === name.toLowerCase(),
+    (a: JiraAttachment) => a.filename !== undefined && looseName(a.filename) === looseName(name),
+  ];
+  for (const matches of matchers) {
+    const pool = attachments.filter(matches);
+    if (pool.length > 0) {
+      return [...pool].sort((x, y) => (y.created ?? "").localeCompare(x.created ?? ""))[0];
+    }
+  }
+  return null;
 }
 
 /** SVG can carry script, so only raster images are proxied. */

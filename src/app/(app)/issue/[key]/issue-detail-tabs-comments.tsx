@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime } from "@/lib/utils";
-import { wikiToHtml } from "@/lib/wiki";
+import { WikiContent } from "@/components/issues/wiki-content";
 import type { IssueDetail } from "./lib/issue-detail-types";
 
 interface IssueDetailTabsCommentsProps {
@@ -59,10 +59,7 @@ export function IssueDetailTabsComments({
               <span className="font-medium">{c.author}</span>
               <span className="text-xs text-muted-foreground">{formatDateTime(c.createdAt)}</span>
             </div>
-            <div
-              className="wiki-content text-sm"
-              dangerouslySetInnerHTML={{ __html: wikiToHtml(c.body, { issueKey: jiraKey }) }}
-            />
+            <WikiContent source={c.body} issueKey={jiraKey} className="text-sm" />
           </CardContent>
         </Card>
       ))}
