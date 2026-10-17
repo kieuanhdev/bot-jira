@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TaskCreateForm } from "./task-create-form";
 import { useSingleTaskCreate } from "./use-single-task-create";
+import type { SingleCreatePhase } from "./single-create-model";
 import { AiIdeaPanel } from "./ai-idea-panel";
 import { useAiEnabled } from "@/hooks/use-ai-enabled";
 import {
@@ -41,8 +42,23 @@ import {
 
 export type { TaskCreatePrefill } from "./task-create-form-model";
 
+/** Context passed to a function-form `extraActions`. */
+export type TaskCreateExtraActionsContext = {
+  /** A create is in flight (previewing, creating or waiting in the queue). */
+  busy: boolean;
+  /** Current form row; null until project metadata has loaded. */
+  row: BulkCreateRowInput | null;
+};
+
+/**
+ * Prefill merged into the live form (via `mergeAiPrefill`) each time `seq` changes,
+ * without discarding the user's other edits or the in-flight create state.
+ */
+export type TaskCreateExternalPatch = { seq: number; prefill: TaskCreatePrefill };
+
 const METADATA_STALE_MS = 5 * 60 * 1000;
 const DONE_TOAST_MS = 6_000;
+const IDLE_PHASE: SingleCreatePhase = { kind: "idle" };
 
 export type TaskCreateDialogProps = {
   open: boolean;
@@ -60,8 +76,14 @@ export type TaskCreateDialogProps = {
   lockedLabels?: string[];
   source: NonNullable<BulkCreateRequest["source"]>;
   endpoint?: string;
-  /** Slot under the title for AI actions. */
-  extraActions?: ReactNode;
+  /** Slot under the title for AI actions; the function form gets the busy state and current row. */
+  extraActions?: ReactNode | ((ctx: TaskCreateExtraActionsContext) => ReactNode);
+  /**
+   * Applied once per new `seq` when the form is idle and loaded (a patch arriving
+   * before metadata loads waits for it; one arriving during a create is dropped,
+   * so callers should disable their trigger while `busy`).
+   */
+  externalPatch?: TaskCreateExternalPatch | null;
   /**
    * Show "Viết bằng AI" (rough idea → form fields) under the title when the
    * server has AI configured. The suggestion is merged with `mergeAiPrefill`.
@@ -101,6 +123,7 @@ export function TaskCreateDialog({
   source,
   endpoint,
   extraActions,
+  externalPatch,
   aiAssist = false,
   onCreated,
 }: TaskCreateDialogProps): React.JSX.Element {
@@ -131,7 +154,14 @@ export function TaskCreateDialog({
       onCreated?.(jiraKey);
     },
   });
-  const { phase } = create;
+  // Seq of the last external patch handled, and a duplicate prompt made stale by a
+  // patch (the hook cannot be reset during render, so that prompt is hidden instead).
+  const [patchSeq, setPatchSeq] = useState<number | null>(null);
+  const [staleDuplicateOpId, setStaleDuplicateOpId] = useState<string | null>(null);
+  const phase: SingleCreatePhase =
+    create.phase.kind === "duplicate" && create.phase.operationId === staleDuplicateOpId
+      ? IDLE_PHASE
+      : create.phase;
 
   // Untouched form = derived from metadata + prefill; first edit pins it into state.
   const row: BulkCreateRowInput | null =
@@ -150,6 +180,18 @@ export function TaskCreateDialog({
         : null;
 
   const busy = phase.kind === "previewing" || phase.kind === "creating" || phase.kind === "queued-slow";
+  const mergeOpts = { lockedLabels, defaultIssueTypeId: metadata?.defaultIssueTypeId };
+
+  // Adjust state on prop change during render (no effect): React re-renders
+  // immediately with the merged draft, and the seq guard makes it run once per patch.
+  if (externalPatch && externalPatch.seq !== patchSeq && row && metadata) {
+    setPatchSeq(externalPatch.seq);
+    if (!busy) {
+      setDraft({ projectKey, row: mergeAiPrefill(row, externalPatch.prefill, mergeOpts) });
+      // Same as handleChange: a pending duplicate confirmation no longer matches the form.
+      if (phase.kind === "duplicate") setStaleDuplicateOpId(phase.operationId);
+    }
+  }
   const check = row && metadata ? canSubmit(row, metadata) : null;
   const blocked =
     phase.kind === "blocked" && metadata ? splitPreviewErrors(phase.errors, metadata) : null;
@@ -162,9 +204,7 @@ export function TaskCreateDialog({
 
   function handleAiApply(prefill: TaskCreatePrefill) {
     if (!row || !metadata) return;
-    handleChange(
-      mergeAiPrefill(row, prefill, { lockedLabels, defaultIssueTypeId: metadata.defaultIssueTypeId })
-    );
+    handleChange(mergeAiPrefill(row, prefill, mergeOpts));
   }
 
   function handleOpenChange(next: boolean) {
@@ -229,15 +269,16 @@ export function TaskCreateDialog({
     );
   }
 
+  const extra = typeof extraActions === "function" ? extraActions({ busy, row }) : extraActions;
   const showAiPanel = aiAssist && aiEnabled && Boolean(row && metadata?.canCreate);
   const headerExtra =
     showAiPanel && row ? (
       <div className="space-y-2">
         <AiIdeaPanel key={projectKey} projectKey={projectKey} current={row} disabled={busy} onApply={handleAiApply} />
-        {extraActions}
+        {extra}
       </div>
     ) : (
-      extraActions
+      extra
     );
 
   const footer = (

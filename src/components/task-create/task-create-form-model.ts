@@ -194,13 +194,16 @@ export function duplicateKeyFromWarning(
 
 const AI_OVERWRITE_KEYS = ["summary", "description"] as const;
 
-function hasText(value: string | undefined): boolean {
-  return Boolean(value && value.trim());
-}
-
-/** Whether applying an AI prefill would replace summary/description the user already wrote. */
+/**
+ * Whether applying an AI prefill would replace summary/description the user
+ * already wrote with different text (identical text after trimming is no loss).
+ */
 export function aiOverwriteNeedsConfirm(row: BulkCreateRowInput, prefill: TaskCreatePrefill): boolean {
-  return AI_OVERWRITE_KEYS.some((key) => hasText(prefill[key]) && hasText(row[key]));
+  return AI_OVERWRITE_KEYS.some((key) => {
+    const next = prefill[key]?.trim();
+    const current = row[key]?.trim();
+    return Boolean(next && current && next !== current);
+  });
 }
 
 /**

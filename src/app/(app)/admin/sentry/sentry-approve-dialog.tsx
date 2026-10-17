@@ -1,12 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ExternalLink, Info } from "lucide-react";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
-import { TaskCreateDialog, type TaskCreatePrefill } from "@/components/task-create/task-create-dialog";
-import type { BulkCreateProjectMetadata, BulkCreateSource } from "@/lib/bulk/create-types";
+import {
+  TaskCreateDialog,
+  type TaskCreateExternalPatch,
+  type TaskCreateExtraActionsContext,
+  type TaskCreatePrefill,
+} from "@/components/task-create/task-create-dialog";
+import { aiOverwriteNeedsConfirm } from "@/components/task-create/task-create-form-model";
+import type { BulkCreateProjectMetadata, BulkCreateRowInput, BulkCreateSource } from "@/lib/bulk/create-types";
 import { useAiEnabled } from "@/hooks/use-ai-enabled";
 import { bulkKeys } from "@/lib/query-keys";
 import { sentryLabel } from "@/lib/sentry/idempotency";
@@ -95,6 +101,20 @@ export interface SentryTaskCreateDialogProps {
   onCreated: (jiraKey: string) => void;
 }
 
+/** Keeps `rowRef` pointing at the form's latest row, for reading in async callbacks. */
+function LatestRowSync({
+  rowRef,
+  row,
+}: {
+  rowRef: RefObject<BulkCreateRowInput | null>;
+  row: BulkCreateRowInput | null;
+}) {
+  useEffect(() => {
+    rowRef.current = row;
+  });
+  return null;
+}
+
 /**
  * Approve one Sentry issue with the full task form, filed with the admin's Jira
  * token via `/api/admin/sentry-import/[id]/create`. Keep it mounted per row
@@ -103,7 +123,7 @@ export interface SentryTaskCreateDialogProps {
 export function SentryTaskCreateDialog({ row, open, onOpenChange, onCreated }: SentryTaskCreateDialogProps) {
   const source = useMemo<BulkCreateSource>(() => ({ type: "sentry", sentryImportId: row.id }), [row.id]);
   const lockedLabels = useMemo(() => ["sentry", sentryLabel({ id: row.sentryIssueId })], [row.sentryIssueId]);
-  const basePrefill = useMemo<TaskCreatePrefill>(() => {
+  const prefill = useMemo<TaskCreatePrefill>(() => {
     const draft = buildSentryTaskDraft(row);
     return {
       summary: row.draftSummary ?? draft.summary,
@@ -112,21 +132,15 @@ export function SentryTaskCreateDialog({ row, open, onOpenChange, onCreated }: S
   }, [row]);
   const ref = row.shortId ?? row.sentryIssueId;
 
-  // AI summary state lives here, above the remounted form, so it survives applying.
+  // AI summary state lives here, above the sheet content, so it survives closing the form.
   const aiEnabled = useAiEnabled();
   const queryClient = useQueryClient();
   const aiSummary = useSentryAiSummary(row.id);
   const [proposal, setProposal] = useState<SentryAiSummaryResult | null>(null);
-  const [aiPrefill, setAiPrefill] = useState<TaskCreatePrefill | null>(null);
-  // Bumped to remount TaskCreateDialog so it re-derives the form from the new prefill.
-  const [formKey, setFormKey] = useState(0);
+  // Merged into the live form by TaskCreateDialog each time `seq` changes.
+  const [aiPatch, setAiPatch] = useState<TaskCreateExternalPatch | null>(null);
   const [priorityNote, setPriorityNote] = useState<string | null>(null);
-
-  function runAiSummary() {
-    setProposal(null);
-    setPriorityNote(null);
-    aiSummary.mutate(undefined, { onSuccess: (result) => setProposal(result) });
-  }
+  const formRowRef = useRef<BulkCreateRowInput | null>(null);
 
   /** Priority id for the suggested name, from the metadata the open form already cached. */
   function resolvePriorityId(name: string | undefined): string | undefined {
@@ -138,72 +152,94 @@ export function SentryTaskCreateDialog({ row, open, onOpenChange, onCreated }: S
     if (!metadata?.fieldCapabilities.priority.available) return undefined;
     return metadata.priorityOptions.find((p) => p.name.trim().toLowerCase() === wanted)?.id;
   }
-  const proposalPriorityId = resolvePriorityId(proposal?.priorityName);
 
-  function applyAiSummary() {
-    if (!proposal) return;
-    setAiPrefill({
-      ...basePrefill,
-      summary: proposal.summary,
-      description: proposal.description,
-      ...(proposalPriorityId ? { priorityId: proposalPriorityId } : {}),
-    });
+  function prefillFor(result: SentryAiSummaryResult): TaskCreatePrefill {
+    const priorityId = resolvePriorityId(result.priorityName);
+    return {
+      summary: result.summary,
+      description: result.description,
+      ...(priorityId ? { priorityId } : {}),
+    };
+  }
+
+  function applyAiSummary(result: SentryAiSummaryResult) {
+    const next = prefillFor(result);
+    setAiPatch((prev) => ({ seq: (prev?.seq ?? 0) + 1, prefill: next }));
     setPriorityNote(
-      proposal.priorityName && !proposalPriorityId
-        ? `Không tìm thấy priority "${proposal.priorityName}" trong project, giữ mặc định.`
+      result.priorityName && !next.priorityId
+        ? `Không tìm thấy priority "${result.priorityName}" trong project, giữ mặc định.`
         : null
     );
-    setFormKey((k) => k + 1);
     setProposal(null);
   }
 
+  function runAiSummary() {
+    setProposal(null);
+    setPriorityNote(null);
+    aiSummary.mutate(undefined, {
+      onSuccess: (result) => {
+        // Ask first only when it would replace a summary/description the admin has.
+        const current = formRowRef.current;
+        if (current && !aiOverwriteNeedsConfirm(current, prefillFor(result))) applyAiSummary(result);
+        else setProposal(result);
+      },
+    });
+  }
+
   // Sentry context, plus the "AI tóm tắt lỗi" action when the server has an LLM.
-  const extraActions = (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
-      <Badge variant={levelVariant(row.level)} className="uppercase">
-        {row.level ?? "?"}
-      </Badge>
-      {row.eventCount !== null && <span>{formatNumber(row.eventCount)} lần xảy ra</span>}
-      {row.permalinkUrl && (
-        <a
-          href={row.permalinkUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex cursor-pointer items-center gap-1 font-medium text-primary underline-offset-4 transition-colors duration-150 hover:underline"
-        >
-          Xem trên Sentry
-          <ExternalLink className="h-3 w-3" aria-hidden="true" />
-        </a>
-      )}
-      {aiEnabled && (
-        <SentryAiSummaryButton
-          pending={aiSummary.isPending}
-          error={aiSummary.error}
-          usedEvent={aiSummary.data?.usedEvent ?? null}
-          proposal={proposal}
-          proposalSetsPriority={Boolean(proposalPriorityId)}
-          note={priorityNote}
-          onRun={runAiSummary}
-          onApply={applyAiSummary}
-          onDismiss={() => setProposal(null)}
-        />
-      )}
-    </div>
-  );
+  function extraActions({ busy, row: formRow }: TaskCreateExtraActionsContext) {
+    const proposalPrefill = proposal ? prefillFor(proposal) : null;
+    // mergeAiPrefill only fills an empty priority.
+    const proposalSetsPriority = Boolean(proposalPrefill?.priorityId && !formRow?.priorityId);
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
+        <LatestRowSync rowRef={formRowRef} row={formRow} />
+        <Badge variant={levelVariant(row.level)} className="uppercase">
+          {row.level ?? "?"}
+        </Badge>
+        {row.eventCount !== null && <span>{formatNumber(row.eventCount)} lần xảy ra</span>}
+        {row.permalinkUrl && (
+          <a
+            href={row.permalinkUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex cursor-pointer items-center gap-1 font-medium text-primary underline-offset-4 transition-colors duration-150 hover:underline"
+          >
+            Xem trên Sentry
+            <ExternalLink className="h-3 w-3" aria-hidden="true" />
+          </a>
+        )}
+        {aiEnabled && (
+          <SentryAiSummaryButton
+            pending={aiSummary.isPending}
+            disabled={busy || !formRow}
+            error={aiSummary.error}
+            usedEvent={aiSummary.data?.usedEvent ?? null}
+            proposal={proposal}
+            proposalSetsPriority={proposalSetsPriority}
+            note={priorityNote}
+            onRun={runAiSummary}
+            onApply={() => proposal && applyAiSummary(proposal)}
+            onDismiss={() => setProposal(null)}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <TaskCreateDialog
-      key={formKey}
       open={open}
       onOpenChange={onOpenChange}
       projectKey={row.targetProject}
       title={`Tạo task từ lỗi Sentry ${ref}`}
-      prefill={aiPrefill ?? basePrefill}
+      prefill={prefill}
       prefillIssueTypeName={buildSentryTaskDraft(row).issueType}
       lockedLabels={lockedLabels}
       source={source}
       endpoint={`/api/admin/sentry-import/${row.id}/create`}
       extraActions={extraActions}
+      externalPatch={aiPatch}
       onCreated={onCreated}
     />
   );

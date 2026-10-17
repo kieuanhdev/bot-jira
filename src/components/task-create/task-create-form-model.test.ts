@@ -324,6 +324,12 @@ describe("aiOverwriteNeedsConfirm", () => {
     expect(aiOverwriteNeedsConfirm({ ...emptyRow(meta()), description: "d" }, { description: "y" })).toBe(true);
   });
 
+  it("is false when the filled text equals the suggestion (ignoring surrounding spaces)", () => {
+    const row = { ...emptyRow(meta()), summary: "Lỗi đăng nhập ", description: "Mô tả" };
+    expect(aiOverwriteNeedsConfirm(row, { summary: "Lỗi đăng nhập", description: " Mô tả" })).toBe(false);
+    expect(aiOverwriteNeedsConfirm(row, { summary: "Lỗi đăng nhập", description: "Khác" })).toBe(true);
+  });
+
   it("is false when the prefill does not carry the filled field", () => {
     const row = { ...emptyRow(meta()), summary: "Cũ" };
     expect(aiOverwriteNeedsConfirm(row, { description: "y" })).toBe(false);

@@ -13,8 +13,8 @@ export type SentryAiSummaryResult = {
 };
 
 /**
- * Calls `/api/admin/sentry-import/[id]/ai-summary`. Keep it above any element
- * that is remounted to apply the result, so the outcome survives the remount.
+ * Calls `/api/admin/sentry-import/[id]/ai-summary`. Keep it above the sheet
+ * content (which unmounts on close) so a result survives closing the form.
  */
 export function useSentryAiSummary(rowId: string) {
   return useMutation({
@@ -27,6 +27,8 @@ export function useSentryAiSummary(rowId: string) {
 
 export interface SentryAiSummaryButtonProps {
   pending: boolean;
+  /** Disable running/applying, e.g. while the task is being created. */
+  disabled?: boolean;
   error: unknown;
   /** Last successful result's `usedEvent`; null before any result. */
   usedEvent: boolean | null;
@@ -44,6 +46,7 @@ export interface SentryAiSummaryButtonProps {
 /** "AI tóm tắt lỗi" action for the Sentry task form header. Presentational only. */
 export function SentryAiSummaryButton({
   pending,
+  disabled = false,
   error,
   usedEvent,
   proposal,
@@ -62,7 +65,7 @@ export function SentryAiSummaryButton({
           size="sm"
           className="h-7 cursor-pointer gap-1.5 text-xs"
           onClick={onRun}
-          disabled={pending}
+          disabled={pending || disabled}
         >
           {pending ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -100,8 +103,7 @@ export function SentryAiSummaryButton({
           <p className="flex items-start gap-1.5">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span>
-              Thay tiêu đề, mô tả{proposalSetsPriority ? " và priority" : ""} bằng bản AI?{" "}
-              <span className="text-muted-foreground">Các thay đổi khác trong form sẽ được đặt lại.</span>
+              Thay tiêu đề, mô tả{proposalSetsPriority ? " và điền priority" : ""} bằng bản AI?
             </span>
           </p>
           <p className="line-clamp-2 font-medium">{proposal.summary}</p>
@@ -109,7 +111,7 @@ export function SentryAiSummaryButton({
             <Button type="button" variant="outline" size="sm" className="h-7 cursor-pointer text-xs" onClick={onDismiss}>
               Bỏ qua
             </Button>
-            <Button type="button" size="sm" className="h-7 cursor-pointer text-xs" onClick={onApply}>
+            <Button type="button" size="sm" className="h-7 cursor-pointer text-xs" onClick={onApply} disabled={disabled}>
               Áp dụng
             </Button>
           </div>
