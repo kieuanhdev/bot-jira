@@ -4,7 +4,6 @@ import { AiUnavailableError } from "@/lib/ai/provider";
 import { buildEstimateInput } from "@/lib/ai/estimation-input";
 import { guard, hasLLMConfig, env } from "../guard";
 import type { WorkerLog } from "../guard";
-import { notifyAiEstimateReady } from "@/lib/ai/notify";
 
 const BATCH = 5;
 
@@ -16,10 +15,12 @@ export async function runAiScore(): Promise<WorkerLog> {
   const policy = await loadSyncPolicy();
   const disabledProjects = policy.disabledKeys("aiScore");
 
-  // Issues that have no AI estimate yet and are not in Done.
+  // Issues that have no AI estimate yet, no story points set (already pointed
+  // tasks need no estimate; users can still request one manually), and are not in Done.
   const candidates = await prisma.issueCache.findMany({
     where: {
       aiScore: null,
+      points: null,
       status: { not: "Done" },
       ...(disabledProjects.length > 0 ? { NOT: { projectKey: { in: disabledProjects } } } : {}),
     },
@@ -41,7 +42,6 @@ export async function runAiScore(): Promise<WorkerLog> {
         projectKey: issue.projectKey,
       });
       const result = await aiProvider.estimate(input);
-      const scoredAt = new Date();
       await prisma.aiScore.upsert({
         where: { jiraKey: issue.jiraKey },
         update: {
@@ -53,7 +53,7 @@ export async function runAiScore(): Promise<WorkerLog> {
           similarTasks: result.similarTasks,
           model: aiProvider.name,
           promptVersion: AI_PROMPT_VERSION,
-          scoredAt,
+          scoredAt: new Date(),
         },
         create: {
           jiraKey: issue.jiraKey,
@@ -66,14 +66,6 @@ export async function runAiScore(): Promise<WorkerLog> {
           model: aiProvider.name,
           promptVersion: AI_PROMPT_VERSION,
         },
-      });
-      await notifyAiEstimateReady({
-        jiraKey: issue.jiraKey,
-        summary: issue.summary,
-        assigneeJira: issue.assigneeJira,
-        points: result.suggestedPoints,
-        confidence: result.confidence,
-        scoredAt,
       });
       scored++;
     } catch (e) {
