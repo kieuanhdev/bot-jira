@@ -6,23 +6,9 @@ import {
   type BulkCreateProjectMetadata,
 } from "@/lib/bulk/create-types";
 import { Sheet } from "@/components/ui/sheet";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  AssigneeCombobox,
-  ParentCombobox,
-  LabelCombobox,
-  DynamicCustomFields,
-  IssueTypeField,
-  PriorityField,
-  FixVersionField,
-  ComponentsField,
-  PointsField,
-  EstimateField,
-  DueDateField,
-  DescriptionEditor,
-} from "@/components/task-fields";
+import { TaskCreateForm } from "@/components/task-create/task-create-form";
 import { FileText } from "lucide-react";
 
 interface TaskDetailSheetProps {
@@ -48,15 +34,6 @@ export function TaskDetailSheet({
 }: TaskDetailSheetProps) {
   if (!item) return null;
 
-  const subtaskIssueTypeIds = new Set(
-    metadata.issueTypes.filter((t) => t.subtask).map((t) => t.id)
-  );
-
-  function update(patch: Partial<BulkCreateRowInput>) {
-    if (!item) return;
-    onChange({ ...item, ...patch });
-  }
-
   return (
     <Sheet
       open={open}
@@ -65,175 +42,13 @@ export function TaskDetailSheet({
       description={item.summary || `Dòng: ${item.clientRef}`}
     >
       <div className="space-y-5">
-        {/* Summary */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-foreground">
-            Tiêu đề <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            value={item.summary}
-            onChange={(e) => update({ summary: e.target.value })}
-            placeholder="Nhập tiêu đề công việc..."
-            className="h-9 text-sm"
-          />
-        </div>
-
-        {/* Issue Type — BC-SMART-301 */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-foreground">
-            Loại task <span className="text-destructive">*</span>
-          </Label>
-          <IssueTypeField
-            value={item.issueTypeId}
-            onChange={(newType) => {
-              const isEpic = newType
-                ? metadata.issueTypes.find((t) => t.id === newType)?.name.toLowerCase() === "epic"
-                : false;
-              const patch: Partial<BulkCreateRowInput> = { issueTypeId: newType };
-              if (isEpic) patch.parent = null;
-              update(patch);
-            }}
-            metadata={metadata}
-            defaults={defaults}
-            className="h-9"
-          />
-        </div>
-
-        {/* Parent / Epic */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-foreground">
-            Task cha / Epic
-            {item.issueTypeId && subtaskIssueTypeIds.has(item.issueTypeId) && (
-              <span className="ml-1 text-destructive">*</span>
-            )}
-          </Label>
-          <ParentCombobox
-            projectKey={projectKey}
-            value={item.parent}
-            onChange={(parent) => update({ parent })}
-            batchItems={items}
-            currentClientRef={item.clientRef}
-            subtaskIssueTypeIds={subtaskIssueTypeIds}
-            placeholder={item.issueTypeId && subtaskIssueTypeIds.has(item.issueTypeId) ? "Bắt buộc *" : "Chọn Epic / Task cha (tùy chọn)"}
-          />
-        </div>
-
-        {/* Assignee */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-foreground">Người thực hiện</Label>
-          <AssigneeCombobox
-            projectKey={projectKey}
-            value={item.assignee ?? null}
-            onChange={(username) => update({ assignee: username })}
-            placeholder={defaults.assignee || "Chưa gán"}
-          />
-        </div>
-
-        {/* Priority */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-foreground">Mức ưu tiên</Label>
-          <PriorityField
-            value={item.priorityId}
-            onChange={(priorityId) => update({ priorityId })}
-            metadata={metadata}
-            defaults={defaults}
-            className="h-9"
-          />
-        </div>
-
-        {/* Components */}
-        {metadata.components && metadata.components.length > 0 && (
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-foreground">Hợp phần (Components)</Label>
-            <ComponentsField
-              metadata={metadata}
-              value={item.componentIds}
-              onChange={(componentIds) => update({ componentIds })}
-              defaults={defaults}
-            />
-          </div>
-        )}
-
-        {/* Labels */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-foreground">Nhãn</Label>
-          <LabelCombobox
-            projectKey={projectKey}
-            value={item.labels}
-            onChange={(labels) => update({ labels })}
-            placeholder="Thêm nhãn…"
-          />
-        </div>
-
-        {/* Story Points */}
-        {metadata.pointsFieldId && (
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-foreground">Story Points</Label>
-            <PointsField
-              value={item.points}
-              onChange={(points) => update({ points })}
-              defaults={defaults}
-              className="h-9"
-            />
-          </div>
-        )}
-
-        {/* Original Estimate */}
-        {metadata.supportsTimeTracking && (
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-foreground">Ước tính thời gian</Label>
-            <EstimateField
-              value={item.originalEstimate}
-              onChange={(originalEstimate) => update({ originalEstimate })}
-              defaults={defaults}
-              className="h-9"
-            />
-          </div>
-        )}
-
-        {/* Due Date */}
-        {metadata.supportsDueDate && (
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-foreground">Hạn hoàn thành</Label>
-            <DueDateField
-              value={item.dueDate}
-              onChange={(dueDate) => update({ dueDate })}
-              className="h-9"
-            />
-          </div>
-        )}
-
-        {/* Fix Version */}
-        {metadata.versionOptions.length > 0 && (
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-foreground">Phiên bản phát hành</Label>
-            <FixVersionField
-              value={item.fixVersionIds}
-              onChange={(fixVersionIds) => update({ fixVersionIds })}
-              metadata={metadata}
-              defaults={defaults}
-              className="h-9"
-            />
-          </div>
-        )}
-
-        {/* Description — BC-SMART-302 */}
-        <div className="space-y-1.5">
-          <DescriptionEditor
-            value={item.description}
-            onChange={(description) => update({ description })}
-            defaultDescription={defaults.description}
-            showLayoutToggles={false}
-          />
-        </div>
-
-        {/* Dynamic Custom Fields */}
-        <DynamicCustomFields
+        <TaskCreateForm
+          value={item}
+          onChange={onChange}
           metadata={metadata}
-          issueTypeId={item.issueTypeId}
+          projectKey={projectKey}
           defaults={defaults}
-          values={item.customFields}
-          onChange={(customFields) => update({ customFields })}
+          batchItems={items}
         />
 
         {/* Client Ref (read-only) */}

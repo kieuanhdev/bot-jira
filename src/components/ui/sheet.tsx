@@ -9,6 +9,10 @@ interface SheetProps {
   title?: string;
   description?: string;
   children: ReactNode;
+  /** Extra content rendered in the header under the title/description. */
+  headerExtra?: ReactNode;
+  /** Pinned footer rendered below the scrollable body. */
+  footer?: ReactNode;
   className?: string;
   side?: "right" | "left";
 }
@@ -19,6 +23,8 @@ export function Sheet({
   title,
   description,
   children,
+  headerExtra,
+  footer,
   className,
   side = "right",
 }: SheetProps) {
@@ -52,6 +58,7 @@ export function Sheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        inert={!open}
         className={cn(
           "fixed top-0 bottom-0 z-50 flex w-full max-w-md flex-col bg-background shadow-xl transition-transform duration-200 ease-out",
           side === "right" ? "right-0" : "left-0",
@@ -63,13 +70,14 @@ export function Sheet({
       >
         {(title || description) && (
           <div className="flex items-start justify-between border-b border-border px-5 py-4">
-            <div>
+            <div className="min-w-0 flex-1">
               {title && (
                 <h2 className="text-sm font-semibold text-foreground">{title}</h2>
               )}
               {description && (
                 <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
               )}
+              {headerExtra && <div className="mt-2">{headerExtra}</div>}
             </div>
             <button
               type="button"
@@ -84,6 +92,7 @@ export function Sheet({
           </div>
         )}
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        {footer && <div className="border-t border-border px-5 py-3">{footer}</div>}
       </div>
     </>
   );
