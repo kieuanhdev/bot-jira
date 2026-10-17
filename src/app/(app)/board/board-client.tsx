@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { IssueItem } from "@/hooks/use-issues";
@@ -41,6 +41,19 @@ import { useBoardUserContext } from "./hooks/use-board-user-context";
 import { useBoardIssues } from "./hooks/use-board-issues";
 import { useBoardActionsController } from "./hooks/use-board-actions-controller";
 import { useBoardTableColumns } from "./hooks/use-board-table-columns";
+import { TaskCreateDialog } from "@/components/task-create/task-create-dialog";
+
+const BOARD_CREATE_SOURCE = { type: "single", origin: "board" } as const;
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT" ||
+    target.isContentEditable
+  );
+}
 
 const QuickPanel = dynamic(
   () => import("./board-quick-panel").then((m) => m.QuickPanel),
@@ -214,6 +227,25 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
     onOpenQuickPanel: (issue) => setQuickPanel(issue),
   });
 
+  const [createOpen, setCreateOpen] = useState(false);
+  const openCreateTask = useCallback(() => setCreateOpen(true), []);
+  const canCreateTask = Boolean(picker.selectedProject) && quickPanel === null;
+
+  // "c" opens the create dialog, unless the user is typing or another dialog is open.
+  useEffect(() => {
+    if (!canCreateTask) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "c" || e.repeat || e.defaultPrevented) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (isTypingTarget(e.target)) return;
+      if (document.querySelector('[role="dialog"], [role="menu"], [role="listbox"]')) return;
+      e.preventDefault();
+      setCreateOpen(true);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canCreateTask]);
+
   if (!prefs) {
     return prefsError ? (
       <EmptyState
@@ -282,6 +314,7 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
         filterBarOptions={filterBarOptions}
         peopleFieldData={peopleFieldData}
         selectedProjectSyncDisabled={selectedProjectSyncDisabled}
+        onCreateTask={openCreateTask}
       />
 
       <BoardContent
@@ -319,6 +352,14 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
           onOptimisticUpdate={handleOptimisticIssueUpdate}
         />
       )}
+
+      {/* Stays mounted (driven by `open`) so polling and the success toast survive closing. */}
+      <TaskCreateDialog
+        open={createOpen && Boolean(picker.selectedProject)}
+        onOpenChange={setCreateOpen}
+        projectKey={picker.selectedProject}
+        source={BOARD_CREATE_SOURCE}
+      />
     </div>
   );
 }

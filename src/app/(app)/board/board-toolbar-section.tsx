@@ -39,6 +39,7 @@ interface BoardToolbarSectionProps {
   filterBarOptions: IssueFilterOptions;
   peopleFieldData?: PeopleFieldData | null;
   selectedProjectSyncDisabled: boolean;
+  onCreateTask: () => void;
 }
 
 export function BoardToolbarSection({
@@ -61,6 +62,7 @@ export function BoardToolbarSection({
   filterBarOptions,
   peopleFieldData,
   selectedProjectSyncDisabled,
+  onCreateTask,
 }: BoardToolbarSectionProps) {
   const {
     filters,
@@ -98,6 +100,7 @@ export function BoardToolbarSection({
         syncDisabled={selectedProjectSyncDisabled}
         isFetching={isFetching}
         onSync={jiraSync.syncJira}
+        onCreateTask={onCreateTask}
         effectiveView={effectiveView}
         onViewChange={onViewChange}
         width={width}

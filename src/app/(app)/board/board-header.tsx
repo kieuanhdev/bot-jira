@@ -1,6 +1,7 @@
 "use client";
 
-import { LayoutGrid, List, ChevronsUpDown, User, Users } from "lucide-react";
+import { LayoutGrid, List, ChevronsUpDown, Plus, User, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/shared/segmented-control";
 import {
   Select,
@@ -48,6 +49,8 @@ export interface BoardHeaderProps {
   syncDisabled: boolean;
   isFetching: boolean;
   onSync: () => void;
+  /** Opens the shared task create dialog for `selectedProject`. */
+  onCreateTask: () => void;
 
   effectiveView: ViewMode;
   onViewChange: (mode: ViewMode) => void;
@@ -101,6 +104,7 @@ export function BoardHeader({
   syncDisabled,
   isFetching,
   onSync,
+  onCreateTask,
 
   effectiveView,
   onViewChange,
@@ -153,7 +157,7 @@ export function BoardHeader({
         />
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {canUseTeamMode && (
           <SegmentedControl<"personal" | "team">
             items={[
@@ -173,6 +177,19 @@ export function BoardHeader({
           isFetching={isFetching}
           onSync={onSync}
         />
+        {selectedProject && (
+          <Button
+            size="sm"
+            onClick={onCreateTask}
+            className="gap-1.5 cursor-pointer"
+            aria-label={`Tạo task trong ${selectedProject}`}
+            title={`Tạo task trong ${selectedProject} (phím tắt: C)`}
+            aria-keyshortcuts="c"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Tạo task</span>
+          </Button>
+        )}
         <SegmentedControl<ViewMode>
           items={[
             { value: "board", label: "Bảng", icon: LayoutGrid, disabled: width === "narrow" },
