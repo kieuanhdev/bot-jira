@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CopyPlus, GitBranch, RefreshCw } from "lucide-react";
+import { CopyPlus, Flag, GitBranch, Link as LinkIcon, Link2, RefreshCw, Timer, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -18,8 +18,15 @@ interface QuickPanelActionsProps {
   cloning: boolean;
   onClone: () => void;
   cloneMsg: QuickPanelActionMessage | null;
-  /** Feedback from the footer "Thêm" menu (link, worklog, copy...). */
+  /** Feedback from the other actions (link, worklog, copy...). */
   actionMsg: QuickPanelActionMessage | null;
+  flagged: boolean;
+  onToggleFlag: () => void;
+  onLogWork: () => void;
+  onLinkIssue: () => void;
+  onDelete: () => void;
+  /** Omitted when the Jira URL is unknown. */
+  onCopyLink?: () => void;
 }
 
 function ActionMessage({ message }: { message: QuickPanelActionMessage | null }) {
@@ -55,10 +62,47 @@ export function QuickPanelActions({
   onClone,
   cloneMsg,
   actionMsg,
+  flagged,
+  onToggleFlag,
+  onLogWork,
+  onLinkIssue,
+  onDelete,
+  onCopyLink,
 }: QuickPanelActionsProps) {
   return (
     <>
-      <div className="flex flex-wrap items-center justify-end gap-1.5 border-b bg-muted/20 px-4 py-2">
+      <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/20 px-4 py-2">
+        <Button variant="outline" size="sm" onClick={onLogWork} className="h-7 cursor-pointer gap-1.5 text-xs">
+          <Timer className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /> Log work
+        </Button>
+        <Button variant="outline" size="sm" onClick={onLinkIssue} className="h-7 cursor-pointer gap-1.5 text-xs">
+          <Link2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /> Link issue
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onToggleFlag}
+          aria-pressed={flagged}
+          className="h-7 cursor-pointer gap-1.5 text-xs"
+          title="Thêm/bỏ nhãn Impediment trên Jira (không phải cờ Flagged của Jira)"
+        >
+          <Flag
+            className={flagged ? "h-3.5 w-3.5 text-amber-500" : "h-3.5 w-3.5 text-muted-foreground"}
+            aria-hidden="true"
+          />
+          {flagged ? "Bỏ Impediment" : "Impediment"}
+        </Button>
+        {onCopyLink && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCopyLink}
+            className="h-7 cursor-pointer gap-1.5 text-xs"
+            title="Sao chép liên kết Jira"
+          >
+            <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /> Copy link
+          </Button>
+        )}
         {/* Clone Button */}
         <Button
           variant="outline"
@@ -91,6 +135,16 @@ export function QuickPanelActions({
             <GitBranch className="h-3.5 w-3.5 text-primary" />
           )}
           {creatingBranch ? "Đang tạo…" : "Tạo nhánh Git"}
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onDelete}
+          className="ml-auto h-7 cursor-pointer gap-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+          title="Xóa task trên Jira"
+        >
+          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Xóa
         </Button>
       </div>
 

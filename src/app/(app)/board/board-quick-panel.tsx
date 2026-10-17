@@ -190,6 +190,12 @@ export function QuickPanel({
           onClone={clone.openCloneDialog}
           cloneMsg={clone.cloneMsg}
           actionMsg={actionMsg}
+          flagged={flagged}
+          onToggleFlag={() => void toggleFlag()}
+          onLogWork={worklog.openLogWorkDialog}
+          onLinkIssue={link.openLinkDialog}
+          onDelete={del.openDeleteDialog}
+          onCopyLink={jiraUrl ? () => void copyToClipboard(jiraUrl, "Đã sao chép liên kết Jira.") : undefined}
         />
 
         <QuickPanelDialogs
@@ -259,18 +265,9 @@ export function QuickPanel({
         </div>
 
         <QuickPanelFooter
-          jiraKey={issue.jiraKey}
           watched={watched}
           onToggleWatch={() => void toggleWatch()}
           jiraUrl={jiraUrl}
-          dueDate={dueDate}
-          onSetDueDate={(value) => mutateField({ dueDate: value })}
-          flagged={flagged}
-          onToggleFlag={() => void toggleFlag()}
-          onLogWork={worklog.openLogWorkDialog}
-          onLinkIssue={link.openLinkDialog}
-          onDelete={del.openDeleteDialog}
-          onCopyLink={() => void copyToClipboard(jiraUrl ?? "", "Đã sao chép liên kết Jira.")}
           onOpenFull={() => router.push(`/issue/${issue.jiraKey}`)}
         />
       </div>
