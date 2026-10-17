@@ -1,15 +1,23 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ExternalLink, Info } from "lucide-react";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { TaskCreateDialog, type TaskCreatePrefill } from "@/components/task-create/task-create-dialog";
-import type { BulkCreateSource } from "@/lib/bulk/create-types";
+import type { BulkCreateProjectMetadata, BulkCreateSource } from "@/lib/bulk/create-types";
+import { useAiEnabled } from "@/hooks/use-ai-enabled";
+import { bulkKeys } from "@/lib/query-keys";
 import { sentryLabel } from "@/lib/sentry/idempotency";
 import { buildSentryTaskDraft } from "@/lib/sentry/task-draft";
 import { formatNumber } from "@/lib/utils";
 import { levelVariant, type SentryRowItem } from "./sentry-row";
+import {
+  SentryAiSummaryButton,
+  useSentryAiSummary,
+  type SentryAiSummaryResult,
+} from "./sentry-ai-summary-button";
 
 const MAX_LISTED = 5;
 
@@ -95,7 +103,7 @@ export interface SentryTaskCreateDialogProps {
 export function SentryTaskCreateDialog({ row, open, onOpenChange, onCreated }: SentryTaskCreateDialogProps) {
   const source = useMemo<BulkCreateSource>(() => ({ type: "sentry", sentryImportId: row.id }), [row.id]);
   const lockedLabels = useMemo(() => ["sentry", sentryLabel({ id: row.sentryIssueId })], [row.sentryIssueId]);
-  const prefill = useMemo<TaskCreatePrefill>(() => {
+  const basePrefill = useMemo<TaskCreatePrefill>(() => {
     const draft = buildSentryTaskDraft(row);
     return {
       summary: row.draftSummary ?? draft.summary,
@@ -104,9 +112,43 @@ export function SentryTaskCreateDialog({ row, open, onOpenChange, onCreated }: S
   }, [row]);
   const ref = row.shortId ?? row.sentryIssueId;
 
-  // Sentry context; Task 11 appends its "AI tóm tắt lỗi" button beside it.
+  // AI summary state lives here, above the remounted form, so it survives applying.
+  const aiEnabled = useAiEnabled();
+  const queryClient = useQueryClient();
+  const aiSummary = useSentryAiSummary(row.id);
+  const [proposal, setProposal] = useState<SentryAiSummaryResult | null>(null);
+  const [aiPrefill, setAiPrefill] = useState<TaskCreatePrefill | null>(null);
+  // Bumped to remount TaskCreateDialog so it re-derives the form from the new prefill.
+  const [formKey, setFormKey] = useState(0);
+
+  function runAiSummary() {
+    setProposal(null);
+    aiSummary.mutate(undefined, { onSuccess: (result) => setProposal(result) });
+  }
+
+  function applyAiSummary() {
+    if (!proposal) return;
+    // Metadata is already cached by the open form; map the suggested priority by name if possible.
+    const metadata = queryClient.getQueryData<BulkCreateProjectMetadata>(
+      bulkKeys.createMetadata(row.targetProject)
+    );
+    const wanted = proposal.priorityName?.trim().toLowerCase();
+    const priorityId = wanted
+      ? metadata?.priorityOptions.find((p) => p.name.trim().toLowerCase() === wanted)?.id
+      : undefined;
+    setAiPrefill({
+      ...basePrefill,
+      summary: proposal.summary,
+      description: proposal.description,
+      ...(priorityId ? { priorityId } : {}),
+    });
+    setFormKey((k) => k + 1);
+    setProposal(null);
+  }
+
+  // Sentry context, plus the "AI tóm tắt lỗi" action when the server has an LLM.
   const extraActions = (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
       <Badge variant={levelVariant(row.level)} className="uppercase">
         {row.level ?? "?"}
       </Badge>
@@ -122,16 +164,28 @@ export function SentryTaskCreateDialog({ row, open, onOpenChange, onCreated }: S
           <ExternalLink className="h-3 w-3" aria-hidden="true" />
         </a>
       )}
+      {aiEnabled && (
+        <SentryAiSummaryButton
+          pending={aiSummary.isPending}
+          error={aiSummary.error}
+          usedEvent={aiSummary.data?.usedEvent ?? null}
+          proposal={proposal}
+          onRun={runAiSummary}
+          onApply={applyAiSummary}
+          onDismiss={() => setProposal(null)}
+        />
+      )}
     </div>
   );
 
   return (
     <TaskCreateDialog
+      key={formKey}
       open={open}
       onOpenChange={onOpenChange}
       projectKey={row.targetProject}
       title={`Tạo task từ lỗi Sentry ${ref}`}
-      prefill={prefill}
+      prefill={aiPrefill ?? basePrefill}
       prefillIssueTypeName={buildSentryTaskDraft(row).issueType}
       lockedLabels={lockedLabels}
       source={source}

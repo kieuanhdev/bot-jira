@@ -42,6 +42,17 @@ export function sanitizeSentryErrorMessage(raw: string): string {
   return sanitized.slice(0, 300);
 }
 
+/** Non-2xx response from Sentry. `message` is already sanitized (no tokens or secret query params). */
+export class SentryRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "SentryRequestError";
+    this.status = status;
+  }
+}
+
 /** Org/project/token a Sentry request is made with. Base URL is always the server's. */
 export type SentryCreds = { org: string; project: string; token: string };
 
@@ -68,7 +79,7 @@ async function fetchSentry<T>(
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     const safeText = sanitizeSentryErrorMessage(text);
-    throw new Error(`Sentry ${label} -> ${res.status}: ${safeText}`);
+    throw new SentryRequestError(`Sentry ${label} -> ${res.status}: ${safeText}`, res.status);
   }
 
   return res.json() as Promise<T>;
@@ -108,18 +119,26 @@ export type SentryEvent = {
 
 /**
  * Latest event of an issue. Needs the `event:read` scope.
- * Path: GET /api/0/organizations/{org}/issues/{issueId}/events/latest/
+ *
+ * Tries GET /api/0/organizations/{org}/issues/{issueId}/events/latest/ first;
+ * on a 404 retries the older base-relative GET /api/0/issues/{issueId}/events/latest/
+ * with the same token. Both calls share one timeout budget.
  */
 export async function getLatestEvent(
   issueId: string,
   creds: SentryCreds,
   options?: SentryRequestOptions
 ): Promise<SentryEvent> {
-  return requestSentryOrg<SentryEvent>(
-    `issues/${encodeURIComponent(issueId)}/events/latest/`,
-    creds,
-    options
-  );
+  const path = `issues/${encodeURIComponent(issueId)}/events/latest/`;
+  const shared: SentryRequestOptions = {
+    signal: options?.signal ?? AbortSignal.timeout(options?.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+  };
+  try {
+    return await requestSentryOrg<SentryEvent>(path, creds, shared);
+  } catch (err) {
+    if (!(err instanceof SentryRequestError) || err.status !== 404) throw err;
+    return fetchSentry<SentryEvent>(path, path, creds.token, shared);
+  }
 }
 
 /** Fill `permalinkUrl` from the REST field `permalink` so callers read one name. */

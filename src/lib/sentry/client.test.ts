@@ -4,6 +4,7 @@ import {
   requestSentry,
   sanitizeSentryErrorMessage,
   getLatestEvent,
+  SentryRequestError,
   type SentryIssue,
 } from "./client";
 import { env } from "@/lib/env";
@@ -201,6 +202,39 @@ describe("Sentry client and error sanitization", () => {
       expect(err).toBeInstanceOf(Error);
       expect((err as Error).message).toContain("403");
       expect((err as Error).message).not.toContain("sntrys_FAKEtoken0123456789");
+      expect(err).toBeInstanceOf(SentryRequestError);
+      expect((err as SentryRequestError).status).toBe(403);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to the base-relative issue path when the org-scoped one returns 404", async () => {
+      const calls: { url: string; auth?: string }[] = [];
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        calls.push({ url, auth: (init?.headers as Record<string, string>)?.["Authorization"] });
+        if (calls.length === 1) return { ok: false, status: 404, text: async () => "" };
+        return { ok: true, json: async () => ({ eventID: "fallback" }) };
+      });
+
+      await expect(getLatestEvent("4242", creds)).resolves.toEqual({ eventID: "fallback" });
+      const base = env.sentryBaseUrl.replace(/\/$/, "");
+      expect(calls.map((c) => c.url)).toEqual([
+        `${base}/api/0/organizations/my%20org/issues/4242/events/latest/`,
+        `${base}/api/0/issues/4242/events/latest/`,
+      ]);
+      expect(calls[1].auth).toBe(`Bearer ${creds.token}`);
+    });
+
+    it("surfaces the fallback's error when both paths fail", async () => {
+      globalThis.fetch = vi.fn().mockImplementation(async () => ({
+        ok: false,
+        status: 404,
+        text: async () => "",
+      }));
+
+      const err = await getLatestEvent("4242", creds).catch((e: Error) => e);
+      expect(err).toBeInstanceOf(SentryRequestError);
+      expect((err as SentryRequestError).status).toBe(404);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
     });
   });
 });
