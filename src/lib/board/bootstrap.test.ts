@@ -34,6 +34,7 @@ vi.mock("@/lib/env", () => ({
     jiraBaseUrl: "https://jira.example.com",
     bitbucketBaseUrl: null,
   },
+  hasOpenAiConfig: () => true,
 }));
 
 import { getBoardBootstrap } from "./bootstrap";
@@ -86,6 +87,7 @@ describe("getBoardBootstrap", () => {
       jiraName: "alice",
       role: "lead",
       canBoardTeam: true,
+      aiEnabled: true,
     });
     expect(result?.initialProject).toBe("EPM");
     expect(result?.peopleFieldData?.fields.approver).toBe("customfield_10300");

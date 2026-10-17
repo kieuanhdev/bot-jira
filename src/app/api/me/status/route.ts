@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { userJiraAuth, userJiraUsername } from "@/lib/user-creds";
-import { env } from "@/lib/env";
+import { env, hasOpenAiConfig } from "@/lib/env";
 import { can } from "@/lib/permissions";
 
 export async function getMeStatus(sessionUser: { id: string; role?: string }) {
@@ -28,6 +28,7 @@ export async function getMeStatus(sessionUser: { id: string; role?: string }) {
     bitbucketBaseUrl: env.bitbucketBaseUrl || null,
     role: user?.role ?? sessionUser.role ?? "member",
     canBoardTeam: can({ user: { role: user?.role ?? sessionUser.role } }, "board.team"),
+    aiEnabled: hasOpenAiConfig(),
   };
 
   if (!auth) {

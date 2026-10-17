@@ -20,7 +20,7 @@ export function useBoardUserContext(initialBootstrap?: BoardBootstrap | null) {
   const { data: meStatus } = useQuery({
     queryKey: meKeys.status,
     queryFn: () =>
-      api<{ jiraName: string | null; jiraBaseUrl?: string; role?: string; canBoardTeam?: boolean }>("/api/me/status"),
+      api<{ jiraName: string | null; jiraBaseUrl?: string; role?: string; canBoardTeam?: boolean; aiEnabled?: boolean }>("/api/me/status"),
     initialData: initialBootstrap?.meStatus,
     retry: 0,
   });

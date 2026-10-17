@@ -10,7 +10,7 @@ import {
   userJiraAuth,
 } from "@/lib/user-creds";
 import { getProjectPeopleFields } from "@/lib/jira/people-fields";
-import { env } from "@/lib/env";
+import { env, hasOpenAiConfig } from "@/lib/env";
 import { can } from "@/lib/permissions";
 
 export interface BoardBootstrap {
@@ -36,6 +36,7 @@ export interface BoardBootstrap {
     bitbucketBaseUrl: string | null;
     role: string;
     canBoardTeam: boolean;
+    aiEnabled: boolean;
   };
   initialProject: string;
   peopleFieldData?: {
@@ -104,6 +105,7 @@ export async function getBoardBootstrap(
     bitbucketBaseUrl: env.bitbucketBaseUrl || null,
     role: user.role,
     canBoardTeam: can({ user: { role: user.role } }, "board.team"),
+    aiEnabled: hasOpenAiConfig(),
   };
 
   const normalizedUrlProject = initialProjectFromUrl

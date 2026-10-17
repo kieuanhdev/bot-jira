@@ -41,6 +41,12 @@ export {
 export interface LLMProvider {
   readonly name: string;
   /**
+   * Send a raw prompt and return the model's text reply. Throws
+   * AiProviderError (with `retryable`) on transport/HTTP failures, including a
+   * non-retryable error when the provider is not configured.
+   */
+  generate(prompt: string, timeoutMs?: number): Promise<string>;
+  /**
    * Estimate story points for a single task (M7).
    * Throws AiUnavailableError when the model cannot produce a valid estimate
    * (network error, bad JSON after retries, ...). Callers must surface this as
