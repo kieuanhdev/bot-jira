@@ -12,6 +12,7 @@ import { BulkCreateEditorTopbar } from "./bulk-create-editor-topbar";
 import { BulkCreateCommandBar } from "./bulk-create-command-bar";
 import { BulkCreateDataGrid } from "./bulk-create-data-grid";
 import { BulkCreateStatusBar } from "./bulk-create-status-bar";
+import { Loader2 } from "lucide-react";
 
 const CsvImportDialog = dynamic(
   () => import("./csv-import-dialog").then((m) => m.CsvImportDialog),
@@ -61,6 +62,11 @@ interface BulkCreateEditorShellProps {
   focusRow?: number | null;
   focusField?: string | null;
   onClearFocusRow?: () => void;
+  isSwitchingProject?: boolean;
+  switchingToProject?: string;
+  notices?: React.ReactNode;
+  blockedState?: React.ReactNode;
+  onPrefetchProjects?: () => void;
 }
 
 export function BulkCreateEditorShell({
@@ -82,6 +88,11 @@ export function BulkCreateEditorShell({
   focusRow,
   focusField,
   onClearFocusRow,
+  isSwitchingProject = false,
+  switchingToProject,
+  notices,
+  blockedState,
+  onPrefetchProjects,
 }: BulkCreateEditorShellProps) {
   // Preferences are read from localStorage on first render; the shell is only mounted client-side after metadata loads.
   const [density, setDensityState] = useState<GridDensity>(() => getStoredDensity());
@@ -299,6 +310,7 @@ export function BulkCreateEditorShell({
           onExitFullscreen={onToggleFullscreen}
           onPreview={onPreview}
           isPreviewPending={isPreviewPending}
+          isSwitchingProject={isSwitchingProject || Boolean(blockedState)}
         />
       )}
 
@@ -308,6 +320,7 @@ export function BulkCreateEditorShell({
         projectKey={projectKey}
         availableProjects={availableProjects}
         onSelectProject={onSelectProject}
+        onPrefetchProjects={onPrefetchProjects}
         defaults={defaults}
         onDefaultsChange={onDefaultsChange}
         onOpenImport={() => setImportDialogOpen(true)}
@@ -325,23 +338,60 @@ export function BulkCreateEditorShell({
         totalRows={items.length}
         isFullscreen={isFullscreen}
         onToggleFullscreen={onToggleFullscreen}
+        isSwitchingProject={isSwitchingProject || Boolean(blockedState)}
       />
 
-      {/* Main Data Grid */}
-      <BulkCreateDataGrid
-        metadata={metadata}
-        projectKey={projectKey}
-        defaults={defaults}
-        items={items}
-        onChange={onItemsChange}
-        visibleColumnIds={visibleColumnIds}
-        density={density}
-        focusRow={focusRow}
-        focusField={focusField}
-        onClearFocusRow={onClearFocusRow}
-        selectedRows={selectedRows}
-        onSelectedRowsChange={setSelectedRows}
-      />
+      {/* Notices area */}
+      {notices && (
+        <div className="shrink-0 px-3 sm:px-4 pt-3 space-y-2">
+          {notices}
+        </div>
+      )}
+
+      {/* Main Data Grid or Blocked State */}
+      {blockedState ? (
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+          {blockedState}
+        </div>
+      ) : (
+        <div className="relative flex-1 flex flex-col min-h-0">
+          {isSwitchingProject && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-[1px] animate-in fade-in duration-150"
+            >
+              <div className="flex items-center gap-2.5 rounded-lg border border-border bg-card/90 px-4 py-3 shadow-lg">
+                <Loader2 className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
+                <span className="text-xs font-medium text-foreground">
+                  Đang tải cấu hình dự án {switchingToProject || projectKey}…
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div
+            className="flex-1 flex flex-col min-h-0"
+            aria-busy={isSwitchingProject ? "true" : undefined}
+            inert={isSwitchingProject ? true : undefined}
+          >
+            <BulkCreateDataGrid
+              metadata={metadata}
+              projectKey={projectKey}
+              defaults={defaults}
+              items={items}
+              onChange={onItemsChange}
+              visibleColumnIds={visibleColumnIds}
+              density={density}
+              focusRow={focusRow}
+              focusField={focusField}
+              onClearFocusRow={onClearFocusRow}
+              selectedRows={selectedRows}
+              onSelectedRowsChange={setSelectedRows}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Status & Action Dock */}
       <BulkCreateStatusBar
@@ -355,10 +405,9 @@ export function BulkCreateEditorShell({
         isPreviewPending={isPreviewPending}
         isSavingDraft={isSavingDraft}
         draftSavedTime={draftSavedTime}
-        isFullscreen={isFullscreen}
-        onToggleFullscreen={onToggleFullscreen}
         onAddRow={handleAddRow}
         canAddRow={items.length < MAX_BULK_CREATE_ITEMS}
+        isSwitchingProject={isSwitchingProject || Boolean(blockedState)}
       />
 
       {/* Dialogs */}

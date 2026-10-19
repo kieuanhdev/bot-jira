@@ -54,3 +54,40 @@ export function sanitizeItemsForProjectChange(
     fixVersionIds: undefined,
   }));
 }
+
+export type DraftStatus = "pending-decision" | "ready";
+
+/** Đọc raw localStorage của một dự án và quyết định có cần hỏi khôi phục không. */
+export function resolveDraftStatus(raw: string | null): DraftStatus {
+  if (!raw) return "ready";
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed?.items) && parsed.items.length > 0) {
+      const hasContent = parsed.items.some(
+        (i: { summary?: string }) => Boolean(i?.summary && i.summary.trim().length > 0)
+      );
+      if (hasContent) {
+        return "pending-decision";
+      }
+    }
+    return "ready";
+  } catch {
+    return "ready";
+  }
+}
+
+/** Autosave chỉ được ghi khi bản nháp của đúng dự án đó đã được xử lý xong. */
+export function canAutosaveDraft(input: {
+  draftOwner: string | null;
+  projectKey: string;
+  status: DraftStatus;
+  handoffActive: boolean;
+  step: "input" | "preview" | "progress";
+}): boolean {
+  if (input.step !== "input") return false;
+  if (input.handoffActive) return false;
+  if (!input.draftOwner || input.draftOwner !== input.projectKey) return false;
+  if (input.status === "pending-decision") return false;
+  return true;
+}
+

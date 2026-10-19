@@ -18,6 +18,7 @@ interface BulkCreateColumnPickerProps {
   visibleColumnIds: string[];
   onToggleColumn: (id: ColumnId) => void;
   onResetColumns: () => void;
+  disabled?: boolean;
 }
 
 export function BulkCreateColumnPicker({
@@ -25,6 +26,7 @@ export function BulkCreateColumnPicker({
   visibleColumnIds,
   onToggleColumn,
   onResetColumns,
+  disabled = false,
 }: BulkCreateColumnPickerProps) {
   const visibleCount = toggleableColumns.filter((col) =>
     visibleColumnIds.includes(col.id)
@@ -37,6 +39,7 @@ export function BulkCreateColumnPicker({
           type="button"
           variant="outline"
           size="sm"
+          disabled={disabled}
           className="h-8 gap-1.5 text-xs cursor-pointer hover:bg-muted/50"
         >
           <Columns3 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />

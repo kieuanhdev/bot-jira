@@ -11,8 +11,6 @@ import {
   Loader2,
   Check,
   Plus,
-  Maximize2,
-  Minimize2,
   Info,
 } from "lucide-react";
 import { MAX_BULK_CREATE_ITEMS } from "@/lib/bulk/create-types";
@@ -28,10 +26,9 @@ interface BulkCreateStatusBarProps {
   isPreviewPending?: boolean;
   isSavingDraft?: boolean;
   draftSavedTime?: number | null;
-  isFullscreen?: boolean;
-  onToggleFullscreen?: () => void;
   onAddRow?: () => void;
   canAddRow?: boolean;
+  isSwitchingProject?: boolean;
 }
 
 export function BulkCreateStatusBar({
@@ -45,10 +42,9 @@ export function BulkCreateStatusBar({
   isPreviewPending = false,
   isSavingDraft = false,
   draftSavedTime = null,
-  isFullscreen = false,
-  onToggleFullscreen,
   onAddRow,
   canAddRow = true,
+  isSwitchingProject = false,
 }: BulkCreateStatusBarProps) {
   function formatSavedTime(ts: number | null) {
     if (!ts) return "";
@@ -56,7 +52,7 @@ export function BulkCreateStatusBar({
     return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
   }
 
-  const canProceed = filledItemsCount > 0 && totalErrors === 0 && !isPreviewPending;
+  const canProceed = filledItemsCount > 0 && totalErrors === 0 && !isPreviewPending && !isSwitchingProject;
 
   return (
     <footer className="flex flex-col sm:flex-row sm:h-12 shrink-0 items-stretch sm:items-center justify-between border-t border-border bg-card/95 px-3 py-2 sm:py-0 text-xs select-none backdrop-blur-md gap-2 shadow-xs transition-colors">
@@ -158,29 +154,12 @@ export function BulkCreateStatusBar({
               variant="outline"
               size="sm"
               onClick={onAddRow}
-              disabled={!canAddRow}
+              disabled={!canAddRow || isSwitchingProject}
               title="Thêm dòng mới (Ctrl+Enter)"
               className="h-8 px-2.5 text-xs cursor-pointer text-foreground hover:bg-muted"
             >
               <Plus className="h-3.5 w-3.5 sm:mr-1" aria-hidden="true" />
               <span className="hidden sm:inline">Thêm dòng</span>
-            </Button>
-          )}
-
-          {onToggleFullscreen && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onToggleFullscreen}
-              title={isFullscreen ? "Thu nhỏ về trang thường" : "Mở toàn màn hình"}
-              className="h-8 w-8 p-0 cursor-pointer text-muted-foreground hover:text-foreground"
-            >
-              {isFullscreen ? (
-                <Minimize2 className="h-3.5 w-3.5" aria-hidden="true" />
-              ) : (
-                <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-              )}
             </Button>
           )}
 
@@ -191,11 +170,13 @@ export function BulkCreateStatusBar({
               onClick={onPreview}
               disabled={!canProceed}
               title={
-                filledItemsCount === 0
-                  ? "Hãy nhập ít nhất một dòng tiêu đề task"
-                  : totalErrors > 0
-                    ? `Vui lòng sửa ${totalErrors} lỗi trước khi tiếp tục`
-                    : "Chuyển sang bước Xem trước & Xác nhận"
+                isSwitchingProject
+                  ? "Đang tải cấu hình dự án…"
+                  : filledItemsCount === 0
+                    ? "Hãy nhập ít nhất một dòng tiêu đề task"
+                    : totalErrors > 0
+                      ? `Vui lòng sửa ${totalErrors} lỗi trước khi tiếp tục`
+                      : "Chuyển sang bước Xem trước & Xác nhận"
               }
               className={`h-8 gap-1.5 px-3 text-xs font-semibold cursor-pointer shadow-xs transition-all duration-150 ${
                 canProceed

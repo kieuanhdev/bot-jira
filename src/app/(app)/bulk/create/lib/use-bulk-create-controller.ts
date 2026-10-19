@@ -1,10 +1,19 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { boardKeys, bulkKeys } from "@/lib/query-keys";
+
+export function metadataQueryOptions(projectKey: string) {
+  return {
+    queryKey: bulkKeys.createMetadata(projectKey),
+    queryFn: () => api<BulkCreateProjectMetadata>(`/api/bulk/create/metadata?project=${projectKey}`),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  };
+}
 import {
   type BulkCreateRowInput,
   type BulkCreateFieldDefaults,
@@ -19,13 +28,26 @@ import {
   hasDraftContent,
   filterDiscardBlockedRows,
   sanitizeItemsForProjectChange,
+  resolveDraftStatus,
+  canAutosaveDraft,
+  type DraftStatus,
 } from "./bulk-create-controller-model";
 
 export type Step = "input" | "preview" | "progress";
 
 export const HANDOFF_MISSING_MESSAGE = "Không tìm thấy danh sách sub-task, hãy thử lại";
 
+function safeReadDraft(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 export function useBulkCreateController() {
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -43,11 +65,9 @@ export function useBulkCreateController() {
   const [activeOperationId, setActiveOperationId] = useState<string | null>(null);
   const [focusRow, setFocusRow] = useState<number | null>(null);
   const [focusField, setFocusField] = useState<string | null>(null);
-  const [draftAvailable, setDraftAvailable] = useState(false);
   const [isEditorFullscreen, setIsEditorFullscreen] = useState(() => getStoredEditorMode() === "fullscreen");
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [draftSavedTime, setDraftSavedTime] = useState<number | null>(null);
-  const draftRestoredRef = useRef(false);
   const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Rows handed over via `?handoff=<id>` (AI sub-task split). While active, the
@@ -81,9 +101,22 @@ export function useBulkCreateController() {
     "";
   const draftKey = `bulk-create-draft:${projectKey}`;
 
+  const [draftState, setDraftState] = useState<{ owner: string | null; status: DraftStatus }>({
+    owner: null,
+    status: "ready",
+  });
+
+  if (projectKey && draftState.owner !== projectKey && !handoffActive) {
+    setDraftState({ owner: projectKey, status: resolveDraftStatus(safeReadDraft(draftKey)) });
+  }
+
+  const draftAvailable = draftState.owner === projectKey && draftState.status === "pending-decision";
+
   const saveDraft = useCallback((itemsToSave: BulkCreateRowInput[], defaultsToSave: BulkCreateFieldDefaults) => {
     if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
-    setIsSavingDraft(true);
+    queueMicrotask(() => {
+      setIsSavingDraft(true);
+    });
     draftSaveTimer.current = setTimeout(() => {
       try {
         const hasContent = hasDraftContent(itemsToSave, defaultsToSave);
@@ -112,18 +145,17 @@ export function useBulkCreateController() {
     const handoff = readHandoff(handoffId);
     if (handoff) {
       handoffModeRef.current = true;
-      draftRestoredRef.current = true;
       if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
     }
     queueMicrotask(() => {
       if (handoff) {
         setUserSelectedProject(handoff.projectKey);
+        setDraftState({ owner: handoff.projectKey, status: "ready" });
         setItems(handoff.items);
         setDefaults({});
         setStep("input");
         setPreviewData(null);
         setActiveOperationId(null);
-        setDraftAvailable(false);
         setIsSavingDraft(false);
         setHandoffActive(true);
         setHandoffError(null);
@@ -137,38 +169,24 @@ export function useBulkCreateController() {
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }, [handoffId, searchParams, router, pathname]);
 
-  // Restore draft on project change
-  useEffect(() => {
-    if (!projectKey || draftRestoredRef.current || handoffModeRef.current) return;
-    draftRestoredRef.current = true;
-    try {
-      const raw = localStorage.getItem(draftKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed.items) && parsed.items.length > 0) {
-          const hasContent = parsed.items.some((i: { summary?: string }) => i.summary?.trim());
-          if (hasContent) {
-            queueMicrotask(() => setDraftAvailable(true));
-            return;
-          }
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [projectKey, draftKey]);
-
   // Auto-save draft on items/defaults change
   useEffect(() => {
-    if (step !== "input" || handoffModeRef.current) return;
-    if (draftRestoredRef.current) {
+    if (
+      canAutosaveDraft({
+        draftOwner: draftState.owner,
+        projectKey,
+        status: draftState.status,
+        handoffActive,
+        step,
+      })
+    ) {
       saveDraft(items, defaults);
     }
-  }, [items, defaults, step, saveDraft]);
+  }, [items, defaults, step, saveDraft, draftState.owner, draftState.status, projectKey, handoffActive]);
 
   function handleRestoreDraft() {
     try {
-      const raw = localStorage.getItem(draftKey);
+      const raw = safeReadDraft(draftKey);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed.items) && parsed.items.length > 0) {
@@ -179,14 +197,16 @@ export function useBulkCreateController() {
     } catch {
       /* ignore */
     }
-    setDraftAvailable(false);
-    draftRestoredRef.current = true;
+    setDraftState({ owner: projectKey, status: "ready" });
   }
 
   function handleDiscardDraft() {
-    localStorage.removeItem(draftKey);
-    setDraftAvailable(false);
-    draftRestoredRef.current = true;
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {
+      /* ignore */
+    }
+    setDraftState({ owner: projectKey, status: "ready" });
   }
 
   function handleToggleFullscreen() {
@@ -201,25 +221,38 @@ export function useBulkCreateController() {
     isLoading: metadataLoading,
     error: metadataError,
     refetch: refetchMetadata,
+    isPlaceholderData,
   } = useQuery({
-    queryKey: bulkKeys.createMetadata(projectKey),
-    queryFn: () => api<BulkCreateProjectMetadata>(`/api/bulk/create/metadata?project=${projectKey}`),
+    ...metadataQueryOptions(projectKey),
     enabled: Boolean(projectKey) && Boolean(projectsData),
-    staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 
+  const isSwitchingProject = isPlaceholderData;
+  // Metadata thật của projectKey hiện tại, không phải placeholder của dự án cũ
+  const currentMetadata = isPlaceholderData ? undefined : metadata;
+
+  const [shellMetadata, setShellMetadata] = useState<BulkCreateProjectMetadata | undefined>();
+  if (currentMetadata && currentMetadata !== shellMetadata) {
+    setShellMetadata(currentMetadata);
+  }
+
   const previewMutation = useMutation({
-    mutationFn: (overrideItems?: BulkCreateRowInput[]) =>
-      api<BulkCreatePreviewResult>("/api/bulk/create", {
+    mutationFn: (overrideItems?: BulkCreateRowInput[]) => {
+      if (isSwitchingProject) {
+        throw new Error("Đang tải cấu hình dự án mới, vui lòng đợi");
+      }
+      return api<BulkCreatePreviewResult>("/api/bulk/create", {
         method: "POST",
         body: {
           projectKey,
           defaults,
           items: filterFilledItems(overrideItems || items),
-          metadataFingerprint: metadata?.fingerprint,
+          metadataFingerprint: currentMetadata?.fingerprint,
           source,
         },
-      }),
+      });
+    },
     onSuccess: (data) => {
       setPreviewData(data);
       setStep("preview");
@@ -272,7 +305,25 @@ export function useBulkCreateController() {
     previewMutation.mutate(remaining);
   }
 
+  const syncProjectUrl = useCallback(
+    (newKey: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("project", newKey);
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [searchParams, router, pathname]
+  );
+
+  const handlePrefetchProjects = useCallback(() => {
+    const targets = availableProjects.filter((k) => k !== projectKey).slice(0, 10);
+    for (const key of targets) {
+      void queryClient.prefetchQuery(metadataQueryOptions(key));
+    }
+  }, [availableProjects, projectKey, queryClient]);
+
   function handleProjectSelect(newKey: string) {
+    if (step !== "input") return;
     if (newKey === projectKey) return;
     const hasData = hasDraftContent(items, defaults);
     if (hasData) {
@@ -280,9 +331,8 @@ export function useBulkCreateController() {
       setConfirmProjectDialogOpen(true);
     } else {
       setUserSelectedProject(newKey);
+      syncProjectUrl(newKey);
       exitHandoffMode();
-      draftRestoredRef.current = false;
-      setDraftAvailable(false);
     }
   }
 
@@ -293,10 +343,9 @@ export function useBulkCreateController() {
 
   function applyProjectChange(newKey: string) {
     setUserSelectedProject(newKey);
+    syncProjectUrl(newKey);
     exitHandoffMode();
     setDefaults({});
-    setDraftAvailable(false);
-    draftRestoredRef.current = false;
     setItems((prev) => sanitizeItemsForProjectChange(prev));
     setPreviewData(null);
     setActiveOperationId(null);
@@ -337,6 +386,9 @@ export function useBulkCreateController() {
     metadataLoading,
     metadataError,
     refetchMetadata,
+    isSwitchingProject,
+    currentMetadata,
+    shellMetadata,
     previewMutation,
     confirmMutation,
     filledCount,
@@ -348,5 +400,6 @@ export function useBulkCreateController() {
     pendingProjectKey,
     setPendingProjectKey,
     applyProjectChange,
+    handlePrefetchProjects,
   };
 }

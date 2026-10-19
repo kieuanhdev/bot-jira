@@ -19,6 +19,7 @@ interface BulkCreateEditorTopbarProps {
   onExitFullscreen: () => void;
   onPreview: () => void;
   isPreviewPending: boolean;
+  isSwitchingProject?: boolean;
 }
 
 export function BulkCreateEditorTopbar({
@@ -30,6 +31,7 @@ export function BulkCreateEditorTopbar({
   onExitFullscreen,
   onPreview,
   isPreviewPending,
+  isSwitchingProject = false,
 }: BulkCreateEditorTopbarProps) {
   function formatSavedTime(ts: number | null) {
     if (!ts) return "";
@@ -90,7 +92,8 @@ export function BulkCreateEditorTopbar({
           type="button"
           size="sm"
           onClick={onPreview}
-          disabled={filledCount === 0 || isPreviewPending}
+          disabled={filledCount === 0 || isPreviewPending || isSwitchingProject}
+          title={isSwitchingProject ? "Đang tải cấu hình dự án…" : undefined}
           className="h-8 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold cursor-pointer shadow-xs"
         >
           {isPreviewPending ? (

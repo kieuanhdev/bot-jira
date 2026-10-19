@@ -55,6 +55,8 @@ interface BulkCreateCommandBarProps {
   totalRows: number;
   isFullscreen: boolean;
   onToggleFullscreen?: () => void;
+  isSwitchingProject?: boolean;
+  onPrefetchProjects?: () => void;
 }
 
 export function BulkCreateCommandBar({
@@ -79,6 +81,8 @@ export function BulkCreateCommandBar({
   totalRows,
   isFullscreen,
   onToggleFullscreen,
+  isSwitchingProject = false,
+  onPrefetchProjects,
 }: BulkCreateCommandBarProps) {
   const [defaultsDialogOpen, setDefaultsDialogOpen] = useState(false);
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
@@ -99,21 +103,30 @@ export function BulkCreateCommandBar({
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card/75 px-3 sm:px-4 py-2 select-none text-xs backdrop-blur-xs">
       {/* Left controls: Project, Defaults, Import & Templates */}
       <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-        {/* Project Selector */}
-        <div className="w-32 sm:w-36">
-          <Select value={projectKey} onValueChange={onSelectProject}>
-            <SelectTrigger className="h-8 text-xs cursor-pointer font-medium bg-background/80 hover:bg-background border-border/80">
-              <SelectValue placeholder="Chọn dự án" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableProjects.map((p) => (
-                <SelectItem key={p} value={p} className="text-xs cursor-pointer">
-                  {p}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Project Selector (only rendered in fullscreen mode; standard mode uses header selector) */}
+        {isFullscreen && (
+          <div className="w-32 sm:w-36">
+            <Select
+              value={projectKey}
+              onValueChange={onSelectProject}
+              onOpenChange={(open) => {
+                if (open && onPrefetchProjects) onPrefetchProjects();
+              }}
+              disabled={availableProjects.length === 0 || isSwitchingProject}
+            >
+              <SelectTrigger className="h-8 text-xs cursor-pointer font-medium bg-background/80 hover:bg-background border-border/80 disabled:cursor-not-allowed disabled:opacity-60">
+                <SelectValue placeholder="Chọn dự án" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableProjects.map((p) => (
+                  <SelectItem key={p} value={p} className="text-xs cursor-pointer">
+                    {p}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Defaults Button */}
         <Button
@@ -121,6 +134,7 @@ export function BulkCreateCommandBar({
           variant="outline"
           size="sm"
           onClick={() => setDefaultsDialogOpen(true)}
+          disabled={isSwitchingProject}
           className={`h-8 gap-1.5 text-xs cursor-pointer transition-colors ${
             activeDefaultsCount > 0
               ? "border-primary/50 bg-primary/10 text-primary font-medium hover:bg-primary/15"
@@ -145,6 +159,7 @@ export function BulkCreateCommandBar({
           variant="outline"
           size="sm"
           onClick={onOpenImport}
+          disabled={isSwitchingProject}
           className="h-8 gap-1.5 text-xs cursor-pointer text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-primary/5"
           title="Nhập dữ liệu từ tệp CSV, TSV hoặc Excel (.xlsx)"
         >
@@ -159,7 +174,7 @@ export function BulkCreateCommandBar({
           variant="outline"
           size="sm"
           onClick={onDownloadTemplate}
-          disabled={isDownloadingTemplate}
+          disabled={isDownloadingTemplate || isSwitchingProject}
           title={`Tải mẫu file Excel có sẵn dropdown danh mục của dự án ${projectKey}`}
           className="h-8 gap-1.5 text-xs cursor-pointer text-teal-700 dark:text-teal-400 hover:bg-teal-500/10 border-teal-500/20"
         >
@@ -177,7 +192,7 @@ export function BulkCreateCommandBar({
           variant="outline"
           size="sm"
           onClick={onOpenTemplateDialog}
-          disabled={totalRows >= MAX_BULK_CREATE_ITEMS}
+          disabled={totalRows >= MAX_BULK_CREATE_ITEMS || isSwitchingProject}
           className="h-8 gap-1.5 text-xs cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted"
           title="Sao chép cấu trúc từ một task có sẵn trên Jira để làm mẫu"
         >
@@ -195,6 +210,7 @@ export function BulkCreateCommandBar({
           visibleColumnIds={visibleColumnIds}
           onToggleColumn={onToggleColumn}
           onResetColumns={onResetColumns}
+          disabled={isSwitchingProject}
         />
 
         {/* Density Switcher */}
@@ -247,7 +263,7 @@ export function BulkCreateCommandBar({
           type="button"
           size="sm"
           onClick={onAddRow}
-          disabled={totalRows >= MAX_BULK_CREATE_ITEMS}
+          disabled={totalRows >= MAX_BULK_CREATE_ITEMS || isSwitchingProject}
           className="h-8 gap-1.5 text-xs font-semibold cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs"
           title="Thêm một dòng trống mới (Ctrl+Enter)"
         >
@@ -262,6 +278,7 @@ export function BulkCreateCommandBar({
             variant="ghost"
             size="sm"
             onClick={onClearAll}
+            disabled={isSwitchingProject}
             title="Làm mới bảng về 1 dòng trống"
             className="h-8 w-8 p-0 cursor-pointer text-muted-foreground hover:text-destructive"
           >

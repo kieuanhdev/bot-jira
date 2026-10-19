@@ -23,13 +23,12 @@ import {
   FolderKanban,
   ListPlus,
   Edit3,
-  Maximize2,
-  Sparkles,
   ListTree,
   X,
 } from "lucide-react";
 import { BulkCreateStepper } from "./bulk-create-stepper";
 import { BulkCreateProjectDialog } from "./bulk-create-project-dialog";
+import { BulkCreateDraftBanner } from "./bulk-create-draft-banner";
 
 export function BulkCreateClient() {
   const {
@@ -60,10 +59,12 @@ export function BulkCreateClient() {
     handoffActive,
     handoffError,
     dismissHandoffError,
-    metadata,
     metadataLoading,
     metadataError,
     refetchMetadata,
+    isSwitchingProject,
+    currentMetadata,
+    shellMetadata,
     previewMutation,
     confirmMutation,
     filledCount,
@@ -75,7 +76,88 @@ export function BulkCreateClient() {
     pendingProjectKey,
     setPendingProjectKey,
     applyProjectChange,
+    handlePrefetchProjects,
   } = useBulkCreateController();
+
+  const hasNotices = Boolean(
+    handoffError ||
+    handoffActive ||
+    draftAvailable ||
+    previewMutation.isError
+  );
+
+  const notices = hasNotices ? (
+    <>
+      {/* AI sub-task handoff missing or expired */}
+      {handoffError && (
+        <FeedbackBanner
+          tone="warning"
+          action={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={dismissHandoffError}
+              aria-label="Đóng thông báo"
+              className="h-7 w-7 cursor-pointer p-0"
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          }
+        >
+          {handoffError}
+        </FeedbackBanner>
+      )}
+
+      {/* Rows handed over from "Tách sub-task bằng AI" */}
+      {handoffActive && (
+        <FeedbackBanner tone="info" icon={ListTree}>
+          Danh sách sub-task do AI đề xuất. Kiểm tra lại trước khi tạo; danh sách này không được lưu thành bản nháp.
+        </FeedbackBanner>
+      )}
+
+      {/* Draft Restore Banner */}
+      {draftAvailable && (
+        <BulkCreateDraftBanner
+          projectKey={projectKey}
+          onRestore={handleRestoreDraft}
+          onDiscard={handleDiscardDraft}
+        />
+      )}
+
+      {/* Preview Error Banner */}
+      {previewMutation.isError && (
+        <FeedbackBanner tone="destructive">
+          Lỗi kiểm tra xem trước: {previewMutation.error.message}
+        </FeedbackBanner>
+      )}
+    </>
+  ) : null;
+
+  const blockedState =
+    metadataError && !metadataLoading ? (
+      <ErrorState
+        title={`Không thể tải thông tin dự án ${projectKey}`}
+        message={
+          metadataError instanceof Error
+            ? metadataError.message
+            : "Đã xảy ra lỗi khi kết nối tới Jira. Vui lòng kiểm tra lại token cá nhân trong Cài đặt."
+        }
+        onRetry={() => refetchMetadata()}
+        retryLabel="Thử lại"
+        className="p-6"
+      />
+    ) : currentMetadata && !currentMetadata.canCreate ? (
+      <FeedbackBanner tone="destructive" className="my-4">
+        <div className="font-semibold text-foreground">
+          Không thể tạo task trong dự án {projectKey}
+        </div>
+        <div className="mt-1 text-xs">
+          {currentMetadata.permissionReason ||
+            "Tài khoản Jira của bạn không có quyền CREATE_ISSUES trên dự án này."}
+        </div>
+      </FeedbackBanner>
+    ) : null;
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
@@ -126,18 +208,37 @@ export function BulkCreateClient() {
               {isProjectsLoading ? (
                 <Skeleton className="h-5 w-24 rounded" />
               ) : (
-                <Select value={projectKey} onValueChange={handleProjectSelect} disabled={availableProjects.length === 0}>
-                  <SelectTrigger className="h-7 border-0 p-0 text-xs font-bold text-foreground focus:ring-0 cursor-pointer shadow-none">
-                    <SelectValue placeholder={availableProjects.length === 0 ? "Không có dự án" : "Chọn dự án"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableProjects.map((p) => (
-                      <SelectItem key={p} value={p} className="text-xs cursor-pointer font-medium">
-                        {p}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <span
+                  tabIndex={0}
+                  className="block focus:outline-none"
+                  title={
+                    step === "preview"
+                      ? "Quay lại bước 1 để đổi dự án"
+                      : step === "progress"
+                        ? `Đang tạo task trong ${projectKey}. Bấm “Tạo batch mới” để đổi dự án`
+                        : undefined
+                  }
+                >
+                  <Select
+                    value={projectKey}
+                    onValueChange={handleProjectSelect}
+                    onOpenChange={(open) => {
+                      if (open) handlePrefetchProjects();
+                    }}
+                    disabled={availableProjects.length === 0 || step !== "input"}
+                  >
+                    <SelectTrigger className="h-7 border-0 p-0 text-xs font-bold text-foreground focus:ring-0 cursor-pointer shadow-none disabled:cursor-not-allowed disabled:opacity-60">
+                      <SelectValue placeholder={availableProjects.length === 0 ? "Không có dự án" : "Chọn dự án"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableProjects.map((p) => (
+                        <SelectItem key={p} value={p} className="text-xs cursor-pointer font-medium">
+                          {p}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </span>
               )}
             </div>
           </div>
@@ -145,19 +246,6 @@ export function BulkCreateClient() {
           <Badge variant={filledCount > 0 ? "info" : "secondary"} className="h-8 px-2.5 text-xs font-medium">
             {filledCount} task sẵn sàng
           </Badge>
-
-          {step === "input" && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleToggleFullscreen}
-              className="h-8 gap-1.5 text-xs font-medium cursor-pointer border-border hover:bg-muted text-foreground"
-            >
-              <Maximize2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-              <span>Toàn màn hình</span>
-            </Button>
-          )}
         </div>
       </header>
 
@@ -173,8 +261,8 @@ export function BulkCreateClient() {
       {/* Step 1: Input & Defaults */}
       {step === "input" && (
         <div className="space-y-4">
-          {/* AI sub-task handoff missing or expired */}
-          {handoffError && (
+          {/* AI sub-task handoff missing or expired (when shell has not mounted yet) */}
+          {handoffError && !shellMetadata && (
             <FeedbackBanner
               tone="warning"
               action={
@@ -191,13 +279,6 @@ export function BulkCreateClient() {
               }
             >
               {handoffError}
-            </FeedbackBanner>
-          )}
-
-          {/* Rows handed over from "Tách sub-task bằng AI" */}
-          {handoffActive && (
-            <FeedbackBanner tone="info" icon={ListTree}>
-              Danh sách sub-task do AI đề xuất. Kiểm tra lại trước khi tạo; danh sách này không được lưu thành bản nháp.
             </FeedbackBanner>
           )}
 
@@ -228,109 +309,72 @@ export function BulkCreateClient() {
             />
           )}
 
-          {/* Loading Metadata Skeleton */}
-          {!isProjectsLoading && Boolean(projectKey) && metadataLoading && (
+          {/* Loading Metadata Skeleton (first load only) */}
+          {!isProjectsLoading && Boolean(projectKey) && metadataLoading && !shellMetadata && (
             <div className="space-y-3">
               <Skeleton className="h-10 w-full rounded-lg" />
               <Skeleton className="h-80 w-full rounded-lg" />
             </div>
           )}
 
-          {/* Error State */}
-          {metadataError && !metadataLoading && (
+          {/* Error State on initial load when no shell exists yet */}
+          {metadataError && !metadataLoading && !shellMetadata && (
             <ErrorState
               title={`Không thể tải thông tin dự án ${projectKey}`}
-              message={metadataError instanceof Error ? metadataError.message : "Đã xảy ra lỗi khi kết nối tới Jira. Vui lòng kiểm tra lại token cá nhân trong Cài đặt."}
+              message={
+                metadataError instanceof Error
+                  ? metadataError.message
+                  : "Đã xảy ra lỗi khi kết nối tới Jira. Vui lòng kiểm tra lại token cá nhân trong Cài đặt."
+              }
               onRetry={() => refetchMetadata()}
               retryLabel="Thử lại"
               className="p-6"
             />
           )}
 
-          {/* Permission Error State */}
-          {metadata && !metadata.canCreate && (
+          {/* Permission Error State on initial load when no shell exists yet */}
+          {!shellMetadata && currentMetadata && !currentMetadata.canCreate && (
             <FeedbackBanner tone="destructive" className="my-4">
               <div className="font-semibold text-foreground">
                 Không thể tạo task trong dự án {projectKey}
               </div>
               <div className="mt-1 text-xs">
-                {metadata.permissionReason || "Tài khoản Jira của bạn không có quyền CREATE_ISSUES trên dự án này."}
+                {currentMetadata.permissionReason ||
+                  "Tài khoản Jira của bạn không có quyền CREATE_ISSUES trên dự án này."}
               </div>
             </FeedbackBanner>
           )}
 
-          {/* Main Workspace when metadata is loaded and canCreate is true */}
-          {metadata && metadata.canCreate && (
-            <div className="space-y-4">
-              {/* Draft Restore Banner */}
-              {draftAvailable && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 shadow-2xs animate-in fade-in duration-200">
-                  <div className="flex items-center gap-2.5 text-xs">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15 text-primary shrink-0">
-                      <Sparkles className="h-4 w-4" aria-hidden="true" />
-                    </div>
-                    <div>
-                      <div className="font-semibold text-foreground">
-                        Tìm thấy bản nháp chưa hoàn tất cho dự án {projectKey}
-                      </div>
-                      <div className="text-muted-foreground text-[11px]">
-                        Bạn có muốn khôi phục lại danh sách task và cài đặt mặc định đã soạn thảo từ phiên trước?
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={handleRestoreDraft}
-                      className="h-7.5 px-3 text-xs font-semibold cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs"
-                    >
-                      Khôi phục bản nháp
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleDiscardDraft}
-                      className="h-7.5 px-2.5 text-xs cursor-pointer text-muted-foreground hover:text-destructive"
-                    >
-                      Bỏ qua
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Fullscreen / Inline Editor Shell */}
-              <BulkCreateEditorShell
-                metadata={metadata}
-                projectKey={projectKey}
-                availableProjects={availableProjects}
-                onSelectProject={handleProjectSelect}
-                defaults={defaults}
-                onDefaultsChange={setDefaults}
-                items={items}
-                onItemsChange={setItems}
-                onSourceChange={setSource}
-                isFullscreen={isEditorFullscreen}
-                onToggleFullscreen={handleToggleFullscreen}
-                onPreview={() => previewMutation.mutate()}
-                isPreviewPending={previewMutation.isPending}
-                isSavingDraft={isSavingDraft}
-                draftSavedTime={draftSavedTime}
-                focusRow={focusRow}
-                focusField={focusField}
-                onClearFocusRow={() => {
-                  setFocusRow(null);
-                  setFocusField(null);
-                }}
-              />
-
-              {previewMutation.isError && (
-                <FeedbackBanner tone="destructive">
-                  Lỗi kiểm tra xem trước: {previewMutation.error.message}
-                </FeedbackBanner>
-              )}
-            </div>
+          {/* Main Workspace when shellMetadata exists */}
+          {shellMetadata && (
+            <BulkCreateEditorShell
+              metadata={shellMetadata}
+              projectKey={projectKey}
+              availableProjects={availableProjects}
+              onSelectProject={handleProjectSelect}
+              defaults={defaults}
+              onDefaultsChange={setDefaults}
+              items={items}
+              onItemsChange={setItems}
+              onSourceChange={setSource}
+              isFullscreen={isEditorFullscreen}
+              onToggleFullscreen={handleToggleFullscreen}
+              onPreview={() => previewMutation.mutate()}
+              isPreviewPending={previewMutation.isPending}
+              isSavingDraft={isSavingDraft}
+              draftSavedTime={draftSavedTime}
+              focusRow={focusRow}
+              focusField={focusField}
+              onClearFocusRow={() => {
+                setFocusRow(null);
+                setFocusField(null);
+              }}
+              isSwitchingProject={isSwitchingProject}
+              switchingToProject={projectKey}
+              notices={notices}
+              blockedState={blockedState}
+              onPrefetchProjects={handlePrefetchProjects}
+            />
           )}
         </div>
       )}

@@ -6,6 +6,8 @@ import {
   hasDraftContent,
   filterDiscardBlockedRows,
   sanitizeItemsForProjectChange,
+  resolveDraftStatus,
+  canAutosaveDraft,
 } from "./bulk-create-controller-model";
 import type { BulkCreateRowInput } from "@/lib/bulk/create-types";
 
@@ -84,5 +86,61 @@ describe("bulk-create-controller-model", () => {
     expect(sanitized[0].issueTypeId).toBeUndefined();
     expect(sanitized[0].priorityId).toBeUndefined();
     expect(sanitized[0].fixVersionIds).toBeUndefined();
+  });
+
+  describe("resolveDraftStatus", () => {
+    it("returns 'ready' for null, empty or invalid json", () => {
+      expect(resolveDraftStatus(null)).toBe("ready");
+      expect(resolveDraftStatus("")).toBe("ready");
+      expect(resolveDraftStatus("invalid json{")).toBe("ready");
+      expect(resolveDraftStatus(JSON.stringify({}))).toBe("ready");
+      expect(resolveDraftStatus(JSON.stringify({ items: [] }))).toBe("ready");
+    });
+
+    it("returns 'ready' when all rows have blank summaries", () => {
+      const raw = JSON.stringify({
+        items: [{ summary: "" }, { summary: "   " }, { summary: null }],
+      });
+      expect(resolveDraftStatus(raw)).toBe("ready");
+    });
+
+    it("returns 'pending-decision' when at least one row has meaningful summary", () => {
+      const raw = JSON.stringify({
+        items: [{ summary: " " }, { summary: "Prepare release" }],
+      });
+      expect(resolveDraftStatus(raw)).toBe("pending-decision");
+    });
+  });
+
+  describe("canAutosaveDraft", () => {
+    const baseInput = {
+      draftOwner: "PROJ",
+      projectKey: "PROJ",
+      status: "ready" as const,
+      handoffActive: false,
+      step: "input" as const,
+    };
+
+    it("allows autosave under normal input step with matching project and ready status", () => {
+      expect(canAutosaveDraft(baseInput)).toBe(true);
+    });
+
+    it("prevents autosave when draftOwner does not match projectKey", () => {
+      expect(canAutosaveDraft({ ...baseInput, draftOwner: "OTHER" })).toBe(false);
+      expect(canAutosaveDraft({ ...baseInput, draftOwner: null })).toBe(false);
+    });
+
+    it("prevents autosave when status is pending-decision", () => {
+      expect(canAutosaveDraft({ ...baseInput, status: "pending-decision" })).toBe(false);
+    });
+
+    it("prevents autosave when handoff is active", () => {
+      expect(canAutosaveDraft({ ...baseInput, handoffActive: true })).toBe(false);
+    });
+
+    it("prevents autosave outside input step", () => {
+      expect(canAutosaveDraft({ ...baseInput, step: "preview" })).toBe(false);
+      expect(canAutosaveDraft({ ...baseInput, step: "progress" })).toBe(false);
+    });
   });
 });
