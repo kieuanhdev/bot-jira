@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Clock, Inbox, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, HelpCircle, Inbox, XCircle } from "lucide-react";
 import { MetricCard } from "@/components/shared/metric-card";
 import { MetricGrid } from "@/components/shared/metric-grid";
 import type { RowState, SentryFilter } from "./sentry-row";
@@ -10,6 +10,7 @@ export interface SentryFilterTabsProps {
   onChange: (filter: SentryFilter) => void;
   counts: Partial<Record<RowState, number>>;
   isLoading?: boolean;
+  isAdmin?: boolean;
 }
 
 export function SentryFilterTabs({
@@ -17,9 +18,10 @@ export function SentryFilterTabs({
   onChange,
   counts,
   isLoading = false,
+  isAdmin = false,
 }: SentryFilterTabsProps) {
   return (
-    <MetricGrid columns={5}>
+    <MetricGrid columns={isAdmin ? 6 : 5}>
       <MetricCard
         label="Chờ duyệt"
         value={counts.review ?? 0}
@@ -57,13 +59,24 @@ export function SentryFilterTabs({
       />
       <MetricCard
         label="Lỗi"
-        value={(counts.failed ?? 0) + (counts.ignored ?? 0)}
+        value={counts.failed ?? 0}
         icon={AlertTriangle}
         tone="danger"
         loading={isLoading}
         onClick={() => onChange("problem")}
         selected={filter === "problem"}
       />
+      {isAdmin && (
+        <MetricCard
+          label="Chưa map dự án"
+          value={counts.ignored ?? 0}
+          icon={HelpCircle}
+          tone="danger"
+          loading={isLoading}
+          onClick={() => onChange("ignored")}
+          selected={filter === "ignored"}
+        />
+      )}
     </MetricGrid>
   );
 }

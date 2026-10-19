@@ -68,12 +68,17 @@ export async function hasInflightSentryOp(
     where: {
       type: "create-issues",
       state: { in: [...INFLIGHT_OP_STATES] },
-      // Age is measured from confirm, not preview: confirmBulkCreate sets
-      // `startedAt` when it queues the op and the executor claim keeps it.
-      // BulkOperation has no `updatedAt`; `createdAt` is only a fallback for a
-      // queued/running op that somehow has no `startedAt`.
-      OR: [{ startedAt: { gte: since } }, { startedAt: null, createdAt: { gte: since } }],
-      payload: { path: ["source", "sentryImportId"], equals: sentryImportId },
+      AND: [
+        {
+          OR: [{ startedAt: { gte: since } }, { startedAt: null, createdAt: { gte: since } }],
+        },
+        {
+          OR: [
+            { payload: { path: ["source", "sentryImportId"], equals: sentryImportId } },
+            { payload: { path: ["source", "sentryImportIds"], array_contains: sentryImportId } },
+          ],
+        },
+      ],
       ...(excludeOperationId ? { id: { not: excludeOperationId } } : {}),
     },
     select: { id: true },
@@ -81,10 +86,23 @@ export async function hasInflightSentryOp(
   return op !== null;
 }
 
+/** The Sentry row ids a bulk op was created for, or empty array when it is not a Sentry op. */
+export function sentryImportIdsOfPayload(payload: unknown): string[] {
+  const source = (payload as { source?: BulkCreateSource } | null)?.source;
+  if (source?.type !== "sentry") return [];
+  if (Array.isArray(source.sentryImportIds)) {
+    return source.sentryImportIds.filter((id): id is string => typeof id === "string" && id.length > 0);
+  }
+  if (typeof source.sentryImportId === "string" && source.sentryImportId.length > 0) {
+    return [source.sentryImportId];
+  }
+  return [];
+}
+
 /** The Sentry row id a bulk op was created for, or null when it is not a Sentry op. */
 export function sentryImportIdOfPayload(payload: unknown): string | null {
-  const source = (payload as { source?: BulkCreateSource } | null)?.source;
-  return source?.type === "sentry" && source.sentryImportId ? source.sentryImportId : null;
+  const ids = sentryImportIdsOfPayload(payload);
+  return ids[0] ?? null;
 }
 
 type ConfirmResult = Awaited<ReturnType<typeof confirmBulkCreate>>;
@@ -94,48 +112,77 @@ export type SentryConfirmGuardResult =
   | { ok: false; status: number; error: string };
 
 /**
- * Confirm a Sentry-sourced preview op exactly once per row.
+ * Confirm a Sentry-sourced preview op exactly once per row(s).
  *
- * The row is locked (`SELECT ... FOR UPDATE`) for the whole check-and-confirm,
- * so two admins confirming two different preview ops for the same row are
- * serialized: the second one sees the first op already `queued` and gets 409.
- * `confirm` runs on the global client and commits before the lock is released.
- * Errors thrown by `confirm` propagate unchanged (the route maps them).
+ * All rows are locked (`SELECT ... FOR UPDATE` sorted by id ASC) for the whole
+ * check-and-confirm, preventing deadlocks between concurrent reviewers.
+ * Any row that is already filed/queued causes 409.
  */
 export async function confirmSentryCreate(opts: {
-  sentryImportId: string;
+  sentryImportId?: string;
+  sentryImportIds?: string[];
   operationId: string;
   reviewer: string;
   confirm: (operationId: string) => Promise<ConfirmResult>;
 }): Promise<SentryConfirmGuardResult> {
-  const { sentryImportId, operationId, reviewer, confirm } = opts;
+  const { operationId, reviewer, confirm } = opts;
+  const rawIds =
+    opts.sentryImportIds && opts.sentryImportIds.length > 0
+      ? opts.sentryImportIds
+      : opts.sentryImportId
+        ? [opts.sentryImportId]
+        : [];
+  const ids = [...new Set(rawIds.map((id) => id.trim()))].filter(Boolean);
+  if (ids.length === 0) {
+    return { ok: false, status: 400, error: "Thiếu sentryImportId" };
+  }
 
   const op = await prisma.bulkOperation.findUnique({
     where: { id: operationId },
     select: { payload: true },
   });
-  if (op && sentryImportIdOfPayload(op.payload) !== sentryImportId) {
-    return { ok: false, status: 400, error: MSG_OP_MISMATCH };
+  if (op) {
+    const opIds = sentryImportIdsOfPayload(op.payload);
+    const sortedExpected = [...ids].sort();
+    const sortedActual = [...opIds].sort();
+    const matches =
+      sortedExpected.length === sortedActual.length &&
+      sortedExpected.every((id, idx) => id === sortedActual[idx]);
+    if (!matches) {
+      return { ok: false, status: 400, error: MSG_OP_MISMATCH };
+    }
   }
-  // A missing op falls through to `confirm`, which reports "không tìm thấy".
+
+  const sortedIds = [...ids].sort();
 
   return prisma.$transaction(
     async (tx) => {
-      const locked = await tx.$queryRaw<{ state: ImportState }[]>`
-        SELECT "state" FROM "SentryIssueImported" WHERE "id" = ${sentryImportId} FOR UPDATE`;
-      const row = locked[0];
-      if (!row) return { ok: false as const, status: 404, error: MSG_NOT_FOUND };
-      if (!OPEN_SENTRY_STATES.includes(row.state)) {
-        return { ok: false as const, status: 409, error: MSG_NOT_OPEN };
+      const locked = await tx.$queryRaw<{ id: string; state: ImportState }[]>`
+        SELECT "id", "state" FROM "SentryIssueImported"
+        WHERE "id" = ANY(${sortedIds}::text[])
+        ORDER BY "id" ASC
+        FOR UPDATE`;
+
+      if (locked.length !== sortedIds.length) {
+        return { ok: false as const, status: 404, error: MSG_NOT_FOUND };
       }
-      if (await hasInflightSentryOp(sentryImportId, operationId, tx)) {
-        return { ok: false as const, status: 409, error: MSG_INFLIGHT };
+
+      for (const row of locked) {
+        if (!OPEN_SENTRY_STATES.includes(row.state)) {
+          return { ok: false as const, status: 409, error: MSG_NOT_OPEN };
+        }
+      }
+
+      for (const id of sortedIds) {
+        if (await hasInflightSentryOp(id, operationId, tx)) {
+          return { ok: false as const, status: 409, error: MSG_INFLIGHT };
+        }
       }
 
       const result = await confirm(operationId);
       // State is left alone: the bulk executor moves the row to `created`.
       await tx.sentryIssueImported.updateMany({
-        where: { id: sentryImportId, state: { in: OPEN_SENTRY_STATES } },
+        where: { id: { in: sortedIds }, state: { in: OPEN_SENTRY_STATES } },
         data: { reviewedBy: reviewer, reviewedAt: new Date() },
       });
       return { ok: true as const, result };

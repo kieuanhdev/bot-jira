@@ -17,6 +17,7 @@ import {
   projectsKeys,
   releasesKeys,
   reportsKeys,
+  sentryKeys,
   settingsKeys,
   staleKeys,
   syncKeys,
@@ -61,8 +62,9 @@ describe("query-keys factory", () => {
     expect(bulkKeys.op("op-1")).toEqual(["bulk-operation", "op-1"]);
     expect(bulkKeys.createMetadata("EPM")).toEqual(["bulk-create-metadata", "EPM"]);
 
-    expect(adminKeys.sentry).toEqual(["admin", "sentry"]);
-    expect(adminKeys.sentryList("review")).toEqual(["admin", "sentry", "review"]);
+    expect(sentryKeys.all).toEqual(["sentry"]);
+    expect(sentryKeys.list("review", "all")).toEqual(["sentry", "list", "review", "all"]);
+    expect(sentryKeys.lists()).toEqual(["sentry", "list"]);
     expect(adminKeys.overviewErrors("sentry")).toEqual(["admin", "overview", "errors", "sentry"]);
 
     expect(chatKeys.identity).toEqual(["chat", "identity"]);
@@ -96,9 +98,9 @@ describe("query-keys factory", () => {
     expect(partialMatchKey(branchesKeys.picker("EPM-1", "fix"), branchesKeys.tasksAll)).toBe(true);
     expect(partialMatchKey(branchesKeys.prPlan("EPM-1"), branchesKeys.tasksAll)).toBe(true);
 
-    // admin sentry prefix matches sentryList
-    expect(partialMatchKey(adminKeys.sentryList("review"), adminKeys.sentry)).toBe(true);
-    expect(partialMatchKey(adminKeys.sentryList("rejected"), adminKeys.sentry)).toBe(true);
+    // sentry prefix matches sentry lists and all
+    expect(partialMatchKey(sentryKeys.list("review", "EPM"), sentryKeys.lists())).toBe(true);
+    expect(partialMatchKey(sentryKeys.list("review", "EPM"), sentryKeys.all)).toBe(true);
 
     // Integration test with QueryClient
     const qc = new QueryClient();

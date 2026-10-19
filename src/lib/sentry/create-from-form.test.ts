@@ -85,11 +85,20 @@ describe("hasInflightSentryOp", () => {
       where: {
         type: "create-issues",
         state: { in: ["queued", "running"] },
-        OR: [
-          { startedAt: { gte: expect.any(Date) } },
-          { startedAt: null, createdAt: { gte: expect.any(Date) } },
+        AND: [
+          {
+            OR: [
+              { startedAt: { gte: expect.any(Date) } },
+              { startedAt: null, createdAt: { gte: expect.any(Date) } },
+            ],
+          },
+          {
+            OR: [
+              { payload: { path: ["source", "sentryImportId"], equals: "r1" } },
+              { payload: { path: ["source", "sentryImportIds"], array_contains: "r1" } },
+            ],
+          },
         ],
-        payload: { path: ["source", "sentryImportId"], equals: "r1" },
       },
       select: { id: true },
     });
@@ -112,10 +121,10 @@ describe("hasInflightSentryOp", () => {
       const where = mocks.findFirst.mock.calls[0][0].where;
       const since = Date.parse("2026-10-17T10:00:00Z") - INFLIGHT_OP_MAX_AGE_MS;
       expect(where.createdAt).toBeUndefined();
-      expect(where.OR[0].startedAt.gte.getTime()).toBe(since);
+      expect(where.AND[0].OR[0].startedAt.gte.getTime()).toBe(since);
       // createdAt only counts for an op that was never stamped at confirm.
-      expect(where.OR[1].startedAt).toBeNull();
-      expect(where.OR[1].createdAt.gte.getTime()).toBe(since);
+      expect(where.AND[0].OR[1].startedAt).toBeNull();
+      expect(where.AND[0].OR[1].createdAt.gte.getTime()).toBe(since);
     } finally {
       vi.useRealTimers();
     }
@@ -136,12 +145,15 @@ describe("confirmSentryCreate", () => {
     mocks.findUnique.mockResolvedValue({
       payload: { projectKey: "EPM", source: { type: "sentry", sentryImportId: "r1" } },
     });
-    mocks.queryRaw.mockResolvedValue([{ state: "review" }]);
+    mocks.queryRaw.mockResolvedValue([{ id: "r1", state: "review" }]);
     mocks.findFirst.mockResolvedValue(null);
     mocks.updateMany.mockResolvedValue({ count: 1 });
   });
 
-  function run(confirm = vi.fn().mockResolvedValue(confirmed)) {
+  function run(
+    confirm = vi.fn().mockResolvedValue(confirmed),
+    overrideOpts?: Partial<Parameters<typeof confirmSentryCreate>[0]>
+  ) {
     return {
       confirm,
       result: confirmSentryCreate({
@@ -149,6 +161,7 @@ describe("confirmSentryCreate", () => {
         operationId: "op-1",
         reviewer: "admin@x",
         confirm,
+        ...overrideOpts,
       }),
     };
   }
@@ -160,14 +173,38 @@ describe("confirmSentryCreate", () => {
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
     expect(mocks.queryRaw).toHaveBeenCalledTimes(1);
     expect((mocks.queryRaw.mock.calls[0][0] as string[]).join("")).toMatch(
-      /FROM "SentryIssueImported"[\s\S]*FOR UPDATE/
+      /FROM "SentryIssueImported"[\s\S]*ORDER BY "id" ASC[\s\S]*FOR UPDATE/
     );
     expect(mocks.findFirst.mock.calls[0][0].where.id).toEqual({ not: "op-1" });
     expect(mocks.updateMany).toHaveBeenCalledWith({
-      where: { id: "r1", state: { in: ["review", "pending", "rejected"] } },
+      where: { id: { in: ["r1"] }, state: { in: ["review", "pending", "rejected"] } },
       data: { reviewedBy: "admin@x", reviewedAt: expect.any(Date) },
     });
     expect(mocks.updateMany.mock.calls[0][0].data).not.toHaveProperty("state");
+  });
+
+  it("supports multiple rows and locks all in sorted order", async () => {
+    mocks.findUnique.mockResolvedValue({
+      payload: { projectKey: "EPM", source: { type: "sentry", sentryImportIds: ["r2", "r1"] } },
+    });
+    mocks.queryRaw.mockResolvedValue([
+      { id: "r1", state: "review" },
+      { id: "r2", state: "pending" },
+    ]);
+    const confirm = vi.fn().mockResolvedValue({ operationId: "op-multi", total: 2, actionable: 2, blocked: 0 });
+
+    const result = await confirmSentryCreate({
+      sentryImportIds: ["r2", "r1"],
+      operationId: "op-multi",
+      reviewer: "user@x",
+      confirm,
+    });
+
+    expect(result).toEqual({ ok: true, result: { operationId: "op-multi", total: 2, actionable: 2, blocked: 0 } });
+    expect(mocks.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["r1", "r2"] }, state: { in: ["review", "pending", "rejected"] } },
+      data: { reviewedBy: "user@x", reviewedAt: expect.any(Date) },
+    });
   });
 
   it("rejects an op created for another sentry row", async () => {
@@ -187,7 +224,7 @@ describe("confirmSentryCreate", () => {
   });
 
   it("returns 409 when the row is no longer open", async () => {
-    mocks.queryRaw.mockResolvedValue([{ state: "created" }]);
+    mocks.queryRaw.mockResolvedValue([{ id: "r1", state: "created" }]);
     const { confirm, result } = run();
     await expect(result).resolves.toEqual({ ok: false, status: 409, error: MSG_NOT_OPEN });
     expect(confirm).not.toHaveBeenCalled();

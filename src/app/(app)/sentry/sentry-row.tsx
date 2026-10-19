@@ -34,7 +34,7 @@ export type SentryRowItem = {
   createdAt: string;
 };
 
-export type SentryFilter = "review" | "approved" | "created" | "rejected" | "problem";
+export type SentryFilter = "review" | "approved" | "created" | "rejected" | "problem" | "ignored";
 
 export const STATE_BADGE: Record<
   RowState,
@@ -53,18 +53,20 @@ export const FILTER_STATES: Record<SentryFilter, string> = {
   approved: "approved",
   created: "created",
   rejected: "rejected",
-  problem: "failed,ignored",
+  problem: "failed",
+  ignored: "ignored",
 };
 
 export const EMPTY: Record<SentryFilter, { title: string; hint: string }> = {
   review: { title: "Không có issue chờ duyệt", hint: "Issue Sentry mới sẽ xuất hiện ở đây sau tối đa 5 phút." },
   approved: { title: "Không có task đang tạo", hint: "Issue đã duyệt sẽ được tạo trên Jira trong giây lát." },
-  created: { title: "Chưa có task nào được tạo", hint: "Duyệt một issue trong tab Chờ duyệt để tạo task Jira." },
+  created: { title: "Chưa có task nào được tạo", hint: "Chọn một issue trong tab Chờ duyệt để tạo task Jira." },
   rejected: { title: "Chưa bỏ qua issue nào", hint: "Issue bị bỏ qua sẽ không bao giờ được tạo task." },
-  problem: { title: "Không có lỗi", hint: "Mọi issue đã duyệt đều được tạo task thành công." },
+  problem: { title: "Không có lỗi", hint: "Mọi task tạo từ Sentry đều thành công." },
+  ignored: { title: "Không có issue chưa map dự án", hint: "Mọi issue Sentry đều map được với dự án Jira tương ứng." },
 };
 
-export const VALID_FILTERS: Set<string> = new Set(["review", "approved", "created", "rejected", "problem"]);
+export const VALID_FILTERS: Set<string> = new Set(["review", "approved", "created", "rejected", "problem", "ignored"]);
 
 export function levelVariant(level: string | null): "danger" | "warning" | "info" | "secondary" {
   if (level === "fatal") return "danger";
@@ -85,12 +87,13 @@ export interface SentryRowProps {
   selectable: boolean;
   filter: SentryFilter;
   isBusy: boolean;
-  isDecidingApprove: boolean;
+  isDecidingApprove?: boolean;
+  isAdmin?: boolean;
   onToggleSelect: (checked: boolean) => void;
   onApprove: () => void;
   onReject: () => void;
   onReopen: () => void;
-  onRetry: () => void;
+  onRetry?: () => void;
 }
 
 export function SentryRow({
@@ -99,7 +102,8 @@ export function SentryRow({
   selectable,
   filter,
   isBusy,
-  isDecidingApprove,
+  isDecidingApprove = false,
+  isAdmin = false,
   onToggleSelect,
   onApprove,
   onReject,
@@ -134,7 +138,12 @@ export function SentryRow({
             <Badge variant={levelVariant(row.level)} className="uppercase">
               {row.level ?? "?"}
             </Badge>
-            <span className={cn("line-clamp-2 text-sm font-medium", isReview && triage.tier === "noise" ? "text-muted-foreground" : "text-foreground")}>
+            <span
+              className={cn(
+                "line-clamp-2 text-sm font-medium",
+                isReview && triage.tier === "noise" ? "text-muted-foreground" : "text-foreground"
+              )}
+            >
               {row.title ?? `Sentry issue #${row.sentryIssueId}`}
             </span>
             {filter !== "review" && <Badge variant={badge.variant}>{badge.label}</Badge>}
@@ -164,7 +173,9 @@ export function SentryRow({
             <span>
               {row.sentryProject} → {row.targetProject ?? "chưa map"}
             </span>
-            {row.eventCount !== null && <span className="font-semibold text-foreground">{formatNumber(row.eventCount)} lần xảy ra</span>}
+            {row.eventCount !== null && (
+              <span className="font-semibold text-foreground">{formatNumber(row.eventCount)} lần xảy ra</span>
+            )}
             <span>lần cuối {timeAgo(row.lastSeen ?? row.createdAt)}</span>
             {row.reviewedBy && row.reviewedAt && (
               <span>
@@ -242,7 +253,7 @@ export function SentryRow({
             <span className="font-mono text-sm font-semibold">{row.jiraKey}</span>
           )
         )}
-        {(row.state === "failed" || row.state === "ignored") && (
+        {isAdmin && (row.state === "failed" || row.state === "ignored") && onRetry && (
           <Button
             variant="outline"
             size="sm"

@@ -7,7 +7,7 @@ export interface SentryBulkBarProps {
   selectedCount: number;
   showReject: boolean;
   busy: boolean;
-  onApprove: () => void;
+  onCreate: () => void;
   onReject: () => void;
 }
 
@@ -15,7 +15,7 @@ export function SentryBulkBar({
   selectedCount,
   showReject,
   busy,
-  onApprove,
+  onCreate,
   onReject,
 }: SentryBulkBarProps) {
   if (selectedCount <= 0) return null;
@@ -30,7 +30,7 @@ export function SentryBulkBar({
           size="sm"
           className="cursor-pointer gap-1.5"
           disabled={busy}
-          onClick={onApprove}
+          onClick={onCreate}
         >
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
           Tạo task cho {selectedCount} issue

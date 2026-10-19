@@ -7,10 +7,10 @@ import { enqueueBulkOperation } from "@/lib/queue/boss";
 import { previewBulkCreate, confirmBulkCreate } from "@/lib/bulk/create-ops";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 import { logger } from "@/lib/logger";
-import { sentryImportIdOfPayload } from "@/lib/sentry/create-from-form";
+import { sentryImportIdsOfPayload } from "@/lib/sentry/create-from-form";
 
-// Sentry-sourced ops must go through /api/admin/sentry-import/[id]/create, which
-// locks the Sentry row (confirmSentryCreate) so the issue is filed only once.
+// Sentry-sourced ops must go through /api/sentry/bulk-create or /api/sentry/[id]/create, which
+// locks the Sentry row(s) (confirmSentryCreate) so the issue is filed only once.
 const MSG_SENTRY_SOURCE = "Task từ Sentry phải được tạo qua màn hình duyệt lỗi Sentry";
 
 export async function POST(req: Request) {
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       select: { payload: true },
     });
     // A missing op falls through to confirmBulkCreate, which reports "không tìm thấy".
-    if (existing && sentryImportIdOfPayload(existing.payload) !== null) {
+    if (existing && sentryImportIdsOfPayload(existing.payload).length > 0) {
       return NextResponse.json({ error: MSG_SENTRY_SOURCE }, { status: 400 });
     }
 

@@ -1,5 +1,6 @@
+import type { SentryIssueImported } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { getSession, isAdmin } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { userJiraAuth } from "@/lib/user-creds";
 import { jiraWith, probeJiraAuth, JiraRequestError } from "@/lib/jira/client";
@@ -7,7 +8,6 @@ import { enqueueBulkOperation } from "@/lib/queue/boss";
 import { previewBulkCreate, confirmBulkCreate } from "@/lib/bulk/create-ops";
 import type { BulkCreateRowInput } from "@/lib/bulk/create-types";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
-import { env, jiraProjectList, parseSentryMappings, resolveJiraProject } from "@/lib/env";
 import { audit } from "@/lib/audit";
 import { logger } from "@/lib/logger";
 import {
@@ -15,30 +15,31 @@ import {
   confirmSentryCreate,
   hasInflightSentryOp,
   MSG_INFLIGHT,
-  MSG_NOT_FOUND,
   MSG_NOT_OPEN,
   OPEN_SENTRY_STATES,
 } from "@/lib/sentry/create-from-form";
-
-// Same resolution as the sentry-import worker for rows seeded without a target.
-const mappings = parseSentryMappings(env.sentryProjectMappings);
-const fallbackProject = jiraProjectList[0] ?? null;
+import { assertSentryRowAccess, resolveRowTargetProject, sentryScopeFor } from "@/lib/sentry/scope";
 
 /**
  * File one reviewed Sentry issue through the bulk create pipeline with the
- * admin's own Jira token. Same preview/confirm contract and response shapes as
+ * user's own Jira token. Same preview/confirm contract and response shapes as
  * `/api/bulk/create`: preview body `{row}`, confirm body `{confirm:true, operationId}`.
- * Admin-only.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
+
   const { id } = await params;
+  const scope = await sentryScopeFor(session);
+
+  let sentryRow: SentryIssueImported;
+  try {
+    sentryRow = await assertSentryRowAccess(id, scope);
+  } catch {
+    return NextResponse.json({ error: "Không tìm thấy lỗi Sentry" }, { status: 404 });
+  }
 
   const rawBody = (await req.json().catch(() => ({}))) as {
     row?: unknown;
@@ -88,7 +89,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       await audit({
         actorId: session.user.id,
         actorEmail: session.user.email,
-        action: "admin.sentry.create_form",
+        action: "sentry.create_form",
         target: id,
         after: { operationId, total: res.total, actionable: res.actionable, blocked: res.blocked },
         source: "web",
@@ -121,13 +122,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "row required" }, { status: 400 });
   }
 
-  const sentryRow = await prisma.sentryIssueImported.findUnique({
-    where: { id },
-    select: { id: true, sentryIssueId: true, sentryProject: true, targetProject: true, state: true },
-  });
-  if (!sentryRow) {
-    return NextResponse.json({ error: MSG_NOT_FOUND }, { status: 404 });
-  }
   if (!OPEN_SENTRY_STATES.includes(sentryRow.state)) {
     return NextResponse.json({ error: MSG_NOT_OPEN }, { status: 409 });
   }
@@ -135,12 +129,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: MSG_INFLIGHT }, { status: 409 });
   }
 
+  const targetProject = resolveRowTargetProject(sentryRow);
   const request = buildSentryBulkRequest(row, {
     id: sentryRow.id,
     sentryIssueId: sentryRow.sentryIssueId,
-    targetProject:
-      sentryRow.targetProject ??
-      resolveJiraProject(sentryRow.sentryProject, mappings, fallbackProject),
+    targetProject,
   });
   if ("error" in request) {
     return NextResponse.json({ error: request.error }, { status: 400 });

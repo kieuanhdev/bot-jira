@@ -86,7 +86,14 @@ describe("runSentryImport worker", () => {
     expect(prisma.bulkOperation.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          payload: { path: ["source", "sentryImportId"], equals: "rec-inflight" },
+          AND: expect.arrayContaining([
+            expect.objectContaining({
+              OR: expect.arrayContaining([
+                { payload: { path: ["source", "sentryImportId"], equals: "rec-inflight" } },
+                { payload: { path: ["source", "sentryImportIds"], array_contains: "rec-inflight" } },
+              ]),
+            }),
+          ]),
         }),
       })
     );

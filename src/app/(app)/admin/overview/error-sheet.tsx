@@ -10,7 +10,7 @@ import { ListSkeleton } from "@/components/shared/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { api, getErrorMessage } from "@/lib/api-client";
-import { adminKeys } from "@/lib/query-keys";
+import { adminKeys, sentryKeys } from "@/lib/query-keys";
 import { maskSecrets } from "@/lib/admin/mask-secrets";
 import { timeAgo, cn } from "@/lib/utils";
 
@@ -84,7 +84,7 @@ export function ErrorSheet({
 
   const sentryQuery = useQuery({
     queryKey: adminKeys.overviewErrors("sentry"),
-    queryFn: () => api<{ items: SentryFailedItem[] }>("/api/admin/sentry-import?state=failed"),
+    queryFn: () => api<{ items: SentryFailedItem[] }>("/api/sentry?state=failed"),
     enabled: open && type === "sentry",
   });
 
@@ -100,7 +100,7 @@ export function ErrorSheet({
     mutationFn: async (id: string) => {
       setRetryingId(id);
       if (type === "sentry") {
-        return api("/api/admin/sentry-import", {
+        return api("/api/sentry/retry", {
           method: "POST",
           body: { id },
         });
@@ -114,6 +114,9 @@ export function ErrorSheet({
       setActionFeedback("Đã xếp hàng thử lại thành công.");
       queryClient.invalidateQueries({ queryKey: adminKeys.overviewErrors(type) });
       queryClient.invalidateQueries({ queryKey: adminKeys.overview });
+      if (type === "sentry") {
+        queryClient.invalidateQueries({ queryKey: sentryKeys.all });
+      }
       setTimeout(() => setActionFeedback(null), 3500);
     },
     onSettled: () => {
@@ -126,7 +129,7 @@ export function ErrorSheet({
       if (type === "sentry") {
         const items = sentryQuery.data?.items ?? [];
         for (const item of items) {
-          await api("/api/admin/sentry-import", {
+          await api("/api/sentry/retry", {
             method: "POST",
             body: { id: item.id },
           });
@@ -142,6 +145,9 @@ export function ErrorSheet({
       setActionFeedback(`Đã xếp hàng thử lại ${data?.count ?? "tất cả"} bản ghi.`);
       queryClient.invalidateQueries({ queryKey: adminKeys.overviewErrors(type) });
       queryClient.invalidateQueries({ queryKey: adminKeys.overview });
+      if (type === "sentry") {
+        queryClient.invalidateQueries({ queryKey: sentryKeys.all });
+      }
       setTimeout(() => setActionFeedback(null), 3500);
     },
   });

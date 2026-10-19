@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   upsertJiraIssue: vi.fn(),
   markSentryRowFromBulkOp: vi.fn(),
   sentryFindUnique: vi.fn(),
+  sentryFindMany: vi.fn(),
   loggerError: vi.fn(),
   loggerWarn: vi.fn(),
 }));
@@ -47,6 +48,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     sentryIssueImported: {
       findUnique: mocks.sentryFindUnique,
+      findMany: mocks.sentryFindMany,
     },
   },
 }));
@@ -109,6 +111,7 @@ describe("create-execution", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.sentryFindUnique.mockResolvedValue({ state: "review", jiraKey: null });
+    mocks.sentryFindMany.mockResolvedValue([{ id: "r1", state: "review", jiraKey: null }]);
   });
 
   describe("executeBulkCreateOperation", () => {
@@ -307,17 +310,18 @@ describe("create-execution", () => {
         createItems: [],
       });
       mocks.bulkOperationUpdateMany.mockResolvedValue({ count: 1 });
-      mocks.sentryFindUnique.mockResolvedValue(sentryRow);
+      mocks.sentryFindMany.mockResolvedValue([{ id: "r1", ...sentryRow }]);
+      mocks.bulkCreateItemFindMany.mockResolvedValue([{ id: "item-1", clientRef: "single-1" }]);
 
       await executeBulkCreateOperation("op-sentry-dup");
 
-      expect(mocks.sentryFindUnique).toHaveBeenCalledWith({
-        where: { id: "r1" },
-        select: { state: true, jiraKey: true },
+      expect(mocks.sentryFindMany).toHaveBeenCalledWith({
+        where: { id: { in: ["r1"] } },
+        select: { id: true, state: true, jiraKey: true },
       });
       expect(mocks.processCreateItem).not.toHaveBeenCalled();
       expect(mocks.bulkCreateItemUpdateMany).toHaveBeenCalledWith({
-        where: { operationId: "op-sentry-dup", status: { in: ["pending", "waiting_for_parent"] } },
+        where: { id: { in: ["item-1"] } },
         data: expect.objectContaining({
           status: "failed",
           errorCode: "SENTRY_ALREADY_FILED",
@@ -330,6 +334,68 @@ describe("create-execution", () => {
         data: expect.objectContaining({ state: "cancelled", failed: 1 }),
       });
       expect(mocks.markSentryRowFromBulkOp).not.toHaveBeenCalled();
+    });
+
+    it("multi-row Sentry op: only fails the item whose row is already filed, continuing other items", async () => {
+      mocks.bulkOperationFindUnique.mockResolvedValue({
+        id: "op-sentry-multi",
+        requestedBy: "user-1",
+        state: "queued",
+        total: 2,
+        payload: {
+          projectKey: "PROJ",
+          source: { type: "sentry", sentryImportIds: ["r1", "r2"] },
+        },
+        createItems: [],
+      });
+      mocks.bulkOperationUpdateMany.mockResolvedValue({ count: 1 });
+      mocks.userFindUnique.mockResolvedValue({ id: "user-1" });
+      mocks.userJiraAuth.mockReturnValue({ user: "alice", token: "tok-1", authMode: "Bearer" });
+      // r1 was already created; r2 is still open
+      mocks.sentryFindMany.mockResolvedValue([
+        { id: "r1", state: "created", jiraKey: "PROJ-1" },
+        { id: "r2", state: "review", jiraKey: null },
+      ]);
+      // First findMany call for taken items:
+      mocks.bulkCreateItemFindMany
+        .mockResolvedValueOnce([
+          { id: "item-1", clientRef: "sentry-r1" },
+          { id: "item-2", clientRef: "sentry-r2" },
+        ])
+        // Round 1 items to execute:
+        .mockResolvedValueOnce([
+          { id: "item-2", rowIndex: 1, clientRef: "sentry-r2", status: "pending" },
+        ])
+        // Round 2 items (done):
+        .mockResolvedValueOnce([]);
+
+      mocks.processCreateItem.mockResolvedValueOnce(true);
+      mocks.bulkCreateItemFindUnique.mockResolvedValue({ id: "item-2", jiraKey: "PROJ-2", clientRef: "sentry-r2" });
+      mocks.bulkCreateItemGroupBy.mockResolvedValue([
+        { status: "failed", _count: { _all: 1 } },
+        { status: "succeeded", _count: { _all: 1 } },
+      ]);
+
+      await executeBulkCreateOperation("op-sentry-multi");
+
+      // Item 1 was marked failed
+      expect(mocks.bulkCreateItemUpdateMany).toHaveBeenCalledWith({
+        where: { id: { in: ["item-1"] } },
+        data: expect.objectContaining({
+          status: "failed",
+          errorCode: "SENTRY_ALREADY_FILED",
+        }),
+      });
+
+      // Item 2 proceeded to execution
+      expect(mocks.processCreateItem).toHaveBeenCalledTimes(1);
+      expect(mocks.bulkOperationUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "op-sentry-multi" },
+          data: expect.objectContaining({ state: "partially_failed", succeeded: 1, failed: 1 }),
+        })
+      );
+      expect(mocks.markSentryRowFromBulkOp).toHaveBeenCalledWith("op-sentry-multi");
     });
 
     it("does not look up a Sentry row for non-Sentry ops", async () => {

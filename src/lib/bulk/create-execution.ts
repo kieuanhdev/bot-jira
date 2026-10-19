@@ -16,7 +16,11 @@ import {
 } from "./create-parent-resolver";
 import { processCreateItem } from "./create-item-executor";
 import { markSentryRowFromBulkOp } from "@/lib/sentry/bulk-completion";
-import { OPEN_SENTRY_STATES, sentryImportIdOfPayload } from "@/lib/sentry/create-from-form";
+import {
+  OPEN_SENTRY_STATES,
+  sentryImportIdOfPayload,
+  sentryImportIdsOfPayload,
+} from "@/lib/sentry/create-from-form";
 import { logger } from "@/lib/logger";
 
 export const MAX_ROUNDS = 10;
@@ -37,19 +41,33 @@ async function markSentryRowSafely(operationId: string): Promise<void> {
 }
 
 /**
- * For a Sentry-sourced op: true when its Sentry row was already filed or taken
- * by another flow (approved for the sentry-import worker, created, ...), so
- * running the op now would create a duplicate Jira task.
+ * For a Sentry-sourced op: returns the set of Sentry row ids that were already
+ * filed or taken by another flow (approved for the sentry-import worker, created, ...).
  */
-async function sentryRowTakenElsewhere(payload: unknown): Promise<boolean> {
-  const sentryImportId = sentryImportIdOfPayload(payload);
-  if (!sentryImportId) return false;
-  const row = await prisma.sentryIssueImported.findUnique({
-    where: { id: sentryImportId },
-    select: { state: true, jiraKey: true },
-  });
-  if (!row) return false;
-  return Boolean(row.jiraKey) || !OPEN_SENTRY_STATES.includes(row.state);
+export async function getSentryTakenRowIds(payload: unknown): Promise<Set<string>> {
+  const ids = sentryImportIdsOfPayload(payload);
+  if (ids.length === 0) return new Set();
+  const rows =
+    (await prisma.sentryIssueImported.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, state: true, jiraKey: true },
+    })) ?? [];
+  const rowMap = new Map(rows.map((r) => [r.id, r]));
+  const taken = new Set<string>();
+  for (const id of ids) {
+    const row = rowMap.get(id);
+    if (!row || Boolean(row.jiraKey) || !OPEN_SENTRY_STATES.includes(row.state)) {
+      taken.add(id);
+    }
+  }
+  return taken;
+}
+
+export function sentryIdOfItem(clientRef: string | undefined | null, payload: unknown): string | null {
+  if (clientRef && clientRef.startsWith("sentry-")) {
+    return clientRef.slice("sentry-".length);
+  }
+  return sentryImportIdOfPayload(payload);
 }
 
 /**
@@ -203,26 +221,43 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
   });
   if (claim.count === 0 && op.state !== "running") return;
 
-  // Re-check the Sentry row at execution time: the confirm-time guard cannot
-  // see a row approved/filed while this op sat in the queue (e.g. worker outage).
-  if (await sentryRowTakenElsewhere(op.payload)) {
-    await prisma.bulkCreateItem.updateMany({
+  // Re-check Sentry rows at execution time: the confirm-time guard cannot
+  // see rows approved/filed while this op sat in the queue (e.g. worker outage).
+  const takenSentryIds = await getSentryTakenRowIds(op.payload);
+  if (takenSentryIds.size > 0) {
+    const pendingItems = await prisma.bulkCreateItem.findMany({
       where: { operationId, status: { in: ["pending", "waiting_for_parent"] } },
-      data: {
-        status: "failed",
-        errorCode: "SENTRY_ALREADY_FILED",
-        error: MSG_SENTRY_ALREADY_FILED,
-        retryable: false,
-      },
+      select: { id: true, clientRef: true },
     });
-    await prisma.bulkOperation.update({
-      where: { id: operationId },
-      data: { state: "cancelled", failed: op.total, completedAt: new Date() },
-    });
-    logger.warn({ message: "Skipped Sentry bulk create op: row already filed", operationId });
-    // The row is not marked: it belongs to the other flow now.
-    await notifyCreateResult(op, "failed", 0, op.total);
-    return;
+    const takenItemIds = pendingItems
+      .filter((item) => {
+        const rowId = sentryIdOfItem(item.clientRef, op.payload);
+        return rowId && takenSentryIds.has(rowId);
+      })
+      .map((item) => item.id);
+
+    if (takenItemIds.length > 0) {
+      await prisma.bulkCreateItem.updateMany({
+        where: { id: { in: takenItemIds } },
+        data: {
+          status: "failed",
+          errorCode: "SENTRY_ALREADY_FILED",
+          error: MSG_SENTRY_ALREADY_FILED,
+          retryable: false,
+        },
+      });
+
+      // If all items in this op were taken elsewhere, cancel the op
+      if (takenItemIds.length >= op.total) {
+        await prisma.bulkOperation.update({
+          where: { id: operationId },
+          data: { state: "cancelled", failed: op.total, completedAt: new Date() },
+        });
+        logger.warn({ message: "Skipped Sentry bulk create op: all rows already filed", operationId });
+        await notifyCreateResult(op, "failed", 0, op.total);
+        return;
+      }
+    }
   }
 
   // Load user credentials

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getErrorMessage } from "@/lib/api-client";
-import { adminKeys, bulkKeys, issuesTouchingProjects } from "@/lib/query-keys";
+import { bulkKeys, issuesTouchingProjects, sentryKeys } from "@/lib/query-keys";
 import type {
   BulkCreatePreviewResult,
   BulkCreateRowInput,
@@ -26,7 +26,7 @@ export type UseSingleTaskCreateOptions = {
   /**
    * Preview/confirm endpoint. Contract:
    * - default `/api/bulk/create`: preview body `{projectKey, items:[row], source}`;
-   * - any other endpoint (e.g. `/api/admin/sentry-import/[id]/create`): preview body `{row}`
+   * - any other endpoint (e.g. `/api/sentry/[id]/create`): preview body `{row}`
    *   (the route derives project/source itself);
    * - confirm body is `{confirm:true, operationId}` for both.
    * Both must answer preview with a `BulkCreatePreviewResult`.
@@ -133,7 +133,7 @@ export function useSingleTaskCreate(opts: UseSingleTaskCreateOptions): UseSingle
     void queryClient.invalidateQueries({ predicate: issuesTouchingProjects([doneProjectKey]) });
     void queryClient.invalidateQueries({ queryKey: bulkKeys.operations });
     if (source.type === "sentry") {
-      void queryClient.invalidateQueries({ queryKey: adminKeys.sentry });
+      void queryClient.invalidateQueries({ queryKey: sentryKeys.all });
     }
     onCreated?.(doneKey, doneProjectKey);
   }, [doneKey, doneProjectKey, source.type, queryClient, onCreated]);

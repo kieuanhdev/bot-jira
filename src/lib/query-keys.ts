@@ -244,6 +244,13 @@ export const reportsKeys = {
 };
 
 
+export const sentryKeys = {
+  all: ["sentry"] as const,
+  list: (state: string = "review", project: string = "all") =>
+    ["sentry", "list", state, project] as const,
+  lists: () => ["sentry", "list"] as const,
+};
+
 export const adminKeys = {
   all: ["admin"] as const,
   projects: ["admin", "projects"] as const,
@@ -252,7 +259,5 @@ export const adminKeys = {
   audit: ["admin", "overview", "audit"] as const,
   health: ["admin", "overview", "health"] as const,
   overviewErrors: (type: "sentry" | "outbox") => ["admin", "overview", "errors", type] as const,
-  sentry: ["admin", "sentry"] as const,
-  sentryList: (filter: string = "review") => ["admin", "sentry", filter] as const,
 };
 

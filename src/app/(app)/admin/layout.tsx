@@ -5,7 +5,6 @@ import { getSession, isAdmin } from "@/lib/session";
 import { getServerQueryClient } from "@/lib/query-server";
 import { adminKeys } from "@/lib/query-keys";
 import { listAdminProjectSync } from "@/lib/admin/project-sync";
-import { listSentryImports } from "@/lib/admin/sentry";
 import { logSwallowed } from "@/lib/logger";
 import { PageContainer } from "@/components/shared/page-container";
 import { AdminNav } from "./admin-nav";
@@ -20,19 +19,13 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const queryClient = getServerQueryClient();
 
   try {
-    await Promise.all([
-      queryClient.prefetchQuery({
-        queryKey: adminKeys.projects,
-        queryFn: async () => ({
-          items: await listAdminProjectSync(),
-          generatedAt: new Date().toISOString(),
-        }),
+    await queryClient.prefetchQuery({
+      queryKey: adminKeys.projects,
+      queryFn: async () => ({
+        items: await listAdminProjectSync(),
+        generatedAt: new Date().toISOString(),
       }),
-      queryClient.prefetchQuery({
-        queryKey: adminKeys.sentryList("review"),
-        queryFn: () => listSentryImports("review"),
-      }),
-    ]);
+    });
   } catch (err) {
     logSwallowed("admin.layout.prefetch", err);
   }

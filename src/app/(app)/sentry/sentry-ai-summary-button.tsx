@@ -13,13 +13,13 @@ export type SentryAiSummaryResult = {
 };
 
 /**
- * Calls `/api/admin/sentry-import/[id]/ai-summary`. Keep it above the sheet
+ * Calls `/api/sentry/[id]/ai-summary`. Keep it above the sheet
  * content (which unmounts on close) so a result survives closing the form.
  */
 export function useSentryAiSummary(rowId: string) {
   return useMutation({
     mutationFn: () =>
-      api<SentryAiSummaryResult>(`/api/admin/sentry-import/${encodeURIComponent(rowId)}/ai-summary`, {
+      api<SentryAiSummaryResult>(`/api/sentry/${encodeURIComponent(rowId)}/ai-summary`, {
         method: "POST",
       }),
   });
@@ -32,7 +32,7 @@ export interface SentryAiSummaryButtonProps {
   error: unknown;
   /** Last successful result's `usedEvent`; null before any result. */
   usedEvent: boolean | null;
-  /** A result waiting for the admin to apply or dismiss it. */
+  /** A result waiting for the user to apply or dismiss it. */
   proposal: SentryAiSummaryResult | null;
   /** Whether applying the proposal also sets the priority (its name maps to a project priority). */
   proposalSetsPriority: boolean;

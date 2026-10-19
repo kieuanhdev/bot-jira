@@ -148,11 +148,19 @@ function parseBulkCreateSource(
   }
 
   if (type === "sentry") {
-    const id = typeof src.sentryImportId === "string" ? src.sentryImportId.trim() : "";
-    if (!id) {
-      return { ok: false, message: "Thiếu sentryImportId cho nguồn Sentry" };
+    const ids = Array.isArray(src.sentryImportIds)
+      ? src.sentryImportIds
+          .filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+          .map((id) => id.trim())
+      : [];
+    const legacyId = typeof src.sentryImportId === "string" ? src.sentryImportId.trim() : "";
+    if (ids.length > 0) {
+      return { ok: true, value: { type: "sentry", sentryImportIds: ids } };
     }
-    return { ok: true, value: { type: "sentry", sentryImportId: id } };
+    if (legacyId) {
+      return { ok: true, value: { type: "sentry", sentryImportId: legacyId } };
+    }
+    return { ok: false, message: "Thiếu sentryImportId cho nguồn Sentry" };
   }
 
   return { ok: false, message: "Loại nguồn tạo task (source.type) không hợp lệ" };

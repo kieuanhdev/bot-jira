@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ExternalLink, Info } from "lucide-react";
-import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   TaskCreateDialog,
@@ -25,76 +24,8 @@ import {
   type SentryAiSummaryResult,
 } from "./sentry-ai-summary-button";
 
-const MAX_LISTED = 5;
-
-export interface SentryApproveDialogProps {
-  /** Rows about to be filed by the import worker; null/empty closes the dialog. */
-  rows: SentryRowItem[] | null;
-  pending: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}
-
-/**
- * Confirms approving issues as listed (the worker files them with the generated
- * draft). A single issue with a mapped Jira project is approved through the full
- * task form instead; this dialog only sees one issue when its project is unmapped.
- */
-export function SentryApproveDialog({ rows, pending, onCancel, onConfirm }: SentryApproveDialogProps) {
-  if (!rows || rows.length === 0) return null;
-  const single = rows.length === 1;
-  const unmapped = rows.some((r) => !r.targetProject);
-
-  return (
-    <ConfirmDialog
-      open
-      onOpenChange={(next) => {
-        if (!next) onCancel();
-      }}
-      icon={CheckCircle2}
-      title={single ? "Tạo task Jira từ issue này?" : `Tạo ${rows.length} task Jira?`}
-      description={
-        single
-          ? "Task được tạo với nội dung bên dưới. Sentry không bị thay đổi."
-          : "Xem lại danh sách trước khi tạo. Muốn sửa nội dung từng task thì duyệt từng issue một."
-      }
-      confirmLabel={single ? "Tạo task" : `Tạo ${rows.length} task`}
-      pending={pending}
-      onConfirm={onConfirm}
-      className="sm:max-w-xl"
-    >
-      <div className="flex max-h-[50vh] flex-col gap-2 overflow-y-auto">
-        {unmapped && (
-          <p className="flex items-start gap-2 rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span>
-              {single
-                ? "Issue chưa map sang project Jira nên không sửa được nội dung trước khi tạo. "
-                : "Có issue chưa map sang project Jira. "}
-              Task sẽ được tạo ở project theo cấu hình mapping Sentry (hoặc project mặc định).
-            </span>
-          </p>
-        )}
-        {rows.slice(0, MAX_LISTED).map((row) => (
-          <div key={row.id} className="flex flex-col gap-1 rounded-md border bg-muted/20 p-3 text-xs">
-            <span className="text-muted-foreground">
-              Project Jira: <strong className="text-foreground">{row.targetProject ?? "chưa map"}</strong>
-            </span>
-            <p className="text-sm font-medium text-foreground">
-              {row.draftSummary ?? buildSentryTaskDraft(row).summary}
-            </p>
-          </div>
-        ))}
-        {rows.length > MAX_LISTED && (
-          <p className="text-xs text-muted-foreground">…và {rows.length - MAX_LISTED} issue khác.</p>
-        )}
-      </div>
-    </ConfirmDialog>
-  );
-}
-
-export interface SentryTaskCreateDialogProps {
-  /** Must have a `targetProject`; rows without one go through `SentryApproveDialog`. */
+export interface SentryCreateDialogProps {
+  /** Must have a `targetProject`. */
   row: SentryRowItem & { targetProject: string };
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -116,11 +47,11 @@ function LatestRowSync({
 }
 
 /**
- * Approve one Sentry issue with the full task form, filed with the admin's Jira
- * token via `/api/admin/sentry-import/[id]/create`. Keep it mounted per row
- * (`key={row.id}`) and drive it with `open` so an in-flight create survives closing.
+ * Create one Jira task from a Sentry issue with the full task form, filed with the user's Jira
+ * token via `/api/sentry/[id]/create`. Keep it mounted per row (`key={row.id}`) and drive it
+ * with `open` so an in-flight create survives closing.
  */
-export function SentryTaskCreateDialog({ row, open, onOpenChange, onCreated }: SentryTaskCreateDialogProps) {
+export function SentryCreateDialog({ row, open, onOpenChange, onCreated }: SentryCreateDialogProps) {
   const source = useMemo<BulkCreateSource>(() => ({ type: "sentry", sentryImportId: row.id }), [row.id]);
   const lockedLabels = useMemo(() => ["sentry", sentryLabel({ id: row.sentryIssueId })], [row.sentryIssueId]);
   const prefill = useMemo<TaskCreatePrefill>(() => {
@@ -178,7 +109,7 @@ export function SentryTaskCreateDialog({ row, open, onOpenChange, onCreated }: S
     setPriorityNote(null);
     aiSummary.mutate(undefined, {
       onSuccess: (result) => {
-        // Ask first only when it would replace a summary/description the admin has.
+        // Ask first only when it would replace a summary/description the user has.
         const current = formRowRef.current;
         if (current && !aiOverwriteNeedsConfirm(current, prefillFor(result))) applyAiSummary(result);
         else setProposal(result);
@@ -189,7 +120,6 @@ export function SentryTaskCreateDialog({ row, open, onOpenChange, onCreated }: S
   // Sentry context, plus the "AI tóm tắt lỗi" action when the server has an LLM.
   function extraActions({ busy, row: formRow }: TaskCreateExtraActionsContext) {
     const proposalPrefill = proposal ? prefillFor(proposal) : null;
-    // mergeAiPrefill only fills an empty priority.
     const proposalSetsPriority = Boolean(proposalPrefill?.priorityId && !formRow?.priorityId);
     return (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
@@ -237,7 +167,7 @@ export function SentryTaskCreateDialog({ row, open, onOpenChange, onCreated }: S
       prefillIssueTypeName={buildSentryTaskDraft(row).issueType}
       lockedLabels={lockedLabels}
       source={source}
-      endpoint={`/api/admin/sentry-import/${row.id}/create`}
+      endpoint={`/api/sentry/${row.id}/create`}
       extraActions={extraActions}
       externalPatch={aiPatch}
       onCreated={onCreated}

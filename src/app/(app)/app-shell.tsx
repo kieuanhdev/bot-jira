@@ -20,6 +20,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ShieldCheck,
+  Bug,
 } from "lucide-react";
 import { UnreadBadge } from "./unread-badge";
 import { FreshnessBanner } from "./freshness-banner";
@@ -30,6 +31,7 @@ import { cn } from "@/lib/utils";
 const baseNav = [
   { href: "/board", label: "Bảng công việc", icon: LayoutGrid },
   { href: "/stale", label: "Task cần xử lý", icon: BarChart3 },
+  { href: "/sentry", label: "Lỗi Sentry", icon: Bug },
   { href: "/bulk", label: "Cập nhật hàng loạt", icon: ListChecks },
   { href: "/release", label: "Quản lý phát hành", icon: Rocket },
   { href: "/branches", label: "Nhánh & Delivery", icon: GitBranch },

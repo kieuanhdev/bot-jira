@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function AdminSentryLoading() {
+export default function SentryLoading() {
   return (
     <div className="flex flex-col gap-6">
       {/* Header Skeleton */}
@@ -14,10 +14,17 @@ export default function AdminSentryLoading() {
         </div>
       </div>
 
+      {/* Project Tabs Skeleton */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-8 w-20 rounded-md shrink-0" />
+        ))}
+      </div>
+
       {/* Filter Tabs Skeleton */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-9 w-28 rounded-lg shrink-0" />
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-16 w-32 rounded-lg shrink-0" />
         ))}
       </div>
 

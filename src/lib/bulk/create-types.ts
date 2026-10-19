@@ -66,7 +66,7 @@ export type BulkCreateRequest = {
 export type BulkCreateSource =
   | { type: "grid" | "paste" | "csv" | "excel"; fileName?: string | null }
   | { type: "single"; origin: "board" }
-  | { type: "sentry"; sentryImportId: string };
+  | { type: "sentry"; sentryImportId?: string; sentryImportIds?: string[] };
 
 export type CanonicalCreateItem = {
   clientRef: string;
