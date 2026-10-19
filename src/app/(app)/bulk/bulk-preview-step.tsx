@@ -90,7 +90,6 @@ export function PreviewItemCard({ item, jiraBaseUrl }: { item: PreviewItem; jira
   );
 }
 
-/** Step 3: preview summary tabs, per-task diffs and the confirm/cancel actions. */
 function PreviewItemList({
   items,
   jiraBaseUrl,
@@ -135,6 +134,7 @@ function PreviewItemList({
   );
 }
 
+/** Step 3: preview summary tabs, per-task diffs and the confirm/cancel actions. */
 export function BulkPreviewCard({
   preview,
   previewOutdated,
@@ -245,15 +245,25 @@ export function BulkPreviewCard({
               onClick={() => onChangeView(bucket)}
               className={cn(
                 "cursor-pointer rounded-lg border p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-                previewView === bucket && "border-primary bg-primary/5 shadow-sm",
-                previewView !== bucket && count === 0 && "opacity-50"
+                previewView === bucket && "border-primary bg-primary/5 shadow-sm"
               )}
             >
               <span className="flex items-center justify-between gap-2">
                 <span className="text-xs text-muted-foreground font-medium">{label}</span>
-                <Icon className={cn("h-4 w-4", color)} aria-hidden="true" />
+                {/* Dim only the decorative icon for empty buckets so text keeps ≥4.5:1 contrast. */}
+                <Icon
+                  className={cn("h-4 w-4", color, previewView !== bucket && count === 0 && "opacity-40")}
+                  aria-hidden="true"
+                />
               </span>
-              <span className="mt-1 block text-xl font-semibold">{count}</span>
+              <span
+                className={cn(
+                  "mt-1 block text-xl font-semibold",
+                  previewView !== bucket && count === 0 && "text-muted-foreground"
+                )}
+              >
+                {count}
+              </span>
             </button>
           ))}
         </div>
