@@ -65,7 +65,7 @@ function StaleTaskRow({ task, onOpen }: { task: Task; onOpen: () => void }) {
         <p
           className={cn(
             "text-xs font-medium",
-            !task.assigneeJira && "text-amber-700 dark:text-amber-400"
+            !task.assigneeJira && "text-warning"
           )}
         >
           {task.assigneeJira ?? "Chưa phân công"}
@@ -91,7 +91,7 @@ function StaleTaskRow({ task, onOpen }: { task: Task; onOpen: () => void }) {
         <p className="text-xs font-semibold">
           {task.stateAgeDays} / {task.slaDays} ngày
         </p>
-        <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+        <p className="mt-1 text-xs text-warning">
           +{task.overByDays} ngày vượt
         </p>
       </td>
@@ -109,7 +109,7 @@ function StaleTaskRow({ task, onOpen }: { task: Task; onOpen: () => void }) {
           <p className="mt-1.5 text-xs text-muted-foreground">Chưa có baseline theo điểm</p>
         ) : (
           task.baselineLevel !== "within" && (
-            <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-400">
+            <p className="mt-1.5 text-xs text-warning">
               Vượt baseline {task.points} điểm
             </p>
           )

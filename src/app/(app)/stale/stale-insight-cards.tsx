@@ -54,7 +54,7 @@ export function StaleDataQualityCard({ summary, tasks }: { summary: Summary; tas
     <Card className="shadow-none">
       <CardHeader className="pb-4">
         <CardTitle className="flex items-center gap-2 text-base">
-          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden /> Kiểm tra chất lượng dữ liệu
+          <AlertTriangle className="h-4 w-4 text-warning" aria-hidden /> Kiểm tra chất lượng dữ liệu
         </CardTitle>
         <CardDescription className="text-xs">
           Các tín hiệu cần hoàn thiện để phân tích và dự báo chính xác hơn.

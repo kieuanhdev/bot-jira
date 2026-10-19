@@ -12,10 +12,10 @@ import { BulkStandardizationAction } from "./stale-standardization-action";
 /** Shown when the user has no Jira username configured. */
 export function JiraUsernameWarning() {
   return (
-    <Card className="border-amber-500/30 bg-amber-500/5 shadow-none">
+    <Card className="border-warning/30 bg-warning/5 shadow-none">
       <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5">
         <div className="flex items-center gap-3">
-          <UserRoundX className="h-6 w-6 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden />
+          <UserRoundX className="h-6 w-6 text-warning shrink-0" aria-hidden />
           <div>
             <h2 className="text-sm font-semibold text-foreground">
               Chưa cấu hình tài khoản Jira
@@ -103,7 +103,7 @@ export function StandardizationOverviewCard({
                 <div
                   className={cn(
                     "h-full rounded-full transition-[width] duration-300 motion-reduce:transition-none",
-                    completePercent === 100 ? "bg-emerald-500" : "bg-primary"
+                    completePercent === 100 ? "bg-success" : "bg-primary"
                   )}
                   style={{ width: `${completePercent}%` }}
                 />
@@ -135,10 +135,10 @@ const METRICS: {
   missing: string;
   done: string;
 }[] = [
-  { code: "ESTIMATION", label: "Estimate / Points", icon: Hash, tone: "bg-amber-500/10 text-amber-700 dark:text-amber-400", missing: "Task thiếu điểm / estimate", done: "Đã đủ điểm / estimate" },
-  { code: "WORKLOG", label: "Worklog", icon: Clock3, tone: "bg-sky-500/10 text-sky-700 dark:text-sky-400", missing: "Chưa ghi nhận thời gian", done: "Đã có worklog" },
-  { code: "FIX_VERSION", label: "Fix Version", icon: Layers, tone: "bg-violet-500/10 text-violet-700 dark:text-violet-400", missing: "Chưa gán bản phát hành", done: "Đã gán phiên bản" },
-  { code: "DUE_DATE", label: "Due date", icon: CalendarClock, tone: "bg-orange-500/10 text-orange-700 dark:text-orange-400", missing: "Chưa đặt hạn hoàn thành", done: "Đã có hạn hoàn thành" },
+  { code: "ESTIMATION", label: "Estimate / Points", icon: Hash, tone: "bg-warning/10 text-warning", missing: "Task thiếu điểm / estimate", done: "Đã đủ điểm / estimate" },
+  { code: "WORKLOG", label: "Worklog", icon: Clock3, tone: "bg-info/10 text-info", missing: "Chưa ghi nhận thời gian", done: "Đã có worklog" },
+  { code: "FIX_VERSION", label: "Fix Version", icon: Layers, tone: "bg-primary/10 text-primary", missing: "Chưa gán bản phát hành", done: "Đã gán phiên bản" },
+  { code: "DUE_DATE", label: "Due date", icon: CalendarClock, tone: "bg-warning/10 text-warning", missing: "Chưa đặt hạn hoàn thành", done: "Đã có hạn hoàn thành" },
 ];
 
 /** Four clickable toggle cards: they double as the "missing field" filter for the queue below. */
@@ -169,7 +169,7 @@ export function StandardizationMetricCards({
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-muted-foreground">{label}</span>
-              <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full", count === 0 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : tone)}>
+              <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full", count === 0 ? "bg-success/10 text-success" : tone)}>
                 {count === 0 ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Icon className="h-3.5 w-3.5" aria-hidden />}
               </span>
             </div>

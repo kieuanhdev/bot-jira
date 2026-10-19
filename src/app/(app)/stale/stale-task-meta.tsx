@@ -11,7 +11,7 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
 export function TaskMeta({ task }: { task: Task }) {
   const worklog = formatTimeSpent(task.timeSpent);
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-muted-foreground">
       <span>
         {task.projectKey} · {task.type}
       </span>
@@ -25,5 +25,5 @@ export function TaskMeta({ task }: { task: Task }) {
 }
 
 export function GreenCheck({ className }: { className?: string }) {
-  return <CheckCircle2 className={cn("text-emerald-600 dark:text-emerald-400", className)} aria-hidden="true" />;
+  return <CheckCircle2 className={cn("text-success", className)} aria-hidden="true" />;
 }

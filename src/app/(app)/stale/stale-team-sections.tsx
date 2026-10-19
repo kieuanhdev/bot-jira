@@ -43,8 +43,8 @@ export function FocusCard({
           className={cn(
             "flex h-9 w-9 items-center justify-center rounded-full",
             tone === "danger"
-              ? "bg-red-500/10 text-red-700 dark:text-red-400"
-              : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+              ? "bg-destructive/10 text-destructive"
+              : "bg-warning/10 text-warning"
           )}
         >
           <Icon className="h-4 w-4" aria-hidden />
@@ -103,7 +103,7 @@ export function InsightBrief({ data, staleRate }: { data: StaleResponse; staleRa
               <div
                 className={cn(
                   "h-full rounded-full transition-[width] duration-200",
-                  staleRate >= 30 ? "bg-red-500" : staleRate >= 15 ? "bg-amber-500" : "bg-primary"
+                  staleRate >= 30 ? "bg-destructive" : staleRate >= 15 ? "bg-warning" : "bg-primary"
                 )}
                 style={{ width: `${Math.min(100, staleRate)}%` }}
               />
@@ -243,10 +243,10 @@ export function ActionQueue({ tasks, focus }: { tasks: Task[]; focus: FocusMode 
 
 export function AgingDistribution({ tasks }: { tasks: Task[] }) {
   const bands = [
-    { label: "Mới vượt", hint: "1–2 ngày", count: tasks.filter((task) => task.overByDays <= 2).length, color: "bg-sky-500" },
-    { label: "Cần can thiệp", hint: "3–5 ngày", count: tasks.filter((task) => task.overByDays >= 3 && task.overByDays <= 5).length, color: "bg-amber-500" },
-    { label: "Rủi ro cao", hint: "6–10 ngày", count: tasks.filter((task) => task.overByDays >= 6 && task.overByDays <= 10).length, color: "bg-orange-500" },
-    { label: "Nợ kéo dài", hint: ">10 ngày", count: tasks.filter((task) => task.overByDays > 10).length, color: "bg-red-500" },
+    { label: "Mới vượt", hint: "1–2 ngày", count: tasks.filter((task) => task.overByDays <= 2).length, color: "bg-info" },
+    { label: "Cần can thiệp", hint: "3–5 ngày", count: tasks.filter((task) => task.overByDays >= 3 && task.overByDays <= 5).length, color: "bg-warning" },
+    { label: "Rủi ro cao", hint: "6–10 ngày", count: tasks.filter((task) => task.overByDays >= 6 && task.overByDays <= 10).length, color: "bg-destructive/75" },
+    { label: "Nợ kéo dài", hint: ">10 ngày", count: tasks.filter((task) => task.overByDays > 10).length, color: "bg-destructive" },
   ];
   const max = Math.max(1, ...bands.map((band) => band.count));
   return (

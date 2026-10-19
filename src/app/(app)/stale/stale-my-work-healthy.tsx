@@ -20,11 +20,11 @@ export function MyWorkHealthyState({
     (myWork?.standardization?.incomplete ?? 0) > 0 || (myWork?.standardization?.unknown ?? 0) > 0;
 
   return (
-    <Card className="shadow-none border-emerald-500/25 bg-emerald-500/[0.035]">
+    <Card className="shadow-none border-success/25 bg-success/[0.035]">
       <CardContent className="flex flex-col gap-5 p-6 sm:p-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start gap-3.5">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
               <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
             </span>
             <div>
@@ -52,9 +52,9 @@ export function MyWorkHealthyState({
         </div>
 
         {hasIncompleteStandardization && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4">
             <div className="flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden />
+              <AlertTriangle className="h-5 w-5 text-warning shrink-0" aria-hidden />
               <div>
                 <p className="text-sm font-semibold text-foreground">
                   Bạn có {myWork?.standardization?.incomplete} task chưa đạt chuẩn dữ liệu
@@ -68,7 +68,7 @@ export function MyWorkHealthyState({
               <Button
                 size="sm"
                 onClick={onViewStandardization}
-                className="cursor-pointer shrink-0 bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-600 dark:hover:bg-amber-500"
+                className="cursor-pointer shrink-0 bg-warning text-warning-foreground hover:bg-warning/90"
               >
                 Kiểm tra tiêu chuẩn ({myWork?.standardization?.incomplete})
                 <ArrowRight className="h-4 w-4 ml-1.5" aria-hidden />
@@ -83,7 +83,7 @@ export function MyWorkHealthyState({
               <span className="font-semibold text-foreground">
                 Task bạn đang thực hiện ({myWork.tasks.length})
               </span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-medium">Trong hạn SLA</span>
+              <span className="text-success font-medium">Trong hạn SLA</span>
             </div>
             <div className="divide-y divide-border">
               {myWork.tasks.map((task) => (
@@ -97,11 +97,11 @@ export function MyWorkHealthyState({
                       <span className="font-mono text-xs font-semibold text-primary group-hover:underline">
                         {task.jiraKey}
                       </span>
-                      <Badge variant="secondary" className="text-[11px] font-normal">
+                      <Badge variant="secondary" className="text-2xs font-normal">
                         {task.status}
                       </Badge>
                       {task.points != null && (
-                        <span className="text-[11px] font-mono text-muted-foreground">
+                        <span className="text-2xs font-mono text-muted-foreground">
                           {task.points}pt
                         </span>
                       )}
@@ -111,7 +111,7 @@ export function MyWorkHealthyState({
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full">
+                    <span className="text-xs font-medium text-success bg-success/10 px-2.5 py-1 rounded-full">
                       Đang chạy tốt
                     </span>
                     <ChevronRight

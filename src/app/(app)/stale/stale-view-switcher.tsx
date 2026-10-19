@@ -7,9 +7,9 @@ import { TEAM_VIEW_ENABLED } from "./lib/stale-flags";
 type CountTone = "warning" | "danger" | "success" | "muted";
 
 const COUNT_TONES: Record<CountTone, string> = {
-  warning: "bg-amber-500/20 text-amber-700 dark:text-amber-400",
-  danger: "bg-red-500/20 text-red-700 dark:text-red-400",
-  success: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400",
+  warning: "bg-warning/20 text-warning",
+  danger: "bg-destructive/20 text-destructive",
+  success: "bg-success/20 text-success",
   muted: "bg-muted text-muted-foreground",
 };
 
@@ -41,7 +41,7 @@ function SegmentButton({
       {icon}
       {label}
       {count !== undefined && (
-        <span className={cn("ml-1 rounded-full px-1.5 text-[10px] font-semibold leading-4 tabular-nums", COUNT_TONES[tone])}>
+        <span className={cn("ml-1 rounded-full px-1.5 text-2xs font-semibold leading-4 tabular-nums", COUNT_TONES[tone])}>
           {count}
         </span>
       )}

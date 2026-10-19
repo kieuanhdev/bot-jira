@@ -89,7 +89,7 @@ export function QuickPointsEditor({ jiraKey }: { jiraKey: string }) {
         </button>
       </div>
       {error && (
-        <p className="mt-1 max-w-40 text-[11px] leading-4 text-destructive" role="alert">
+        <p className="mt-1 max-w-40 text-2xs leading-4 text-destructive" role="alert">
           {error}
         </p>
       )}
@@ -147,7 +147,7 @@ export function QuickFixVersionSelect({ jiraKey }: { jiraKey: string }) {
         </SelectContent>
       </Select>
       {error && (
-        <p className="mt-1 max-w-40 text-[11px] leading-4 text-destructive" role="alert">
+        <p className="mt-1 max-w-40 text-2xs leading-4 text-destructive" role="alert">
           {error}
         </p>
       )}

@@ -25,10 +25,10 @@ const FOCUS_CHIPS: {
   icon: typeof ShieldAlert;
   tone: string;
 }[] = [
-  { mode: "high", label: "Khẩn cấp", hint: "Mức độ cao, cần xác nhận chủ sở hữu và bước tiếp theo ngay.", icon: ShieldAlert, tone: "text-red-700 dark:text-red-400" },
-  { mode: "blocked", label: "Đang bị chặn", hint: "Không thể tiến triển nếu phụ thuộc hoặc quyết định chưa được tháo gỡ.", icon: Lock, tone: "text-red-700 dark:text-red-400" },
-  { mode: "overdue", label: "Đã quá hạn", hint: "Đã vượt hạn bàn giao, cần thương lượng lại phạm vi hoặc thời hạn.", icon: CalendarX, tone: "text-amber-700 dark:text-amber-400" },
-  { mode: "unassigned", label: "Chưa phân công", hint: "Chưa có người chịu trách nhiệm nên nguy cơ tiếp tục già hóa cao.", icon: UserRoundX, tone: "text-amber-700 dark:text-amber-400" },
+  { mode: "high", label: "Khẩn cấp", hint: "Mức độ cao, cần xác nhận chủ sở hữu và bước tiếp theo ngay.", icon: ShieldAlert, tone: "text-destructive" },
+  { mode: "blocked", label: "Đang bị chặn", hint: "Không thể tiến triển nếu phụ thuộc hoặc quyết định chưa được tháo gỡ.", icon: Lock, tone: "text-destructive" },
+  { mode: "overdue", label: "Đã quá hạn", hint: "Đã vượt hạn bàn giao, cần thương lượng lại phạm vi hoặc thời hạn.", icon: CalendarX, tone: "text-warning" },
+  { mode: "unassigned", label: "Chưa phân công", hint: "Chưa có người chịu trách nhiệm nên nguy cơ tiếp tục già hóa cao.", icon: UserRoundX, tone: "text-warning" },
 ];
 
 /** One-line lens chips (replaces four large cards); picking one narrows the queue and the list below. */
@@ -62,7 +62,7 @@ export function StaleFocusSection({
           >
             <Icon className={cn("h-3.5 w-3.5", tone)} aria-hidden />
             {label}
-            <span className="rounded-full bg-muted px-1.5 text-[10px] font-semibold leading-4 tabular-nums">
+            <span className="rounded-full bg-muted px-1.5 text-2xs font-semibold leading-4 tabular-nums">
               {focusCounts[mode]}
             </span>
           </button>

@@ -59,11 +59,11 @@ export function StdMobileCard({
           >
             {task.jiraKey}
           </Link>
-          <Badge variant="secondary" className="text-[11px]">
+          <Badge variant="secondary" className="text-2xs">
             {task.status}
           </Badge>
         </div>
-        <Badge variant="outline" className="text-[10px]">
+        <Badge variant="outline" className="text-2xs">
           {policyLabel(task.policyId)}
         </Badge>
       </div>
@@ -77,7 +77,7 @@ export function StdMobileCard({
           <Badge
             key={req}
             variant="danger"
-            className="text-[10px] flex items-center gap-1 font-normal"
+            className="text-2xs flex items-center gap-1 font-normal"
           >
             <X className="h-3 w-3" aria-hidden />
             {req === "ESTIMATION"
@@ -102,17 +102,17 @@ export function StdMobileCard({
       {/* Secondary operational signals */}
       <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
         {task.isStale && (
-          <Badge variant="warning" className="text-[10px]">
+          <Badge variant="warning" className="text-2xs">
             Ngâm {task.stateAgeDays}/{task.slaDays} ngày
           </Badge>
         )}
         {task.overdueDays > 0 && (
-          <Badge variant="danger" className="text-[10px]">
+          <Badge variant="danger" className="text-2xs">
             Quá hạn {task.overdueDays} ngày
           </Badge>
         )}
         {task.isBlocked && (
-          <Badge variant="danger" className="text-[10px]">
+          <Badge variant="danger" className="text-2xs">
             Bị chặn
           </Badge>
         )}

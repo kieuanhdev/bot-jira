@@ -69,14 +69,14 @@ export function StdTaskRow({
           >
             {task.jiraKey}
           </Link>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-2xs text-muted-foreground">
             {task.projectKey} · {task.type} · {policyLabel(task.policyId)}
           </span>
         </div>
         <p className="mt-1 line-clamp-2 text-sm font-medium text-foreground group-hover:text-primary transition-colors">
           {task.summary || "Task chưa đặt tên"}
         </p>
-        <Badge variant="secondary" className="mt-1.5 text-[11px]">
+        <Badge variant="secondary" className="mt-1.5 text-2xs">
           {task.status}
         </Badge>
       </td>
@@ -91,7 +91,7 @@ export function StdTaskRow({
                 <div className="space-y-1">
                   <Badge
                     variant="danger"
-                    className="text-[10px] w-full justify-start font-normal"
+                    className="text-2xs w-full justify-start font-normal"
                   >
                     <X className="h-3 w-3 mr-1 shrink-0" aria-hidden />{" "}
                     {estimationLabel}
@@ -103,7 +103,7 @@ export function StdTaskRow({
               ) : (
                 <Badge
                   variant="success"
-                  className="text-[10px] w-full justify-start font-normal"
+                  className="text-2xs w-full justify-start font-normal"
                 >
                   <Check className="h-3 w-3 mr-1 shrink-0" aria-hidden />
                   {task.points
@@ -127,7 +127,7 @@ export function StdTaskRow({
                 >
                   <Badge
                     variant="danger"
-                    className="text-[10px] w-full justify-start font-normal cursor-pointer group-hover/wl:bg-destructive/20 transition-colors"
+                    className="text-2xs w-full justify-start font-normal cursor-pointer group-hover/wl:bg-destructive/20 transition-colors"
                   >
                     <Clock className="h-3 w-3 mr-1 shrink-0" aria-hidden /> Chưa log work
                   </Badge>
@@ -135,7 +135,7 @@ export function StdTaskRow({
               ) : (
                 <Badge
                   variant="success"
-                  className="text-[10px] w-full justify-start font-normal"
+                  className="text-2xs w-full justify-start font-normal"
                 >
                   <Check className="h-3 w-3 mr-1 shrink-0" aria-hidden />
                   {formatTimeSpent(task.timeSpent) ?? "Đã log"}
@@ -151,7 +151,7 @@ export function StdTaskRow({
                 <div className="space-y-1">
                   <Badge
                     variant="danger"
-                    className="text-[10px] w-full justify-start font-normal"
+                    className="text-2xs w-full justify-start font-normal"
                   >
                     <X className="h-3 w-3 mr-1 shrink-0" aria-hidden /> Thiếu FixVer
                   </Badge>
@@ -160,7 +160,7 @@ export function StdTaskRow({
               ) : (
                 <Badge
                   variant="success"
-                  className="text-[10px] w-full justify-start font-normal truncate max-w-32"
+                  className="text-2xs w-full justify-start font-normal truncate max-w-32"
                 >
                   <Check className="h-3 w-3 mr-1 shrink-0" aria-hidden />
                   {task.fixVersionNames[0] ?? "Có FV"}
@@ -175,14 +175,14 @@ export function StdTaskRow({
               {task.missing.includes("DUE_DATE") ? (
                 <Badge
                   variant="danger"
-                  className="text-[10px] w-full justify-start font-normal"
+                  className="text-2xs w-full justify-start font-normal"
                 >
                   <X className="h-3 w-3 mr-1 shrink-0" aria-hidden /> Thiếu Due date
                 </Badge>
               ) : (
                 <Badge
                   variant="success"
-                  className="text-[10px] w-full justify-start font-normal"
+                  className="text-2xs w-full justify-start font-normal"
                 >
                   <Check className="h-3 w-3 mr-1 shrink-0" aria-hidden />
                   {formatDueDate(task.dueDate)}
@@ -197,24 +197,24 @@ export function StdTaskRow({
       <td className="px-3 py-3.5 align-top">
         <div className="space-y-1 text-xs">
           {task.isStale ? (
-            <Badge variant="warning" className="text-[11px] font-normal">
+            <Badge variant="warning" className="text-2xs font-normal">
               Ngâm {task.stateAgeDays}/{task.slaDays} ngày
             </Badge>
           ) : (
-            <span className="text-[11px] text-muted-foreground block">
+            <span className="text-2xs text-muted-foreground block">
               Trong hạn SLA ({task.stateAgeDays}/{task.slaDays}d)
             </span>
           )}
           {task.overdueDays > 0 && (
             <div>
-              <Badge variant="danger" className="text-[11px] font-normal">
+              <Badge variant="danger" className="text-2xs font-normal">
                 Quá hạn {task.overdueDays} ngày
               </Badge>
             </div>
           )}
           {task.isBlocked && (
             <div>
-              <Badge variant="danger" className="text-[11px] font-normal">
+              <Badge variant="danger" className="text-2xs font-normal">
                 Bị chặn
               </Badge>
             </div>

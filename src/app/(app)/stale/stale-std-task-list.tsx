@@ -104,7 +104,7 @@ export function StandardizationTaskList({
         {filteredStdTasks.length === 0 ? (
           incompleteCount === 0 && totalActive > 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-success/10 text-success">
                 <CheckCircle2 className="h-6 w-6" aria-hidden />
               </span>
               <div>
@@ -190,7 +190,7 @@ export function StandardizationTaskList({
                     ))}
                   </tbody>
                 </table>
-                <p className="flex items-center gap-2 border-t bg-muted/20 px-4 py-2 text-[11px] text-muted-foreground">
+                <p className="flex items-center gap-2 border-t bg-muted/20 px-4 py-2 text-2xs text-muted-foreground">
                   <Keyboard className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   <span>
                     <kbd className="font-mono">J</kbd>/<kbd className="font-mono">K</kbd> di chuyển ·{" "}

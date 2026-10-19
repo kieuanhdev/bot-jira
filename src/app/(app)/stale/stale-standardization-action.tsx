@@ -90,7 +90,7 @@ export function BulkStandardizationAction({
 
   if (isMultiProject) {
     return (
-      <div className="flex flex-col gap-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md p-2.5">
+      <div className="flex flex-col gap-1.5 text-xs text-warning bg-warning/10 border border-warning/20 rounded-md p-2.5">
         <span className="font-semibold flex items-center gap-1">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
           Đã chọn task từ {selectedProjects.length} dự án ({selectedProjects.join(", ")})
@@ -100,7 +100,7 @@ export function BulkStandardizationAction({
           <button
             type="button"
             onClick={() => onFilterToSingleProject(selectedProjects[0])}
-            className="cursor-pointer text-left underline font-medium hover:text-amber-800 dark:hover:text-amber-300"
+            className="cursor-pointer text-left underline font-medium text-warning hover:opacity-80"
           >
             Chỉ chọn các task dự án {selectedProjects[0]}
           </button>
@@ -164,7 +164,7 @@ export function BulkStandardizationAction({
               <ListChecks className="h-4 w-4 text-primary shrink-0" aria-hidden />
               <div>
                 <p className="font-medium text-xs">Cập nhật trường dữ liệu</p>
-                <p className="text-[11px] text-muted-foreground">Points, Estimate, Due date, Fix Version...</p>
+                <p className="text-2xs text-muted-foreground">Points, Estimate, Due date, Fix Version...</p>
               </div>
             </Link>
           </DropdownMenuItem>
@@ -175,10 +175,10 @@ export function BulkStandardizationAction({
               href={`/bulk?${projectParam}keys=${worklogKeysCsv}&action=log-work&returnTo=standardization`}
               className="flex items-center gap-2"
             >
-              <Clock className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" aria-hidden />
+              <Clock className="h-4 w-4 text-success shrink-0" aria-hidden />
               <div>
                 <p className="font-medium text-xs">Ghi Worklog hàng loạt</p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-2xs text-muted-foreground">
                   Ghi thời gian cho {selectedTasksList.filter((t) => t.missing.includes("WORKLOG")).length} task thiếu worklog
                 </p>
               </div>
