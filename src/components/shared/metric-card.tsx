@@ -12,12 +12,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 export type MetricTone = "neutral" | "primary" | "info" | "success" | "warning" | "danger";
 
 const toneChip: Record<MetricTone, string> = {
-  neutral: "bg-muted/40 text-muted-foreground",
-  primary: "bg-primary/10 text-primary",
-  info: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
-  success: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  danger: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+  neutral: "bg-muted text-muted-foreground",
+  primary: "bg-primary-soft text-primary-soft-foreground",
+  info: "bg-info/12 text-info",
+  success: "bg-success/12 text-success",
+  warning: "bg-warning/12 text-warning",
+  danger: "bg-destructive/12 text-destructive",
 };
 
 export type MetricCardProps = {
@@ -69,9 +69,9 @@ export function MetricCard({
           : undefined
       }
       className={cn(
-        "flex h-full flex-col justify-between rounded-lg border bg-card p-4 text-left transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+        "flex h-full flex-col justify-between rounded-xl border bg-card p-4 text-left shadow-[var(--shadow-card)] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
         interactive && "cursor-pointer hover:-translate-y-0.5 hover:shadow-md",
-        selected ? "border-primary bg-primary/5 ring-2 ring-primary/40" : "border-border",
+        selected ? "border-primary bg-primary-soft ring-2 ring-primary" : "border-border",
         interactive && !selected && "hover:border-primary/40",
         className
       )}
@@ -86,12 +86,12 @@ export function MetricCard({
       </div>
       <div className="mt-1">
         {loading ? (
-          <Skeleton className="h-7 w-16" />
+          <Skeleton className="h-8 w-16" />
         ) : (
-          <div className="text-2xl font-bold tracking-tight text-foreground tabular-nums">{value}</div>
+          <div className="text-3xl font-bold tracking-tight text-foreground tabular-nums">{value}</div>
         )}
         {description ? (
-          <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">{description}</p>
+          <p className="mt-0.5 line-clamp-1 text-2xs text-muted-foreground">{description}</p>
         ) : null}
       </div>
     </div>

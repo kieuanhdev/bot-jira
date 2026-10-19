@@ -167,7 +167,7 @@ export function AssigneeCombobox({
                   />
                   <div className="flex flex-col overflow-hidden">
                     <span className="truncate leading-tight">{user.displayName}</span>
-                    <span className="text-[10px] text-muted-foreground leading-tight">@{user.username}</span>
+                    <span className="text-2xs text-muted-foreground leading-tight">@{user.username}</span>
                   </div>
                 </li>
               ))}

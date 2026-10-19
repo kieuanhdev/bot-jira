@@ -66,7 +66,7 @@ export function EmptyState({
         <h3
           className={cn(
             "font-semibold text-foreground",
-            isCompact ? "text-xs" : "text-sm"
+            isCompact ? "text-sm" : "text-base"
           )}
         >
           {title}
@@ -75,7 +75,7 @@ export function EmptyState({
           <p
             className={cn(
               "mx-auto text-muted-foreground",
-              isCompact ? "max-w-xs text-[11px]" : "max-w-sm text-xs"
+              isCompact ? "max-w-xs text-2xs" : "max-w-sm text-xs"
             )}
           >
             {bodyText}

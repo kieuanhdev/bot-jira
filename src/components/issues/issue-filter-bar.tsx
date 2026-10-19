@@ -350,14 +350,14 @@ export function IssueFilterBar({
             onClick={() => setMoreOpen((open) => !open)}
             aria-expanded={moreOpen || extraActiveCount > 0}
             className={cn(
-              "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors",
-              extraActiveCount > 0 ? "border-primary/40 bg-primary/5 text-foreground" : "border-input bg-background hover:bg-accent/40"
+              "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors",
+              extraActiveCount > 0 ? "border-primary/40 bg-primary-soft text-primary-soft-foreground font-semibold" : "border-input bg-card hover:bg-accent/40"
             )}
           >
-            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+            <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
             Bộ lọc khác
             {extraActiveCount > 0 && (
-              <span className="rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary">{extraActiveCount}</span>
+              <span className="rounded-full bg-primary-soft-foreground/20 px-1.5 py-0.5 text-2xs font-semibold text-primary-soft-foreground">{extraActiveCount}</span>
             )}
           </button>
         )}

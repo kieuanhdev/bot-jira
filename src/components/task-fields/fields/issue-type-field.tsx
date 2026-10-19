@@ -51,7 +51,7 @@ export function IssueTypeField({
       <SelectTrigger
         className={`cursor-pointer ${className ?? "h-8 text-xs"} ${
           hasNoSelection
-            ? "border-amber-500/40 bg-amber-500/5"
+            ? "border-warning/40 bg-warning/10"
             : value
               ? ""
               : "text-muted-foreground"

@@ -219,14 +219,14 @@ export function AssigneeFilter({
 
             {extraCount > 0 && (
               <Badge
-                variant="secondary"
-                className="h-4 px-1 text-[10px] font-semibold bg-primary/15 text-primary rounded-full shrink-0"
+                variant="primary-soft"
+                className="px-1.5 py-0 text-2xs font-semibold rounded-full shrink-0"
               >
                 +{extraCount}
               </Badge>
             )}
 
-            <ChevronDown className="h-3.5 w-3.5 opacity-50 shrink-0 ml-0.5" aria-hidden="true" />
+            <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ml-0.5" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
 
@@ -291,7 +291,7 @@ export function AssigneeFilter({
               <button
                 type="button"
                 onClick={handleClear}
-                className="text-[11px] text-muted-foreground hover:text-destructive transition-colors cursor-pointer px-1 py-0.5"
+                className="text-2xs text-muted-foreground hover:text-destructive transition-colors cursor-pointer px-1 py-0.5"
               >
                 Đặt lại
               </button>
@@ -342,7 +342,7 @@ export function AssigneeFilter({
             )}
 
             {filteredAssignees.length > 0 && (
-              <DropdownMenuLabel className="px-2 py-1 text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
+              <DropdownMenuLabel className="px-2 py-1 text-2xs text-muted-foreground font-medium uppercase tracking-wider">
                 Thành viên ({filteredAssignees.length})
               </DropdownMenuLabel>
             )}
@@ -364,7 +364,7 @@ export function AssigneeFilter({
                     {opt.label ?? opt.value}
                   </span>
                   {opt.count != null && (
-                    <span className="text-[10px] text-muted-foreground font-mono">
+                    <span className="text-2xs text-muted-foreground font-mono">
                       {opt.count}
                     </span>
                   )}
@@ -380,7 +380,7 @@ export function AssigneeFilter({
           </div>
 
           {/* Footer */}
-          <div className="px-2.5 py-1.5 border-t border-border/60 text-[11px] text-muted-foreground flex justify-between items-center bg-muted/10">
+          <div className="px-2.5 py-1.5 border-t border-border/60 text-2xs text-muted-foreground flex justify-between items-center bg-muted/10">
             <span>
               {isAll
                 ? "Đang hiển thị tất cả"
@@ -389,7 +389,7 @@ export function AssigneeFilter({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="text-[11px] font-medium text-primary hover:underline cursor-pointer"
+              className="text-2xs font-medium text-primary hover:underline cursor-pointer"
             >
               Xong
             </button>

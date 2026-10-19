@@ -18,20 +18,20 @@ function RelationRow({ issue, label }: { issue: RelatedIssue; label?: string }) 
     >
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
-          {label && <span className="shrink-0 text-[11px] text-muted-foreground">{label}</span>}
+          {label && <span className="shrink-0 text-2xs text-muted-foreground">{label}</span>}
           <span className="shrink-0 font-mono text-xs font-semibold text-primary">{issue.jiraKey}</span>
           {issue.status && (
-            <Badge variant="outline" className="h-5 min-w-0 max-w-28 truncate px-1.5 text-[10px] font-medium">
+            <Badge variant="outline" className="h-5 min-w-0 max-w-28 truncate px-1.5 text-2xs font-medium">
               {issue.status}
             </Badge>
           )}
         </div>
-        <p className="mt-0.5 truncate text-xs text-foreground">
+        <p className="mt-0.5 truncate text-sm text-foreground">
           {issue.summary || issue.type || "Mở task để xem chi tiết"}
         </p>
       </div>
       <ArrowUpRight
-        className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-colors duration-150 group-hover:text-primary"
+        className="h-4 w-4 shrink-0 text-muted-foreground transition-colors duration-150 group-hover:text-primary"
         aria-hidden="true"
       />
     </Link>
@@ -43,9 +43,9 @@ function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex cursor-pointer items-center gap-1 text-[11px] font-medium normal-case tracking-normal text-primary transition-colors duration-150 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex cursor-pointer items-center gap-1 text-xs font-medium normal-case tracking-normal text-primary transition-colors duration-150 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <Plus className="h-3 w-3" aria-hidden="true" /> {label}
+      <Plus className="h-3.5 w-3.5" aria-hidden="true" /> {label}
     </button>
   );
 }
@@ -67,7 +67,7 @@ function RelationGroup({
   if (issues.length === 0 && !action) return null;
   return (
     <div>
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="mb-1.5 flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
         {icon}
         <span>{title}</span>
         {issues.length > 0 && <span className="tabular-nums">({issues.length})</span>}
@@ -154,9 +154,9 @@ export function IssueRelations({
     <section className={cn(className)} aria-labelledby="work-relations-title">
       <div className="mb-3 flex items-center gap-2">
         <Network className="h-4 w-4 text-primary" aria-hidden="true" />
-        <h3 id="work-relations-title" className="text-sm font-semibold">Liên kết công việc</h3>
+        <h3 id="work-relations-title" className="text-base font-semibold">Liên kết công việc</h3>
         {relationCount > 0 && (
-          <Badge variant="secondary" className="h-5 px-1.5 text-[10px] tabular-nums">
+          <Badge variant="secondary" className="h-5 px-1.5 text-2xs tabular-nums">
             {relationCount}
           </Badge>
         )}
@@ -185,31 +185,31 @@ export function IssueRelations({
             <Link2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           </span>
           <div>
-            <p className="text-xs font-medium">Chưa có task liên quan</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">Epic, task con và issue links từ Jira sẽ hiện ở đây.</p>
+            <p className="text-sm font-medium">Chưa có task liên quan</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Epic, task con và issue links từ Jira sẽ hiện ở đây.</p>
           </div>
         </div>
       ) : (
         <div className="space-y-3">
           <RelationGroup
-            icon={<Layers3 className="h-3.5 w-3.5" aria-hidden="true" />}
+            icon={<Layers3 className="h-4 w-4" aria-hidden="true" />}
             title="Epic"
             issues={[relationships?.epic].filter((issue): issue is RelatedIssue => Boolean(issue))}
           />
           <RelationGroup
-            icon={<GitFork className="h-3.5 w-3.5" aria-hidden="true" />}
+            icon={<GitFork className="h-4 w-4" aria-hidden="true" />}
             title="Task cha"
             issues={[relationships?.parent].filter((issue): issue is RelatedIssue => Boolean(issue))}
           />
           <RelationGroup
-            icon={<GitFork className="h-3.5 w-3.5" aria-hidden="true" />}
+            icon={<GitFork className="h-4 w-4" aria-hidden="true" />}
             title="Task con"
             issues={relationships?.children ?? []}
             action={childAction}
             emptyHint={isEpic ? "Chưa có task nào trong Epic này." : "Chưa có sub-task."}
           />
           <RelationGroup
-            icon={<Link2 className="h-3.5 w-3.5" aria-hidden="true" />}
+            icon={<Link2 className="h-4 w-4" aria-hidden="true" />}
             title="Issue links"
             issues={relationships?.links ?? []}
             action={linkAction}

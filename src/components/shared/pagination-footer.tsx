@@ -33,7 +33,7 @@ export function PaginationFooter({
   return (
     <div
       className={cn(
-        "flex items-center justify-between text-xs text-muted-foreground pt-3",
+        "flex items-center justify-between text-sm text-muted-foreground pt-3",
         className
       )}
     >
@@ -53,25 +53,25 @@ export function PaginationFooter({
           type="button"
           variant="outline"
           size="sm"
-          className="h-8 px-2.5 text-xs cursor-pointer disabled:cursor-not-allowed gap-1"
+          className="h-9 px-3 text-xs cursor-pointer disabled:cursor-not-allowed gap-1"
           disabled={disabled || isFirst}
           onClick={() => onPageChange(page - 1)}
           aria-label="Trang trước"
         >
-          <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           <span>Trước</span>
         </Button>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="h-8 px-2.5 text-xs cursor-pointer disabled:cursor-not-allowed gap-1"
+          className="h-9 px-3 text-xs cursor-pointer disabled:cursor-not-allowed gap-1"
           disabled={disabled || isLast}
           onClick={() => onPageChange(page + 1)}
           aria-label="Trang sau"
         >
           <span>Sau</span>
-          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
     </div>

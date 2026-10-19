@@ -160,21 +160,21 @@ export function LinkIssueDialog({
             />
 
             {effectiveTarget && (
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-2xs text-muted-foreground">
                 Sẽ liên kết với{" "}
                 <span className="font-mono font-semibold text-foreground">{effectiveTarget}</span>
               </p>
             )}
 
             {targetKey ? null : trimmedQuery.length < 2 ? (
-              <p className="text-[11px] text-muted-foreground">Nhập ít nhất 2 ký tự để tìm.</p>
+              <p className="text-2xs text-muted-foreground">Nhập ít nhất 2 ký tự để tìm.</p>
             ) : searching ? (
               <div className="flex flex-col gap-1.5">
                 <Skeleton className="h-8 w-full" />
                 <Skeleton className="h-8 w-full" />
               </div>
             ) : hits.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-2xs text-muted-foreground">
                 Không tìm thấy task nào khớp trong dữ liệu đã đồng bộ.
               </p>
             ) : (
@@ -189,7 +189,7 @@ export function LinkIssueDialog({
                         setQuery(hit.jiraKey);
                       }}
                       className={cn(
-                        "flex w-full cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors duration-150 hover:bg-accent",
+                        "flex w-full cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left text-sm transition-colors duration-150 hover:bg-accent",
                         hit.jiraKey === effectiveTarget && "bg-accent"
                       )}
                     >
@@ -197,7 +197,7 @@ export function LinkIssueDialog({
                       <span className="min-w-0 flex-1 truncate text-muted-foreground">
                         {hit.summary}
                       </span>
-                      <span className="shrink-0 text-[10px] text-muted-foreground">{hit.status}</span>
+                      <span className="shrink-0 text-2xs text-muted-foreground">{hit.status}</span>
                     </button>
                   </li>
                 ))}

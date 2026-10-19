@@ -16,10 +16,10 @@ export interface JiraAvatarProps {
 }
 
 const SIZE_MAP = {
-  xs: "h-4 w-4 text-[8px]",
-  sm: "h-5 w-5 text-[10px]",
-  md: "h-6 w-6 text-xs",
-  lg: "h-8 w-8 text-sm",
+  xs: "h-5 w-5 text-[9px]",
+  sm: "h-6 w-6 text-2xs",
+  md: "h-7 w-7 text-xs",
+  lg: "h-9 w-9 text-sm",
   xl: "h-12 w-12 text-base",
 };
 
@@ -32,10 +32,10 @@ const JIRA_SIZE_MAP = {
 };
 
 const DIMENSION_MAP: Record<"xs" | "sm" | "md" | "lg" | "xl", number> = {
-  xs: 16,
-  sm: 20,
-  md: 24,
-  lg: 32,
+  xs: 20,
+  sm: 24,
+  md: 28,
+  lg: 36,
   xl: 48,
 };
 

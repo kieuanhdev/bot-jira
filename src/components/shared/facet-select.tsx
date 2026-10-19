@@ -60,7 +60,7 @@ export function FacetSelect<T extends string = string>({
         aria-label={ariaLabel}
         className={cn(
           "h-9 cursor-pointer gap-1 px-2.5 text-xs transition-colors",
-          !isAll && "border-primary/40 bg-primary/5 font-medium text-foreground",
+          !isAll && "border-primary/40 bg-primary-soft font-medium text-foreground",
           className
         )}
       >
@@ -69,18 +69,18 @@ export function FacetSelect<T extends string = string>({
         </SelectValue>
       </SelectTrigger>
       <SelectContent className="max-h-72">
-        <SelectItem value={allValue} className="cursor-pointer text-xs">
+        <SelectItem value={allValue} className="cursor-pointer text-sm">
           {allLabel}
         </SelectItem>
         {options.map((opt) => (
           <SelectItem
             key={opt.value}
             value={opt.value}
-            className="cursor-pointer text-xs"
+            className="cursor-pointer text-sm"
           >
             <span>{opt.label}</span>
             {typeof opt.count === "number" && (
-              <span className="ml-1 text-[10px] text-muted-foreground tabular-nums">
+              <span className="ml-1 text-2xs text-muted-foreground tabular-nums">
                 ({opt.count})
               </span>
             )}

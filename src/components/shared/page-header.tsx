@@ -53,11 +53,11 @@ export function PageHeader({
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
             {Icon ? (
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary-soft-foreground">
+                <Icon className="h-5 w-5 text-current" aria-hidden="true" />
               </span>
             ) : null}
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
             {badge}
             {meta ? <span className="text-xs text-muted-foreground">{meta}</span> : null}
           </div>

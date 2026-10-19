@@ -35,7 +35,7 @@ function ImageTile({
       >
         <div className="flex min-h-24 items-center justify-center bg-muted/40 p-1">
           {failed ? (
-            <span className="flex flex-col items-center gap-1 py-4 text-[11px] text-muted-foreground">
+            <span className="flex flex-col items-center gap-1 py-4 text-2xs text-muted-foreground">
               <ImageOff className="h-5 w-5" aria-hidden="true" />
               Không tải được ảnh
             </span>
@@ -51,8 +51,8 @@ function ImageTile({
           )}
         </div>
         <div className="px-2 py-1.5">
-          <p className="truncate text-xs font-medium">{item.filename}</p>
-          <p className="truncate text-[11px] text-muted-foreground">
+          <p className="truncate text-sm font-medium">{item.filename}</p>
+          <p className="truncate text-2xs text-muted-foreground">
             {formatBytes(item.size)}
             {item.created ? ` · ${formatDateTime(item.created)}` : ""}
           </p>
@@ -73,15 +73,15 @@ function FileRow({ issueKey, item }: { issueKey: string; item: AttachmentItem })
       >
         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-xs font-medium">{item.filename}</span>
-          <span className="block truncate text-[11px] text-muted-foreground">
+          <span className="block truncate text-sm font-medium">{item.filename}</span>
+          <span className="block truncate text-2xs text-muted-foreground">
             {formatBytes(item.size)}
             {item.author ? ` · ${item.author}` : ""}
             {item.created ? ` · ${formatDateTime(item.created)}` : ""}
           </span>
         </span>
         <Download
-          className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-colors duration-150 group-hover:text-primary"
+          className="h-4 w-4 shrink-0 text-muted-foreground transition-colors duration-150 group-hover:text-primary"
           aria-hidden="true"
         />
       </a>
@@ -131,8 +131,8 @@ export function IssueAttachments({ jiraKey, className }: { jiraKey: string; clas
             <Paperclip className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           </span>
           <div>
-            <p className="text-xs font-medium">Chưa có tệp đính kèm</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">Ảnh và file đính kèm trên Jira sẽ hiện ở đây.</p>
+            <p className="text-sm font-medium">Chưa có tệp đính kèm</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Ảnh và file đính kèm trên Jira sẽ hiện ở đây.</p>
           </div>
         </div>
       ) : (

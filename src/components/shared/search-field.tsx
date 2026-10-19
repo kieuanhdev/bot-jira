@@ -49,7 +49,7 @@ export function SearchField({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        className="h-9 pl-8 pr-8 text-xs"
+        className="h-10 pl-9 pr-8 text-sm"
       />
       {value ? (
         <button

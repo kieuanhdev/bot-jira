@@ -35,9 +35,9 @@ export function FilterBar({ children, actions, activeCount, onReset, className }
             variant="ghost"
             size="sm"
             onClick={onReset}
-            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            className="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
-            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            <RotateCcw className="h-4 w-4" aria-hidden="true" />
             Xóa lọc ({activeCount})
           </Button>
         ) : null}

@@ -363,7 +363,7 @@ export function TaskCreateDialog({
       )}
 
       <div className="flex items-center justify-between gap-3">
-        <p className="min-w-0 truncate text-[11px] text-muted-foreground">
+        <p className="min-w-0 truncate text-2xs text-muted-foreground">
           {!busy && check && !check.ok ? check.reason : null}
         </p>
         <div className="flex shrink-0 items-center gap-2">

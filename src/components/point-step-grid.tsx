@@ -32,19 +32,19 @@ export function PointStepGrid({
               key={p}
               variant={value === p ? "default" : "outline"}
               size="sm"
-              className={cn("relative h-7 px-0 text-xs", isAi && value !== p && "border-primary/60 text-primary")}
+              className={cn("relative h-8 px-0 text-xs", isAi && value !== p && "border-primary/60 text-primary")}
               title={isAi ? "AI gợi ý điểm này" : undefined}
               onClick={() => onChange(p)}
             >
               {p}
-              {isAi && <Sparkles className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 text-primary" aria-hidden />}
+              {isAi && <Sparkles className="absolute -right-0.5 -top-0.5 h-3 w-3 text-primary" aria-hidden="true" />}
             </Button>
           );
         })}
       </div>
       {aiPoints != null && (
-        <div className="flex items-center gap-1 px-2 pb-1 text-[11px] text-muted-foreground">
-          <Sparkles className="h-3 w-3 text-primary" aria-hidden />
+        <div className="flex items-center gap-1 px-2 pb-1 text-2xs text-muted-foreground">
+          <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
           AI gợi ý: <span className="font-semibold text-foreground">{aiPoints}</span>
         </div>
       )}

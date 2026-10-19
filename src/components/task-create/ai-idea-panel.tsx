@@ -146,7 +146,7 @@ export function AiIdeaPanel({ projectKey, current, disabled, onApply }: AiIdeaPa
             className="resize-y bg-background"
           />
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-2xs text-muted-foreground">
               {idea.length}/{MAX_IDEA_LENGTH}
             </span>
             <Button

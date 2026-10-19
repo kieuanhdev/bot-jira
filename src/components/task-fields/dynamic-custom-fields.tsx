@@ -133,11 +133,11 @@ export function DynamicCustomFields({
       return (
         <div key={field.id} className="space-y-1">
           <div className="flex items-center justify-between">
-            <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
+            <Label className="text-2xs font-medium text-foreground flex items-center gap-1">
               <span>{field.name}</span>
               {field.required && <span className="text-destructive">*</span>}
               {isUsingDefault && (
-                <span className="text-[10px] text-muted-foreground font-normal">(mặc định)</span>
+                <span className="text-2xs text-muted-foreground font-normal">(mặc định)</span>
               )}
             </Label>
           </div>
@@ -167,11 +167,11 @@ export function DynamicCustomFields({
       return (
         <div key={field.id} className="space-y-1">
           <div className="flex items-center justify-between">
-            <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
+            <Label className="text-2xs font-medium text-foreground flex items-center gap-1">
               <span>{field.name}</span>
               {field.required && <span className="text-destructive">*</span>}
               {isUsingDefault && (
-                <span className="text-[10px] text-muted-foreground font-normal">(mặc định)</span>
+                <span className="text-2xs text-muted-foreground font-normal">(mặc định)</span>
               )}
             </Label>
           </div>
@@ -196,11 +196,11 @@ export function DynamicCustomFields({
       return (
         <div key={field.id} className="space-y-1">
           <div className="flex items-center justify-between">
-            <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
+            <Label className="text-2xs font-medium text-foreground flex items-center gap-1">
               <span>{field.name}</span>
               {field.required && <span className="text-destructive">*</span>}
               {isUsingDefault && (
-                <span className="text-[10px] text-muted-foreground font-normal">(mặc định)</span>
+                <span className="text-2xs text-muted-foreground font-normal">(mặc định)</span>
               )}
             </Label>
           </div>
@@ -220,11 +220,11 @@ export function DynamicCustomFields({
     return (
       <div key={field.id} className="space-y-1">
         <div className="flex items-center justify-between">
-          <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
+          <Label className="text-2xs font-medium text-foreground flex items-center gap-1">
             <span>{field.name}</span>
             {field.required && <span className="text-destructive">*</span>}
             {isUsingDefault && (
-              <span className="text-[10px] text-muted-foreground font-normal">(mặc định)</span>
+              <span className="text-2xs text-muted-foreground font-normal">(mặc định)</span>
             )}
           </Label>
         </div>
@@ -247,7 +247,7 @@ export function DynamicCustomFields({
           <Sliders className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
           <span>Trường mở rộng (Custom Fields)</span>
           {requiredFields.length > 0 && (
-            <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+            <span className="rounded bg-warning/15 px-1.5 py-0.5 text-2xs font-medium text-warning">
               {requiredFields.length} bắt buộc
             </span>
           )}
@@ -258,7 +258,7 @@ export function DynamicCustomFields({
             variant="ghost"
             size="sm"
             onClick={() => setShowOptional(!showOptional)}
-            className="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-foreground gap-1"
+            className="h-7 px-1.5 text-2xs text-muted-foreground hover:text-foreground gap-1"
           >
             {showOptional ? (
               <>

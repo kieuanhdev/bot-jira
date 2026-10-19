@@ -26,7 +26,7 @@ export function ShowMoreFooter({
 
   return (
     <div className={cn("flex flex-col items-center gap-2 border-t px-6 py-4", className)}>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Đang hiển thị {shown} trên {totalCount} {unit}
       </p>
       <Button

@@ -5,18 +5,18 @@ import { cn } from "@/lib/utils";
 export type FeedbackTone = "info" | "success" | "warning" | "destructive";
 
 const TONE: Record<FeedbackTone, { box: string; icon: string; Icon: ComponentType<{ className?: string }> }> = {
-  info: { box: "border-primary/30 bg-primary/10", icon: "text-primary", Icon: Info },
+  info: { box: "border-info/30 bg-info/12 text-info", icon: "text-info", Icon: Info },
   success: {
-    box: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-    icon: "text-emerald-600 dark:text-emerald-400",
+    box: "border-success/30 bg-success/12 text-success",
+    icon: "text-success",
     Icon: CheckCircle2,
   },
   warning: {
-    box: "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300",
-    icon: "text-amber-600 dark:text-amber-400",
+    box: "border-warning/30 bg-warning/12 text-warning",
+    icon: "text-warning",
     Icon: CircleAlert,
   },
-  destructive: { box: "border-destructive/30 bg-destructive/10 text-destructive", icon: "text-destructive", Icon: TriangleAlert },
+  destructive: { box: "border-destructive/30 bg-destructive/12 text-destructive", icon: "text-destructive", Icon: TriangleAlert },
 };
 
 export type FeedbackBannerProps = {

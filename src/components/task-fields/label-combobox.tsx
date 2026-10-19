@@ -130,7 +130,7 @@ export function LabelCombobox({
         <Badge
           key={label}
           variant="secondary"
-          className="gap-1 rounded px-1.5 py-0 text-[10px] font-medium"
+          className="gap-1 rounded px-1.5 py-0 text-2xs font-medium"
         >
           <Tag className="h-2.5 w-2.5" aria-hidden="true" />
           {label}
@@ -192,7 +192,7 @@ export function LabelCombobox({
                   <Tag className="h-3 w-3 text-muted-foreground shrink-0" aria-hidden="true" />
                   <span className="truncate">{s}</span>
                   {s === inputValue.trim() && (
-                    <span className="ml-auto text-[10px] text-muted-foreground">Tạo mới</span>
+                    <span className="ml-auto text-2xs text-muted-foreground">Tạo mới</span>
                   )}
                 </li>
               ))}

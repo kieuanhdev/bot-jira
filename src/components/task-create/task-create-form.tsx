@@ -65,9 +65,9 @@ function FieldBlock({
         {required && <span className="ml-1 text-destructive">*</span>}
       </Label>
       {children}
-      {hint && !error && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+      {hint && !error && <p className="text-2xs text-muted-foreground">{hint}</p>}
       {error && (
-        <p role="alert" className="text-[11px] text-destructive">
+        <p role="alert" className="text-2xs text-destructive">
           {error}
         </p>
       )}
@@ -251,7 +251,7 @@ export function TaskCreateForm({
           showLayoutToggles={false}
         />
         {fieldErrors.description && (
-          <p role="alert" className="text-[11px] text-destructive">
+          <p role="alert" className="text-2xs text-destructive">
             {fieldErrors.description}
           </p>
         )}

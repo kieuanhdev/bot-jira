@@ -70,7 +70,7 @@ export function LogWorkDialog({
                   : "Chưa ghi nhận (0m)"}
               </span>
             </div>
-            <div className="text-[11px] text-muted-foreground pt-1 border-t">
+            <div className="text-2xs text-muted-foreground pt-1 border-t">
               * Không thay đổi Remaining Estimate (adjustEstimate = leave).
             </div>
           </div>
@@ -90,9 +90,9 @@ export function LogWorkDialog({
               value={logTimeSpent}
               onChange={(e) => onLogTimeSpentChange(e.target.value)}
               disabled={submitting}
-              className="h-9 text-sm font-mono"
+              className="h-10 text-sm font-mono"
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               Cú pháp Jira: <strong>m</strong> (phút), <strong>h</strong> (giờ), <strong>d</strong> (ngày = 8h), <strong>w</strong> (tuần = 5d).
             </p>
           </div>
@@ -106,9 +106,9 @@ export function LogWorkDialog({
               value={logStartedAt}
               onChange={(e) => onLogStartedAtChange(e.target.value)}
               disabled={submitting}
-              className="h-9 text-sm"
+              className="h-10 text-sm"
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               Theo giờ địa phương trình duyệt. Không chọn tương lai quá 5 phút.
             </p>
           </div>
@@ -116,7 +116,7 @@ export function LogWorkDialog({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs">
               <span className="font-semibold text-foreground">Ghi chú (Tùy chọn)</span>
-              <span className={cn("text-[11px]", logComment.length > 4000 ? "text-destructive font-semibold" : "text-muted-foreground")}>
+              <span className={cn("text-2xs", logComment.length > 4000 ? "text-destructive font-semibold" : "text-muted-foreground")}>
                 {logComment.length} / 4000
               </span>
             </div>

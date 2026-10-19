@@ -155,7 +155,7 @@ export function ParentCombobox({
         >
           <span className="truncate">{displayValue || <span className="text-muted-foreground">{placeholder}</span>}</span>
           {displayValue && (
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-2xs text-muted-foreground">
               {value?.type === "batch" ? <ListTree className="h-3 w-3" /> : <ExternalLink className="h-3 w-3" />}
             </span>
           )}
@@ -193,7 +193,7 @@ export function ParentCombobox({
             {/* Batch parent options */}
             {batchParentOptions.length > 0 && (
               <>
-                <div className="px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground">
+                <div className="px-2 py-1 text-2xs font-medium uppercase text-muted-foreground">
                   Trong batch này
                 </div>
                 {batchParentOptions.map((item) => (
@@ -205,7 +205,7 @@ export function ParentCombobox({
                   >
                     <ListTree className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
                     <span className="truncate">
-                      <span className="font-mono text-[10px] text-muted-foreground mr-1">{item.clientRef}</span>
+                      <span className="font-mono text-2xs text-muted-foreground mr-1">{item.clientRef}</span>
                       {item.summary || "(chưa có tiêu đề)"}
                     </span>
                   </button>
@@ -216,7 +216,7 @@ export function ParentCombobox({
             {/* Jira parent options */}
             {debouncedQuery.length >= 2 && (
               <>
-                <div className="mt-1 border-t border-border px-2 pt-1 pb-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+                <div className="mt-1 border-t border-border px-2 pt-1 pb-0.5 text-2xs font-medium uppercase text-muted-foreground">
                   Trên Jira
                 </div>
                 {jiraLoading && (
@@ -231,10 +231,10 @@ export function ParentCombobox({
                   >
                     <ExternalLink className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
                     <span className="truncate">
-                      <span className="font-mono text-[10px] text-primary mr-1">{issue.key}</span>
+                      <span className="font-mono text-2xs text-primary mr-1">{issue.key}</span>
                       {issue.summary}
                     </span>
-                    <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{issue.status}</span>
+                    <span className="ml-auto shrink-0 text-2xs text-muted-foreground">{issue.status}</span>
                   </button>
                 ))}
                 {!jiraLoading && (jiraResults ?? []).length === 0 && (

@@ -89,7 +89,7 @@ export function DescriptionEditor({
             size="sm"
             onClick={handleInsertAcTemplate}
             title="Chèn khung Tiêu chí nghiệm thu (Acceptance Criteria)"
-            className="h-6 px-2 text-[11px] gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted"
+            className="h-7 px-2 text-2xs gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted"
           >
             <ListChecks className="h-3 w-3 text-primary" aria-hidden="true" />
             <span className="hidden sm:inline">Khung</span> AC
@@ -101,7 +101,7 @@ export function DescriptionEditor({
             size="sm"
             onClick={handleInsertCodeBlock}
             title="Chèn khối mã nguồn {code}"
-            className="h-6 px-2 text-[11px] gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted"
+            className="h-7 px-2 text-2xs gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted"
           >
             <Code className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
             <span>Code</span>
@@ -117,7 +117,7 @@ export function DescriptionEditor({
                 size="sm"
                 onClick={toggleHeight}
                 title={isLarge ? "Thu nhỏ chiều cao khung nhập" : "Mở rộng chiều cao khung nhập"}
-                className="h-6 px-2 text-[11px] gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted"
+                className="h-7 px-2 text-2xs gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted"
               >
                 {isLarge ? (
                   <>
@@ -139,7 +139,7 @@ export function DescriptionEditor({
                   size="sm"
                   onClick={onToggleFullWidth}
                   title={isFullWidth ? "Chuyển về chia 2 cột" : "Mở rộng mô tả toàn chiều rộng"}
-                  className="h-6 px-2 text-[11px] gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted"
+                  className="h-7 px-2 text-2xs gap-1 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted"
                 >
                   {isFullWidth ? (
                     <>
@@ -159,7 +159,7 @@ export function DescriptionEditor({
 
           <span
             className={cn(
-              "text-[10px] tabular-nums ml-1",
+              "text-2xs tabular-nums ml-1",
               descLength > MAX_DESCRIPTION_LENGTH * 0.9
                 ? "text-destructive font-medium"
                 : "text-muted-foreground"
@@ -181,7 +181,7 @@ export function DescriptionEditor({
         )}
       />
 
-      <div className="flex flex-wrap items-center justify-between text-[11px] text-muted-foreground pt-1 gap-2">
+      <div className="flex flex-wrap items-center justify-between text-2xs text-muted-foreground pt-1 gap-2">
         <span className="flex items-center gap-1">
           <span>Hỗ trợ Markdown và Jira markup (h1., *bold*, _italic_, - [ ], {"{code}"}). Kéo góc dưới ô để mở rộng tuỳ ý.</span>
         </span>

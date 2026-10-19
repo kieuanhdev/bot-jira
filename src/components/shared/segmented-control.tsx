@@ -52,20 +52,20 @@ export function SegmentedControl<T extends string>({
               if (!item.disabled) onChange(item.value);
             }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50",
+              "inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50",
               active
                 ? tone === "primary"
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "bg-background text-foreground shadow-xs"
-                : "cursor-pointer text-muted-foreground hover:text-foreground"
+                  ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                  : "bg-background text-foreground font-semibold shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+            {Icon ? <Icon className="h-4 w-4" aria-hidden="true" /> : null}
             <span>{item.label}</span>
             {item.count != null && item.count > 0 ? (
               <span
                 className={cn(
-                  "rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+                  "rounded-full px-1.5 text-2xs font-semibold tabular-nums",
                   active
                     ? tone === "primary"
                       ? "bg-primary-foreground/20 text-primary-foreground"

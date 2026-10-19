@@ -52,7 +52,7 @@ export function AssigneeQuickSwitch({
       role="region"
       aria-label="Chuyển nhanh góc nhìn người phụ trách"
     >
-      <span className="shrink-0 font-medium text-[11px] text-muted-foreground uppercase tracking-wider pl-0.5">
+      <span className="shrink-0 font-medium text-2xs text-muted-foreground uppercase tracking-wider pl-0.5">
         Xem nhanh:
       </span>
 
@@ -65,17 +65,17 @@ export function AssigneeQuickSwitch({
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors duration-150 shrink-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
             isAllSelected
-              ? "border-primary bg-primary/10 text-primary shadow-xs font-semibold"
+              ? "border-primary bg-primary-soft text-primary-soft-foreground shadow-xs font-semibold"
               : "border-border/80 bg-background text-muted-foreground hover:text-foreground hover:bg-muted/60"
           )}
         >
-          <Users className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>Tất cả đã chọn</span>
           <span
             className={cn(
-              "rounded-full px-1 py-0.2 text-[10px] tabular-nums font-semibold",
+              "rounded-full px-1.5 py-0.5 text-2xs tabular-nums font-semibold",
               isAllSelected
-                ? "bg-primary/20 text-primary"
+                ? "bg-primary-soft-foreground/20 text-primary-soft-foreground"
                 : "bg-muted text-muted-foreground"
             )}
           >
@@ -97,16 +97,16 @@ export function AssigneeQuickSwitch({
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs cursor-pointer transition-colors duration-150 shrink-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                 isActive
-                  ? "border-primary bg-primary/10 text-primary shadow-xs font-semibold"
+                  ? "border-primary bg-primary-soft text-primary-soft-foreground shadow-xs font-semibold"
                   : "border-border/80 bg-background text-muted-foreground hover:text-foreground hover:bg-muted/60"
               )}
             >
               {isUnassigned ? (
                 <div
-                  className="h-4 w-4 rounded-full flex items-center justify-center bg-muted text-muted-foreground shrink-0"
+                  className="h-5 w-5 rounded-full flex items-center justify-center bg-muted text-muted-foreground shrink-0"
                   aria-hidden="true"
                 >
-                  <UserX className="h-2.5 w-2.5" />
+                  <UserX className="h-3 w-3" />
                 </div>
               ) : (
                 <JiraAvatar
