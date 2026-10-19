@@ -487,18 +487,18 @@ Mỗi task bên dưới làm cùng một việc cho thư mục được chỉ đ
 5. Thêm thư mục vào `MIGRATED_DIRS`.
 6. Commit.
 
-| Task | Khu vực (`src/app/(app)/…`) | Chữ nhỏ | Chú ý riêng |
-|---|---|---:|---|
-| 4.1 | `issue/[key]` | 49 | Tiêu đề issue `text-2xl font-bold`. `.wiki-content` trong `globals.css` đặt `font-size: 0.9375rem` và `line-height` 1.65 |
-| 4.2 | `bulk` + `bulk/create` | 354 | Lưới dữ liệu (`bulk-create-data-grid.tsx`) giữ ô cao khoảng 40px, `text-sm`. Kiểm tra cuộn ngang trong lưới |
-| 4.3 | `reports/projects` + `[projectKey]` | 245 | Chart dùng `--chart-*`. Kiểm tra lại tương phản legend và trục với `text-xs` |
-| 4.4 | `stale` | 121 | |
-| 4.5 | `branches` | 126 | Badge trạng thái PR dùng chung quy tắc với Task 3.1 |
-| 4.6 | `release` | 76 | |
-| 4.7 | `leaderboard` | 77 | Podium: số hạng `text-3xl` |
-| 4.8 | `admin` + `admin/sync` | 88 | |
-| 4.9 | `settings`, `notifications`, `sentry`, `watch` | 113 | Thêm `ThemeToggle` vào Cài đặt (vẫn bị cờ ẩn) |
-| 4.10 | `src/app/(auth)/*` (login, register, setup-jira) | 34 | Đọc `pages/login.md`. Trang auth phải giữ static, không thêm logic theme phía server |
+| Task | Khu vực (`src/app/(app)/…`) | Chữ nhỏ | Chú ý riêng | Trạng thái |
+|---|---|---:|---|---|
+| 4.1 | `issue/[key]` | 49 | Tiêu đề issue `text-2xl font-bold`. `.wiki-content` trong `globals.css` đặt `font-size: 0.9375rem` và `line-height` 1.65 | [x] Hoàn tất |
+| 4.2 | `bulk` + `bulk/create` | 354 | Lưới dữ liệu (`bulk-create-data-grid.tsx`) giữ ô cao khoảng 40px, `text-sm`. Kiểm tra cuộn ngang trong lưới | [x] Hoàn tất |
+| 4.3 | `reports/projects` + `[projectKey]` | 245 | Chart dùng `--chart-*`. Kiểm tra lại tương phản legend và trục với `text-xs` | [x] Hoàn tất |
+| 4.4 | `stale` | 121 | | [x] Hoàn tất |
+| 4.5 | `branches` | 126 | Badge trạng thái PR dùng chung quy tắc với Task 3.1 | [x] Hoàn tất |
+| 4.6 | `release` | 76 | | [x] Hoàn tất |
+| 4.7 | `leaderboard` | 77 | Podium: số hạng `text-3xl` | [x] Hoàn tất |
+| 4.8 | `admin` + `admin/sync` | 88 | | [x] Hoàn tất |
+| 4.9 | `settings`, `notifications`, `sentry`, `watch` | 113 | Thêm `ThemeToggle` vào Cài đặt (vẫn bị cờ ẩn) | [x] Hoàn tất |
+| 4.10 | `src/app/(auth)/*` (login, register, setup-jira) | 34 | Đọc `pages/login.md`. Trang auth phải giữ static, không thêm logic theme phía server | [x] Hoàn tất |
 
 Đọc `pages/bulk-create.md`, `pages/leaderboard.md`, `pages/admin.md` trước khi làm các task tương ứng, và cập nhật mọi chỗ trong các file đó còn mâu thuẫn với kích thước mới.
 
