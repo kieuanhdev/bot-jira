@@ -25,7 +25,7 @@ export function StaleIndicator({ lastUpdated }: StaleIndicatorProps) {
     <span className="flex items-center gap-1.5">
       <span>• Cập nhật {timeAgo(new Date(lastUpdated).toISOString())}</span>
       {isStale && (
-        <Badge variant="warning" className="gap-1 text-[11px]">
+        <Badge variant="warning" className="gap-1 text-2xs">
           <TriangleAlert className="h-3 w-3" aria-hidden="true" />
           Dữ liệu cũ
         </Badge>

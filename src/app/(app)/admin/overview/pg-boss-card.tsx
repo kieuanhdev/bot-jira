@@ -86,8 +86,8 @@ export function PgBossCard({
                     <TableRow
                       key={q.name}
                       className={cn(
-                        hasFailed && "bg-rose-500/[0.03]",
-                        isHighPending && !hasFailed && "bg-amber-500/[0.03]"
+                        hasFailed && "bg-destructive/[0.03]",
+                        isHighPending && !hasFailed && "bg-warning/[0.03]"
                       )}
                     >
                       <TableCell className="py-2 font-mono text-xs font-medium text-foreground">

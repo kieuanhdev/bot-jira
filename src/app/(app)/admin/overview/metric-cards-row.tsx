@@ -52,7 +52,7 @@ export function MetricCardsRow({
           staleProjectsCount > 0 ? (
             <Link
               href="/admin/sync"
-              className="cursor-pointer font-medium text-amber-600 hover:underline dark:text-amber-400"
+              className="cursor-pointer font-medium text-warning hover:underline"
             >
               {staleProjectsCount} dự án chậm
             </Link>

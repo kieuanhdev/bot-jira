@@ -33,10 +33,10 @@ export function serviceBadge(p: Ping) {
 
 export function serviceDotColor(p: Ping): string {
   if (p.error === "not configured") return "bg-muted-foreground/30";
-  if (!p.ok) return "bg-rose-500";
-  if (p.ms < 1000) return "bg-emerald-500";
-  if (p.ms <= 3000) return "bg-amber-500";
-  return "bg-rose-500";
+  if (!p.ok) return "bg-destructive";
+  if (p.ms < 1000) return "bg-success";
+  if (p.ms <= 3000) return "bg-warning";
+  return "bg-destructive";
 }
 
 export interface ServicesCardProps {
@@ -105,7 +105,7 @@ export function ServicesCard({
                   </div>
                   {hasInlineError && (
                     <div className="mt-1 flex items-start justify-between gap-2 rounded bg-destructive/10 p-2 text-xs text-destructive">
-                      <p className="font-mono text-[11px] leading-relaxed">
+                      <p className="font-mono text-2xs leading-relaxed">
                         {maskSecrets(ping.error)}
                       </p>
                       <CopyButton text={maskSecrets(ping.error)} />

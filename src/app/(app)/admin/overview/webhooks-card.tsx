@@ -81,7 +81,7 @@ export function WebhooksCard({
                 const hasUnprocessed = w.unprocessed > 0;
 
                 return (
-                  <TableRow key={w.source} className={cn(hasErrors && "bg-rose-500/[0.03]")}>
+                  <TableRow key={w.source} className={cn(hasErrors && "bg-destructive/[0.03]")}>
                     <TableCell className="py-2.5">
                       <div className="flex flex-col">
                         <span className="font-medium text-foreground">{label}</span>
@@ -110,11 +110,11 @@ export function WebhooksCard({
                     </TableCell>
                     <TableCell className="py-2.5 text-right">
                       {isSilent ? (
-                        <Badge variant="warning" className="text-[11px]">
+                        <Badge variant="warning" className="text-2xs">
                           Im lặng
                         </Badge>
                       ) : (
-                        <Badge variant="success" className="text-[11px]">
+                        <Badge variant="success" className="text-2xs">
                           Bình thường
                         </Badge>
                       )}

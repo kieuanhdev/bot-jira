@@ -154,7 +154,7 @@ export function ProjectFeaturesSheet({
         {project && currentFeatures && (
           <div className="flex flex-col gap-5 py-2">
             {!project.syncEnabled && (
-              <div className="rounded-md border border-amber-300/50 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
+              <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
                 <span className="font-semibold">Đồng bộ đang tắt:</span> Các hạng mục được cấu
                 hình dưới đây sẽ có hiệu lực khi công tắc đồng bộ tổng của dự án được bật lại.
               </div>

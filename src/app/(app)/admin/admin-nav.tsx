@@ -45,7 +45,7 @@ export function AdminNav() {
             <span>{item.label}</span>
             {hasFailedBadge && (
               <span
-                className="ml-1 inline-flex items-center justify-center rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-rose-600 dark:text-rose-400"
+                className="ml-1 inline-flex items-center justify-center rounded-full bg-destructive/15 px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-destructive"
                 aria-label={`${failedCount} dự án lỗi`}
               >
                 {failedCount}

@@ -117,7 +117,7 @@ export function JobsCard({
             className={cn(
               "mb-3 flex items-center gap-2 rounded-md border p-2.5 text-xs transition-opacity duration-200",
               toastMessage.tone === "success"
-                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                ? "border-success/20 bg-success/10 text-success"
                 : "border-destructive/20 bg-destructive/10 text-destructive"
             )}
             role="status"

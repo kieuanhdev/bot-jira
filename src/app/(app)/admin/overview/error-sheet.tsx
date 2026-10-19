@@ -61,7 +61,7 @@ export function CopyButton({ text }: { text: string }) {
       aria-label="Sao chép lỗi"
     >
       {copied ? (
-        <Check className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
+        <Check className="h-3.5 w-3.5 text-success" aria-hidden="true" />
       ) : (
         <Copy className="h-3.5 w-3.5" aria-hidden="true" />
       )}
@@ -227,7 +227,7 @@ export function ErrorSheet({
                                 <span className="font-mono text-xs font-semibold text-foreground">
                                   {item.sentryProject} #{item.sentryIssueId}
                                 </span>
-                                <span className="text-[11px] text-muted-foreground">
+                                <span className="text-2xs text-muted-foreground">
                                   {item.attemptCount} lần thử · {item.lastAttemptAt ? timeAgo(item.lastAttemptAt) : "chưa thử"}
                                 </span>
                               </div>
@@ -248,7 +248,7 @@ export function ErrorSheet({
 
                             {maskedErr && (
                               <div className="relative mt-1">
-                                <pre className="max-h-32 overflow-x-auto whitespace-pre-wrap rounded bg-destructive/10 p-2 pr-7 font-mono text-[11px] text-destructive">
+                                <pre className="max-h-32 overflow-x-auto whitespace-pre-wrap rounded bg-destructive/10 p-2 pr-7 font-mono text-2xs text-destructive">
                                   {maskedErr}
                                 </pre>
                                 <div className="absolute top-1 right-1">
@@ -305,14 +305,14 @@ export function ErrorSheet({
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex flex-col">
                                 <div className="flex items-center gap-1.5">
-                                  <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+                                  <Badge variant="secondary" className="px-1.5 py-0 text-2xs">
                                     {item.channel}
                                   </Badge>
                                   <span className="line-clamp-1 text-xs font-medium text-foreground">
                                     {item.title}
                                   </span>
                                 </div>
-                                <span className="text-[11px] text-muted-foreground">
+                                <span className="text-2xs text-muted-foreground">
                                   {item.userEmail} · {item.attemptCount} lần thử · {timeAgo(item.updatedAt)}
                                 </span>
                               </div>
@@ -333,7 +333,7 @@ export function ErrorSheet({
 
                             {maskedErr && (
                               <div className="relative mt-1">
-                                <pre className="max-h-32 overflow-x-auto whitespace-pre-wrap rounded bg-destructive/10 p-2 pr-7 font-mono text-[11px] text-destructive">
+                                <pre className="max-h-32 overflow-x-auto whitespace-pre-wrap rounded bg-destructive/10 p-2 pr-7 font-mono text-2xs text-destructive">
                                   {maskedErr}
                                 </pre>
                                 <div className="absolute top-1 right-1">

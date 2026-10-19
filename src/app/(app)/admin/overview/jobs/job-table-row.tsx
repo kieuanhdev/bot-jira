@@ -51,9 +51,9 @@ export function JobTableRow({
     <React.Fragment>
       <TableRow
         className={cn(
-          row.isStuck && "bg-rose-500/[0.06]",
-          row.isFailing && !row.isStuck && "bg-rose-500/[0.03]",
-          row.isRunning && !row.isStuck && "bg-sky-500/[0.03]"
+          row.isStuck && "bg-destructive/[0.06]",
+          row.isFailing && !row.isStuck && "bg-destructive/[0.03]",
+          row.isRunning && !row.isStuck && "bg-info/[0.03]"
         )}
       >
         <TableCell className="py-2.5">
@@ -164,7 +164,7 @@ export function JobTableRow({
               {raw.lastError && (
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-destructive">
+                    <span className="text-2xs font-semibold uppercase tracking-wider text-destructive">
                       Thông báo lỗi gần nhất
                     </span>
                     <CopyButton text={maskSecrets(raw.lastError)} />
@@ -176,7 +176,7 @@ export function JobTableRow({
               )}
               {statsEntries.length > 0 && (
                 <div>
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Thống kê (stats)
                   </span>
                   <div className="mt-1 flex flex-wrap gap-1.5 text-xs">
@@ -185,14 +185,14 @@ export function JobTableRow({
                         <Badge
                           key={entry.key}
                           variant={entry.tone ?? "warning"}
-                          className="text-[11px]"
+                          className="text-2xs"
                         >
                           {entry.value}
                         </Badge>
                       ) : (
                         <span
                           key={entry.key}
-                          className="rounded border border-border/60 bg-muted/70 px-2 py-0.5 font-mono text-[11px]"
+                          className="rounded border border-border/60 bg-muted/70 px-2 py-0.5 font-mono text-2xs"
                         >
                           <span className="text-muted-foreground">{entry.label}: </span>
                           <span className="font-semibold text-foreground">{entry.value}</span>

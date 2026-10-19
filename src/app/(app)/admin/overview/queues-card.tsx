@@ -37,7 +37,7 @@ export function StackedBar({
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-semibold text-foreground">{title}</span>
           <div className="flex items-center gap-1.5">
-            {subtitle && <span className="text-[11px] text-muted-foreground">{subtitle}</span>}
+            {subtitle && <span className="text-2xs text-muted-foreground">{subtitle}</span>}
             {action}
           </div>
         </div>
@@ -286,7 +286,7 @@ export function QueuesCard({
                       <StackedBar
                         key={gateName}
                         title={label}
-                        subtitle={<span className="font-mono text-[10px] text-muted-foreground">{gateName}</span>}
+                        subtitle={<span className="font-mono text-2xs text-muted-foreground">{gateName}</span>}
                         segments={segments}
                       />
                     );

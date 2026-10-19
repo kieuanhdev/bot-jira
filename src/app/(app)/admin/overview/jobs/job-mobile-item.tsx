@@ -32,7 +32,7 @@ export function JobMobileItem({
     <div
       className={cn(
         "flex flex-col gap-1.5 py-3",
-        row.isStuck && "bg-rose-500/[0.06] rounded-md px-2"
+        row.isStuck && "bg-destructive/[0.06] rounded-md px-2"
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -88,7 +88,7 @@ export function JobMobileItem({
 
       {row.runs.length >= 4 && (
         <div className="flex items-center gap-2 pt-0.5 text-xs text-muted-foreground">
-          <span className="text-[11px]">Xu hướng:</span>
+          <span className="text-2xs">Xu hướng:</span>
           <Sparkline
             data={row.runs.map((r) => r.durationMs)}
             width={80}
@@ -123,7 +123,7 @@ export function JobMobileItem({
               {raw.lastError && (
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-destructive">Lỗi:</span>
+                    <span className="text-2xs font-semibold text-destructive">Lỗi:</span>
                     <CopyButton text={maskSecrets(raw.lastError)} />
                   </div>
                   <pre className="mt-1 max-h-40 overflow-x-auto whitespace-pre-wrap font-mono text-xs text-destructive">
@@ -136,7 +136,7 @@ export function JobMobileItem({
                   {statsEntries.map((e) => (
                     <span
                       key={e.key}
-                      className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]"
+                      className="rounded bg-muted px-1.5 py-0.5 font-mono text-2xs"
                     >
                       {e.label}: {e.value}
                     </span>

@@ -81,7 +81,7 @@ export function AuditCard() {
                         <span className="font-medium text-foreground">
                           {getAuditActionLabel(log.action)}
                         </span>
-                        <span className="font-mono text-[10px] text-muted-foreground">
+                        <span className="font-mono text-2xs text-muted-foreground">
                           {log.action}
                         </span>
                       </div>
@@ -90,7 +90,7 @@ export function AuditCard() {
                       {log.target ?? "—"}
                     </TableCell>
                     <TableCell className="py-2 text-right">
-                      <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+                      <Badge variant="secondary" className="px-1.5 py-0 text-2xs">
                         {log.source ?? "web"}
                       </Badge>
                     </TableCell>

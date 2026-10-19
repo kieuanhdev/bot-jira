@@ -162,7 +162,7 @@ export function Sparkline({
       {/* Floating Mini Tooltip when hovering over a point */}
       {hoverIndex !== null && (
         <div
-          className="pointer-events-none absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-30 rounded border border-border bg-popover px-1.5 py-0.5 text-[10px] font-medium text-popover-foreground shadow-sm whitespace-nowrap"
+          className="pointer-events-none absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-30 rounded border border-border bg-popover px-1.5 py-0.5 text-2xs font-medium text-popover-foreground shadow-sm whitespace-nowrap"
           role="tooltip"
         >
           {formatValue(activePoint.val)}

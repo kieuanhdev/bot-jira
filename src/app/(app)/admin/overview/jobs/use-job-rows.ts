@@ -150,9 +150,9 @@ export function useJobRows({
       const ratio = duration != null ? duration / (expireSeconds * 1000) : 0;
       const durationColorClass =
         ratio > 0.8
-          ? "text-rose-600 dark:text-rose-400 font-semibold"
+          ? "text-destructive font-semibold"
           : ratio > 0.5
-          ? "text-amber-600 dark:text-amber-400 font-medium"
+          ? "text-warning font-medium"
           : "text-muted-foreground";
 
       const runningAge =
