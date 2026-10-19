@@ -444,7 +444,7 @@ Nếu developer muốn dùng `next-themes`, cần duyệt riêng việc sửa `p
 
 **Files:** `src/app/(app)/board/board-card.tsx`, `board-column.tsx`, `board-kanban-view.tsx`, `board-summary-cards.tsx`, `board-quick-filter-chips.tsx`
 
-- [ ] **Thẻ:**
+- [x] **Thẻ:**
   - padding `p-3`
   - jiraKey `font-mono text-xs font-semibold text-muted-foreground`
   - loại issue `text-2xs`
@@ -452,29 +452,29 @@ Nếu developer muốn dùng `next-themes`, cần duyệt riêng việc sửa `p
   - badge theo bảng mapping (bỏ `h-4`)
   - nút ⋯ và ‹ › dùng `h-7 w-7` với icon `h-4 w-4`
   - rail priority rộng `w-1`
-- [ ] **Badge delivery:** đổi `emerald-400`/`purple-400` (tương phản 1.93/2.79) thành:
+- [x] **Badge delivery:** đổi `emerald-400`/`purple-400` (tương phản 1.93/2.79) thành:
   - PR open → `success`
   - merged → `info`, hoặc thêm token `--merged` (tím) có giá trị light/dark đã đo ≥4.5
-- [ ] **Cột:**
+- [x] **Cột:**
   - header cột `text-sm font-semibold`, bộ đếm là badge `neutral`
   - nền cột `bg-muted/60` để thẻ trắng nổi lên
   - `gap-2.5`
-- [ ] **Summary cards:** dùng MetricCard đã làm ở Task 1.3.
-- [ ] Commit.
+- [x] **Summary cards:** dùng MetricCard đã làm ở Task 1.3.
+- [x] Commit.
 
 #### Task 3.2: List view, toolbar, quick panel
 
 **Files:** `board-list-view.tsx`, `board-list-row.tsx`, `board-list-inline-cells.tsx`, `board-list-bulk-bar.tsx`, `board-header.tsx`, `board-toolbar-section.tsx`, `board-project-tabs.tsx`, `board-columns-menu.tsx`, `board-team-view.tsx`, `board-banners.tsx`, `board-toast.tsx`, `board-skeleton.tsx`, `quick-panel/*`, `board-quick-panel.tsx`
 
-- [ ] **Hàng List:** cao tối thiểu 44px, chữ `text-sm`.
-- [ ] **Project tabs:** `h-10`, tab active dùng `bg-card shadow`.
-- [ ] **`quick-panel-fields.tsx`** là file có nhiều chữ nhỏ nhất (29 chỗ):
+- [x] **Hàng List:** cao tối thiểu 44px, chữ `text-sm`.
+- [x] **Project tabs:** `h-10`, tab active dùng `bg-card shadow`.
+- [x] **`quick-panel-fields.tsx`** là file có nhiều chữ nhỏ nhất (29 chỗ):
   - label `text-xs font-medium`
   - value `text-sm`
   - panel rộng thêm khoảng 40px nếu cần
-- [ ] Skeleton phải khớp kích thước mới.
-- [ ] Thêm `board` vào `MIGRATED_DIRS`.
-- [ ] Commit, chụp ảnh Kanban và List ở 4 breakpoint.
+- [x] Skeleton phải khớp kích thước mới.
+- [x] Thêm `board` vào `MIGRATED_DIRS`.
+- [x] Commit, chụp ảnh Kanban và List ở 4 breakpoint.
 
 ### Phase 4: Các trang còn lại (theo thứ tự ưu tiên)
 
