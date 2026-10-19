@@ -48,6 +48,7 @@ export function BulkClient() {
     selectionMode: selection.selectionMode,
     onClearSelected: selection.clearSelected,
     setPreviewError: preview.setPreviewError,
+    onOperationConfirmed: () => preview.resetPreview(),
   });
 
   function handleProjectChange(newProject: string) {
