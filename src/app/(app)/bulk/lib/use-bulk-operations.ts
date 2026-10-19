@@ -13,6 +13,8 @@ export interface UseBulkOperationsOptions {
   onClearSelected: () => void;
   setPreviewError: (error: string | null) => void;
   onOperationConfirmed?: (operationId: string) => void;
+  /** Operation to show on load, e.g. from a notification's `/bulk?operation=<id>` link. */
+  initialActiveOp?: string | null;
 }
 
 export function useBulkOperations({
@@ -21,11 +23,12 @@ export function useBulkOperations({
   onClearSelected,
   setPreviewError,
   onOperationConfirmed,
+  initialActiveOp,
 }: UseBulkOperationsOptions) {
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [activeOp, setActiveOp] = useState<string | null>(null);
+  const [activeOp, setActiveOp] = useState<string | null>(initialActiveOp || null);
 
   // Operations history managed via TanStack Query
   const { data: opsData, isSuccess, refetch } = useQuery({

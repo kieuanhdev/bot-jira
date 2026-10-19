@@ -52,6 +52,7 @@ export function BulkClient() {
     onClearSelected: selection.clearSelected,
     setPreviewError: preview.setPreviewError,
     onOperationConfirmed: () => preview.resetPreview(),
+    initialActiveOp: searchParams?.get("operation"),
   });
 
   function handleProjectChange(newProject: string) {
