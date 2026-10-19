@@ -306,7 +306,7 @@ export function AppShell({
           {!collapsed ? (
             <ThemeToggle className="my-1 self-start" />
           ) : (
-            <ThemeToggle className="my-1" />
+            <ThemeToggle compact className="my-1" />
           )}
 
           <button

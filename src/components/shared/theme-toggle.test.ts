@@ -11,4 +11,10 @@ describe("ThemeToggle", () => {
     expect(html).toContain("Theo hệ thống");
     expect(html).toContain('role="group"');
   });
+
+  it("renders compact button trigger when compact is true", () => {
+    const html = renderToStaticMarkup(React.createElement(ThemeToggle, { compact: true }));
+    expect(html).toContain("Giao diện:");
+    expect(html).not.toContain('role="group"');
+  });
 });
