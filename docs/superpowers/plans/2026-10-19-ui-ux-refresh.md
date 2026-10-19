@@ -296,8 +296,8 @@ Nếu developer muốn dùng `next-themes`, cần duyệt riêng việc sửa `p
 
 #### Task 0.1: Chụp ảnh baseline
 
-- [ ] Chạy `npm run dev` (port 3100), đăng nhập bằng tài khoản dev, chụp các trang ở mục 4.2 (light, 1280 và 375px).
-- [ ] Lưu ảnh vào `docs/ui-refresh/baseline/` (hoặc thư mục scratch nếu không muốn commit ảnh).
+- [x] Chạy `npm run dev` (port 3100), đăng nhập bằng tài khoản dev, chụp các trang ở mục 4.2 (light, 1280 và 375px).
+- [x] Lưu ảnh vào `docs/ui-refresh/baseline/` (hoặc thư mục scratch nếu không muốn commit ảnh).
 
 #### Task 0.2: Sửa tài liệu design system cho khớp code và quyết định mới
 
