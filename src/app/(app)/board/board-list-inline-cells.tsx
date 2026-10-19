@@ -25,12 +25,12 @@ function CellTrigger({ children, label }: { children: ReactNode; label: string }
       <button
         type="button"
         aria-label={label}
-        className="group inline-flex max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 px-2 py-1 text-left font-medium text-foreground shadow-xs transition-colors duration-150 hover:border-primary hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:border-primary data-[state=open]:bg-primary/10"
+        className="group inline-flex max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md border border-border/70 bg-card px-2.5 py-1 text-left text-xs font-medium text-foreground shadow-xs transition-colors duration-150 hover:border-primary/40 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:border-primary data-[state=open]:bg-primary-soft/50"
       >
         <span className="min-w-0 truncate" title={typeof children === "string" ? children : undefined}>{children}</span>
         <ChevronDown
           aria-hidden
-          className="h-4 w-4 shrink-0 text-primary transition-colors group-data-[state=open]:text-primary"
+          className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-colors group-data-[state=open]:text-primary"
         />
       </button>
     </DropdownMenuTrigger>

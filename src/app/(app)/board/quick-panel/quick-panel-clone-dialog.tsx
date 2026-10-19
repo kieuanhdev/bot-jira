@@ -78,14 +78,14 @@ export function QuickPanelCloneDialog({
               }}
               className="text-sm"
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {trimmed.length}/{MAX_SUMMARY_LENGTH} ký tự
             </p>
           </div>
 
           <div className="flex items-start gap-2 rounded-md border bg-muted/20 p-2.5">
             <Info className="mt-px h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <div className="min-w-0 text-[11px] text-muted-foreground">
+            <div className="min-w-0 text-xs text-muted-foreground">
               <p>
                 Bản sao giữ mô tả, loại task, độ ưu tiên, nhãn, component, fix version, người thực
                 hiện, hạn hoàn thành, reporter/approver/tester, epic link, story points và các

@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { IssueItem } from "@/hooks/use-issues";
-import { CATEGORY_DOT_MAP } from "./lib/board-types";
 import { FLAG_LABEL } from "./lib/quick-panel-utils";
 import { QuickPanelHeader } from "./quick-panel/quick-panel-header";
 import { QuickPanelActions, type QuickPanelActionMessage } from "./quick-panel/quick-panel-actions";
@@ -150,14 +149,14 @@ export function QuickPanel({
   const timeSpentSeconds = d?.timeSpentSeconds ?? issue.timeSpent;
   const stale = d?.staleSnapshots?.[0] ?? null;
 
-  const dotClass = CATEGORY_DOT_MAP[statusCat] ?? "bg-slate-400";
+  const dotClass = statusCat === "done" ? "bg-success" : statusCat === "indeterminate" ? "bg-primary" : "bg-info";
   const transitionList = transitions?.transitions ?? [];
 
   if (typeof document === "undefined") return null;
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-[1px]"
+      className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs"
       role="dialog"
       aria-modal="true"
       aria-label={`${issue.jiraKey} quick panel`}
@@ -166,7 +165,7 @@ export function QuickPanel({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="flex h-full w-full flex-col sm:w-1/2 sm:min-w-[32rem] overflow-hidden border-l bg-card shadow-2xl outline-none motion-safe:animate-[panelIn_180ms_ease-out]"
+        className="flex h-full w-full flex-col sm:w-1/2 sm:min-w-[34.5rem] overflow-hidden border-l border-border bg-card shadow-2xl outline-none motion-safe:animate-[panelIn_180ms_ease-out]"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <QuickPanelHeader

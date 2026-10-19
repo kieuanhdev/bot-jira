@@ -82,7 +82,7 @@ export function QuickPanelComments({
               ref={editButtonRef}
               type="button"
               onClick={() => setDescDraft(description ?? "")}
-              className="flex cursor-pointer items-center gap-1 text-[11px] text-primary transition-colors duration-150 hover:underline"
+              className="flex cursor-pointer items-center gap-1 text-xs font-medium text-primary transition-colors duration-150 hover:underline"
             >
               <Pencil className="h-3 w-3" aria-hidden /> Sửa
             </button>
@@ -105,12 +105,12 @@ export function QuickPanelComments({
               className="min-h-[10rem] w-full resize-y rounded-md border bg-background px-2.5 py-1.5 font-mono text-xs leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             />
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] text-muted-foreground">Cú pháp Jira wiki · Ctrl+Enter để lưu</span>
+              <span className="text-xs text-muted-foreground">Cú pháp Jira wiki · Ctrl+Enter để lưu</span>
               <div className="flex gap-1.5">
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => closeDescription(false)}>
+                <Button size="sm" variant="ghost" className="h-8 cursor-pointer px-3 text-xs" onClick={() => closeDescription(false)}>
                   Hủy
                 </Button>
-                <Button size="sm" className="h-7 text-xs" onClick={() => closeDescription(true)}>
+                <Button size="sm" className="h-8 cursor-pointer px-3 text-xs" onClick={() => closeDescription(true)}>
                   Lưu
                 </Button>
               </div>
@@ -127,7 +127,7 @@ export function QuickPanelComments({
 
       <Section title={`Comments (${commentCount})`}>
         {commentsDisabled && (
-          <div className="mb-2 rounded-md border border-amber-300/40 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-300">
+          <div className="mb-2 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
             Bình luận không được đồng bộ cho dự án này.
           </div>
         )}

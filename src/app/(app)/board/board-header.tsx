@@ -220,7 +220,7 @@ export function BoardHeader({
         />
 
         <Select value={sortMode} onValueChange={(v) => onSortModeChange(v as SortMode)}>
-          <SelectTrigger className="h-8 w-auto gap-1.5 text-sm" title="Sắp xếp thẻ trong từng cột">
+          <SelectTrigger className="h-9 w-auto gap-1.5 text-sm cursor-pointer" title="Sắp xếp thẻ trong từng cột">
             <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
             <SelectValue />
           </SelectTrigger>

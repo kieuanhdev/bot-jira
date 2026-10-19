@@ -51,9 +51,9 @@ export function BoardListBulkBar({
     <div
       role="region"
       aria-label="Sửa hàng loạt"
-      className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b bg-primary/10 px-3 py-2 text-xs backdrop-blur"
+      className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-primary/20 bg-primary-soft px-3 py-2 text-xs backdrop-blur"
     >
-      <span className="font-semibold text-foreground">{selected.length} task đã chọn</span>
+      <span className="font-semibold text-primary-soft-foreground">{selected.length} task đã chọn</span>
       <span className="text-muted-foreground">· Đặt giá trị cho tất cả:</span>
       <SelectCell
         label="Status"
@@ -115,8 +115,8 @@ export function BoardListBulkBar({
       {people("reporter", options.reporters)}
       {people("approver", options.approvers, "Xóa approver")}
       {people("tester", options.testers, "Xóa tester")}
-      <Button variant="ghost" size="sm" className="ml-auto h-7 gap-1 px-2 text-xs" onClick={onClear}>
-        <X aria-hidden className="h-3.5 w-3.5" /> Bỏ chọn
+      <Button variant="ghost" size="sm" className="ml-auto h-8 gap-1.5 px-2.5 text-xs font-medium cursor-pointer hover:bg-background/40" onClick={onClear}>
+        <X aria-hidden className="h-4 w-4" /> Bỏ chọn
       </Button>
       <ConfirmDialog
         open={pending !== null}

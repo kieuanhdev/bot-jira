@@ -24,17 +24,17 @@ import { PRIORITIES, toName } from "../lib/quick-panel-utils";
 
 /** Shared look for an editable value: bordered chip + chevron so it reads as a control. */
 const EDIT_TRIGGER =
-  "flex h-7 max-w-full cursor-pointer items-center gap-1.5 rounded-md border border-border/70 bg-background px-2 text-left text-sm font-medium transition-colors duration-150 hover:border-primary/50 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+  "flex h-8 max-w-full cursor-pointer items-center gap-1.5 rounded-md border border-border/70 bg-background px-2.5 text-left text-sm font-medium transition-colors duration-150 hover:border-primary/50 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
 
 function Chevron() {
-  return <ChevronDown className="ml-auto h-3 w-3 shrink-0 opacity-60" aria-hidden />;
+  return <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 truncate font-medium">{children}</dd>
+      <dt className="text-xs uppercase tracking-wide text-muted-foreground font-medium">{label}</dt>
+      <dd className="mt-1 truncate text-sm font-medium text-foreground">{children}</dd>
     </div>
   );
 }
@@ -109,7 +109,7 @@ function PersonPicker({
         <button className={EDIT_TRIGGER}>
           {value ? (
             <>
-              <JiraAvatar username={value} size="xs" />
+              <JiraAvatar username={value} size="sm" />
               <span className="truncate">{value}</span>
             </>
           ) : (
@@ -164,18 +164,18 @@ function DueDatePicker({
           }}
           className="h-8 w-full rounded-md border bg-background px-2 text-xs"
         />
-        <div className="mt-1 flex gap-1">
+        <div className="mt-1.5 flex gap-1.5">
           <DropdownMenuItem
             disabled={!draft || draft === current}
             onClick={() => onChange(draft)}
-            className="h-7 flex-1 justify-center text-xs font-medium text-primary"
+            className="h-8 flex-1 justify-center text-xs font-medium text-primary cursor-pointer"
           >
             Lưu
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!value}
             onClick={() => onChange(null)}
-            className="h-7 flex-1 justify-center text-xs text-destructive"
+            className="h-8 flex-1 justify-center text-xs text-destructive cursor-pointer"
           >
             Xóa ngày
           </DropdownMenuItem>
@@ -292,7 +292,7 @@ export function QuickPanelFields({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className={EDIT_TRIGGER}>
-                <span className={cn("h-2 w-2 shrink-0 rounded-full", dotClass)} />
+                <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dotClass)} />
                 <span className="truncate">{status}</span>
                 <Chevron />
               </button>
@@ -335,7 +335,7 @@ export function QuickPanelFields({
               <button className={EDIT_TRIGGER}>
                 {assigneeJira ? (
                   <>
-                    <JiraAvatar username={assigneeJira} size="xs" />
+                    <JiraAvatar username={assigneeJira} size="sm" />
                     <span className="truncate">{assigneeJira}</span>
                   </>
                 ) : (
@@ -409,15 +409,15 @@ export function QuickPanelFields({
       {/* Fix Versions */}
       <div className="mt-4">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">
+          <span className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">
             Phiên bản phát hành (Fix Versions)
           </span>
           {!showAddVersion && (
             <button
               onClick={() => setShowAddVersion(true)}
-              className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+              className="flex items-center gap-1 text-xs font-medium text-primary hover:underline cursor-pointer"
             >
-              <Plus className="h-3 w-3" /> Thêm version
+              <Plus className="h-3.5 w-3.5" /> Thêm version
             </button>
           )}
         </div>
@@ -426,11 +426,11 @@ export function QuickPanelFields({
             <span className="text-xs italic text-muted-foreground">Chưa gắn phiên bản</span>
           )}
           {fixVersions.map((v) => (
-            <Badge key={v} variant="info" className="gap-1 text-[11px]">
+            <Badge key={v} variant="info" className="gap-1">
               {v}
               <button
                 onClick={() => onRemoveVersion(v)}
-                className="ml-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10"
+                className="ml-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
                 title={`Gỡ ${v}`}
               >
                 <X className="h-3 w-3" />
@@ -441,7 +441,7 @@ export function QuickPanelFields({
             <div className="flex items-center gap-1.5">
               {projectVersions.length > 0 ? (
                 <Select onValueChange={(val) => handleSaveVersion(val)}>
-                  <SelectTrigger className="h-6 w-32 text-xs">
+                  <SelectTrigger className="h-8 w-36 text-xs">
                     <SelectValue placeholder="Chọn version…" />
                   </SelectTrigger>
                   <SelectContent>
@@ -462,14 +462,14 @@ export function QuickPanelFields({
                     if (e.key === "Escape") setShowAddVersion(false);
                   }}
                   placeholder="1.0.0"
-                  className="h-6 w-24 text-xs px-1.5"
+                  className="h-8 w-28 text-xs px-2"
                 />
               )}
               {!projectVersions.length && (
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-6 px-2 text-xs"
+                  className="h-8 px-2.5 text-xs cursor-pointer"
                   onClick={() => handleSaveVersion(newVersionInput)}
                 >
                   Lưu
@@ -477,7 +477,7 @@ export function QuickPanelFields({
               )}
               <button
                 onClick={() => setShowAddVersion(false)}
-                className="p-1 text-muted-foreground hover:text-foreground"
+                className="cursor-pointer p-1 text-muted-foreground hover:text-foreground"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -489,15 +489,15 @@ export function QuickPanelFields({
       {/* Labels */}
       <div className="mt-4">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">
+          <span className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">
             Nhãn (Labels)
           </span>
           {!showAddLabel && (
             <button
               onClick={() => setShowAddLabel(true)}
-              className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+              className="flex items-center gap-1 text-xs font-medium text-primary hover:underline cursor-pointer"
             >
-              <Plus className="h-3 w-3" /> Thêm nhãn
+              <Plus className="h-3.5 w-3.5" /> Thêm nhãn
             </button>
           )}
         </div>
@@ -506,11 +506,11 @@ export function QuickPanelFields({
             <span className="text-xs italic text-muted-foreground">Không có nhãn</span>
           )}
           {labels.map((l) => (
-            <Badge key={l} variant="outline" className="gap-1 text-[11px]">
+            <Badge key={l} variant="outline" className="gap-1">
               {l}
               <button
                 onClick={() => onRemoveLabel(l)}
-                className="ml-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10"
+                className="ml-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
                 title={`Xóa nhãn ${l}`}
               >
                 <X className="h-3 w-3" />
@@ -528,14 +528,14 @@ export function QuickPanelFields({
                   if (e.key === "Escape") setShowAddLabel(false);
                 }}
                 placeholder="Tên nhãn…"
-                className="h-6 w-28 text-xs px-1.5"
+                className="h-8 w-32 text-xs px-2"
               />
-              <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={handleSaveLabel}>
+              <Button size="sm" variant="outline" className="h-8 px-2.5 text-xs cursor-pointer" onClick={handleSaveLabel}>
                 Lưu
               </Button>
               <button
                 onClick={() => setShowAddLabel(false)}
-                className="p-1 text-muted-foreground hover:text-foreground"
+                className="cursor-pointer p-1 text-muted-foreground hover:text-foreground"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -547,7 +547,7 @@ export function QuickPanelFields({
       {/* Linked Branches */}
       {branches.length > 0 && (
         <div className="mt-4">
-          <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold block mb-1.5">
+          <span className="text-xs uppercase tracking-wide text-muted-foreground font-semibold block mb-1.5">
             Nhánh Bitbucket liên kết
           </span>
           <div className="flex flex-col gap-1.5">
@@ -562,7 +562,7 @@ export function QuickPanelFields({
                     <GitBranch className="h-3.5 w-3.5 text-primary shrink-0" />
                     {/* Submodule-style projects reuse one branch name across many repos. */}
                     <span
-                      className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                      className="shrink-0 rounded bg-muted px-2 py-0.5 text-2xs font-semibold text-muted-foreground"
                       title={b.repo}
                     >
                       {b.repo.split("/").pop()}

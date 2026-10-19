@@ -11,7 +11,11 @@ import { describe, expect, it } from "vitest";
  *
  * MIGRATED_DIRS starts with ["src/components"] in Phase 1 and expands in subsequent phases.
  */
-export const MIGRATED_DIRS = ["src/components", "src/app/(app)"];
+export const MIGRATED_DIRS = [
+  "src/components",
+  "src/app/(app)",
+  "src/app/(app)/board",
+];
 
 const FORBIDDEN_MICRO_TEXT_REGEX = /text-\[(8|9|10|11|13)px\]/g;
 const FORBIDDEN_PALETTE_REGEX =

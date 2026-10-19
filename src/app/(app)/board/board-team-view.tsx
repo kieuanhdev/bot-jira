@@ -85,9 +85,9 @@ export function BoardTeamView({
             {lanes.length} thành viên · {issues.length} task
           </span>
         </div>
-        <div className="ml-auto flex items-center gap-1">
-          <a href={`/reports/projects/${encodeURIComponent(projectKey)}`} className="inline-flex cursor-pointer items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/50 hover:bg-primary/5"><BarChart3 className="h-3.5 w-3.5" aria-hidden />Báo cáo team</a>
-          <a href="/stale" className="inline-flex cursor-pointer items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/50 hover:bg-primary/5"><Clock3 className="h-3.5 w-3.5" aria-hidden />Task stale</a>
+        <div className="ml-auto flex items-center gap-1.5">
+          <a href={`/reports/projects/${encodeURIComponent(projectKey)}`} className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/40 hover:bg-primary-soft/50"><BarChart3 className="h-3.5 w-3.5" aria-hidden />Báo cáo team</a>
+          <a href="/stale" className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/40 hover:bg-primary-soft/50"><Clock3 className="h-3.5 w-3.5" aria-hidden />Task stale</a>
         </div>
       </div>
 
@@ -131,11 +131,11 @@ export function BoardTeamView({
                       <JiraAvatar username={assignee === "__unassigned__" ? null : assignee} size="sm" title={displayName} />
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold">{displayName}</span>
-                        <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">
+                        <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
                           {items.length} task · {points} pt
                         </span>
                         {overdue > 0 && (
-                          <span className="mt-1 block text-[11px] font-medium text-destructive">
+                          <span className="mt-1 block text-xs font-medium text-destructive">
                             {overdue} quá hạn
                           </span>
                         )}
@@ -168,12 +168,12 @@ export function BoardTeamView({
                             <button
                               type="button"
                               onClick={() => toggleExpandedCell(cellId)}
-                              className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg border border-dashed py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                              className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg border border-dashed py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary-soft/50 hover:text-primary"
                             >
                               {isExpanded ? (
-                                <><ChevronUp className="size-3" aria-hidden />Thu gọn</>
+                                <><ChevronUp className="size-3.5" aria-hidden />Thu gọn</>
                               ) : (
-                                <><ChevronDown className="size-3" aria-hidden />Xem thêm {bucket.length - shown.length}</>
+                                <><ChevronDown className="size-3.5" aria-hidden />Xem thêm {bucket.length - shown.length}</>
                               )}
                             </button>
                           )}

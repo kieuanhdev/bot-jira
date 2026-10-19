@@ -48,32 +48,31 @@ export function QuickPanelHeader({
       ) : (
         <span className="font-mono text-sm font-semibold text-primary">{jiraKey}</span>
       )}
-      <Badge variant="secondary" className="text-[11px]">
+      <Badge variant="secondary">
         {status}
       </Badge>
       {priority && (
-        <Badge variant="outline" className="text-[11px]">
+        <Badge variant="outline">
           {priority}
         </Badge>
       )}
       {points != null && (
-        <Badge variant="outline" className="text-[11px]">
+        <Badge variant="outline">
           {points}pt
         </Badge>
       )}
       {aiScore && (
         <Badge
           variant={aiDecision ? (aiDecision.decision === "rejected" ? "danger" : "success") : "info"}
-          className="h-4 gap-1 px-1.5 text-[10px]"
           title={aiDecision ? `AI ${aiDecision.decision}` : "AI estimate (pending)"}
         >
-          <Bot className="h-2.5 w-2.5" />
+          <Bot className="h-3 w-3" />
           {aiScore.points}pt
         </Badge>
       )}
       {stale && (
-        <Badge variant="warning" className="h-4 gap-1 px-1.5 text-[10px]">
-          <Clock className="h-2.5 w-2.5" /> {stale.stateAgeDays}d
+        <Badge variant="warning">
+          <Clock className="h-3 w-3" /> {stale.stateAgeDays}d
         </Badge>
       )}
       <div className="ml-auto flex items-center gap-0.5">

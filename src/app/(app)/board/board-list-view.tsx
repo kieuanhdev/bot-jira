@@ -184,7 +184,7 @@ export function BoardListView({
   }, [options.epics, visibleRows]);
 
   return (
-    <div ref={scrollRef} className="max-h-[calc(100dvh-15rem)] min-h-[24rem] flex-1 overflow-auto overscroll-x-contain rounded-lg border">
+    <div ref={scrollRef} className="max-h-[calc(100dvh-15rem)] min-h-[24rem] flex-1 overflow-auto overscroll-x-contain rounded-xl border border-border/70 bg-card shadow-[var(--shadow-card)]">
       {selected.length > 0 && (
         <BoardListBulkBar
           selected={selected}
@@ -197,12 +197,12 @@ export function BoardListView({
       <table className="w-full min-w-max whitespace-nowrap text-sm">
         <thead
           className={cn(
-            "sticky z-10 bg-muted text-left text-xs text-muted-foreground",
+            "sticky z-10 h-11 bg-muted/60 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-xs",
             selected.length > 0 ? "top-[3.25rem]" : "top-0"
           )}
         >
           <tr>
-            <th className="w-9 px-3 py-2">
+            <th className="w-9 px-3 py-2.5">
               <Checkbox
                 aria-label="Chọn tất cả"
                 checked={allChecked ? true : selected.length > 0 ? "indeterminate" : false}

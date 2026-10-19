@@ -5,10 +5,10 @@ import { Input } from "@/components/ui/input";
 import { ListFilter, PauseCircle, Plus, RefreshCw } from "lucide-react";
 
 const tabCls = (active: boolean) =>
-  "flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
+  "flex h-10 cursor-pointer items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-all " +
   (active
-    ? "bg-primary text-primary-foreground"
-    : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground");
+    ? "bg-card text-foreground shadow-sm border border-border"
+    : "bg-muted/50 text-muted-foreground border border-transparent hover:bg-muted hover:text-foreground");
 
 interface BoardProjectTabsProps {
   projectList: Array<{ key: string; openCount: number; syncDisabled?: boolean }>;
@@ -69,12 +69,12 @@ export function BoardProjectTabs({
         >
           {p.key}
           {p.syncDisabled && (
-            <PauseCircle className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" aria-label="Đã tắt đồng bộ" />
+            <PauseCircle className="h-4 w-4 text-warning" aria-label="Đã tắt đồng bộ" />
           )}
           <span
             className={
-              "rounded-full px-1.5 text-xs " +
-              (selectedProject === p.key ? "bg-primary-foreground/20" : "bg-background/60")
+              "rounded-full px-2 py-0.5 text-2xs font-semibold tabular-nums " +
+              (selectedProject === p.key ? "bg-muted text-foreground" : "bg-background/80 text-muted-foreground")
             }
           >
             {p.openCount}
@@ -86,10 +86,10 @@ export function BoardProjectTabs({
         <button
           onClick={() => (showPicker ? onClosePicker() : onOpenPicker())}
           className={
-            "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
+            "flex h-10 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm font-medium transition-all " +
             (preferredCount > 0
-              ? "border border-primary/40 bg-primary/10 text-primary"
-              : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground")
+              ? "border border-primary/30 bg-primary-soft text-primary-soft-foreground font-semibold shadow-xs"
+              : "bg-muted/50 text-muted-foreground border border-transparent hover:bg-muted hover:text-foreground")
           }
         >
           <ListFilter className="h-4 w-4" />
@@ -114,7 +114,7 @@ export function BoardProjectTabs({
             </div>
 
             <div className="mt-2.5 border-t border-border pt-2.5">
-              <p className="mb-1 text-[11px] font-semibold text-muted-foreground">
+              <p className="mb-1 text-xs font-semibold text-muted-foreground">
                 Nhập dự án muốn có
               </p>
               <div className="flex gap-1.5">
@@ -122,7 +122,7 @@ export function BoardProjectTabs({
                   value={boardNewKey}
                   onChange={(e) => onKeyChange(e.target.value)}
                   placeholder="Mã dự án (VD: ABC)"
-                  className="h-8 font-mono text-xs uppercase"
+                  className="h-9 font-mono text-xs uppercase"
                   disabled={boardValidating}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -136,29 +136,29 @@ export function BoardProjectTabs({
                   variant="secondary"
                   disabled={boardValidating || !boardNewKey.trim()}
                   onClick={() => void onAddProject()}
-                  className="h-8 shrink-0 cursor-pointer px-2.5 text-xs gap-1"
+                  className="h-9 shrink-0 cursor-pointer px-3 text-xs gap-1.5"
                 >
                   {boardValidating ? (
-                    <RefreshCw className="h-3 w-3 animate-spin motion-reduce:animate-none" />
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
                   ) : (
-                    <Plus className="h-3 w-3" />
+                    <Plus className="h-3.5 w-3.5" />
                   )}
                   Thêm
                 </Button>
               </div>
               {boardValidateError && (
-                <p className="mt-1 text-[11px] font-medium text-destructive">{boardValidateError}</p>
+                <p className="mt-1 text-xs font-medium text-destructive">{boardValidateError}</p>
               )}
             </div>
 
             <div className="mt-2.5 flex items-center justify-between border-t border-border pt-2">
               <button
                 onClick={onSelectAllKeys}
-                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                className="cursor-pointer text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
               >
                 Chọn tất cả
               </button>
-              <Button size="sm" variant="ghost" onClick={onCommit}>
+              <Button size="sm" variant="ghost" onClick={onCommit} className="cursor-pointer">
                 Xong
               </Button>
             </div>

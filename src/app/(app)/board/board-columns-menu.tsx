@@ -67,24 +67,24 @@ export function BoardColumnsMenu({
           variant="outline"
           size="sm"
           className={cn(
-            "h-8 cursor-pointer gap-1.5 font-medium transition-colors",
+            "h-9 cursor-pointer gap-1.5 font-medium transition-colors",
             effectiveView === "board" && hiddenCols.size > 0
-              ? "border-amber-500/50 bg-amber-500/10 text-amber-900 hover:bg-amber-500/15 dark:text-amber-200"
+              ? "border-warning/50 bg-warning/10 text-warning hover:bg-warning/15"
               : effectiveView === "list" && hiddenTableCols.size > 0
-              ? "border-amber-500/50 bg-amber-500/10 text-amber-900 hover:bg-amber-500/15 dark:text-amber-200"
+              ? "border-warning/50 bg-warning/10 text-warning hover:bg-warning/15"
               : ""
           )}
           aria-label="Tùy chỉnh ẩn/hiện cột"
         >
-          <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
+          <SlidersHorizontal className="h-4 w-4" aria-hidden />
           <span>Tùy chỉnh cột</span>
           <span
             className={cn(
-              "rounded-full px-1.5 py-0.2 text-[10px] tabular-nums font-semibold",
+              "rounded-full px-2 py-0.5 text-2xs tabular-nums font-semibold",
               effectiveView === "board" && hiddenCols.size > 0
-                ? "bg-amber-500/25 text-amber-950 dark:text-amber-100"
+                ? "bg-warning/20 text-warning"
                 : effectiveView === "list" && hiddenTableCols.size > 0
-                ? "bg-amber-500/25 text-amber-950 dark:text-amber-100"
+                ? "bg-warning/20 text-warning"
                 : "bg-muted text-muted-foreground"
             )}
           >
@@ -104,11 +104,11 @@ export function BoardColumnsMenu({
             <div className="border-b border-border/50 px-3 py-2">
               <div className="flex items-center justify-between">
                 <DropdownMenuLabel className="p-0 text-sm font-semibold">Tùy chỉnh hiển thị cột</DropdownMenuLabel>
-                <span className="text-[11px] font-medium text-muted-foreground">
+                <span className="text-xs font-medium text-muted-foreground">
                   Hiện {visibleColumns.length}/{columns.length} cột
                 </span>
               </div>
-              <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+              <p className="mt-0.5 text-xs leading-4 text-muted-foreground">
                 Bật/tắt cột để tùy biến bảng. Lưu riêng cho dự án {selectedProject}.
               </p>
             </div>
@@ -171,13 +171,13 @@ export function BoardColumnsMenu({
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground font-medium">
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-2xs tabular-nums text-muted-foreground font-medium">
                         {count}
                       </span>
                       {visible ? (
                         <Eye className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                       ) : (
-                        <EyeOff className="h-3.5 w-3.5 text-rose-500" aria-hidden />
+                        <EyeOff className="h-3.5 w-3.5 text-destructive" aria-hidden />
                       )}
                     </div>
                   </div>
@@ -217,7 +217,7 @@ export function BoardColumnsMenu({
           <>
             <div className="border-b border-border/50 px-3 py-2">
               <DropdownMenuLabel className="p-0 text-sm font-semibold">Cột trong danh sách</DropdownMenuLabel>
-              <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+              <p className="mt-0.5 text-xs leading-4 text-muted-foreground">
                 Chọn các trường thông tin bạn muốn hiển thị trên bảng danh sách.
               </p>
             </div>
@@ -256,7 +256,7 @@ export function BoardColumnsMenu({
                     {visible ? (
                       <Eye className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                     ) : (
-                      <EyeOff className="h-3.5 w-3.5 text-rose-500" aria-hidden />
+                      <EyeOff className="h-3.5 w-3.5 text-destructive" aria-hidden />
                     )}
                   </div>
                 );

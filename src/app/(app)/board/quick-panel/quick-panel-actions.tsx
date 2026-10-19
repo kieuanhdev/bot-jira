@@ -40,8 +40,8 @@ function ActionMessage({ message }: { message: QuickPanelActionMessage | null })
       className={cn(
         "flex flex-wrap items-center gap-2 px-4 py-1.5 text-xs font-medium",
         message.type === "success"
-          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-          : "bg-destructive/10 text-destructive"
+          ? "bg-success/12 text-success"
+          : "bg-destructive/12 text-destructive"
       )}
     >
       <span className="min-w-0 break-words">{message.text}</span>
@@ -76,10 +76,10 @@ export function QuickPanelActions({
   return (
     <>
       <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/20 px-4 py-2">
-        <Button variant="outline" size="sm" onClick={onLogWork} className="h-7 cursor-pointer gap-1.5 text-xs">
+        <Button variant="outline" size="sm" onClick={onLogWork} className="h-8 cursor-pointer gap-1.5 text-xs">
           <Timer className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /> Log work
         </Button>
-        <Button variant="outline" size="sm" onClick={onLinkIssue} className="h-7 cursor-pointer gap-1.5 text-xs">
+        <Button variant="outline" size="sm" onClick={onLinkIssue} className="h-8 cursor-pointer gap-1.5 text-xs">
           <Link2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /> Link issue
         </Button>
         <Button
@@ -87,11 +87,11 @@ export function QuickPanelActions({
           size="sm"
           onClick={onToggleFlag}
           aria-pressed={flagged}
-          className="h-7 cursor-pointer gap-1.5 text-xs"
+          className="h-8 cursor-pointer gap-1.5 text-xs"
           title="Thêm/bỏ nhãn Impediment trên Jira (không phải cờ Flagged của Jira)"
         >
           <Flag
-            className={flagged ? "h-3.5 w-3.5 text-amber-500" : "h-3.5 w-3.5 text-muted-foreground"}
+            className={flagged ? "h-3.5 w-3.5 text-warning" : "h-3.5 w-3.5 text-muted-foreground"}
             aria-hidden="true"
           />
           {flagged ? "Bỏ Impediment" : "Impediment"}
@@ -101,7 +101,7 @@ export function QuickPanelActions({
             variant="outline"
             size="sm"
             onClick={onCopyLink}
-            className="h-7 cursor-pointer gap-1.5 text-xs"
+            className="h-8 cursor-pointer gap-1.5 text-xs"
             title="Sao chép liên kết Jira"
           >
             <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /> Copy link
@@ -113,7 +113,7 @@ export function QuickPanelActions({
           size="sm"
           disabled={cloning}
           onClick={onClone}
-          className="h-7 gap-1.5 text-xs cursor-pointer"
+          className="h-8 gap-1.5 text-xs cursor-pointer"
           title="Clone task này và liên kết với bản gốc"
         >
           {cloning ? (
@@ -130,7 +130,7 @@ export function QuickPanelActions({
           size="sm"
           disabled={creatingBranch}
           onClick={onCreateBranch}
-          className="h-7 gap-1.5 text-xs cursor-pointer"
+          className="h-8 gap-1.5 text-xs cursor-pointer"
           title="Tạo nhánh Bitbucket theo định dạng chuẩn"
         >
           {creatingBranch ? (
@@ -147,7 +147,7 @@ export function QuickPanelActions({
           variant="outline"
           size="sm"
           onClick={onDelete}
-          className="ml-auto h-7 cursor-pointer gap-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+          className="ml-auto h-8 cursor-pointer gap-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
           title="Xóa task trên Jira"
         >
           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Xóa

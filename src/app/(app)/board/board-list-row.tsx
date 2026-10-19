@@ -80,20 +80,20 @@ export function BoardListRow({
       data-row
       data-issue-key={issue.jiraKey}
       data-selected={isSelected || undefined}
-      className="cursor-pointer border-t transition-colors hover:bg-muted/30 data-[selected]:bg-primary/5"
+      className="h-11 min-h-[44px] cursor-pointer border-t border-border/60 transition-colors hover:bg-muted/40 data-[selected]:bg-primary-soft/40"
       onClick={() => onOpen(issue)}
     >
-      <td className="px-3 py-2" onClick={stop}>
+      <td className="px-3 py-2.5" onClick={stop}>
         <Checkbox
           aria-label={`Chọn ${issue.jiraKey}`}
           checked={isSelected}
           onCheckedChange={() => onToggleSelect(issue.jiraKey)}
         />
       </td>
-      <td className="px-3 py-2 font-mono text-xs text-primary">{issue.jiraKey}</td>
-      <td className="max-w-xs truncate px-3 py-2 font-medium">{issue.summary}</td>
+      <td className="px-3 py-2.5 font-mono text-xs font-semibold text-primary">{issue.jiraKey}</td>
+      <td className="max-w-xs truncate px-3 py-2.5 text-sm font-semibold text-foreground">{issue.summary}</td>
       {show("type") && (
-        <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
+        <td className="max-w-48 px-3 py-2.5 text-muted-foreground" onClick={stop}>
           <SelectCell
             label={`Đổi loại ${issue.jiraKey}`}
             value={issue.type || null}
@@ -103,7 +103,7 @@ export function BoardListRow({
         </td>
       )}
       {show("points") && (
-        <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
+        <td className="max-w-48 px-3 py-2.5 text-muted-foreground" onClick={stop}>
           <PointsCell
             jiraKey={issue.jiraKey}
             value={issue.points}
@@ -113,7 +113,7 @@ export function BoardListRow({
         </td>
       )}
       {show("status") && (
-        <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
+        <td className="max-w-48 px-3 py-2.5 text-muted-foreground" onClick={stop}>
           <StatusCell
             jiraKey={issue.jiraKey}
             status={status}
@@ -122,12 +122,12 @@ export function BoardListRow({
         </td>
       )}
       {show("assignee") && (
-        <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
+        <td className="max-w-48 px-3 py-2.5 text-muted-foreground" onClick={stop}>
           {person("assignee", issue.assigneeJira, options.assignees, "Chưa gán")}
         </td>
       )}
       {show("priority") && (
-        <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
+        <td className="max-w-48 px-3 py-2.5 text-muted-foreground" onClick={stop}>
           <SelectCell
             label={`Đổi độ ưu tiên ${issue.jiraKey}`}
             value={issue.priority || null}
@@ -137,7 +137,7 @@ export function BoardListRow({
         </td>
       )}
       {show("due") && (
-        <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
+        <td className="max-w-48 px-3 py-2.5 text-muted-foreground" onClick={stop}>
           <DateCell
             label={`Đổi hạn ${issue.jiraKey}`}
             value={issue.dueDate}
@@ -148,7 +148,7 @@ export function BoardListRow({
         </td>
       )}
       {show("epic") && (
-        <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
+        <td className="max-w-48 px-3 py-2.5 text-muted-foreground" onClick={stop}>
           <SelectCell
             label={`Đổi epic ${issue.jiraKey}`}
             value={issue.epic ?? null}
@@ -159,7 +159,7 @@ export function BoardListRow({
         </td>
       )}
       {show("fixVersion") && (
-        <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
+        <td className="max-w-48 px-3 py-2.5 text-muted-foreground" onClick={stop}>
           <FixVersionCell
             jiraKey={issue.jiraKey}
             names={issue.fixVersionNames}
@@ -178,22 +178,22 @@ export function BoardListRow({
         </td>
       )}
       {show("reporter") && (
-        <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
+        <td className="max-w-48 px-3 py-2.5 text-muted-foreground" onClick={stop}>
           {person("reporter", issue.reporterJira, options.reporters)}
         </td>
       )}
       {show("approver") && (
-        <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
+        <td className="max-w-48 px-3 py-2.5 text-muted-foreground" onClick={stop}>
           {person("approver", issue.approverJira, options.approvers, "Xóa approver")}
         </td>
       )}
       {show("tester") && (
-        <td className="max-w-48 px-3 py-2 text-muted-foreground" onClick={stop}>
+        <td className="max-w-48 px-3 py-2.5 text-muted-foreground" onClick={stop}>
           {person("tester", issue.testerJira, options.testers, "Xóa tester")}
         </td>
       )}
-      {show("created") && <td className="px-3 py-2 text-muted-foreground">{dateLabel(issue.createdAt)}</td>}
-      {show("updated") && <td className="px-3 py-2 text-muted-foreground">{timeAgo(issue.updatedAt)}</td>}
+      {show("created") && <td className="px-3 py-2.5 text-muted-foreground">{dateLabel(issue.createdAt)}</td>}
+      {show("updated") && <td className="px-3 py-2.5 text-muted-foreground">{timeAgo(issue.updatedAt)}</td>}
     </tr>
   );
 }
