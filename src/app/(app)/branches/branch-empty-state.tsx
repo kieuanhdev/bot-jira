@@ -35,7 +35,7 @@ export function BranchEmptyState({ hasFilters, onResetFilters }: BranchEmptyStat
       title="Chưa có nhánh nào được theo dõi"
       hint={
         <>
-          Cấu hình <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">BITBUCKET_REPOS</code>{" "}
+          Cấu hình <code className="rounded bg-muted px-1 py-0.5 font-mono text-2xs">BITBUCKET_REPOS</code>{" "}
           trong tệp cấu hình để bắt đầu đồng bộ các nhánh.
         </>
       }

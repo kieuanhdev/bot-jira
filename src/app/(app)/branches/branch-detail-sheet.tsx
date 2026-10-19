@@ -282,9 +282,9 @@ export function BranchDetailSheet({
                     <Badge
                       variant={
                         branch.prState === "OPEN"
-                          ? "info"
-                          : branch.prState === "MERGED"
                           ? "success"
+                          : branch.prState === "MERGED"
+                          ? "info"
                           : branch.prState === "DECLINED"
                           ? "danger"
                           : "outline"

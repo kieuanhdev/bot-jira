@@ -148,7 +148,7 @@ export function BranchToolbar({
               <span>{tab.label}</span>
               {tab.count !== undefined && (
                 <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  className={`px-1.5 py-0.2 rounded-full text-2xs font-bold ${
                     isActive
                       ? "bg-white/20 text-white"
                       : tab.highlight

@@ -143,7 +143,7 @@ export function BranchLinkDialog({
             />
             {!exactPicked && results.length > 0 && (
               <div className="flex flex-col gap-1">
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-2xs text-muted-foreground">
                   {typed.length >= 2 ? "Kết quả tìm kiếm" : "Gợi ý theo tên nhánh"}
                 </span>
                 <ul className="max-h-48 overflow-y-auto rounded-md border border-border divide-y divide-border">
@@ -157,7 +157,7 @@ export function BranchLinkDialog({
                       >
                         <span className="font-mono font-semibold text-primary shrink-0">{r.jiraKey}</span>
                         <span className="truncate text-foreground">{r.summary}</span>
-                        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{r.status}</span>
+                        <span className="ml-auto shrink-0 text-2xs text-muted-foreground">{r.status}</span>
                       </button>
                     </li>
                   ))}
@@ -165,12 +165,12 @@ export function BranchLinkDialog({
               </div>
             )}
             {typed.length >= 2 && !search.isFetching && results.length === 0 && (
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-2xs text-muted-foreground">
                 Không tìm thấy task nào khớp trong bộ nhớ đệm Jira.
               </span>
             )}
             {typed.length > 0 && !keyValid && (
-              <span className={cn("text-[11px] text-muted-foreground")}>
+              <span className={cn("text-2xs text-muted-foreground")}>
                 Chọn một task trong danh sách hoặc nhập đúng mã (ví dụ EPM-3395).
               </span>
             )}

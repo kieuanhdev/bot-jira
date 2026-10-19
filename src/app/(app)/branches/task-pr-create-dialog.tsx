@@ -147,7 +147,7 @@ export function TaskPrCreateDialog({ jiraKey, summary, open, onOpenChange, onSuc
                   )}
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-1.5">
-                      <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-2xs text-muted-foreground">
                         {r.repo}
                       </span>
                       <span className="truncate font-mono font-semibold">{r.branch}</span>
@@ -233,7 +233,7 @@ export function TaskPrCreateDialog({ jiraKey, summary, open, onOpenChange, onSuc
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-1.5">
-                        <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                        <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-2xs text-muted-foreground">
                           {item.repo}
                         </span>
                         <span className="truncate font-mono font-semibold text-foreground">{item.branch}</span>

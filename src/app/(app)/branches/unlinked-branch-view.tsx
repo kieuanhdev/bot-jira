@@ -109,7 +109,7 @@ export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink, onLinkMany
                 </p>
               )}
               {item.lastCommitAt && (
-                <div className="text-muted-foreground flex items-center gap-1 text-[11px]">
+                <div className="text-muted-foreground flex items-center gap-1 text-2xs">
                   <Clock className="w-3 h-3" />
                   <span>Commit gần nhất: {timeAgo(item.lastCommitAt)}</span>
                   {item.latestCommitSha && (

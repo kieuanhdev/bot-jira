@@ -58,7 +58,7 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
   const getPrStateBadge = (state: string | null, merged: boolean) => {
     if (merged || state?.toUpperCase() === "MERGED") {
       return (
-        <Badge variant="secondary" className="bg-purple-500/10 text-purple-400 border-purple-500/20 text-xs">
+        <Badge variant="info" className="text-xs">
           MERGED
         </Badge>
       );
@@ -70,10 +70,17 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
         </Badge>
       );
     }
-    if (state?.toUpperCase() === "DECLINED" || state?.toUpperCase() === "CLOSED") {
+    if (state?.toUpperCase() === "DECLINED") {
+      return (
+        <Badge variant="danger" className="text-xs">
+          DECLINED
+        </Badge>
+      );
+    }
+    if (state?.toUpperCase() === "CLOSED") {
       return (
         <Badge variant="outline" className="text-muted-foreground text-xs">
-          {state.toUpperCase()}
+          CLOSED
         </Badge>
       );
     }
@@ -169,7 +176,7 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
                     </span>
                   )}
                   {task.prSummary.merged > 0 && (
-                    <span className="flex items-center gap-1 bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-1 rounded">
+                    <span className="flex items-center gap-1 bg-info/10 text-info border border-info/20 px-2 py-1 rounded">
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>{task.prSummary.merged} merged</span>
                     </span>
@@ -229,7 +236,7 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
                           variant="outline"
                           size="sm"
                           onClick={() => onCreatePrs(task)}
-                          className="h-6 gap-1 px-2 text-[11px] cursor-pointer"
+                          className="h-6 gap-1 px-2 text-2xs cursor-pointer"
                         >
                           <GitPullRequest className="w-3 h-3" aria-hidden="true" />
                           Tạo PR hàng loạt
@@ -241,7 +248,7 @@ export function TaskDeliveryList({ tasks, bitbucketBaseUrl, jiraBaseUrl, onAttac
                           variant="outline"
                           size="sm"
                           onClick={() => onAttachBranch(task)}
-                          className="h-6 gap-1 px-2 text-[11px] cursor-pointer"
+                          className="h-6 gap-1 px-2 text-2xs cursor-pointer"
                         >
                           <Link2 className="w-3 h-3" aria-hidden="true" />
                           Gắn nhánh

@@ -127,7 +127,7 @@ export function TaskBranchLinkDialog({
                         <span className="truncate font-mono font-semibold text-foreground">{item.branch}</span>
                         {item.linkedKeys.length > 0 && (
                           <span
-                            className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                            className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground"
                             title="Nhánh này đã gắn với task khác, gắn thêm sẽ dùng chung nhánh"
                           >
                             đã gắn: {item.linkedKeys.join(", ")}

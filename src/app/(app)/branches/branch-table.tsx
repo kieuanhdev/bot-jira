@@ -27,7 +27,7 @@ export function BranchTable({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectBran
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-card">
       <table className="w-full text-left text-xs">
-        <thead className="border-b border-border bg-muted/50 text-[11px] font-medium text-muted-foreground">
+        <thead className="border-b border-border bg-muted/50 text-2xs font-medium text-muted-foreground">
           <tr>
             <th className="py-2.5 pl-4 pr-3">Task & Ngữ cảnh</th>
             <th className="px-3 py-2.5">Nhánh / Kho lưu trữ</th>
@@ -93,7 +93,7 @@ export function BranchTable({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectBran
                               ? "info"
                               : "outline"
                           }
-                          className="h-4 px-1.5 text-[10px]"
+                          className="text-2xs"
                         >
                           {row.task.status}
                         </Badge>
@@ -102,7 +102,7 @@ export function BranchTable({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectBran
                         {row.task.summary}
                       </span>
                       {row.task.assigneeJira && (
-                        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <div className="flex items-center gap-1 text-2xs text-muted-foreground">
                           <User className="h-3 w-3" />
                           <span>{row.task.assigneeJira}</span>
                         </div>
@@ -114,11 +114,11 @@ export function BranchTable({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectBran
                         <Link2 className="h-3.5 w-3.5" />
                         <span className="font-mono font-semibold">Gợi ý: {row.suggestedJiraKey}</span>
                       </div>
-                      <span className="text-[11px] text-muted-foreground">Ứng viên cần xem xét</span>
+                      <span className="text-2xs text-muted-foreground">Ứng viên cần xem xét</span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <span className="text-[11px] italic">Chưa gắn task Jira</span>
+                      <span className="text-2xs italic">Chưa gắn task Jira</span>
                     </div>
                   )}
                 </td>
@@ -144,7 +144,7 @@ export function BranchTable({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectBran
                         {row.branch}
                       </span>
                     )}
-                    <span className="truncate text-[11px] text-muted-foreground" title={row.repo}>
+                    <span className="truncate text-2xs text-muted-foreground" title={row.repo}>
                       {row.repo}
                       {row.prDestinationBranch ? ` → ${row.prDestinationBranch}` : ""}
                     </span>
@@ -173,14 +173,14 @@ export function BranchTable({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectBran
                         <Badge
                           variant={
                             row.prState === "OPEN"
-                              ? "info"
-                              : row.prState === "MERGED"
                               ? "success"
+                              : row.prState === "MERGED"
+                              ? "info"
                               : row.prState === "DECLINED"
                               ? "danger"
                               : "outline"
                           }
-                          className="h-4 px-1.5 text-[10px]"
+                          className="text-2xs"
                         >
                           {row.prState === "OPEN"
                             ? "Đang mở"
@@ -192,13 +192,13 @@ export function BranchTable({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectBran
                         </Badge>
                       </div>
                       {row.prTitle && (
-                        <span className="max-w-[160px] truncate text-[11px] text-muted-foreground" title={row.prTitle}>
+                        <span className="max-w-[160px] truncate text-2xs text-muted-foreground" title={row.prTitle}>
                           {row.prTitle}
                         </span>
                       )}
                     </div>
                   ) : (
-                    <span className="text-[11px] text-muted-foreground">Không có PR</span>
+                    <span className="text-2xs text-muted-foreground">Không có PR</span>
                   )}
                 </td>
 
@@ -206,7 +206,7 @@ export function BranchTable({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectBran
                 <td className="px-3 py-3 align-top whitespace-nowrap text-muted-foreground">
                   <div className="flex flex-col gap-0.5">
                     <span>{row.prUpdatedAt ? timeAgo(row.prUpdatedAt) : timeAgo(row.checkedAt)}</span>
-                    <span className="text-[10px] text-muted-foreground/80">
+                    <span className="text-2xs text-muted-foreground/80">
                       {row.prUpdatedAt ? "PR cập nhật" : "Đã kiểm tra"}
                     </span>
                   </div>
@@ -226,14 +226,14 @@ export function BranchTable({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectBran
                         }`}
                       />
                       <span
-                        className="line-clamp-2 text-[11px] font-medium leading-tight text-foreground"
+                        className="line-clamp-2 text-2xs font-medium leading-tight text-foreground"
                         title={primarySignal.message}
                       >
                         {primarySignal.message}
                       </span>
                     </div>
                   ) : (
-                    <span className="text-[11px] text-muted-foreground/60">—</span>
+                    <span className="text-2xs text-muted-foreground/60">—</span>
                   )}
                 </td>
 

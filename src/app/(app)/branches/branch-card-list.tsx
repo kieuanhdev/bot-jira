@@ -82,7 +82,7 @@ export function BranchCardList({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectB
                           ? "info"
                           : "outline"
                       }
-                      className="h-4 px-1.5 text-[10px]"
+                      className="text-2xs"
                     >
                       {row.task.status}
                     </Badge>
@@ -104,7 +104,7 @@ export function BranchCardList({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectB
                       e.stopPropagation();
                       onOpenLinkDialog(row);
                     }}
-                    className="h-6 border-warning/30 px-2 text-[10px] text-warning hover:bg-warning/10"
+                    className="h-6 border-warning/30 px-2 text-2xs text-warning hover:bg-warning/10"
                   >
                     Xác nhận
                   </Button>
@@ -162,7 +162,7 @@ export function BranchCardList({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectB
               ) : (
                 <span className="truncate font-medium text-foreground">{row.branch}</span>
               )}
-              <span className="truncate text-[11px] text-muted-foreground">
+              <span className="truncate text-2xs text-muted-foreground">
                 {row.repo}
                 {row.prDestinationBranch ? ` → ${row.prDestinationBranch}` : ""}
               </span>
@@ -178,14 +178,14 @@ export function BranchCardList({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectB
                     <Badge
                       variant={
                         row.prState === "OPEN"
-                          ? "info"
-                          : row.prState === "MERGED"
                           ? "success"
+                          : row.prState === "MERGED"
+                          ? "info"
                           : row.prState === "DECLINED"
                           ? "danger"
                           : "outline"
                       }
-                      className="h-4 px-1 text-[10px]"
+                      className="text-2xs"
                     >
                       {row.prState === "OPEN"
                         ? "Đang mở"
@@ -197,17 +197,17 @@ export function BranchCardList({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectB
                     </Badge>
                   </div>
                 ) : (
-                  <span className="text-[11px] text-muted-foreground">Không có PR</span>
+                  <span className="text-2xs text-muted-foreground">Không có PR</span>
                 )}
 
                 <span className="text-muted-foreground/60">•</span>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-2xs text-muted-foreground">
                   {row.prUpdatedAt ? timeAgo(row.prUpdatedAt) : timeAgo(row.checkedAt)}
                 </span>
               </div>
 
               {row.task?.assigneeJira && (
-                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                <div className="flex items-center gap-1 text-2xs text-muted-foreground">
                   <User className="h-3 w-3" />
                   <span>{row.task.assigneeJira}</span>
                 </div>
@@ -216,7 +216,7 @@ export function BranchCardList({ items, bitbucketBaseUrl, jiraBaseUrl, onSelectB
 
             {/* Attention Alert if any */}
             {primarySignal && primarySignal.rule !== "unlinked" && (
-              <div className="mt-2 flex items-center gap-1.5 border-t border-border/50 pt-2 text-[11px]">
+              <div className="mt-2 flex items-center gap-1.5 border-t border-border/50 pt-2 text-2xs">
                 <AlertTriangle
                   className={`h-3.5 w-3.5 shrink-0 ${
                     primarySignal.severity === "high"
