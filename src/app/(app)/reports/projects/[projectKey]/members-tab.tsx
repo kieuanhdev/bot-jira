@@ -57,9 +57,9 @@ const SIGNAL_CONFIG: Record<
   SupportSignal,
   { label: string; variant: "success" | "warning" | "danger" | "secondary"; icon: LucideIcon; bg: string }
 > = {
-  balanced: { label: "Cân bằng", variant: "success", icon: ShieldCheck, bg: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
-  high_load: { label: "Tải cao", variant: "warning", icon: Flame, bg: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
-  needs_unblock: { label: "Cần gỡ nghẽn", variant: "danger", icon: AlertTriangle, bg: "bg-red-500/10 text-red-600 dark:text-red-400" },
+  balanced: { label: "Cân bằng", variant: "success", icon: ShieldCheck, bg: "bg-success/10 text-success" },
+  high_load: { label: "Tải cao", variant: "warning", icon: Flame, bg: "bg-warning/10 text-warning" },
+  needs_unblock: { label: "Cần gỡ nghẽn", variant: "danger", icon: AlertTriangle, bg: "bg-destructive/10 text-destructive" },
   insufficient_data: { label: "Chưa đủ dữ liệu", variant: "secondary", icon: HelpCircle, bg: "bg-muted text-muted-foreground" },
 };
 
@@ -268,16 +268,16 @@ export function MembersTab({
                         {/* Member */}
                         <td className="py-3 px-3">
                           <div className="flex items-center gap-2.5">
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase ring-1 ring-primary/20">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-2xs font-bold uppercase ring-1 ring-primary/20">
                               {m.displayName.trim().slice(0, 2)}
                             </div>
                             <div className="flex flex-col">
                               <span className="font-semibold text-foreground group-hover:text-primary transition-colors flex items-center gap-1">
-                                {m.displayName}
-                                <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
-                              </span>
+                                 {m.displayName}
+                                 <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
+                               </span>
                               {m.assignee !== "unassigned" && (
-                                <span className="text-[11px] text-muted-foreground font-mono">
+                                <span className="text-2xs text-muted-foreground font-mono">
                                   @{m.assignee}
                                 </span>
                               )}
@@ -291,13 +291,13 @@ export function MembersTab({
                             <span className="text-foreground text-sm font-bold">
                               {m.completedTasks}
                             </span>
-                            <span className="text-muted-foreground text-[11px]">task</span>
+                            <span className="text-muted-foreground text-2xs">task</span>
                             {m.deltaCompletedTasks !== null && m.deltaCompletedTasks !== undefined && (
                               <span
-                                className={`inline-flex items-center text-[10px] ml-1 ${
+                                className={`inline-flex items-center text-2xs ml-1 ${
                                   m.deltaCompletedTasks >= 0
-                                    ? "text-emerald-600 dark:text-emerald-400"
-                                    : "text-amber-600 dark:text-amber-400"
+                                    ? "text-success"
+                                    : "text-warning"
                                 }`}
                               >
                                 {m.deltaCompletedTasks >= 0 ? (
@@ -313,7 +313,7 @@ export function MembersTab({
 
                         {/* WIP */}
                         <td className="py-3 px-3 text-center font-medium">
-                          <span className={m.currentWip >= 4 ? "text-amber-600 font-bold" : ""}>
+                          <span className={m.currentWip >= 4 ? "text-warning font-bold" : ""}>
                             {m.currentWip}
                           </span>
                         </td>
@@ -321,24 +321,24 @@ export function MembersTab({
                         {/* Blocked */}
                         <td className="py-3 px-3 text-center">
                           {m.currentBlocked > 0 ? (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-semibold bg-red-500/10 text-red-600 dark:text-red-400">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-2xs font-semibold bg-destructive/10 text-destructive">
                               {m.currentBlocked}
                             </span>
                           ) : (
-                            <span className="text-muted-foreground text-[11px]">0</span>
+                            <span className="text-muted-foreground text-2xs">0</span>
                           )}
                         </td>
 
                         {/* Overdue / Over SLA */}
                         <td className="py-3 px-3 text-center">
                           {m.currentOverdue > 0 || m.currentOverSla > 0 ? (
-                            <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
+                            <span className="inline-flex items-center gap-1 text-warning font-medium">
                               {m.currentOverdue > 0 && `${m.currentOverdue} quá hạn`}
                               {m.currentOverdue > 0 && m.currentOverSla > 0 && ", "}
                               {m.currentOverSla > 0 && `${m.currentOverSla} quá SLA`}
                             </span>
                           ) : (
-                            <span className="text-muted-foreground text-[11px]">Đúng hạn</span>
+                            <span className="text-muted-foreground text-2xs">Đúng hạn</span>
                           )}
                         </td>
 
@@ -355,7 +355,7 @@ export function MembersTab({
                         {/* Reasons */}
                         <td className="py-3 px-3 text-muted-foreground max-w-xs">
                           {m.supportReasons.length > 0 ? (
-                            <ul className="list-disc list-inside space-y-0.5 text-[11px]">
+                            <ul className="list-disc list-inside space-y-0.5 text-2xs">
                               {m.supportReasons.map((r, idx) => (
                                 <li key={idx} className="line-clamp-1 truncate" title={r}>
                                   {r}
@@ -363,7 +363,7 @@ export function MembersTab({
                               ))}
                             </ul>
                           ) : (
-                            <span className="text-[11px] text-muted-foreground">Không có cảnh báo</span>
+                            <span className="text-2xs text-muted-foreground">Không có cảnh báo</span>
                           )}
                         </td>
 
@@ -380,7 +380,7 @@ export function MembersTab({
                                     memberName: m.displayName,
                                   });
                                 }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-teal-600 dark:text-teal-400 hover:bg-teal-500/10 cursor-pointer transition-colors"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-primary hover:bg-primary-soft cursor-pointer transition-colors"
                                 title={`Xem công việc của ${m.displayName}`}
                               >
                                 <span>Xem task</span>

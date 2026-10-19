@@ -13,14 +13,14 @@ export function HiddenGroupsNotice({
 }) {
   return (
     <div className="mt-2.5 flex items-center justify-between rounded-md border border-warning/30 bg-warning/5 px-2.5 py-1.5 text-xs text-warning">
-      <span className="text-[11px]">
+      <span className="text-2xs">
         Đang ẩn <strong>{hiddenGroups.length}</strong> trạng thái khỏi biểu đồ (
         {hiddenGroups.map((g) => REPORT_STATUS_STYLE[g]?.label || g).join(", ")})
       </span>
       <button
         type="button"
         onClick={onShowAll}
-        className="text-[11px] font-semibold underline hover:opacity-80 cursor-pointer shrink-0 ml-2"
+        className="text-2xs font-semibold underline hover:opacity-80 cursor-pointer shrink-0 ml-2"
       >
         Hiện lại tất cả
       </button>
@@ -38,7 +38,7 @@ export function StageSummaryStrip({ stageStats, unitLabel }: { stageStats: Stage
           <Layers className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between gap-1 text-2xs text-muted-foreground">
             <span className="truncate">Chờ làm</span>
             <span className="font-semibold tabular-nums">{stageStats.backlog.pct}%</span>
           </div>
@@ -55,7 +55,7 @@ export function StageSummaryStrip({ stageStats, unitLabel }: { stageStats: Stage
           <PlayCircle className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between gap-1 text-2xs text-muted-foreground">
             <span className="truncate">Đang làm (WIP)</span>
             <span className="font-semibold tabular-nums">{stageStats.wip.pct}%</span>
           </div>
@@ -84,10 +84,10 @@ export function StageSummaryStrip({ stageStats, unitLabel }: { stageStats: Stage
           <AlertOctagon className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between gap-1 text-2xs text-muted-foreground">
             <span className="truncate">Bị nghẽn</span>
             {stageStats.blocked.count > 0 && (
-              <span className="inline-flex items-center rounded px-1 text-[10px] font-bold text-destructive bg-destructive/10">
+              <span className="inline-flex items-center rounded px-1 text-2xs font-bold text-destructive bg-destructive/10">
                 Cần gỡ
               </span>
             )}
@@ -111,7 +111,7 @@ export function StageSummaryStrip({ stageStats, unitLabel }: { stageStats: Stage
           <CheckCircle2 className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between gap-1 text-2xs text-muted-foreground">
             <span className="truncate">Hoàn thành</span>
             <span className="font-semibold text-success tabular-nums">
               {stageStats.done.pct}%

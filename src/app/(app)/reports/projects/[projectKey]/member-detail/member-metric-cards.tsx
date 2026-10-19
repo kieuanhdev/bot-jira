@@ -33,7 +33,7 @@ export function MemberMetricCards({
         {analysis.totalTasks}{" "}
         <span className="text-xs font-normal text-muted-foreground">task</span>
       </div>
-      <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+      <div className="mt-2 flex items-center justify-between text-2xs text-muted-foreground">
         <span>Tiến độ hoàn thành</span>
         <span className="font-semibold text-foreground">{analysis.completionRate}%</span>
       </div>
@@ -48,12 +48,12 @@ export function MemberMetricCards({
     {/* Metric 2: Completed tasks */}
     <div
       onClick={() => drillDown("completed")}
-      className="group cursor-pointer rounded-xl border border-border bg-card p-3.5 shadow-2xs transition-all duration-200 hover:border-emerald-500/40 hover:bg-muted/30 hover:-translate-y-0.5"
+      className="group cursor-pointer rounded-xl border border-border bg-card p-3.5 shadow-2xs transition-all duration-200 hover:border-success/40 hover:bg-muted/30 hover:-translate-y-0.5"
       title={`Xem việc hoàn thành của ${member.displayName}`}
     >
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>{isVersionScope ? "Đã hoàn thành" : "Hoàn thành trong kỳ"}</span>
-        <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+        <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
       </div>
       <div className="mt-2 flex items-baseline gap-2">
         <span className="text-2xl font-bold tabular-nums text-foreground">
@@ -64,8 +64,8 @@ export function MemberMetricCards({
           <span
             className={`inline-flex items-center text-xs font-medium ${
               member.deltaCompletedTasks >= 0
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-amber-600 dark:text-amber-400"
+                ? "text-success"
+                : "text-warning"
             }`}
             title="Thay đổi so với kỳ trước"
           >
@@ -78,7 +78,7 @@ export function MemberMetricCards({
           </span>
         )}
       </div>
-      <div className="mt-2 text-[11px] text-muted-foreground flex items-center justify-between">
+      <div className="mt-2 text-2xs text-muted-foreground flex items-center justify-between">
         <span>Nỗ lực ghi nhận</span>
         <span className="font-medium text-foreground">
           {member.completedPoints} pts · {analysis.effortSummary.completedHours}h
@@ -89,12 +89,12 @@ export function MemberMetricCards({
     {/* Metric 3: In Progress (WIP) */}
     <div
       onClick={() => drillDown("current_open")}
-      className="group cursor-pointer rounded-xl border border-border bg-card p-3.5 shadow-2xs transition-all duration-200 hover:border-amber-500/40 hover:bg-muted/30 hover:-translate-y-0.5"
+      className="group cursor-pointer rounded-xl border border-border bg-card p-3.5 shadow-2xs transition-all duration-200 hover:border-warning/40 hover:bg-muted/30 hover:-translate-y-0.5"
       title={`Xem việc đang làm của ${member.displayName}`}
     >
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>Đang làm (WIP)</span>
-        <Flame className="h-4 w-4 text-amber-500" aria-hidden="true" />
+        <Flame className="h-4 w-4 text-warning" aria-hidden="true" />
       </div>
       <div className="mt-2 flex items-baseline justify-between">
         <div className="text-2xl font-bold tabular-nums text-foreground">
@@ -102,18 +102,18 @@ export function MemberMetricCards({
           <span className="text-xs font-normal text-muted-foreground">task</span>
         </div>
         <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+          className={`rounded-full px-2 py-0.5 text-2xs font-semibold ${
             member.currentWip <= 3
-              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+              ? "bg-success/15 text-success"
               : member.currentWip <= 4
-              ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-              : "bg-red-500/15 text-red-600 dark:text-red-400"
+              ? "bg-warning/15 text-warning"
+              : "bg-destructive/15 text-destructive"
           }`}
         >
           {member.currentWip <= 3 ? "Tối ưu" : member.currentWip <= 4 ? "Tải cao" : "Quá tải"}
         </span>
       </div>
-      <div className="mt-2 text-[11px] text-muted-foreground flex items-center justify-between">
+      <div className="mt-2 text-2xs text-muted-foreground flex items-center justify-between">
         <span>Tỷ trọng tải</span>
         <span className="font-medium text-foreground">
           {analysis.composition.find((c) => c.key === "wip")?.percentage || 0}% tổng việc
@@ -150,7 +150,7 @@ export function MemberMetricCards({
         </span>
         <span className="text-xs font-normal text-muted-foreground">task rủi ro</span>
       </div>
-      <div className="mt-2 text-[11px] text-muted-foreground flex items-center justify-between">
+      <div className="mt-2 text-2xs text-muted-foreground flex items-center justify-between">
         <span>Chi tiết rủi ro</span>
         <span className="font-medium text-foreground">
           {member.currentBlocked > 0 ? `${member.currentBlocked} nghẽn` : "0 nghẽn"} ·{" "}

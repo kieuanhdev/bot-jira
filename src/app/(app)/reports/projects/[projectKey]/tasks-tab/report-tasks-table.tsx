@@ -71,28 +71,28 @@ export function ReportTasksTable({
 
                 <td className="py-2.5 px-3">
                   {task.activity === "completed" ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-success/10 text-success">
                       <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
                       {isVersionScope ? "Đã hoàn thành" : "Hoàn thành trong kỳ"}
                     </span>
                   ) : task.activity === "created" ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-info/10 text-info">
                       <FolderPlus className="h-3 w-3" aria-hidden="true" />
                       {isVersionScope ? "Thuộc version" : "Tạo mới trong kỳ"}
                     </span>
                   ) : task.activity === "current_open" ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-primary-soft text-primary">
                       <PlayCircle className="h-3 w-3" aria-hidden="true" /> Đang mở
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-muted text-muted-foreground">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-muted text-muted-foreground">
                       Không đổi
                     </span>
                   )}
                 </td>
 
                 <td className="py-2.5 px-3">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] bg-muted font-medium">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-2xs bg-muted font-medium">
                     {task.status}
                   </span>
                 </td>
@@ -108,13 +108,13 @@ export function ReportTasksTable({
                 <td className="py-2.5 px-3">
                   <div className="flex flex-wrap gap-1">
                     {task.risks.length === 0 ? (
-                      <span className="text-muted-foreground text-[11px]">Bình thường</span>
+                      <span className="text-muted-foreground text-2xs">Bình thường</span>
                     ) : (
                       task.risks.map((r: string) => (
                         <Badge
                           key={r}
                           variant={r === "blocked" ? "danger" : "warning"}
-                          className="text-[10px] px-1.5 py-0"
+                          className="text-2xs px-1.5 py-0"
                         >
                           {r === "blocked"
                             ? "Tắc nghẽn"

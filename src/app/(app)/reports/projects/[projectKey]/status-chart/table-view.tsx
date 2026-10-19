@@ -47,7 +47,7 @@ export function StatusTableView({
                 key={item.group}
                 onClick={() => onGroupClick(item.group)}
                 className={`transition-colors hover:bg-muted/50 cursor-pointer ${
-                  isSelected ? "bg-teal-500/10 font-medium" : ""
+                  isSelected ? "bg-primary-soft font-medium" : ""
                 }`}
               >
                 <td className="py-2.5 px-3">
@@ -57,7 +57,7 @@ export function StatusTableView({
                       {item.style.label}
                     </span>
                     {item.group === "Blocked" && item.count > 0 && (
-                      <Badge variant="danger" className="text-[10px] py-0 px-1.5 ml-1">
+                      <Badge variant="danger" className="text-2xs py-0 px-1.5 ml-1">
                         Cần gỡ
                       </Badge>
                     )}
@@ -99,7 +99,7 @@ export function StatusTableView({
                       e.stopPropagation();
                       onGroupClick(item.group);
                     }}
-                    className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-teal-600 dark:text-teal-400 hover:bg-teal-500/10 cursor-pointer font-medium"
+                    className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-primary hover:bg-primary-soft cursor-pointer font-medium"
                   >
                     <span>Xem task</span>
                     <ArrowRight className="h-3 w-3" />

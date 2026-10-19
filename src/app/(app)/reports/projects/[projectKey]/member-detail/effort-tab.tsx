@@ -108,7 +108,7 @@ export function EffortTab({ member, analysis }: EffortTabProps) {
             <div className="text-2xl font-bold tabular-nums text-foreground">
               {member.completedPoints} <span className="text-xs font-normal text-muted-foreground">pts</span>
             </div>
-            <p className="text-[11px] text-muted-foreground pt-1">
+            <p className="text-2xs text-muted-foreground pt-1">
               Trung bình: {analysis.effortSummary.avgPointsPerTask} pts / task
             </p>
           </div>
@@ -116,12 +116,12 @@ export function EffortTab({ member, analysis }: EffortTabProps) {
           <div className="rounded-xl border border-border bg-card p-4 shadow-2xs space-y-1">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Giờ công hoàn thành</span>
-              <Timer className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+              <Timer className="h-4 w-4 text-primary" />
             </div>
             <div className="text-2xl font-bold tabular-nums text-foreground">
               {analysis.effortSummary.completedHours} <span className="text-xs font-normal text-muted-foreground">giờ</span>
             </div>
-            <p className="text-[11px] text-muted-foreground pt-1">
+            <p className="text-2xs text-muted-foreground pt-1">
               Trung bình: {analysis.effortSummary.avgHoursPerTask}h / task
             </p>
           </div>
@@ -135,8 +135,8 @@ export function EffortTab({ member, analysis }: EffortTabProps) {
                 <span
                   className={`inline-flex items-center gap-0.5 text-xs font-bold ${
                     member.deltaCompletedTasks >= 0
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-amber-600 dark:text-amber-400"
+                      ? "text-success"
+                      : "text-warning"
                   }`}
                 >
                   {member.deltaCompletedTasks >= 0 ? "+" : ""}

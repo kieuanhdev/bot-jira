@@ -155,7 +155,7 @@ export function StatusDistributionChart({
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2.5">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
                   <PieChartIcon className="h-4 w-4" aria-hidden="true" />
                 </div>
                 <CardTitle className="text-base font-semibold text-foreground">
@@ -165,7 +165,7 @@ export function StatusDistributionChart({
 
               {formattedPeriodBadge && (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium bg-muted/80 text-foreground border border-border/80 shadow-2xs">
-                  <Calendar className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                  <Calendar className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                   <span>{formattedPeriodBadge}</span>
                 </span>
               )}

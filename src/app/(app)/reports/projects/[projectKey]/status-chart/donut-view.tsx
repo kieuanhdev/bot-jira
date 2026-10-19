@@ -116,7 +116,7 @@ export function StatusDonutView({
                           aria-hidden="true"
                         />
                         <span>{style.label || data.group}</span>
-                        <Badge variant="outline" className="ml-auto text-[10px] py-0 px-1">
+                        <Badge variant="outline" className="ml-auto text-2xs py-0 px-1">
                           {data.calculatedPercentage}%
                         </Badge>
                       </div>
@@ -146,7 +146,7 @@ export function StatusDonutView({
                         )}
                       </div>
 
-                      <p className="mt-1 text-[10px] text-teal-600 dark:text-teal-400 font-medium italic pt-1 border-t border-border/40">
+                      <p className="mt-1 text-2xs text-primary font-medium italic pt-1 border-t border-border/40">
                         Nhấp để xem danh sách task →
                       </p>
                     </div>
@@ -166,7 +166,7 @@ export function StatusDonutView({
             {focusedItem ? (
               <>
                 <span
-                  className={`mb-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${focusedItem.style.bg} ${focusedItem.style.text}`}
+                  className={`mb-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium ${focusedItem.style.bg} ${focusedItem.style.text}`}
                 >
                   <span className={`h-1.5 w-1.5 rounded-full ${focusedItem.style.dot}`} />
                   {focusedItem.style.label}
@@ -186,7 +186,7 @@ export function StatusDonutView({
                 <span className="text-xs font-medium text-muted-foreground">
                   tổng {unitLabel}
                 </span>
-                <span className="mt-1 inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                <span className="mt-1 inline-flex items-center rounded-full bg-success/10 px-2 py-0.5 text-2xs font-semibold text-success">
                   {stageStats.done.pct}% Done
                 </span>
               </>
@@ -194,7 +194,7 @@ export function StatusDonutView({
           </div>
         </div>
 
-        <p className="mt-1 text-[11px] text-muted-foreground text-center">
+        <p className="mt-1 text-2xs text-muted-foreground text-center">
           {focusedItem
             ? "Nhấp vào phân đoạn để xem danh sách task"
             : "Rê chuột hoặc nhấp để xem danh sách task"}
@@ -235,7 +235,7 @@ export function StatusDonutView({
                 }}
                 className={`group relative flex flex-col rounded-lg border p-2.5 transition-all duration-150 cursor-pointer ${
                   isSelected
-                    ? "border-teal-500 bg-teal-500/10 shadow-xs ring-1 ring-teal-500"
+                    ? "border-primary bg-primary-soft shadow-xs ring-1 ring-primary"
                     : isHovered
                       ? "border-border bg-muted/80"
                       : "border-border/70 bg-card hover:bg-muted/40"
@@ -254,7 +254,7 @@ export function StatusDonutView({
 
                     {/* Warning tag for blocked */}
                     {item.group === "Blocked" && item.count > 0 && (
-                      <Badge variant="danger" className="text-[10px] py-0 px-1.5">
+                      <Badge variant="danger" className="text-2xs py-0 px-1.5">
                         Nghẽn
                       </Badge>
                     )}
@@ -272,7 +272,7 @@ export function StatusDonutView({
 
                     {/* Secondary info pills (Task count, SP, Hours) */}
                     {showSecondaryMetrics && (
-                      <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
+                      <div className="hidden sm:flex items-center gap-1.5 text-2xs text-muted-foreground tabular-nums">
                         <span>{item.count}t</span>
                         <span>•</span>
                         <span>{item.points}p</span>
@@ -289,7 +289,7 @@ export function StatusDonutView({
                     {/* Arrow hint */}
                     <div
                       className={`shrink-0 transition-transform ${
-                        isSelected ? "translate-x-0.5 text-teal-600 dark:text-teal-400" : "text-muted-foreground/40 group-hover:text-muted-foreground"
+                        isSelected ? "translate-x-0.5 text-primary" : "text-muted-foreground/40 group-hover:text-muted-foreground"
                       }`}
                     >
                       <ArrowRight className="h-3.5 w-3.5" />

@@ -79,7 +79,7 @@ export function MemberToolbar({
 
         <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
           {member.assignee !== "unassigned" && (
-            <span className="font-mono text-[11px] text-muted-foreground/80">
+            <span className="font-mono text-2xs text-muted-foreground/80">
               @{member.assignee}
             </span>
           )}

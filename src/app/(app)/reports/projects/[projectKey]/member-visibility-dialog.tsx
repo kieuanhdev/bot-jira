@@ -131,7 +131,7 @@ export function MemberVisibilityDialog({
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium text-foreground">{member.displayName}</span>
                       {member.assignee !== "unassigned" && (
-                        <span className="block truncate font-mono text-[11px] text-muted-foreground">@{member.assignee}</span>
+                        <span className="block truncate font-mono text-2xs text-muted-foreground">@{member.assignee}</span>
                       )}
                     </span>
                   </label>

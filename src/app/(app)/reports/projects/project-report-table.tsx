@@ -131,7 +131,7 @@ export function ProjectReportTable({ projects, period, unit }: ProjectReportTabl
 
                 {/* Completed in Period */}
                 <td className="py-3.5 px-4 text-center font-semibold text-foreground">
-                  <span className="text-teal-600 dark:text-teal-400">
+                  <span className="text-primary font-semibold">
                     {p.completedInPeriod}
                   </span>{" "}
                   <span className="text-xs font-normal text-muted-foreground">{unitLabel}</span>
@@ -148,7 +148,7 @@ export function ProjectReportTable({ projects, period, unit }: ProjectReportTabl
                 {/* Blocked */}
                 <td className="py-3.5 px-4 text-center">
                   {p.blockedAtEnd > 0 ? (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-600 dark:text-red-400">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-destructive/10 text-destructive">
                       {p.blockedAtEnd}
                     </span>
                   ) : (
@@ -159,7 +159,7 @@ export function ProjectReportTable({ projects, period, unit }: ProjectReportTabl
                 {/* Overdue */}
                 <td className="py-3.5 px-4 text-center">
                   {p.overdueAtEnd > 0 ? (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-warning/10 text-warning">
                       {p.overdueAtEnd}
                     </span>
                   ) : (
@@ -172,15 +172,15 @@ export function ProjectReportTable({ projects, period, unit }: ProjectReportTabl
                   <div className="inline-flex items-center gap-1 text-xs font-medium">
                     {p.netBacklogChange > 0 ? (
                       <>
-                        <TrendingUp className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
-                        <span className="text-amber-600 dark:text-amber-400">
+                        <TrendingUp className="h-3.5 w-3.5 text-warning" aria-hidden="true" />
+                        <span className="text-warning">
                           +{p.netBacklogChange}
                         </span>
                       </>
                     ) : p.netBacklogChange < 0 ? (
                       <>
-                        <TrendingDown className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
-                        <span className="text-emerald-600 dark:text-emerald-400">
+                        <TrendingDown className="h-3.5 w-3.5 text-success" aria-hidden="true" />
+                        <span className="text-success">
                           {p.netBacklogChange}
                         </span>
                       </>
@@ -202,7 +202,7 @@ export function ProjectReportTable({ projects, period, unit }: ProjectReportTabl
                     </Badge>
                     {topReason && (
                       <span
-                        className="text-[11px] text-muted-foreground line-clamp-1 max-w-[200px]"
+                        className="text-2xs text-muted-foreground line-clamp-1 max-w-[200px]"
                         title={topReason}
                       >
                         {topReason}

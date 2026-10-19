@@ -53,7 +53,7 @@ export function MetricToggle({
         }`}
       >
         <span>Task</span>
-        <span className="text-[10px] text-muted-foreground tabular-nums">
+        <span className="text-2xs text-muted-foreground tabular-nums">
           ({totals.taskCount})
         </span>
       </button>
@@ -70,7 +70,7 @@ export function MetricToggle({
         title="Story Points"
       >
         <span>SP</span>
-        <span className="text-[10px] text-muted-foreground tabular-nums">
+        <span className="text-2xs text-muted-foreground tabular-nums">
           ({totals.points})
         </span>
       </button>
@@ -179,7 +179,7 @@ export function DisplayOptionsMenu({
           size="sm"
           className={`h-8 gap-1.5 px-2.5 text-xs cursor-pointer ${
             activeHiddenCount > 0 || !preferences.showStageSummary || !preferences.showSecondaryMetrics
-              ? "border-teal-500/50 bg-teal-500/10 text-teal-700 dark:text-teal-300"
+              ? "border-primary/50 bg-primary-soft text-primary"
               : ""
           }`}
           aria-label="Tùy chỉnh nội dung hiển thị"
@@ -187,7 +187,7 @@ export function DisplayOptionsMenu({
           <SlidersHorizontal className="h-3.5 w-3.5" />
           <span className="hidden md:inline">Tùy biến hiển thị</span>
           {activeHiddenCount > 0 && (
-            <Badge variant="secondary" className="px-1 text-[10px] py-0">
+            <Badge variant="secondary" className="px-1 text-2xs py-0">
               -{activeHiddenCount}
             </Badge>
           )}
@@ -235,11 +235,11 @@ export function DisplayOptionsMenu({
           <DropdownMenuLabel className="p-0 text-xs font-semibold text-foreground">
             Lọc trạng thái
           </DropdownMenuLabel>
-          <div className="flex items-center gap-1.5 text-[11px]">
+          <div className="flex items-center gap-1.5 text-2xs">
             <button
               type="button"
               onClick={onShowAll}
-              className="text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+              className="text-primary hover:underline cursor-pointer"
             >
               Hiện hết
             </button>
@@ -247,7 +247,7 @@ export function DisplayOptionsMenu({
             <button
               type="button"
               onClick={onOnlyOpen}
-              className="text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+              className="text-primary hover:underline cursor-pointer"
             >
               Bỏ Done
             </button>
@@ -272,7 +272,7 @@ export function DisplayOptionsMenu({
                   <span className={`h-2 w-2 rounded-full ${style?.dot}`} />
                   <span>{style?.label || group}</span>
                 </div>
-                <span className="text-[11px] text-muted-foreground tabular-nums ml-2">
+                <span className="text-2xs text-muted-foreground tabular-nums ml-2">
                   ({count})
                 </span>
               </DropdownMenuCheckboxItem>

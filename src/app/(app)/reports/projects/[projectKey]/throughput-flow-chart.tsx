@@ -46,12 +46,12 @@ export function ThroughputFlowChart({ flow, comparison, periodLabel, isVersionSc
         <div className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md bg-muted">
           <span>Thay đổi tồn đọng:</span>
           {flow.netBacklogChange > 0 ? (
-            <span className="text-amber-600 dark:text-amber-400 font-bold inline-flex items-center">
+            <span className="text-warning font-bold inline-flex items-center">
               <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
               +{flow.netBacklogChange} việc
             </span>
           ) : flow.netBacklogChange < 0 ? (
-            <span className="text-emerald-600 dark:text-emerald-400 font-bold inline-flex items-center">
+            <span className="text-success font-bold inline-flex items-center">
               <ArrowDownRight className="h-3.5 w-3.5" aria-hidden="true" />
               {flow.netBacklogChange} việc
             </span>

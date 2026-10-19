@@ -104,7 +104,7 @@ export function RiskTab({ member, analysis, signal, drillDown }: RiskTabProps) {
                         <p className="mt-1 text-muted-foreground">
                           Số lượng: <strong className="text-foreground">{item.value}</strong> task
                         </p>
-                        <p className="text-[10px] text-primary mt-1">
+                        <p className="text-2xs text-primary mt-1">
                           Nhấp vào cột để xem danh sách task
                         </p>
                       </div>
@@ -154,7 +154,7 @@ export function RiskTab({ member, analysis, signal, drillDown }: RiskTabProps) {
                 <ul className="space-y-1.5 text-xs text-muted-foreground">
                   {member.supportReasons.map((reason, idx) => (
                     <li key={idx} className="flex items-start gap-2 rounded-lg bg-muted/40 p-2">
-                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
+                      <AlertTriangle className="h-3.5 w-3.5 text-warning mt-0.5 shrink-0" />
                       <span>{reason}</span>
                     </li>
                   ))}

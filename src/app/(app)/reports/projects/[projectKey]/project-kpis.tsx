@@ -88,8 +88,8 @@ export function ProjectKpis({
         ? `${comparison.completed.delta >= 0 ? "+" : ""}${comparison.completed.delta} so với kỳ trước`
         : isVersionScope ? "Tổng task đã hoàn thành" : "Thông lượng hoàn thành",
       icon: CheckCircle,
-      color: "text-emerald-600 dark:text-emerald-400",
-      bg: "bg-emerald-500/10",
+      color: "text-success",
+      bg: "bg-success/10",
       filterKey: "completed",
       delta: comparison?.completed.delta,
     },
@@ -101,8 +101,8 @@ export function ProjectKpis({
         ? `${comparison.created.delta >= 0 ? "+" : ""}${comparison.created.delta} so với kỳ trước`
         : isVersionScope ? "Không giới hạn theo ngày" : "Công việc mới phát sinh",
       icon: FolderPlus,
-      color: "text-sky-600 dark:text-sky-400",
-      bg: "bg-sky-500/10",
+      color: "text-info",
+      bg: "bg-info/10",
       filterKey: "created",
       delta: comparison?.created.delta,
     },
@@ -112,8 +112,8 @@ export function ProjectKpis({
       value: wipCount,
       subtext: "In Progress / Review / QA",
       icon: PlayCircle,
-      color: "text-teal-600 dark:text-teal-400",
-      bg: "bg-teal-500/10",
+      color: "text-primary",
+      bg: "bg-primary-soft",
       filterKey: "wip",
     },
     {
@@ -122,8 +122,8 @@ export function ProjectKpis({
       value: blockedCount,
       subtext: blockedCount > 0 ? "Cần hỗ trợ tháo gỡ" : "Không có việc nghẽn",
       icon: AlertOctagon,
-      color: blockedCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground",
-      bg: blockedCount > 0 ? "bg-red-500/10" : "bg-muted",
+      color: blockedCount > 0 ? "text-destructive" : "text-muted-foreground",
+      bg: blockedCount > 0 ? "bg-destructive/10" : "bg-muted",
       filterKey: "blocked",
     },
     {
@@ -132,8 +132,8 @@ export function ProjectKpis({
       value: overdueCount,
       subtext: overdueCount > 0 ? "Trễ ngày hạn chót" : "Đúng hạn dự kiến",
       icon: Clock,
-      color: overdueCount > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground",
-      bg: overdueCount > 0 ? "bg-amber-500/10" : "bg-muted",
+      color: overdueCount > 0 ? "text-warning" : "text-muted-foreground",
+      bg: overdueCount > 0 ? "bg-warning/10" : "bg-muted",
       filterKey: "overdue",
     },
     {
@@ -142,8 +142,8 @@ export function ProjectKpis({
       value: overSlaCount,
       subtext: overSlaCount > 0 ? "Ở trạng thái quá lâu" : "Đảm bảo thời hạn",
       icon: ShieldAlert,
-      color: overSlaCount > 0 ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground",
-      bg: overSlaCount > 0 ? "bg-rose-500/10" : "bg-muted",
+      color: overSlaCount > 0 ? "text-destructive" : "text-muted-foreground",
+      bg: overSlaCount > 0 ? "bg-destructive/10" : "bg-muted",
       filterKey: "over_sla",
     },
   ];
@@ -194,10 +194,10 @@ export function ProjectKpis({
                     </span>
                     {c.delta !== undefined && c.delta !== 0 && (
                       <span
-                        className={`inline-flex items-center text-[11px] font-medium ${
+                        className={`inline-flex items-center text-2xs font-medium ${
                           c.delta > 0
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-amber-600 dark:text-amber-400"
+                            ? "text-success"
+                            : "text-warning"
                         }`}
                       >
                         {c.delta > 0 ? (
@@ -209,7 +209,7 @@ export function ProjectKpis({
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5 truncate" title={c.subtext}>
+                  <div className="text-2xs text-muted-foreground mt-0.5 truncate" title={c.subtext}>
                     {c.subtext}
                   </div>
                   {c.customContent}

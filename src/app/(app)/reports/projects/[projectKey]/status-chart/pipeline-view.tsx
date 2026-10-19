@@ -29,7 +29,7 @@ export function StatusPipelineView({
       <div className="rounded-xl border border-border bg-card p-4 space-y-3">
         <div className="flex items-center justify-between text-xs">
           <span className="font-semibold text-foreground flex items-center gap-1.5">
-            <Workflow className="h-4 w-4 text-teal-500" />
+            <Workflow className="h-4 w-4 text-primary" />
             Phân phối lũy kế theo luồng quy trình (Pipeline Flow)
           </span>
           <span className="text-muted-foreground">
@@ -74,7 +74,7 @@ export function StatusPipelineView({
                 onMouseLeave={() => onHoverGroup(null)}
                 className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs transition-colors cursor-pointer ${
                   isSelected
-                    ? "border-teal-500 bg-teal-500/10 font-semibold text-foreground ring-1 ring-teal-500"
+                    ? "border-primary bg-primary-soft font-semibold text-foreground ring-1 ring-primary"
                     : isHovered
                       ? "border-border bg-muted text-foreground"
                       : "border-border/60 bg-card/60 text-muted-foreground hover:bg-muted"
@@ -98,7 +98,7 @@ export function StatusPipelineView({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Backlog */}
         <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-          <div className="flex items-center justify-between text-xs font-semibold text-sky-600 dark:text-sky-400">
+          <div className="flex items-center justify-between text-xs font-semibold text-info">
             <span>1. Chờ xử lý</span>
             <span className="tabular-nums">{stageStats.backlog.pct}%</span>
           </div>
@@ -113,7 +113,7 @@ export function StatusPipelineView({
 
         {/* WIP */}
         <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-          <div className="flex items-center justify-between text-xs font-semibold text-teal-600 dark:text-teal-400">
+          <div className="flex items-center justify-between text-xs font-semibold text-primary">
             <span>2. Đang triển khai</span>
             <span className="tabular-nums">{stageStats.wip.pct}%</span>
           </div>
@@ -130,11 +130,11 @@ export function StatusPipelineView({
         <div
           className={`rounded-lg border p-3 space-y-2 ${
             stageStats.blocked.count > 0
-              ? "border-rose-500/50 bg-rose-500/5"
+              ? "border-destructive/40 bg-destructive/5"
               : "border-border bg-card"
           }`}
         >
-          <div className="flex items-center justify-between text-xs font-semibold text-rose-600 dark:text-rose-400">
+          <div className="flex items-center justify-between text-xs font-semibold text-destructive">
             <span>3. Bị tắc nghẽn</span>
             <span className="tabular-nums">{stageStats.blocked.pct}%</span>
           </div>
@@ -149,7 +149,7 @@ export function StatusPipelineView({
 
         {/* Done */}
         <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-          <div className="flex items-center justify-between text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+          <div className="flex items-center justify-between text-xs font-semibold text-success">
             <span>4. Đã hoàn thành</span>
             <span className="tabular-nums">{stageStats.done.pct}%</span>
           </div>

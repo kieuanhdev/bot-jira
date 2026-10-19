@@ -18,7 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RefreshCw, Clock, Globe } from "lucide-react";
+import { PageHeader } from "@/components/shared/page-header";
+import { RefreshCw, Clock, Globe, FolderKanban } from "lucide-react";
 import type { ProjectPortfolioResponse, ReportUnit, ReportPeriod } from "@/lib/reports/types";
 import { parsePeriodParams } from "../lib/parse-period-params";
 import { shouldReplaceReportUrl } from "./[projectKey]/lib/report-url-state";
@@ -112,13 +113,12 @@ export function ProjectPortfolioClient() {
   return (
     <div className="space-y-6">
       {/* Header & Controls */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Báo cáo danh mục dự án
-          </h1>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-1">
-            <span>Báo cáo theo tuần/tháng và toàn bộ luồng công việc của dự án.</span>
+      <PageHeader
+        icon={FolderKanban}
+        title="Báo cáo danh mục dự án"
+        description="Báo cáo theo tuần/tháng và toàn bộ luồng công việc của dự án."
+        meta={
+          <span className="inline-flex flex-wrap items-center gap-3">
             <span className="inline-flex items-center gap-1">
               <Globe className="h-3 w-3" aria-hidden="true" />
               {period.timezone}
@@ -129,40 +129,41 @@ export function ProjectPortfolioClient() {
                 Đồng bộ Jira: {new Date(data.freshness.lastSyncedAt).toLocaleTimeString("vi-VN")}
               </span>
             )}
+          </span>
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Period selector */}
+            <ReportPeriodFilter period={period} onPeriodChange={setPeriod} />
+
+            {/* Unit selector */}
+            <div className="w-[130px]">
+              <Select value={unit} onValueChange={(v) => setUnit(v as ReportUnit)}>
+                <SelectTrigger className="h-9 text-xs cursor-pointer">
+                  <SelectValue placeholder="Đơn vị tính" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Tự động (Auto)</SelectItem>
+                  <SelectItem value="tasks">Số lượng Task</SelectItem>
+                  <SelectItem value="points">Story Points</SelectItem>
+                  <SelectItem value="estimate">Estimate (Giờ)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer transition-colors disabled:opacity-50"
+              title="Làm mới dữ liệu"
+              aria-label="Làm mới dữ liệu"
+            >
+              <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+            </button>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Period selector */}
-          <ReportPeriodFilter period={period} onPeriodChange={setPeriod} />
-
-          {/* Unit selector */}
-          <div className="w-[130px]">
-            <Select value={unit} onValueChange={(v) => setUnit(v as ReportUnit)}>
-              <SelectTrigger className="h-9 text-xs cursor-pointer">
-                <SelectValue placeholder="Đơn vị tính" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Tự động (Auto)</SelectItem>
-                <SelectItem value="tasks">Số lượng Task</SelectItem>
-                <SelectItem value="points">Story Points</SelectItem>
-                <SelectItem value="estimate">Estimate (Giờ)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer transition-colors disabled:opacity-50"
-            title="Làm mới dữ liệu"
-            aria-label="Làm mới dữ liệu"
-          >
-            <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Loading state */}
       {isLoading && (

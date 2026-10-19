@@ -32,7 +32,7 @@ export function BottleneckChart({ bottlenecks }: BottleneckChartProps) {
       <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
         <div>
           <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-amber-500" aria-hidden="true" />
+            <AlertCircle className="h-4 w-4 text-warning" aria-hidden="true" />
             Điểm nghẽn quy trình (Bottlenecks)
           </CardTitle>
           <CardDescription className="text-xs text-muted-foreground mt-0.5">
@@ -58,7 +58,7 @@ export function BottleneckChart({ bottlenecks }: BottleneckChartProps) {
               <thead>
                 <tr className="border-b border-border bg-muted/40 font-semibold text-muted-foreground">
                   <th className="py-2 px-3">Trạng thái</th>
-                  <th className="py-2 px-3 text-right text-red-600 dark:text-red-400">Vượt SLA</th>
+                  <th className="py-2 px-3 text-right text-destructive">Vượt SLA</th>
                   <th className="py-2 px-3 text-right">Tổng task tại trạng thái</th>
                   <th className="py-2 px-3 text-right">Thời gian lưu TB (ngày)</th>
                 </tr>
@@ -67,7 +67,7 @@ export function BottleneckChart({ bottlenecks }: BottleneckChartProps) {
                 {bottlenecks.map((b) => (
                   <tr key={b.status} className="hover:bg-muted/20">
                     <td className="py-2 px-3 font-medium">{b.status}</td>
-                    <td className="py-2 px-3 text-right font-mono font-semibold text-red-600 dark:text-red-400">
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-destructive">
                       {b.overSlaCount}
                     </td>
                     <td className="py-2 px-3 text-right font-mono">{b.taskCount}</td>
@@ -93,14 +93,14 @@ export function BottleneckChart({ bottlenecks }: BottleneckChartProps) {
                     dataKey="status"
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fill: "currentColor", fontSize: 11 }}
+                    tick={{ fill: "currentColor", fontSize: 12 }}
                     className="text-muted-foreground"
                     interval={0}
                   />
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fill: "currentColor", fontSize: 11 }}
+                    tick={{ fill: "currentColor", fontSize: 12 }}
                     className="text-muted-foreground"
                     allowDecimals={false}
                   />
@@ -112,7 +112,7 @@ export function BottleneckChart({ bottlenecks }: BottleneckChartProps) {
                         <div className="rounded-lg border border-border bg-card p-2.5 shadow-lg text-xs space-y-1">
                           <p className="font-semibold text-foreground">{d.status}</p>
                           <div className="text-muted-foreground space-y-0.5">
-                            <p className="text-red-600 dark:text-red-400">
+                            <p className="text-destructive">
                               Vượt SLA: <span className="font-bold">{d.overSla}</span> task
                             </p>
                             <p>Tổng task ở bước này: <span className="font-semibold text-foreground">{d.taskCount}</span></p>
@@ -124,7 +124,7 @@ export function BottleneckChart({ bottlenecks }: BottleneckChartProps) {
                   />
                   <Bar
                     dataKey="overSla"
-                    fill="oklch(0.6 0.22 25)"
+                    fill="var(--destructive)"
                     radius={[4, 4, 0, 0]}
                     isAnimationActive={false}
                   />

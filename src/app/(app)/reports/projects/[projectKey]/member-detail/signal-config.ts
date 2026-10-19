@@ -8,20 +8,20 @@ export const SIGNAL_CONFIG: Record<
   balanced: {
     label: "Cân bằng",
     icon: ShieldCheck,
-    className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-    badgeBg: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+    className: "bg-success/10 text-success border-success/20",
+    badgeBg: "bg-success/15 text-success",
   },
   high_load: {
     label: "Tải cao",
     icon: Flame,
-    className: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-    badgeBg: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+    className: "bg-warning/10 text-warning border-warning/20",
+    badgeBg: "bg-warning/15 text-warning",
   },
   needs_unblock: {
     label: "Cần gỡ nghẽn",
     icon: AlertTriangle,
-    className: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
-    badgeBg: "bg-red-500/15 text-red-700 dark:text-red-300",
+    className: "bg-destructive/10 text-destructive border-destructive/20",
+    badgeBg: "bg-destructive/15 text-destructive",
   },
   insufficient_data: {
     label: "Chưa đủ dữ liệu",

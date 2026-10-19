@@ -66,10 +66,10 @@ export function OverviewTab({
               className={`flex items-start gap-2.5 p-3 rounded-lg border text-xs ${
                 warn.severity === "high"
                   ? "border-destructive/30 bg-destructive/10 text-destructive"
-                  : "border-amber-500/30 bg-amber-500/5 text-amber-900 dark:text-amber-200"
+                  : "border-warning/30 bg-warning/5 text-warning"
               }`}
             >
-              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+              <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" />
               <div>
                 <span className="font-semibold uppercase tracking-wider block">
                   Lưu ý chất lượng dữ liệu ({warn.code})

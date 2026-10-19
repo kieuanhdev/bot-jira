@@ -54,7 +54,7 @@ export function RadarTab({ member, analysis }: RadarTabProps) {
                         <div className="mt-1 text-muted-foreground">
                           Điểm: <strong className="text-foreground">{item.score}/100</strong>
                         </div>
-                        <div className="text-[11px] text-muted-foreground mt-0.5">
+                        <div className="text-2xs text-muted-foreground mt-0.5">
                           {item.description} ({item.valueDisplay})
                         </div>
                       </div>
@@ -73,12 +73,12 @@ export function RadarTab({ member, analysis }: RadarTabProps) {
                 {analysis.healthScore}/100
               </span>
               <span
-                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                className={`text-2xs font-semibold px-2 py-0.5 rounded-full ${
                   analysis.healthAssessment.status === "optimal"
-                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                    ? "bg-success/15 text-success"
                     : analysis.healthAssessment.status === "attention"
-                    ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                    : "bg-red-500/15 text-red-600 dark:text-red-400"
+                    ? "bg-warning/15 text-warning"
+                    : "bg-destructive/15 text-destructive"
                 }`}
               >
                 {analysis.healthAssessment.status === "optimal"
@@ -110,18 +110,18 @@ export function RadarTab({ member, analysis }: RadarTabProps) {
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-foreground">{m.metric}</span>
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-2xs text-muted-foreground">
                     ({m.valueDisplay})
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span
-                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                    className={`text-2xs font-semibold px-2 py-0.5 rounded-full ${
                       m.status === "good"
-                        ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                        ? "bg-success/15 text-success"
                         : m.status === "warning"
-                        ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                        : "bg-red-500/15 text-red-600 dark:text-red-400"
+                        ? "bg-warning/15 text-warning"
+                        : "bg-destructive/15 text-destructive"
                     }`}
                   >
                     {m.status === "good" ? "Tốt" : m.status === "warning" ? "Cảnh báo" : "Rủi ro"}
@@ -136,16 +136,16 @@ export function RadarTab({ member, analysis }: RadarTabProps) {
                 <div
                   className={`h-full rounded-full transition-[width] duration-300 ${
                     m.status === "good"
-                      ? "bg-emerald-500"
+                      ? "bg-success"
                       : m.status === "warning"
-                      ? "bg-amber-500"
-                      : "bg-red-500"
+                      ? "bg-warning"
+                      : "bg-destructive"
                   }`}
                   style={{ width: `${m.score}%` }}
                 />
               </div>
 
-              <p className="text-[11px] text-muted-foreground">{m.description}</p>
+              <p className="text-2xs text-muted-foreground">{m.description}</p>
             </div>
           ))}
         </div>

@@ -72,7 +72,7 @@ export function RiskTaskTable({
             onClick={() => onFilterRisk?.("blocked")}
             className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border transition-colors cursor-pointer ${
               filterRisk === "blocked"
-                ? "bg-red-600 text-white border-red-600"
+                ? "bg-destructive text-destructive-foreground border-destructive"
                 : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
             }`}
           >
@@ -84,7 +84,7 @@ export function RiskTaskTable({
             onClick={() => onFilterRisk?.("overdue")}
             className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border transition-colors cursor-pointer ${
               filterRisk === "overdue"
-                ? "bg-amber-600 text-white border-amber-600"
+                ? "bg-warning text-warning-foreground border-warning"
                 : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
             }`}
           >
@@ -96,7 +96,7 @@ export function RiskTaskTable({
             onClick={() => onFilterRisk?.("over_sla")}
             className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border transition-colors cursor-pointer ${
               filterRisk === "over_sla"
-                ? "bg-rose-600 text-white border-rose-600"
+                ? "bg-destructive text-destructive-foreground border-destructive"
                 : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
             }`}
           >
@@ -183,7 +183,7 @@ export function RiskTaskTable({
                             <Badge
                               key={risk}
                               variant={config.variant}
-                              className="gap-1 py-0.5 px-1.5 text-[10px]"
+                              className="gap-1 py-0.5 px-1.5 text-2xs"
                             >
                               <Icon className="h-2.5 w-2.5" />
                               {config.label}
@@ -201,10 +201,10 @@ export function RiskTaskTable({
                     {/* Due Date */}
                     <td className="py-3 px-3 text-center text-xs whitespace-nowrap">
                       {task.dueDate ? (
-                        <span className={task.overdueDays > 0 ? "font-semibold text-red-600 dark:text-red-400" : "text-muted-foreground"}>
+                        <span className={task.overdueDays > 0 ? "font-semibold text-destructive" : "text-muted-foreground"}>
                           {task.dueDate}
                           {task.overdueDays > 0 && (
-                            <span className="block text-[10px]">
+                            <span className="block text-2xs">
                               (+{task.overdueDays}d)
                             </span>
                           )}

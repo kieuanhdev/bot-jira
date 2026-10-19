@@ -18,9 +18,9 @@ export interface ActivityFilterConfig {
 
 export const BASE_ACTIVITY_FILTERS: ActivityFilterConfig[] = [
   { id: "all", label: "Tất cả", icon: Layers, color: "text-muted-foreground" },
-  { id: "completed", label: "Hoàn thành trong kỳ", icon: CheckCircle2, color: "text-emerald-500" },
-  { id: "created", label: "Tạo mới trong kỳ", icon: FolderPlus, color: "text-sky-500" },
-  { id: "current_open", label: "Đang mở", icon: PlayCircle, color: "text-teal-500" },
+  { id: "completed", label: "Hoàn thành trong kỳ", icon: CheckCircle2, color: "text-success" },
+  { id: "created", label: "Tạo mới trong kỳ", icon: FolderPlus, color: "text-info" },
+  { id: "current_open", label: "Đang mở", icon: PlayCircle, color: "text-primary" },
   { id: "unmoved", label: "Không đổi", icon: MinusCircle, color: "text-muted-foreground" },
 ];
 

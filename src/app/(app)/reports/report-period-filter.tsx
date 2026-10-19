@@ -141,7 +141,7 @@ export function ReportPeriodFilter({
             />
           </div>
           {isCustomRangeInvalid && (
-            <span className="text-[11px] text-destructive">
+            <span className="text-2xs text-destructive">
               Ngày bắt đầu phải trước ngày kết thúc
             </span>
           )}

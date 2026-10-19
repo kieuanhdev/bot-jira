@@ -69,12 +69,12 @@ export function MemberWorkloadChart({
             const Icon = item.icon;
             return (
               <div key={item.label} className="rounded-lg border border-border/70 bg-muted/30 p-3">
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                <div className="flex items-center justify-between text-2xs text-muted-foreground">
                   <span>{item.label}</span>
                   <Icon className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                 </div>
                 <div className="mt-1 text-lg font-bold tabular-nums text-foreground">
-                  {item.value} <span className="text-[11px] font-normal text-muted-foreground">{item.suffix}</span>
+                  {item.value} <span className="text-2xs font-normal text-muted-foreground">{item.suffix}</span>
                 </div>
               </div>
             );
@@ -165,7 +165,7 @@ export function MemberWorkloadChart({
                 </span>
               </div>
             </div>
-            <p className="text-center text-[11px] text-muted-foreground">Rê chuột hoặc nhấp để xem chi tiết</p>
+            <p className="text-center text-2xs text-muted-foreground">Rê chuột hoặc nhấp để xem chi tiết</p>
           </div>
 
           <div className="lg:col-span-7">

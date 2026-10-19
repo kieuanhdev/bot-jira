@@ -50,10 +50,10 @@ export function ProjectHealthSummary({
                   <span
                     className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${
                       r.severity === "danger"
-                        ? "bg-red-500"
+                        ? "bg-destructive"
                         : r.severity === "warning"
-                          ? "bg-amber-500"
-                          : "bg-teal-500"
+                          ? "bg-warning"
+                          : "bg-primary"
                     }`}
                   />
                   <div className="flex flex-wrap items-baseline gap-1.5">

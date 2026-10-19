@@ -92,7 +92,7 @@ export function CompositionTab({ member, analysis, drillDown }: CompositionTabPr
                           <div>
                             Tỷ trọng: <strong className="text-foreground">{item.percentage}%</strong>
                           </div>
-                          <div className="mt-1 text-[11px] text-muted-foreground/80">
+                          <div className="mt-1 text-2xs text-muted-foreground/80">
                             {item.description}
                           </div>
                         </div>
@@ -127,7 +127,7 @@ export function CompositionTab({ member, analysis, drillDown }: CompositionTabPr
               </span>
             </div>
           </div>
-          <p className="text-center text-[11px] text-muted-foreground mt-2">
+          <p className="text-center text-2xs text-muted-foreground mt-2">
             Rê chuột để xem tỷ trọng · Nhấp vào lát bánh để xem task
           </p>
         </div>
@@ -169,7 +169,7 @@ export function CompositionTab({ member, analysis, drillDown }: CompositionTabPr
                     <div className="font-medium text-sm text-foreground group-hover:text-primary transition-colors">
                       {item.label}
                     </div>
-                    <div className="text-[11px] text-muted-foreground line-clamp-1">
+                    <div className="text-2xs text-muted-foreground line-clamp-1">
                       {item.description}
                     </div>
                   </div>
@@ -231,7 +231,7 @@ export function CompositionTab({ member, analysis, drillDown }: CompositionTabPr
           )}
         </div>
 
-        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-2xs text-muted-foreground">
           {analysis.composition.map((item) => (
             <div key={item.key} className="flex items-center gap-1.5">
               <span
