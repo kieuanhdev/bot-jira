@@ -51,7 +51,7 @@ export function NotificationsBatchBar({
           disabled={isMarkPending}
           className="cursor-pointer gap-1 text-xs h-8 text-foreground hover:border-primary"
         >
-          <Check className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+          <Check className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
           <span className="hidden sm:inline">Đánh dấu đã đọc</span>
         </Button>
 

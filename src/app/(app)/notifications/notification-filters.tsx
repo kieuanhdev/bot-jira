@@ -60,14 +60,14 @@ export function NotificationFilters({
       <div className="pt-2 border-t border-border/50">
         <div className="flex items-center gap-2 mb-2">
           <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
             Phân loại theo danh mục:
           </span>
           {hasActiveFilters && (
             <button
               type="button"
               onClick={onResetFilters}
-              className="ml-auto text-[11px] text-primary hover:underline cursor-pointer flex items-center gap-1"
+              className="ml-auto text-2xs text-primary hover:underline cursor-pointer flex items-center gap-1"
             >
               <RotateCcw className="h-3 w-3" aria-hidden="true" />
               Đặt lại bộ lọc
@@ -104,7 +104,7 @@ export function NotificationFilters({
                 {count > 0 && (
                   <span
                     className={cn(
-                      "rounded-full px-1.5 py-0.2 text-[10px] tabular-nums font-semibold",
+                      "rounded-full px-1.5 py-0.2 text-2xs tabular-nums font-semibold",
                       isSelected
                         ? "bg-primary-foreground/20 text-primary-foreground"
                         : "bg-muted text-muted-foreground group-hover:bg-muted-foreground/15"

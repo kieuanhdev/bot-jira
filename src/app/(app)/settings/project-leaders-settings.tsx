@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { boardKeys, projectsKeys, settingsKeys } from "@/lib/query-keys";
+import { cn } from "@/lib/utils";
 import type { User } from "./lib/settings-model";
 
 type LeaderCandidate = {
@@ -127,7 +128,7 @@ export function ProjectLeadersSettings({
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Shield className="h-5 w-5 text-teal-600 dark:text-teal-400" aria-hidden />
+          <Shield className="h-5 w-5 text-primary" aria-hidden />
           <CardTitle>Leader theo dự án</CardTitle>
         </div>
         <CardDescription>
@@ -180,11 +181,12 @@ export function ProjectLeadersSettings({
 
         {statusMessage && (
           <div
-            className={`rounded-md p-3 text-xs ${
+            className={cn(
+              "rounded-md p-3 text-xs border",
               statusMessage.startsWith("Lỗi")
-                ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30"
-                : "bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/30"
-            }`}
+                ? "bg-destructive/10 text-destructive border-destructive/30"
+                : "bg-success/10 text-success border-success/30"
+            )}
           >
             {statusMessage}
           </div>
@@ -206,9 +208,9 @@ export function ProjectLeadersSettings({
                 <Badge
                   key={leader.id}
                   variant="outline"
-                  className="flex items-center gap-1.5 py-1 px-2.5 text-xs border-teal-500/40 bg-teal-500/5 text-foreground"
+                  className="flex items-center gap-1.5 py-1 px-2.5 text-xs border-primary/30 bg-primary/5 text-foreground"
                 >
-                  <ShieldCheck className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" aria-hidden />
+                  <ShieldCheck className="h-3.5 w-3.5 text-primary" aria-hidden />
                   <span className="font-medium">{leader.displayName}</span>
                   {leader.jiraUsername && (
                     <span className="font-mono text-muted-foreground">
@@ -263,7 +265,7 @@ export function ProjectLeadersSettings({
                       onClick={() => toggleLeader(user.id)}
                       className={`flex items-center justify-between rounded p-2 text-xs transition-colors cursor-pointer select-none ${
                         isChecked
-                          ? "bg-teal-500/10 dark:bg-teal-500/20 text-foreground"
+                          ? "bg-primary/10 text-foreground"
                           : "hover:bg-muted text-foreground"
                       }`}
                     >
@@ -277,7 +279,7 @@ export function ProjectLeadersSettings({
                         <div>
                           <div className="font-medium">{user.displayName}</div>
                           {user.email ? (
-                            <div className="text-[11px] text-muted-foreground">
+                            <div className="text-2xs text-muted-foreground">
                               {user.email}
                             </div>
                           ) : null}
@@ -285,12 +287,12 @@ export function ProjectLeadersSettings({
                       </div>
                       <div className="flex items-center gap-2">
                         {user.jiraUsername && (
-                          <span className="font-mono text-[11px] text-muted-foreground">
+                          <span className="font-mono text-2xs text-muted-foreground">
                             @{user.jiraUsername}
                           </span>
                         )}
                         {isChecked && (
-                          <span className="flex items-center text-[11px] font-medium text-teal-600 dark:text-teal-400">
+                          <span className="flex items-center text-2xs font-medium text-primary">
                             <Check className="h-3 w-3 mr-0.5" aria-hidden />
                             Leader
                           </span>

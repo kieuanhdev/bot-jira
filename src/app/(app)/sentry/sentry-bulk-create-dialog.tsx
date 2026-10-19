@@ -200,12 +200,12 @@ export function SentryBulkCreateDialog({
                     <span className="font-semibold text-foreground line-clamp-1">
                       {item.summary}
                     </span>
-                    <Badge variant={item.status === "blocked" ? "danger" : "secondary"} className="shrink-0 text-[10px]">
+                    <Badge variant={item.status === "blocked" ? "danger" : "secondary"} className="shrink-0 text-2xs">
                       {item.issueType || "Bug"}
                     </Badge>
                   </div>
                   {item.errors && item.errors.length > 0 && (
-                    <p className="text-[11px] text-destructive">{item.errors.join(", ")}</p>
+                    <p className="text-2xs text-destructive">{item.errors.join(", ")}</p>
                   )}
                 </div>
               ))}

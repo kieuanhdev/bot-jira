@@ -163,7 +163,7 @@ export function SentryProjectTabs({
             </div>
 
             <div className="mt-2.5 border-t border-border pt-2.5">
-              <p className="mb-1 text-[11px] font-semibold text-muted-foreground">
+              <p className="mb-1 text-2xs font-semibold text-muted-foreground">
                 Nhập dự án muốn có
               </p>
               <div className="flex gap-1.5">
@@ -196,7 +196,7 @@ export function SentryProjectTabs({
                 </Button>
               </div>
               {validateError && (
-                <p className="mt-1 text-[11px] font-medium text-destructive">{validateError}</p>
+                <p className="mt-1 text-2xs font-medium text-destructive">{validateError}</p>
               )}
             </div>
 

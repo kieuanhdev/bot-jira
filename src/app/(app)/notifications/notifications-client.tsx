@@ -222,7 +222,7 @@ export function NotificationsClient() {
         description="Theo dõi toàn diện các trao đổi Jira, luồng phát hành, sự cố và cảnh báo SLA."
         badge={
           totalUnreadCount > 0 ? (
-            <Badge variant="danger" className="h-5 px-2 text-[11px] font-semibold tabular-nums">
+            <Badge variant="danger" className="h-5 px-2 text-2xs font-semibold tabular-nums">
               {totalUnreadCount > 99 ? "99+" : totalUnreadCount} mới
             </Badge>
           ) : undefined
@@ -296,7 +296,7 @@ export function NotificationsClient() {
           }}
           onToggleAttention={() => setSeverityFilter((prev) => (prev === "attention" ? "all" : "attention"))}
         />
-        <p className="text-[11px] text-muted-foreground/70 italic px-0.5">
+        <p className="text-2xs text-muted-foreground/70 italic px-0.5">
           * Thống kê tính trên các trang thông báo đã tải (tối đa 5 trang gần nhất). Số chưa đọc tổng thể: {totalUnreadCount}.
         </p>
       </div>
@@ -348,7 +348,7 @@ export function NotificationsClient() {
               Chọn tất cả {filteredItems.length} thông báo trong danh sách
             </label>
           </div>
-          <span className="text-[11px] text-muted-foreground/80">
+          <span className="text-2xs text-muted-foreground/80">
             Hiển thị {filteredItems.length} kết quả
           </span>
         </div>

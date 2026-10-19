@@ -45,7 +45,7 @@ export function DeliveryModeCard({ values, pending, onModeChange, onHourChange }
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-foreground">Gửi tức thì (Mặc định)</span>
-              <Badge variant="outline" className="text-[10px] text-primary border-primary/30">Khuyên dùng</Badge>
+              <Badge variant="outline" className="text-2xs text-primary border-primary/30">Khuyên dùng</Badge>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Nhận ngay thông báo khi có bình luận, chuyển trạng thái hoặc sự cố blocker.

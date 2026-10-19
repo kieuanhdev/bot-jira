@@ -13,6 +13,8 @@ import { ProjectPeopleFieldsSettings } from "./project-people-fields-settings";
 import { ProjectLeadersSettings } from "./project-leaders-settings";
 import { useSettingsController } from "./lib/use-settings-controller";
 import { getServiceHealthBadge, type User } from "./lib/settings-model";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { THEME_TOGGLE_ENABLED } from "@/lib/theme";
 
 export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boolean }) {
   const {
@@ -25,6 +27,19 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
+      {THEME_TOGGLE_ENABLED && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Giao diện</CardTitle>
+            <CardDescription>
+              Tuỳ chỉnh chế độ hiển thị sáng, tối hoặc theo hệ thống.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ThemeToggle />
+          </CardContent>
+        </Card>
+      )}
       <MyIntegrations />
       <NotificationPreferences />
       <ChatLinking />

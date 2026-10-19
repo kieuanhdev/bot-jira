@@ -188,7 +188,7 @@ export function NotificationPreferences() {
               </CardDescription>
             </div>
             {saveSuccess && (
-              <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400 gap-1 border-emerald-500/30 shrink-0 self-start sm:self-auto">
+              <Badge variant="outline" className="text-success gap-1 border-success/30 shrink-0 self-start sm:self-auto">
                 <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
                 Đã lưu cài đặt
               </Badge>
@@ -299,7 +299,7 @@ export function NotificationPreferences() {
                           </span>
                           <Badge
                             variant={isChecked ? "success" : "secondary"}
-                            className="ml-auto text-[10px] px-1.5 py-0 font-normal shrink-0"
+                            className="ml-auto text-2xs px-1.5 py-0 font-normal shrink-0"
                           >
                             {isChecked ? "Bật" : "Tắt"}
                           </Badge>

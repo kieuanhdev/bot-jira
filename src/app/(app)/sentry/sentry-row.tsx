@@ -185,7 +185,7 @@ export function SentryRow({
           </div>
 
           {error && (row.state === "failed" || row.state === "ignored" || row.state === "approved") && (
-            <pre className="mt-1 max-h-24 overflow-x-auto whitespace-pre-wrap rounded bg-destructive/10 p-2 font-mono text-[11px] text-destructive">
+            <pre className="mt-1 max-h-24 overflow-x-auto whitespace-pre-wrap rounded bg-destructive/10 p-2 font-mono text-2xs text-destructive">
               {error}
             </pre>
           )}

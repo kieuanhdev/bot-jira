@@ -47,7 +47,7 @@ export function WebPushCard({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Smartphone className="h-5 w-5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+            <Smartphone className="h-5 w-5 text-primary" aria-hidden="true" />
             Thông báo đẩy ngoài màn hình (Web Push)
           </CardTitle>
           <CardDescription className="mt-1">
@@ -55,7 +55,7 @@ export function WebPushCard({
           </CardDescription>
         </div>
         {values.pushEnabled && (
-          <Badge variant="outline" className="text-teal-600 dark:text-teal-400 border-teal-500/30 shrink-0 self-start sm:self-auto">
+          <Badge variant="outline" className="text-primary border-primary/30 shrink-0 self-start sm:self-auto">
             {pushEnabledCount}/{knownTypes.length} loại đang đẩy
           </Badge>
         )}
@@ -108,7 +108,7 @@ export function WebPushCard({
           {values.pushEnabled && (
             <div className="pt-3 border-t border-border/80 flex flex-wrap items-center justify-between gap-3">
               <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="inline-block h-2 w-2 rounded-full bg-success" />
                 Trạng thái kết nối:{" "}
                 <span className="font-medium text-foreground">
                   {values.hasSubscription ? "Đã đăng ký thiết bị thành công" : "Chờ đăng ký subscription"}
@@ -150,7 +150,7 @@ export function WebPushCard({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-0.5">
               <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                <Sparkles className="h-4 w-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
                 Loại sự kiện được bắn Push ra ngoài màn hình
               </h4>
               <p className="text-xs text-muted-foreground">
@@ -164,7 +164,7 @@ export function WebPushCard({
                 size="sm"
                 onClick={onEnableAllPush}
                 disabled={pending || pushEnabledCount === knownTypes.length}
-                className="h-7 text-xs cursor-pointer text-teal-600 dark:text-teal-400 hover:text-teal-700 gap-1"
+                className="h-7 text-xs cursor-pointer text-primary hover:text-primary/80 gap-1"
               >
                 <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
                 Bật tất cả
@@ -194,7 +194,7 @@ export function WebPushCard({
                   key={`push-${t}`}
                   className={`flex items-center gap-2.5 rounded-lg border p-2.5 cursor-pointer text-xs transition-colors duration-150 ${
                     isChecked
-                      ? "border-teal-500/30 bg-teal-500/5 hover:bg-teal-500/10"
+                      ? "border-primary/30 bg-primary/5 hover:bg-primary/10"
                       : "border-border/60 bg-muted/20 opacity-70 hover:opacity-90"
                   }`}
                 >
@@ -208,7 +208,7 @@ export function WebPushCard({
                   <span className="font-medium text-foreground truncate flex-1">{info.label}</span>
                   <Badge
                     variant={isChecked ? "success" : "secondary"}
-                    className="text-[10px] px-1 py-0 font-normal shrink-0"
+                    className="text-2xs px-1 py-0 font-normal shrink-0"
                   >
                     {isChecked ? "Push bật" : "Push tắt"}
                   </Badge>

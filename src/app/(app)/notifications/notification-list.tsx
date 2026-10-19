@@ -158,7 +158,7 @@ export function NotificationList({
         <div key={group} className="space-y-2.5">
           {/* Date group badge */}
           <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-xs py-1 flex items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/80 px-2.5 py-0.5 rounded-full border border-border/50">
+            <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground bg-muted/80 px-2.5 py-0.5 rounded-full border border-border/50">
               {group}
             </span>
             <span className="h-px flex-1 bg-border/40" />

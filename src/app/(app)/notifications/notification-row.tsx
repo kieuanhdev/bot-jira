@@ -102,19 +102,19 @@ export function NotificationRow({
             </span>
 
             {isUnread && (
-              <Badge variant="info" className="h-4 px-1.5 text-[10px] font-semibold">
+              <Badge variant="info" className="h-4 px-1.5 text-2xs font-semibold">
                 Mới
               </Badge>
             )}
 
-            <Badge variant={category.color.badge} className="h-4 px-1.5 text-[10px] font-medium">
+            <Badge variant={category.color.badge} className="h-4 px-1.5 text-2xs font-medium">
               {category.shortLabel}
             </Badge>
 
             {n.severity && n.severity !== "info" && (
               <Badge
                 variant={n.severity === "danger" ? "danger" : "warning"}
-                className="h-4 px-1.5 text-[10px] font-semibold uppercase tracking-wider"
+                className="h-4 px-1.5 text-2xs font-semibold uppercase tracking-wider"
               >
                 {n.severity === "danger" ? "Khẩn cấp" : "Cảnh báo"}
               </Badge>
@@ -145,7 +145,7 @@ export function NotificationRow({
               <button
                 type="button"
                 onClick={(e) => onToggleExpand(e, n.id)}
-                className="mt-1 text-[11px] text-primary hover:underline font-medium inline-flex items-center gap-0.5 cursor-pointer"
+                className="mt-1 text-2xs text-primary hover:underline font-medium inline-flex items-center gap-0.5 cursor-pointer"
               >
                 {isExpanded ? (
                   <>Thu gọn <ChevronUp className="h-3 w-3" /></>
@@ -186,7 +186,7 @@ export function NotificationRow({
               )}
             </div>
           ) : (
-            <span className="text-[11px] text-muted-foreground/60 flex items-center gap-1">
+            <span className="text-2xs text-muted-foreground/60 flex items-center gap-1">
               <Info className="h-3 w-3" aria-hidden="true" />
               Thông báo nội bộ
             </span>
@@ -204,7 +204,7 @@ export function NotificationRow({
             >
               {isUnread ? (
                 <>
-                  <Check className="h-3 w-3 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                  <Check className="h-3 w-3 text-primary" aria-hidden="true" />
                   <span className="hidden sm:inline">Đã đọc</span>
                 </>
               ) : (
