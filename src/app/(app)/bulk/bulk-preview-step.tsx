@@ -21,6 +21,7 @@ import {
 import { fieldRow } from "./bulk-preview-field-row";
 import { type Preview, type PreviewBucket, type PreviewItem, SKIP_LABELS } from "./lib/bulk-types";
 import { PREVIEW_PAGE_SIZE, warningVariant } from "./lib/bulk-utils";
+import { BulkStepBadge } from "./bulk-step-badge";
 import { getJiraIssueUrl } from "@/lib/jira/urls";
 
 export function PreviewItemCard({ item, jiraBaseUrl }: { item: PreviewItem; jiraBaseUrl: string }) {
@@ -172,11 +173,9 @@ export function BulkPreviewCard({
   return (
     <Card className="overflow-hidden">
       <CardHeader className="border-b p-4 sm:p-5">
-        <CardTitle className="text-base">
-          <span className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">3</span>
-            Xem trước & Chạy
-          </span>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <BulkStepBadge step={3} />
+          Xem trước & Chạy
         </CardTitle>
         <CardDescription>
           {preview.actionable} trên tổng số {preview.total} task sẽ được thay đổi
@@ -246,7 +245,8 @@ export function BulkPreviewCard({
               onClick={() => onChangeView(bucket)}
               className={cn(
                 "cursor-pointer rounded-lg border p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-                previewView === bucket && "border-primary bg-primary/5 shadow-sm"
+                previewView === bucket && "border-primary bg-primary/5 shadow-sm",
+                previewView !== bucket && count === 0 && "opacity-50"
               )}
             >
               <span className="flex items-center justify-between gap-2">

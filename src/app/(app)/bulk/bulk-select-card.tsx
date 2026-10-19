@@ -11,6 +11,7 @@ import {
   BulkTaskListFooter,
   BulkTaskListToolbar,
 } from "./bulk-select-step";
+import { BulkStepBadge } from "./bulk-step-badge";
 
 export interface BulkSelectCardProps {
   filterProject: string;
@@ -114,7 +115,10 @@ export function BulkSelectCard({
   return (
     <Card className="overflow-hidden">
       <CardHeader className="border-b p-4 sm:p-5">
-        <CardTitle className="text-base">Chọn task</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <BulkStepBadge step={1} />
+          Chọn task
+        </CardTitle>
         <CardDescription>Mỗi lần chỉ làm việc trên một dự án.</CardDescription>
       </CardHeader>
       <CardContent className="p-0">

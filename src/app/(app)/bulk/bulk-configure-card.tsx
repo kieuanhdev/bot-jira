@@ -11,6 +11,7 @@ import {
   BulkTransitionForm,
   BulkWorklogForm,
 } from "./bulk-configure-step";
+import { BulkStepBadge } from "./bulk-step-badge";
 import type { OperationKind, ProjectStatus } from "./lib/bulk-logic";
 import type { BulkVersionOption, ProjectFieldOption } from "./lib/bulk-types";
 import type { useBulkFieldState } from "./lib/use-bulk-field-state";
@@ -82,7 +83,8 @@ export function BulkConfigureCard({
   return (
     <Card className={effectiveCount === 0 ? "opacity-60" : undefined}>
       <CardHeader className="p-4 sm:p-5">
-        <CardTitle className="text-base">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <BulkStepBadge step={2} />
           {operationKind === "log-work"
             ? "Ghi worklog"
             : operationKind === "transition"
@@ -91,11 +93,13 @@ export function BulkConfigureCard({
         </CardTitle>
         <CardDescription>
           {filterProject
-            ? operationKind === "log-work"
-              ? "Thời lượng sẽ được cộng dồn vào từng task đã chọn."
-              : operationKind === "transition"
-                ? "Chọn trạng thái đích cho các task đã chọn."
-                : "Bật các trường cần sửa rồi nhập giá trị mới."
+            ? effectiveCount === 0
+              ? "Chọn ít nhất một task ở bước 1 để tiếp tục."
+              : operationKind === "log-work"
+                ? "Thời lượng sẽ được cộng dồn vào từng task đã chọn."
+                : operationKind === "transition"
+                  ? "Chọn trạng thái đích cho các task đã chọn."
+                  : "Bật các trường cần sửa rồi nhập giá trị mới."
             : "Chọn dự án ở bước 1 trước."}
         </CardDescription>
       </CardHeader>
