@@ -213,7 +213,7 @@ export function BulkPreviewCard({
         )}
 
         {isTransitionOp && (
-          <div className="rounded-lg border border-primary/30 bg-primary/10 p-4 text-xs text-primary dark:text-primary">
+          <div className="rounded-lg border border-primary/20 bg-primary-soft p-4 text-xs text-primary-soft-foreground">
             <div className="font-semibold text-sm mb-1 flex items-center gap-1.5 text-foreground">
               <ArrowRightLeft className="h-4 w-4 text-primary" />
               Chuyển trạng thái hàng loạt

@@ -19,7 +19,7 @@ type ThemeSnapshot = {
 };
 
 const SERVER_SNAPSHOT: ThemeSnapshot = {
-  theme: "light",
+  theme: "system",
   resolvedTheme: "light",
 };
 

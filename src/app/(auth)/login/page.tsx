@@ -15,17 +15,17 @@ export default function LoginPage() {
     <main className="relative min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 overflow-hidden bg-background">
       {/* Ambient background glows */}
       <div
-        className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[640px] h-[420px] bg-primary/15 blur-[120px] rounded-full dark:bg-primary/20"
+        className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[640px] h-[420px] bg-primary/15 blur-[120px] rounded-full"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute -bottom-40 right-10 w-[450px] h-[350px] bg-secondary/15 blur-[120px] rounded-full dark:bg-secondary/15"
+        className="pointer-events-none absolute -bottom-40 right-10 w-[450px] h-[350px] bg-secondary/15 blur-[120px] rounded-full"
         aria-hidden="true"
       />
 
       {/* Subtle background tech pattern */}
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:24px_24px] opacity-15 dark:opacity-20"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:24px_24px] opacity-15"
         aria-hidden="true"
       />
 

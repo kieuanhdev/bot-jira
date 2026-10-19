@@ -506,19 +506,19 @@ Mỗi task bên dưới làm cùng một việc cho thư mục được chỉ đ
 
 #### Task 5.1: QA dark mode
 
-- [ ] Tạm bật cờ ở local và chụp mọi trang ở dark mode, 1280 và 375px.
-- [ ] Sửa các chỗ `dark:` thừa hoặc sai. Mục tiêu là không còn `dark:` nào cho màu, vì token đã tự đổi theo mode.
-- [ ] Đo lại tương phản dark bằng script ở Phụ lục A (thêm các cặp mới).
+- [x] Tạm bật cờ ở local và chụp mọi trang ở dark mode, 1280 và 375px.
+- [x] Sửa các chỗ `dark:` thừa hoặc sai. Mục tiêu là không còn `dark:` nào cho màu, vì token đã tự đổi theo mode.
+- [x] Đo lại tương phản dark bằng script ở Phụ lục A (thêm các cặp mới).
 
 #### Task 5.2: Bật toggle
 
-- [ ] Đặt `THEME_TOGGLE_ENABLED = true` và đổi pref mặc định thành `"system"`.
-- [ ] `MIGRATED_DIRS` = toàn bộ `src/`.
-- [ ] Commit `feat(ui): enable light/dark/system theme toggle`.
+- [x] Đặt `THEME_TOGGLE_ENABLED = true` và đổi pref mặc định thành `"system"`.
+- [x] `MIGRATED_DIRS` = toàn bộ `src/`.
+- [x] Commit `feat(ui): enable light/dark/system theme toggle`.
 
 #### Task 5.3 (tuỳ chọn): Trang gallery cho dev
 
-- [ ] Tạo `src/app/(dev)/ui-gallery/page.tsx`. Trang gọi `notFound()` khi `NODE_ENV === "production"` và hiển thị mọi primitive ở cả 2 mode, để review sau này không cần đăng nhập Jira.
+- [x] Tạo `src/app/(dev)/ui-gallery/page.tsx`. Trang gọi `notFound()` khi `NODE_ENV === "production"` và hiển thị mọi primitive ở cả 2 mode, để review sau này không cần đăng nhập Jira.
 
 ---
 

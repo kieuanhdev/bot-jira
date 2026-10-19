@@ -11,31 +11,14 @@ import { describe, expect, it } from "vitest";
  *
  * MIGRATED_DIRS starts with ["src/components"] in Phase 1 and expands in subsequent phases.
  */
-export const MIGRATED_DIRS = [
-  "src/components",
-  "src/app/(app)",
-  "src/app/(app)/board",
-  "src/app/(app)/issue",
-  "src/app/(app)/bulk",
-  "src/app/(app)/reports",
-  "src/app/(app)/stale",
-  "src/app/(app)/branches",
-  "src/app/(app)/release",
-  "src/app/(app)/leaderboard",
-  "src/app/(app)/admin",
-  "src/app/(app)/settings",
-  "src/app/(app)/notifications",
-  "src/app/(app)/sentry",
-  "src/app/(app)/watch",
-  "src/app/(auth)",
-];
+export const MIGRATED_DIRS = ["src"];
 
 const FORBIDDEN_MICRO_TEXT_REGEX = /text-\[(8|9|10|11|13)px\]/g;
 const FORBIDDEN_PALETTE_REGEX =
   /\b(?:bg|text|border|ring)-(?:emerald|purple|sky|amber|red|rose|green|blue|yellow|orange|violet|indigo|slate|gray|zinc)-\d+\b/g;
 
-// Directories where only top-level files are migrated in current phase
-const SHALLOW_DIRS = new Set(["src/app/(app)"]);
+// In Phase 5, all directories are deeply scanned
+const SHALLOW_DIRS = new Set<string>();
 
 function collectTsxFiles(dirPath: string): string[] {
   const fullPath = path.resolve(process.cwd(), dirPath);

@@ -430,7 +430,7 @@ export function QuickPanelFields({
               {v}
               <button
                 onClick={() => onRemoveVersion(v)}
-                className="ml-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
+                className="ml-0.5 rounded-full hover:bg-foreground/15 cursor-pointer"
                 title={`Gỡ ${v}`}
               >
                 <X className="h-3 w-3" />
@@ -510,7 +510,7 @@ export function QuickPanelFields({
               {l}
               <button
                 onClick={() => onRemoveLabel(l)}
-                className="ml-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
+                className="ml-0.5 rounded-full hover:bg-foreground/15 cursor-pointer"
                 title={`Xóa nhãn ${l}`}
               >
                 <X className="h-3 w-3" />

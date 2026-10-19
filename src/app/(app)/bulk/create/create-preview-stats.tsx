@@ -22,7 +22,7 @@ export function CreatePreviewStats({ preview, warningCount }: CreatePreviewStats
           </div>
         </Card>
 
-        <Card className="border-success/20 bg-success/5 p-4 dark:border-success/30">
+        <Card className="border-success/20 bg-success/5 p-4">
           <div className="flex items-center gap-1.5 text-xs font-medium text-success">
             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
             Sẵn sàng tạo
@@ -32,7 +32,7 @@ export function CreatePreviewStats({ preview, warningCount }: CreatePreviewStats
           </div>
         </Card>
 
-        <Card className="border-warning/20 bg-warning/5 p-4 dark:border-warning/30">
+        <Card className="border-warning/20 bg-warning/5 p-4">
           <div className="flex items-center gap-1.5 text-xs font-medium text-warning">
             <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
             Có cảnh báo
@@ -42,7 +42,7 @@ export function CreatePreviewStats({ preview, warningCount }: CreatePreviewStats
           </div>
         </Card>
 
-        <Card className="border-destructive/20 bg-destructive/5 p-4 dark:border-destructive/30">
+        <Card className="border-destructive/20 bg-destructive/5 p-4">
           <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
             <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
             Bị chặn (Lỗi)

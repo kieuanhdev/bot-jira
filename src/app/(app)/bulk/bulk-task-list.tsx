@@ -42,7 +42,7 @@ export const BulkTaskRow = memo(function BulkTaskRow({
         cat === "indeterminate" && "border-l-primary/60",
         cat === "done" && "border-l-success/60",
         isChecked && "bg-accent/40",
-        isStandardizing && "bg-primary/5 dark:bg-primary/10"
+        isStandardizing && "bg-primary-soft/40"
       )}
     >
       <Checkbox

@@ -11,7 +11,7 @@
 export type ThemePref = "light" | "dark" | "system";
 export type ThemeResolved = "light" | "dark";
 
-export const THEME_TOGGLE_ENABLED = false;
+export const THEME_TOGGLE_ENABLED = true;
 export const THEME_STORAGE_KEY = "theme";
 
 /**
@@ -25,9 +25,9 @@ export function resolveTheme(pref: ThemePref, systemDark: boolean): ThemeResolve
 
 /**
  * Inline initialization script executed before first paint to prevent theme flash.
- * Default preference is 'light' when toggle is disabled to avoid accidental dark mode before P5.
+ * Default preference is 'system' now that theme toggle is enabled.
  */
-export const THEME_INIT_SCRIPT = `(function(){try{var p=localStorage.getItem("${THEME_STORAGE_KEY}")||"light";var d=p==="dark"||(p==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d){document.documentElement.classList.add("dark");document.documentElement.style.colorScheme="dark";}else{document.documentElement.classList.remove("dark");document.documentElement.style.colorScheme="light";}}catch(e){}})();`;
+export const THEME_INIT_SCRIPT = `(function(){try{var p=localStorage.getItem("${THEME_STORAGE_KEY}")||"system";var d=p==="dark"||(p==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d){document.documentElement.classList.add("dark");document.documentElement.style.colorScheme="dark";}else{document.documentElement.classList.remove("dark");document.documentElement.style.colorScheme="light";}}catch(e){}})();`;
 
 /**
  * Apply resolved theme to the document element (adds/removes .dark class and sets color-scheme).
@@ -55,7 +55,7 @@ export function applyTheme(pref: ThemePref): ThemeResolved {
  * Reads stored theme preference from localStorage, safely falling back to 'light' (or 'system' if toggle enabled).
  */
 export function getStoredThemePref(): ThemePref {
-  if (typeof window === "undefined") return "light";
+  if (typeof window === "undefined") return "system";
   try {
     const raw = localStorage.getItem(THEME_STORAGE_KEY);
     if (raw === "light" || raw === "dark" || raw === "system") {
@@ -64,7 +64,7 @@ export function getStoredThemePref(): ThemePref {
   } catch {
     // localStorage may be disabled or throw security errors
   }
-  return THEME_TOGGLE_ENABLED ? "system" : "light";
+  return "system";
 }
 
 /**
