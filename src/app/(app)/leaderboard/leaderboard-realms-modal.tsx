@@ -46,7 +46,7 @@ export function LeaderboardRealmsModal({
                     <TierIcon iconName={group.tiers[0].iconName} className="h-4 w-4 text-primary" />
                     <span className="font-bold text-sm text-foreground">{group.realm}</span>
                   </div>
-                  <Badge variant="secondary" className="text-[10px] font-mono">
+                  <Badge variant="secondary" className="text-2xs font-mono">
                     {group.tiers.length} giai đoạn / tầng
                   </Badge>
                 </div>
@@ -73,7 +73,7 @@ export function LeaderboardRealmsModal({
                           {tier.title}
                         </span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground mt-1 italic leading-relaxed">
+                      <p className="text-2xs text-muted-foreground mt-1 italic leading-relaxed">
                         &ldquo;{tier.realmDesc}&rdquo;
                       </p>
                     </div>
@@ -82,7 +82,7 @@ export function LeaderboardRealmsModal({
                       <span className="text-xs font-mono font-bold text-primary">
                         {tier.minPoints > 0 ? `≥ ${tier.minPoints} pts` : "0 pts"}
                       </span>
-                      <div className="text-[10px] text-muted-foreground">Tu vi tối thiểu</div>
+                      <div className="text-2xs text-muted-foreground">Tu vi tối thiểu</div>
                     </div>
                   </div>
                 ))}

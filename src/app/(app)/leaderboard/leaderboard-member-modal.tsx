@@ -61,19 +61,19 @@ export function LeaderboardMemberModal({
               <div className="text-lg font-bold text-primary tabular-nums">
                 {member.completedPoints}
               </div>
-              <div className="text-[11px] text-muted-foreground">Điểm đã chốt</div>
+              <div className="text-2xs text-muted-foreground">Điểm đã chốt</div>
             </div>
             <div className="rounded-lg bg-muted/60 p-2.5 text-center border border-border">
               <div className="text-lg font-bold text-foreground tabular-nums">
                 {member.completedTasks}
               </div>
-              <div className="text-[11px] text-muted-foreground">Nhiệm vụ hoàn thành</div>
+              <div className="text-2xs text-muted-foreground">Nhiệm vụ hoàn thành</div>
             </div>
             <div className="rounded-lg bg-muted/60 p-2.5 text-center border border-border">
               <div className="text-lg font-bold text-warning tabular-nums">
                 {member.inProgressPoints}
               </div>
-              <div className="text-[11px] text-muted-foreground">Điểm đang làm</div>
+              <div className="text-2xs text-muted-foreground">Điểm đang làm</div>
             </div>
           </div>
         )}
@@ -116,11 +116,11 @@ export function LeaderboardMemberModal({
                       </Link>
                       <Badge
                         variant={isDone ? "success" : "info"}
-                        className="text-[10px] py-0 px-1.5 h-4.5"
+                        className="text-2xs py-0 px-1.5"
                       >
                         {t.status}
                       </Badge>
-                      <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4.5 text-muted-foreground">
+                      <Badge variant="outline" className="text-2xs py-0 px-1.5 text-muted-foreground">
                         {t.projectKey}
                       </Badge>
                     </div>
@@ -128,7 +128,7 @@ export function LeaderboardMemberModal({
                       {t.summary}
                     </p>
                     {t.completedAt && (
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-2xs text-muted-foreground">
                         Hoàn thành: {new Date(t.completedAt).toLocaleDateString("vi-VN")}
                       </p>
                     )}
@@ -146,7 +146,7 @@ export function LeaderboardMemberModal({
                     </Badge>
                     <Link
                       href={`/board?q=${t.jiraKey}`}
-                      className="text-[11px] text-primary hover:underline flex items-center gap-0.5"
+                      className="text-2xs text-primary hover:underline flex items-center gap-0.5"
                     >
                       <span>Mở board</span>
                       <ExternalLink className="h-3 w-3" aria-hidden="true" />

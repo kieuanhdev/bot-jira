@@ -99,7 +99,7 @@ export function LeaderboardTable({
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b bg-muted/40 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <tr className="border-b bg-muted/40 text-2xs font-semibold text-muted-foreground uppercase tracking-wider">
                   <th className="py-3 px-4 w-16 text-center">Hạng</th>
                   <th className="py-3 px-4">Đạo Hữu</th>
                   <th className="py-3 px-4">Cảnh Giới</th>
@@ -141,7 +141,7 @@ export function LeaderboardTable({
                               {member.displayName}
                             </span>
                             {member.isCurrentUser && (
-                              <Badge variant="default" className="text-[10px] py-0 px-1.5 h-4 bg-primary text-primary-foreground font-bold">
+                              <Badge variant="default" className="text-2xs py-0 px-1.5 bg-primary text-primary-foreground font-bold">
                                 Bạn
                               </Badge>
                             )}
@@ -169,7 +169,7 @@ export function LeaderboardTable({
                       <span className="text-base font-bold text-primary tabular-nums">
                         {member.completedPoints}
                       </span>
-                      <span className="text-[11px] text-muted-foreground ml-1">pts</span>
+                      <span className="text-2xs text-muted-foreground ml-1">pts</span>
                     </td>
 
                     {/* In Progress Points */}
@@ -194,7 +194,7 @@ export function LeaderboardTable({
                     {/* Share Progress Bar */}
                     <td className="py-3.5 px-4 align-middle hidden sm:table-cell">
                       <div className="space-y-1">
-                        <div className="flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
+                        <div className="flex items-center justify-between text-2xs text-muted-foreground tabular-nums">
                           <span>{member.sharePercentage}%</span>
                         </div>
                         <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">

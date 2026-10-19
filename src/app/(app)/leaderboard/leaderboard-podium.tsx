@@ -56,7 +56,7 @@ export function LeaderboardPodium({
                   size="xl"
                   className="h-16 w-16 ring-4 ring-muted-foreground/30 shadow-md text-xl"
                 />
-                <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-6.5 items-center gap-1 rounded-full bg-muted border border-border px-2.5 text-[11px] font-bold text-foreground shadow-sm whitespace-nowrap">
+                <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-6.5 items-center gap-1 rounded-full bg-muted border border-border px-2.5 text-2xs font-bold text-foreground shadow-sm whitespace-nowrap">
                   <Zap className="h-3.5 w-3.5 text-info shrink-0" aria-hidden="true" />
                   <span>TIÊN TÔN #2</span>
                 </div>
@@ -65,18 +65,18 @@ export function LeaderboardPodium({
               <div className="mt-2 text-center w-full">
                 <div className="font-bold text-foreground text-sm truncate px-2">{top2.displayName}</div>
                 <div className="text-xs text-muted-foreground truncate">@{top2.jiraUsername}</div>
-                <Badge variant="outline" className={cn("mt-1.5 text-[10px]", top2.tier.badgeClass)}>
+                <Badge variant="outline" className={cn("mt-1.5 text-2xs", top2.tier.badgeClass)}>
                   {top2.tier.name}
                 </Badge>
               </div>
 
               {/* Pedestal Box */}
               <div className="mt-4 w-full rounded-t-xl border border-b-0 border-border bg-gradient-to-t from-muted/50 to-muted/10 p-4 text-center">
-                <div className="text-2xl font-black text-foreground tabular-nums">
+                <div className="text-3xl font-black text-foreground tabular-nums">
                   {top2.completedPoints}
                 </div>
-                <div className="text-[11px] font-medium text-muted-foreground">Tu Vi Tích Lũy</div>
-                <div className="mt-1 text-[11px] text-muted-foreground">
+                <div className="text-2xs font-medium text-muted-foreground">Tu Vi Tích Lũy</div>
+                <div className="mt-1 text-2xs text-muted-foreground">
                   {top2.completedTasks} nhiệm vụ hoàn thành
                 </div>
                 <Button
@@ -105,7 +105,7 @@ export function LeaderboardPodium({
                 size="xl"
                 className="h-20 w-20 ring-4 ring-warning/60 shadow-xl shadow-warning/25 text-2xl"
               />
-              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-7 items-center gap-1.5 rounded-full bg-gradient-to-r from-warning/80 via-warning to-warning border border-warning/60 px-3 text-[11px] font-black text-warning-foreground shadow-md whitespace-nowrap">
+              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-7 items-center gap-1.5 rounded-full bg-gradient-to-r from-warning/80 via-warning to-warning border border-warning/60 px-3 text-2xs font-black text-warning-foreground shadow-md whitespace-nowrap">
                 <Crown className="h-3.5 w-3.5 text-warning-foreground shrink-0" aria-hidden="true" />
                 <span>ĐẠO TỔ #1</span>
               </div>
@@ -148,10 +148,10 @@ export function LeaderboardPodium({
                   username={top3.jiraUsername}
                   displayName={top3.displayName}
                   size="xl"
-                  className="h-16 w-16 ring-4 ring-amber-300 dark:ring-amber-700/60 shadow-md text-xl"
+                  className="h-16 w-16 ring-4 ring-warning/40 shadow-md text-xl"
                 />
-                <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-6.5 items-center gap-1 rounded-full bg-amber-700 dark:bg-amber-800 border border-amber-600 px-2.5 text-[11px] font-bold text-white shadow-sm whitespace-nowrap">
-                  <Flame className="h-3.5 w-3.5 text-amber-300 shrink-0" aria-hidden="true" />
+                <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 flex h-6.5 items-center gap-1 rounded-full bg-warning/15 border border-warning/40 px-2.5 text-2xs font-bold text-warning shadow-sm whitespace-nowrap">
+                  <Flame className="h-3.5 w-3.5 text-warning shrink-0" aria-hidden="true" />
                   <span>CHÂN QUÂN #3</span>
                 </div>
               </div>
@@ -159,18 +159,18 @@ export function LeaderboardPodium({
               <div className="mt-2 text-center w-full">
                 <div className="font-bold text-foreground text-sm truncate px-2">{top3.displayName}</div>
                 <div className="text-xs text-muted-foreground truncate">@{top3.jiraUsername}</div>
-                <Badge variant="outline" className={cn("mt-1.5 text-[10px]", top3.tier.badgeClass)}>
+                <Badge variant="outline" className={cn("mt-1.5 text-2xs", top3.tier.badgeClass)}>
                   {top3.tier.name}
                 </Badge>
               </div>
 
               {/* Pedestal Box */}
-              <div className="mt-4 w-full rounded-t-xl border border-b-0 border-amber-700/30 bg-gradient-to-t from-amber-700/20 to-amber-700/5 p-4 text-center">
-                <div className="text-2xl font-black text-foreground tabular-nums">
+              <div className="mt-4 w-full rounded-t-xl border border-warning/20 bg-gradient-to-t from-warning/10 to-transparent p-4 text-center">
+                <div className="text-3xl font-black text-foreground tabular-nums">
                   {top3.completedPoints}
                 </div>
-                <div className="text-[11px] font-medium text-muted-foreground">Tu Vi Tích Lũy</div>
-                <div className="mt-1 text-[11px] text-muted-foreground">
+                <div className="text-2xs font-medium text-muted-foreground">Tu Vi Tích Lũy</div>
+                <div className="mt-1 text-2xs text-muted-foreground">
                   {top3.completedTasks} nhiệm vụ hoàn thành
                 </div>
                 <Button
