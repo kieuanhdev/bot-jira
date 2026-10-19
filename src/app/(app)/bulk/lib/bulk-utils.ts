@@ -2,6 +2,8 @@ import { CATEGORY_DOTS } from "./bulk-types";
 import type { PreviewItem, PreviewBucket } from "./bulk-types";
 import type { SelectionMode } from "./bulk-logic";
 
+export const PREVIEW_PAGE_SIZE = 50;
+
 export const TERMINAL_OP_STATES: readonly string[] = ["completed", "partially_failed", "failed", "cancelled"];
 
 export function isTerminalOpState(state: string | null | undefined): boolean {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ExternalLink, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ACTION_LABELS, type OpDetail } from "./lib/bulk-types";
-import { stateVariant, itemVariant, isTerminalOpState } from "./lib/bulk-utils";
+import { stateVariant, itemVariant, isTerminalOpState, PREVIEW_PAGE_SIZE } from "./lib/bulk-utils";
 import { getJiraIssueUrl } from "@/lib/jira/urls";
 
 export function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: string }) {
@@ -43,6 +43,8 @@ export function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: 
     }
   }, [opState, qc]);
 
+  const [limit, setLimit] = useState(PREVIEW_PAGE_SIZE);
+
   if (!op) {
     return (
       <div className="rounded-md border border-border p-3 space-y-3" aria-busy="true" aria-label="Đang tải chi tiết thao tác…">
@@ -62,6 +64,8 @@ export function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: 
   const done = op.succeeded + op.failed;
   const pct = op.total > 0 ? Math.round((done / op.total) * 100) : 0;
   const isTerminal = isTerminalOpState(op.state);
+  const displayedItems = op.items.slice(0, limit);
+  const remainingItems = op.items.length - limit;
 
   return (
     <div className="rounded-md border border-border p-3">
@@ -79,7 +83,7 @@ export function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: 
         />
       </div>
       <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto text-sm">
-        {op.items.map((it) => (
+        {displayedItems.map((it) => (
           <li key={it.jiraKey} className="flex items-center gap-2">
             <Badge variant={itemVariant(it.status)}>{it.status}</Badge>
             {jiraBaseUrl ? (
@@ -100,6 +104,19 @@ export function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: 
             {it.error && <span className="truncate text-xs text-destructive">{it.error}</span>}
           </li>
         ))}
+        {remainingItems > 0 && (
+          <li className="pt-2 text-center">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setLimit((prev) => prev + PREVIEW_PAGE_SIZE)}
+              className="cursor-pointer"
+            >
+              Xem thêm (còn {remainingItems} task)
+            </Button>
+          </li>
+        )}
       </ul>
       <div className="mt-3 flex items-center justify-between border-t pt-2.5">
         {returnToTarget && isTerminal ? (

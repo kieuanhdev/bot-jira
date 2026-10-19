@@ -31,7 +31,7 @@ export function BulkRunCard({
         </Button>
       </CardHeader>
       <CardContent>
-        <OperationDetail id={id} jiraBaseUrl={jiraBaseUrl} />
+        <OperationDetail key={id} id={id} jiraBaseUrl={jiraBaseUrl} />
       </CardContent>
     </Card>
   );

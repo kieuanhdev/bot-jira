@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +20,7 @@ import {
 } from "lucide-react";
 import { fieldRow } from "./bulk-preview-field-row";
 import { type Preview, type PreviewBucket, type PreviewItem, SKIP_LABELS } from "./lib/bulk-types";
-import { warningVariant } from "./lib/bulk-utils";
+import { PREVIEW_PAGE_SIZE, warningVariant } from "./lib/bulk-utils";
 import { getJiraIssueUrl } from "@/lib/jira/urls";
 
 export function PreviewItemCard({ item, jiraBaseUrl }: { item: PreviewItem; jiraBaseUrl: string }) {
@@ -89,6 +90,50 @@ export function PreviewItemCard({ item, jiraBaseUrl }: { item: PreviewItem; jira
 }
 
 /** Step 3: preview summary tabs, per-task diffs and the confirm/cancel actions. */
+function PreviewItemList({
+  items,
+  jiraBaseUrl,
+}: {
+  items: PreviewItem[];
+  jiraBaseUrl: string;
+}) {
+  const [limit, setLimit] = useState(PREVIEW_PAGE_SIZE);
+  const displayed = items.slice(0, limit);
+  const remaining = items.length - limit;
+
+  if (items.length === 0) {
+    return (
+      <EmptyState
+        icon={CheckCircle2}
+        title="Không có task nào trong nhóm này"
+        description="Chọn một thẻ tóm tắt khác để xem các task tương ứng."
+        className="py-10"
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {displayed.map((item) => (
+        <PreviewItemCard key={item.jiraKey} item={item} jiraBaseUrl={jiraBaseUrl} />
+      ))}
+      {remaining > 0 && (
+        <div className="pt-2 text-center">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setLimit((prev) => prev + PREVIEW_PAGE_SIZE)}
+            className="cursor-pointer"
+          >
+            Xem thêm (còn {remaining} task)
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function BulkPreviewCard({
   preview,
   previewOutdated,
@@ -213,18 +258,12 @@ export function BulkPreviewCard({
           ))}
         </div>
 
-        <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
-          {visiblePreviewItems.map((item) => (
-            <PreviewItemCard key={item.jiraKey} item={item} jiraBaseUrl={jiraBaseUrl} />
-          ))}
-          {visiblePreviewItems.length === 0 && (
-            <EmptyState
-              icon={CheckCircle2}
-              title="Không có task nào trong nhóm này"
-              description="Chọn một thẻ tóm tắt khác để xem các task tương ứng."
-              className="py-10"
-            />
-          )}
+        <div className="max-h-[420px] overflow-y-auto pr-1">
+          <PreviewItemList
+            key={previewView}
+            items={visiblePreviewItems}
+            jiraBaseUrl={jiraBaseUrl}
+          />
         </div>
 
         <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-end">
