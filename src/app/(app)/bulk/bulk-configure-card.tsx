@@ -144,7 +144,7 @@ export function BulkConfigureCard({
           />
         )}
 
-        {filterProject && enabledFields.size > 0 && (
+        {filterProject && operationKind === "update-fields" && enabledFields.size > 0 && (
           <BulkFieldInputs
             filterProject={filterProject}
             enabledFields={enabledFields}
