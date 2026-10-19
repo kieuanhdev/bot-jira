@@ -328,60 +328,60 @@ Nếu developer muốn dùng `next-themes`, cần duyệt riêng việc sửa `p
 - Modify: `src/app/globals.css`
 - Modify: `src/app/layout.tsx`
 
-- [ ] **Đọc trước** (bản Next này khác kiến thức cũ, xem `AGENTS.md`): các guide về font (`next/font`) và về CSS/Tailwind trong `node_modules/next/dist/docs/01-app/`. Tìm bằng `grep -ril "next/font" node_modules/next/dist/docs/01-app`.
-- [ ] Áp dụng bảng màu light/dark ở mục 2.2, kể cả token mới `--primary-soft`, `--primary-soft-foreground`, `--shadow-card`, `--shadow-pop`, và map chúng trong `@theme inline`.
-- [ ] Ghi đè thang chữ như mục 2.1, Đòn A.
-- [ ] Kiểm tra glyph tiếng Việt:
+- [x] **Đọc trước** (bản Next này khác kiến thức cũ, xem `AGENTS.md`): các guide về font (`next/font`) và về CSS/Tailwind trong `node_modules/next/dist/docs/01-app/`. Tìm bằng `grep -ril "next/font" node_modules/next/dist/docs/01-app`.
+- [x] Áp dụng bảng màu light/dark ở mục 2.2, kể cả token mới `--primary-soft`, `--primary-soft-foreground`, `--shadow-card`, `--shadow-pop`, và map chúng trong `@theme inline`.
+- [x] Ghi đè thang chữ như mục 2.1, Đòn A.
+- [x] Kiểm tra glyph tiếng Việt:
   - Mở DevTools, vào Elements → Computed → "Rendered Fonts" trên chữ "Bảng công việc" và "Cập nhật hàng loạt"
   - Nếu thấy font fallback, đổi `subsets: ["latin"]` thành `subsets: ["latin", "latin-ext", "vietnamese"]` trong `layout.tsx`
-- [ ] Đổi tên biến font `--font-geist-sans` thành `--font-sans-app`. Việc này không bắt buộc. Nếu làm thì sửa đồng bộ trong `layout.tsx` và `@theme`.
-- [ ] Commit, rồi chụp nhanh `/board` để xác nhận app không vỡ.
+- [x] Đổi tên biến font `--font-geist-sans` thành `--font-sans-app`. Việc này không bắt buộc. Nếu làm thì sửa đồng bộ trong `layout.tsx` và `@theme`.
+- [x] Commit, rồi chụp nhanh `/board` để xác nhận app không vỡ.
 
 #### Task 1.2: Primitive `src/components/ui/*`
 
 **Files:** `button.tsx`, `input.tsx`, `textarea.tsx`, `select.tsx`, `badge.tsx`, `card.tsx`, `table.tsx`, `tabs.tsx`, `dropdown-menu.tsx`, `dialog.tsx`, `sheet.tsx`, `checkbox.tsx`, `progress.tsx`, `label.tsx`
 
-- [ ] **Button:**
+- [x] **Button:**
   - size `default` `h-10 px-4`, `sm` `h-9 px-3 text-xs`, `lg` `h-11 px-6`, `icon` `h-10 w-10`
   - thêm size `icon-sm` = `h-8 w-8` cho toolbar dày đặc
   - thêm `font-semibold` cho variant `default`
   - `outline` dùng `bg-card` và có `shadow-[var(--shadow-card)]`
-- [ ] **Input / Select trigger / Textarea:**
+- [x] **Input / Select trigger / Textarea:**
   - `h-10`, `bg-card`, `border-input`
   - focus: `focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:border-ring`
-- [ ] **Badge:**
+- [x] **Badge:**
   - base `px-2 py-0.5 text-2xs font-semibold`
   - variant mềm: nền `bg-*/12` (đổi từ `/15`) + chữ `text-*`. Đã đo được 4.72–4.83, xem bảng Badge mềm ở mục 2.2
   - không có variant "mềm" cho primary. Dùng `bg-primary-soft text-primary-soft-foreground`
   - thêm variant `neutral` = `bg-muted text-foreground`
-- [ ] **Card:**
+- [x] **Card:**
   - `shadow-[var(--shadow-card)]`, `rounded-xl`
   - CardTitle: `text-base font-semibold leading-tight`
   - CardDescription: `text-xs`
-- [ ] **Table:**
+- [x] **Table:**
   - TableHead: `h-11 text-xs font-semibold uppercase tracking-wide text-muted-foreground bg-muted/50`
   - TableCell: `px-3 py-2.5`
-- [ ] **Tabs:** list `h-10`, trigger active `bg-card text-foreground shadow-sm font-semibold`.
-- [ ] **DropdownMenu item:** `py-2 text-sm`, icon `size-4`. Content dùng `shadow-[var(--shadow-pop)]`.
-- [ ] **Dialog / Sheet:** title `text-lg font-semibold`, overlay `bg-black/50`.
-- [ ] Commit.
+- [x] **Tabs:** list `h-10`, trigger active `bg-card text-foreground shadow-sm font-semibold`.
+- [x] **DropdownMenu item:** `py-2 text-sm`, icon `size-4`. Content dùng `shadow-[var(--shadow-pop)]`.
+- [x] **Dialog / Sheet:** title `text-lg font-semibold`, overlay `bg-black/50`.
+- [x] Commit.
 
 #### Task 1.3: Component dùng chung `src/components/shared/*` và `src/components/jira-avatar.tsx`
 
 **Files:** `page-header.tsx`, `metric-card.tsx`, `metric-grid.tsx`, `empty-state.tsx`, `filter-bar.tsx`, `search-field.tsx`, `segmented-control.tsx`, `facet-select.tsx`, `facet-multi-select.tsx`, `pagination-footer.tsx`, `show-more-footer.tsx`, `feedback-banner.tsx`, `async-state.tsx`, `page-container.tsx`, `jira-avatar.tsx`
 
-- [ ] **PageHeader:**
+- [x] **PageHeader:**
   - `h1` thành `text-2xl font-bold tracking-tight`
   - description `text-sm`
   - icon chip `h-11 w-11 rounded-xl bg-primary-soft text-primary-soft-foreground`
-- [ ] **MetricCard:**
+- [x] **MetricCard:**
   - số `text-3xl font-bold tabular-nums`, label `text-xs font-medium`
   - bảng `toneChip` đổi từ `sky`/`emerald`/`amber`/`rose` sang `info`/`success`/`warning`/`destructive`
   - trạng thái selected dùng `ring-2 ring-primary` + `bg-primary-soft`
-- [ ] **JiraAvatar:** áp dụng bảng size ở mục 2.1.
-- [ ] Codemod `text-[10px]`/`text-[11px]` trong toàn bộ `src/components/` (210 chỗ, kể cả `issues/`, `task-create/`, `task-fields/`) theo bảng mapping.
-- [ ] Chuyển class palette hardcode trong `src/components/` sang token.
-- [ ] Commit.
+- [x] **JiraAvatar:** áp dụng bảng size ở mục 2.1.
+- [x] Codemod `text-[10px]`/`text-[11px]` trong toàn bộ `src/components/` (210 chỗ, kể cả `issues/`, `task-create/`, `task-fields/`) theo bảng mapping.
+- [x] Chuyển class palette hardcode trong `src/components/` sang token.
+- [x] Commit.
 
 #### Task 1.4: Hạ tầng theme (toggle bị ẩn)
 
@@ -392,22 +392,22 @@ Nếu developer muốn dùng `next-themes`, cần duyệt riêng việc sửa `p
 - Create: `src/components/shared/theme-toggle.tsx`
 - Modify: `src/app/layout.tsx`
 
-- [ ] **Đọc trước:** guide về root layout, `<head>`/`<Script>` và hydration trong `node_modules/next/dist/docs/01-app/`. Nếu Next 16 có cách khuyến nghị khác cho script chạy trước khi hydrate (ví dụ `next/script` `strategy="beforeInteractive"`), làm theo docs đó và ghi lý do trong commit.
-- [ ] Làm như mục 2.4. `ThemeToggle` là segmented control 3 nút (Sun / Moon / Monitor), mỗi nút có `aria-label` tiếng Việt: "Sáng", "Tối", "Theo hệ thống".
-- [ ] Thêm `THEME_TOGGLE_ENABLED = false`. Khi cờ tắt, toggle không render, nhưng script vẫn chạy với pref mặc định `"light"`, để hành vi giữ nguyên như hiện tại.
-- [ ] Unit test (vitest, không cần DOM lib) cho hàm thuần `resolveTheme(pref, systemDark)`.
-- [ ] Commit.
+- [x] **Đọc trước:** guide về root layout, `<head>`/`<Script>` và hydration trong `node_modules/next/dist/docs/01-app/`. Nếu Next 16 có cách khuyến nghị khác cho script chạy trước khi hydrate (ví dụ `next/script` `strategy="beforeInteractive"`), làm theo docs đó và ghi lý do trong commit.
+- [x] Làm như mục 2.4. `ThemeToggle` là segmented control 3 nút (Sun / Moon / Monitor), mỗi nút có `aria-label` tiếng Việt: "Sáng", "Tối", "Theo hệ thống".
+- [x] Thêm `THEME_TOGGLE_ENABLED = false`. Khi cờ tắt, toggle không render, nhưng script vẫn chạy với pref mặc định `"light"`, để hành vi giữ nguyên như hiện tại.
+- [x] Unit test (vitest, không cần DOM lib) cho hàm thuần `resolveTheme(pref, systemDark)`.
+- [x] Commit.
 
 #### Task 1.5: Test chặn tái phạm (design guard)
 
 **Files:** Create `src/lib/design-guard.test.ts`
 
-- [ ] Test đọc các file `*.tsx` nằm trong danh sách `MIGRATED_DIRS` (dùng `fs`, không cần dependency) và fail nếu:
+- [x] Test đọc các file `*.tsx` nằm trong danh sách `MIGRATED_DIRS` (dùng `fs`, không cần dependency) và fail nếu:
   - có `text-\[(8|9|10|11|13)px\]`, trừ `jira-avatar.tsx`
   - có class palette (`(bg|text|border|ring)-(emerald|purple|sky|amber|red|rose|green|blue|yellow|orange|violet|indigo|slate|gray|zinc)-\d+`)
-- [ ] **Chỉ quét `MIGRATED_DIRS`, không quét toàn bộ `src/`.** Sau P1 vẫn còn khoảng 270 chỗ 10/11px ở các trang chưa migrate. Quét toàn bộ sẽ làm `npm test` fail ngay từ P1.
-- [ ] Giá trị khởi tạo: `MIGRATED_DIRS = ["src/components"]`, vì Task 1.3 đã migrate thư mục này. Mỗi phase sau thêm thư mục của nó vào danh sách. Đến P5 thì danh sách là toàn bộ `src/`.
-- [ ] Commit.
+- [x] **Chỉ quét `MIGRATED_DIRS`, không quét toàn bộ `src/`.** Sau P1 vẫn còn khoảng 270 chỗ 10/11px ở các trang chưa migrate. Quét toàn bộ sẽ làm `npm test` fail ngay từ P1.
+- [x] Giá trị khởi tạo: `MIGRATED_DIRS = ["src/components"]`, vì Task 1.3 đã migrate thư mục này. Mỗi phase sau thêm thư mục của nó vào danh sách. Đến P5 thì danh sách là toàn bộ `src/`.
+- [x] Commit.
 
 **Mốc release P1:** toàn app đã to hơn và rõ hơn nhờ token. Các trang chưa migrate có thể còn một vài chỗ 10/11px, nhưng không vỡ layout.
 
