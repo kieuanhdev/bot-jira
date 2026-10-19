@@ -1,10 +1,10 @@
 # Board Page Overrides
 
-> **PROJECT:** Team Task Web
-> **Generated:** 2026-09-19 08:30:02
-> **Page Type:** Dashboard / Data View
+> **PROJECT:** Team Task Web  
+> **Generated:** 2026-09-19 08:30:02 (Updated: 2026-10-19 UI/UX Refresh)  
+> **Page Type:** Dashboard / Data View  
 
-> ⚠️ **IMPORTANT:** Rules in this file **override** the Master file (`design-system/MASTER.md`).
+> ⚠️ **IMPORTANT:** Rules in this file **override** the Master file (`design-system/team-task-web/MASTER.md`).
 > Only deviations from the Master are documented here. For all other rules, refer to the Master.
 
 ---
@@ -13,9 +13,10 @@
 
 ### Layout Overrides
 
-- **Max Width:** full-width (board uses the entire main area; no max-w constraint)
-- **Grid:** 5 fixed status columns (kanban) OR a single-column list (queue view) — user-togglable
-- **Density:** High (dashboard). Card padding `p-2.5`, column gap `gap-3`, card gap `gap-2`.
+- **Max Width:** full-width (board uses the entire main area; no max-w constraint).
+- **Grid:** Workflow status columns (Kanban) OR single-column list (queue view) — user-togglable.
+- **Density:** Comfortable-compact. Card padding `p-3`, column gap `gap-2.5`, card gap `gap-2.5`.
+- **Column Surface:** `bg-muted/60 rounded-xl` so white cards (`bg-card`) stand out clearly against the column background.
 
 ### Responsive / Adaptive Layout (no horizontal scroll)
 
@@ -37,20 +38,25 @@ The board avoids page-level horizontal scrolling and adapts to viewport width. W
   narrow screens List is forced automatically.
 - Columns come from `/api/board/statuses` (real project workflow states). Fallback
   when that endpoint returns nothing: the distinct statuses present in the loaded issues.
-- Summary tiles are category-based (Open / In Progress / Stale / Done), not fixed
-  status names, so they stay correct regardless of the project's workflow.
+- Summary tiles use the shared `MetricCard` component with category metrics (Open / In Progress / Stale / Done).
 
-### Spacing Overrides
+### Spacing & Sizing Overrides (Task 3.1)
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--space-xs` | `4px` | icon gaps, badge inner |
-| `--space-sm` | `6px` | card inner rows |
-| `--space-md` | `8px` | card→card vertical |
-| `--space-lg` | `12px` | section gaps |
-
-- Column width `w-72` (288px), board container `overflow-x-auto`.
-- Summary bar sits above the columns with `mb-3`, gap `gap-2`.
+| Element | Value / Classes | Details |
+|---------|-----------------|---------|
+| Column container | `gap-2.5 overflow-x-auto` | Separates workflow columns cleanly |
+| Column surface | `bg-muted/60 rounded-xl p-3` | Soft background to lift card elevation |
+| Column header | `text-sm font-semibold text-foreground` | Status title |
+| Column counter | `Badge variant="neutral"` (`text-2xs`) | Issue count badge |
+| Card surface | `p-3 rounded-xl bg-card border border-border shadow-[var(--shadow-card)]` | Lifted white surface |
+| Card jiraKey | `font-mono text-xs font-semibold text-muted-foreground` | Monospace key |
+| Card issue type | `text-2xs text-muted-foreground` | Issue type indicator |
+| Card title | `text-sm font-semibold text-foreground line-clamp-2` | Main summary (15px) |
+| Priority rail | `w-1 rounded-full` | High visibility left edge |
+| Action buttons | `h-7 w-7`, icon `h-4 w-4` | ⋯ and ‹ › quick navigation buttons |
+| Delivery badges | `text-2xs py-0.5` | PR open → `success`, merged → `info` (no hardcoded palette) |
+| Badges & pills | `text-2xs py-0.5` (bỏ `h-4`) | Prevents text clipping |
+| Summary bar | `mb-4 gap-3` | Standardized with `MetricGrid` & `MetricCard` |
 
 ### Information Hierarchy (the point of this app vs Jira)
 
@@ -59,80 +65,47 @@ The board avoids page-level horizontal scrolling and adapts to viewport width. W
   and NOT the full raw workflow (Jira boards curate a subset).
   - **Per-project config** (preferred, exact match to Jira): `JIRA_PROJECT_COLUMNS`
     in `.env`, e.g. `EPM:Backlog|Selected for Development|In Progress|Waiting For Deploy|ToDo Test|Done`.
-    These are raw workflow status names, shown in the given order.
   - **Auto-derivation** (fallback when a project isn't configured): keep every
     to-do + in-progress workflow state in workflow order, collapse the done-family
     into a single column.
   - Single project: that project's columns. "All" (multiple projects): the
-    de-duplicated union across projects (a column named the same in two projects,
-    e.g. `In Progress`, is one column).
-- Source of workflow data: Jira REST **v2** `/project/{key}/statuses` (v3 is
-  unavailable on this DC — it 302-redirects to login). Served by
-  `/api/board/statuses`.
-- An issue routes to a column by its **status category** (so a status not listed
-  as a column header still lands in the right column, e.g. `Done Test`+`Deploy`
-  → `Done`).
-- A configured column label that isn't a real workflow status (e.g. `Done`) gets
-  its category **inferred from the label** (done/closed/released → done,
-  progress → in-progress, backlog/todo/… → to-do), so it correctly collects the
-  project's done-family issues.
-- Column dot color is derived from the Jira status category. On this instance the
-  category ids are **2 = To Do, 4 = In Progress, 3 = Done** (not the canonical
-  1/4/5). sky = to-do, teal = in progress, emerald = done.
-- **Workflow transitions** are configured in Jira. The board surfaces them via
-  three interaction patterns (all resolve to a Jira transition lookup):
-  - **Drag & drop** (`@dnd-kit/core`): drag a card to another column → finds the
-    transition to that column's status name → POSTs the transition. Drop target
-    highlights with `bg-primary/5 ring-1 ring-primary/20`. Drag overlay shows a
-    rotated/scaled clone.
-  - **Quick arrows** (↖ ↗ on card top-right): move to the adjacent column
-    (prev/next in column order). Stops at edges. Fastest single-action path.
-  - **Inbox commands**: `MOVE KEY TO Status`, `DONE KEY`, `REOPEN KEY` — typed
-    from chat or the Inbox page for batch/voice workflows.
-  - All three call `GET /api/issues/[key]/transitions` → match by `to.name`
-    case-insensitive → `POST /api/issues/[key]/transition`. If no transition
-    exists to the target, the action silently no-ops (Jira workflow constraint).
-- **Differentiators must be prominent on each card** (this is the reason to use the app over Jira):
-  - AI score (when present) — `info` badge with bot icon, placed first in the meta row.
+    de-duplicated union across projects.
+- Source of workflow data: Jira REST **v2** `/project/{key}/statuses`. Served by `/api/board/statuses`.
+- An issue routes to a column by its **status category**.
+- Column header dot color uses semantic status tokens (`text-muted-foreground`, `text-info`, `text-primary`, `text-warning`, `text-success`).
+- **Workflow transitions** are configured in Jira. The board surfaces them via:
+  - **Drag & drop** (`@dnd-kit/core`): drop target highlights with `bg-primary-soft/50 ring-1 ring-primary`.
+  - **Quick arrows** (‹ › on card top-right): `h-7 w-7` buttons.
+  - **Inbox commands**: `MOVE KEY TO Status`, `DONE KEY`, `REOPEN KEY`.
+- **Differentiators must be prominent on each card**:
+  - AI score (when present) — `info` badge with bot icon, placed first in meta row.
   - Stale indicator — `warning` badge with clock icon, when `ageDays` exceeds threshold.
-  - Priority — shown via a left border accent or a high-priority badge.
+  - Priority — left rail accent `w-1`.
 
 ### View Toggle
 
-- Top-right of the board: `Board ⇄ List` segmented toggle (icon + label).
-- **List view** = single column, rows sorted by priority then age, inline status quick-action.
-- Remember the user's last choice per session (local state is fine).
-
-### Color Overrides
-
-- Column header dot color per group:
-  - Backlog `text-muted-foreground`
-  - To Do `sky`
-  - In Progress `teal` (primary)
-  - In Review `amber`
-  - Done `emerald`
-- Summary tiles use `bg-muted/40` surface, `tabular-nums` for counts.
-
-### Component Overrides
-
-- Card padding tighter than Master (`p-2.5` vs `p-3`).
-- Summary tiles: small stat cards, no shadow, `tabular-nums`.
-- Use `Skeleton` for column/card loading (not text).
+- Top-right of the board: `Board ⇄ List` segmented control (`h-9` or `h-10`).
+- **List view** = single column, rows min-h 44px, text `text-sm`, inline status quick-actions.
+- Remember the user's last choice per session.
 
 ---
 
 ## Page-Specific Components
 
-- **Summary bar:** row of small stat tiles — In Progress, Stale, Up next (this week), Done this week. Each = label + big number + small trend icon.
-- **Issue card (dense):** line 1 = `jiraKey` (mono, muted) + points badge; line 2 = summary (line-clamp-2, font-medium); line 3 = AI score / stale / assignee badges; line 4 = "updated Xh" muted.
-- **Group header:** colored dot + group label + count.
+- **Summary bar:** Row of `MetricCard` components (`In Progress`, `Stale`, `Up next`, `Done this week`). Numbers use `text-3xl font-bold tabular-nums`.
+- **Issue card (Comfortable-compact):**
+  - Line 1: `jiraKey` (mono, `text-xs`) + issue type (`text-2xs`) + quick buttons (`h-7 w-7`).
+  - Line 2: `summary` (`text-sm font-semibold line-clamp-2 text-foreground`).
+  - Line 3: AI score / stale / assignee / delivery badges (`text-2xs py-0.5`).
+  - Line 4: updated time (`text-xs text-muted-foreground`).
+- **Group header:** Colored status dot + group label (`text-sm font-semibold`) + count badge (`neutral`).
 
 ---
 
 ## Recommendations
 
-- Hover: card background shift (150ms), no layout-shift transform.
+- Hover: Card background shift (150ms), no layout-shift transform.
 - Transitions 150–200ms; respect `prefers-reduced-motion` (handled globally).
-- Loading: 5-column skeleton matching real column widths.
-- Empty (per column): subtle muted hint, not a blank column.
+- Loading: Skeleton matching real column and card dimensions.
+- Empty (per column): Subtle muted icon in circle + short hint, not a blank column.
 - Keep text contrast ≥4.5:1 in both light & dark (tokens already handle this).
