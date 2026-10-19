@@ -31,7 +31,7 @@ export function GlobalSyncIndicator() {
         "flex max-w-sm items-center gap-3 rounded-full border px-4 py-2.5 shadow-lg backdrop-blur-md",
         "transition-all duration-300 ease-out",
         hasFinished && !isAnySyncing
-          ? "border-emerald-500/30 bg-card/95 text-foreground ring-1 ring-emerald-500/20"
+          ? "border-success/30 bg-card/95 text-foreground ring-1 ring-success/20"
           : "border-primary/30 bg-card/95 text-foreground ring-1 ring-primary/20 shadow-primary/5"
       )}
     >
@@ -39,7 +39,7 @@ export function GlobalSyncIndicator() {
       <div className="relative flex shrink-0 items-center justify-center">
         {hasFinished && !isAnySyncing ? (
           <CheckCircle2
-            className="h-4.5 w-4.5 text-emerald-500 animate-in zoom-in-75 duration-200"
+            className="h-4.5 w-4.5 text-success animate-in zoom-in-75 duration-200"
             aria-hidden="true"
           />
         ) : (
@@ -70,8 +70,7 @@ export function GlobalSyncIndicator() {
             syncingProjects.slice(0, 2).map((key) => (
               <Badge
                 key={key}
-                variant="outline"
-                className="h-4.5 border-primary/30 bg-primary/10 px-1 text-[10px] font-bold text-primary font-mono"
+                className="h-5 border-transparent bg-primary-soft text-primary-soft-foreground px-1.5 text-2xs font-bold font-mono"
               >
                 {key}
               </Badge>
@@ -79,8 +78,8 @@ export function GlobalSyncIndicator() {
 
           {syncingProjects.length > 2 && (
             <Badge
-              variant="outline"
-              className="h-4.5 border-border bg-muted px-1 text-[10px] text-muted-foreground font-mono"
+              variant="neutral"
+              className="h-5 px-1.5 text-2xs font-mono text-muted-foreground"
             >
               +{syncingProjects.length - 2}
             </Badge>
@@ -91,15 +90,15 @@ export function GlobalSyncIndicator() {
             justFinished.slice(0, 2).map((key) => (
               <Badge
                 key={key}
-                variant="outline"
-                className="h-4.5 border-emerald-500/30 bg-emerald-500/10 px-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 font-mono"
+                variant="success"
+                className="h-5 px-1.5 text-2xs font-bold font-mono"
               >
                 {key}
               </Badge>
             ))}
         </div>
 
-        <p className="text-[11px] text-muted-foreground truncate leading-tight mt-0.5">
+        <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">
           {hasFinished && !isAnySyncing
             ? "Dữ liệu đã được cập nhật mới nhất"
             : "Đang cập nhật thay đổi mới nhất từ Jira…"}
@@ -110,10 +109,10 @@ export function GlobalSyncIndicator() {
       <button
         type="button"
         onClick={() => setDismissedProjects(syncingProjects)}
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
         aria-label="Đóng thông báo đồng bộ"
       >
-        <X className="h-3 w-3" aria-hidden="true" />
+        <X className="h-4 w-4" aria-hidden="true" />
       </button>
     </aside>
   );

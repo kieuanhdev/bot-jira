@@ -27,7 +27,7 @@ export function ReconnectBanner() {
 
   return (
     <div
-      className="flex items-center justify-between gap-3 border-b border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm text-destructive"
+      className="flex items-center justify-between gap-3 border-b border-destructive/40 bg-destructive/12 px-4 py-2.5 text-sm text-destructive"
       role="alert"
     >
       <div className="flex items-center gap-2 min-w-0">
@@ -41,7 +41,7 @@ export function ReconnectBanner() {
         className="flex shrink-0 items-center gap-1 text-xs font-semibold underline underline-offset-4 hover:opacity-80 transition-opacity cursor-pointer"
       >
         <span>Cập nhật token</span>
-        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+        <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </Link>
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { Sun, Moon, Monitor } from "lucide-react";
-import { useTheme } from "@/hooks/use-theme";
+import { useTheme } from "@/lib/theme-client";
 import { THEME_TOGGLE_ENABLED, type ThemePref } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 

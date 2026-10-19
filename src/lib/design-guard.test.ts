@@ -11,11 +11,14 @@ import { describe, expect, it } from "vitest";
  *
  * MIGRATED_DIRS starts with ["src/components"] in Phase 1 and expands in subsequent phases.
  */
-export const MIGRATED_DIRS = ["src/components"];
+export const MIGRATED_DIRS = ["src/components", "src/app/(app)"];
 
 const FORBIDDEN_MICRO_TEXT_REGEX = /text-\[(8|9|10|11|13)px\]/g;
 const FORBIDDEN_PALETTE_REGEX =
   /\b(?:bg|text|border|ring)-(?:emerald|purple|sky|amber|red|rose|green|blue|yellow|orange|violet|indigo|slate|gray|zinc)-\d+\b/g;
+
+// Directories where only top-level files are migrated in current phase
+const SHALLOW_DIRS = new Set(["src/app/(app)"]);
 
 function collectTsxFiles(dirPath: string): string[] {
   const fullPath = path.resolve(process.cwd(), dirPath);
@@ -27,7 +30,9 @@ function collectTsxFiles(dirPath: string): string[] {
   for (const entry of entries) {
     const entryFullPath = path.join(fullPath, entry.name);
     if (entry.isDirectory()) {
-      results.push(...collectTsxFiles(path.relative(process.cwd(), entryFullPath)));
+      if (!SHALLOW_DIRS.has(dirPath)) {
+        results.push(...collectTsxFiles(path.relative(process.cwd(), entryFullPath)));
+      }
     } else if (entry.isFile() && entry.name.endsWith(".tsx")) {
       results.push(path.relative(process.cwd(), entryFullPath));
     }

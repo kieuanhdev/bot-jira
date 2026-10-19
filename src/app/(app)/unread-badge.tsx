@@ -21,7 +21,7 @@ export function UnreadBadge({ variant = "inline", className }: UnreadBadgeProps)
     return (
       <span
         className={cn(
-          "absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white tabular-nums ring-2 ring-card",
+          "absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-2xs font-bold text-destructive-foreground tabular-nums ring-2 ring-card",
           className
         )}
       >
@@ -34,7 +34,7 @@ export function UnreadBadge({ variant = "inline", className }: UnreadBadgeProps)
     return (
       <span
         className={cn(
-          "absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white tabular-nums",
+          "absolute top-1 right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-2xs font-semibold text-destructive-foreground tabular-nums",
           className
         )}
       >
@@ -46,7 +46,7 @@ export function UnreadBadge({ variant = "inline", className }: UnreadBadgeProps)
   return (
     <span
       className={cn(
-        "flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white tabular-nums",
+        "flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-destructive px-1.5 text-2xs font-semibold text-destructive-foreground tabular-nums",
         className
       )}
     >

@@ -61,13 +61,13 @@ export function FreshnessBanner() {
       className={
         "flex items-center gap-2 border-b px-4 py-2 text-sm " +
         (down
-          ? "bg-destructive/10 text-destructive border-destructive/30"
-          : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30")
+          ? "bg-destructive/12 text-destructive border-destructive/30"
+          : "bg-warning/12 text-warning border-warning/30")
       }
       role="status"
       title={tooltip}
     >
-      {down ? <WifiOff className="h-4 w-4 shrink-0" /> : <TriangleAlert className="h-4 w-4 shrink-0" />}
+      {down ? <WifiOff className="h-4 w-4 shrink-0" aria-hidden="true" /> : <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />}
       <span className="min-w-0 truncate">
         {down ? (
           <>Tiến trình nền (Worker) bị gián đoạn — dữ liệu có thể đã cũ. Tín hiệu cuối cách đây {secondsLabel(data.workerAgeMs)}.</>

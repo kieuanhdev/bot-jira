@@ -32,7 +32,7 @@ describe("UnreadBadge", () => {
     mocks.unreadCount.mockReturnValue(5);
     const html = renderToString(React.createElement(UnreadBadge, { variant: "inline" }));
     expect(html).toContain("5");
-    expect(html).toContain("bg-red-500");
+    expect(html).toContain("bg-destructive");
   });
 
   it("renders 99+ when unreadCount > 99", () => {

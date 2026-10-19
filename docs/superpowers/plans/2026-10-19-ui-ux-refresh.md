@@ -421,22 +421,22 @@ Nếu developer muốn dùng `next-themes`, cần duyệt riêng việc sửa `p
 - Modify: `src/app/(app)/unread-badge.tsx`, `freshness-banner.tsx`, `reconnect-banner.tsx`, `global-sync-indicator.tsx`
 - Modify: `src/app/(app)/unread-badge.test.ts` (nếu đổi `bg-red-500` thành `bg-destructive`)
 
-- [ ] **Kích thước:**
+- [x] **Kích thước:**
   - sidebar mở rộng `w-56` → `w-60`
   - nav item `h-10 px-3 text-sm font-medium gap-3`, icon `h-[18px] w-[18px]`
-- [ ] **Item đang chọn:** `bg-primary-soft text-primary-soft-foreground font-semibold` cộng một thanh dọc 3px màu primary ở cạnh trái (`before:` pseudo hoặc span). Item không chọn dùng `text-foreground/80`, **không dùng `muted-foreground`**.
-- [ ] **Nhóm menu:** chia 11 mục thành 3 nhóm, mỗi nhóm có nhãn `text-2xs font-semibold uppercase tracking-wider text-muted-foreground`. Đổi tên nhóm cần developer xác nhận ở review.
+- [x] **Item đang chọn:** `bg-primary-soft text-primary-soft-foreground font-semibold` cộng một thanh dọc 3px màu primary ở cạnh trái (`before:` pseudo hoặc span). Item không chọn dùng `text-foreground/80`, **không dùng `muted-foreground`**.
+- [x] **Nhóm menu:** chia 11 mục thành 3 nhóm, mỗi nhóm có nhãn `text-2xs font-semibold uppercase tracking-wider text-muted-foreground`. Đổi tên nhóm cần developer xác nhận ở review.
   - **Công việc:** Bảng công việc, Task cần xử lý, Task theo dõi, Thông báo
   - **Delivery:** Lỗi Sentry, Cập nhật hàng loạt, Quản lý phát hành, Nhánh & Delivery
   - **Phân tích:** Báo cáo dự án, Xếp hạng
   - Cài đặt và Quản trị chuyển xuống footer
-- [ ] **Header sidebar:** logo chip `h-9 w-9 bg-primary text-primary-foreground` (đặc thay vì `/10`), tên app `text-base font-bold`.
-- [ ] **Footer sidebar:** đặt `ThemeToggle` (vẫn bị cờ ẩn), Cài đặt, nút thu gọn.
-- [ ] **Vùng nội dung chính:** `main` dùng `p-4 md:p-6 xl:p-8`.
-- [ ] **Header mobile:** dùng cùng style item như sidebar desktop.
-- [ ] Chuyển màu hardcode trong 4 component banner/badge sang token.
-- [ ] Thêm `src/app/(app)` (chỉ các file ở cấp này) vào `MIGRATED_DIRS`.
-- [ ] Commit.
+- [x] **Header sidebar:** logo chip `h-9 w-9 bg-primary text-primary-foreground` (đặc thay vì `/10`), tên app `text-base font-bold`.
+- [x] **Footer sidebar:** đặt `ThemeToggle` (vẫn bị cờ ẩn), Cài đặt, nút thu gọn.
+- [x] **Vùng nội dung chính:** `main` dùng `p-4 md:p-6 xl:p-8`.
+- [x] **Header mobile:** dùng cùng style item như sidebar desktop.
+- [x] Chuyển màu hardcode trong 4 component banner/badge sang token.
+- [x] Thêm `src/app/(app)` (chỉ các file ở cấp này) vào `MIGRATED_DIRS`.
+- [x] Commit.
 
 ### Phase 3: Board (màn dùng nhiều nhất)
 

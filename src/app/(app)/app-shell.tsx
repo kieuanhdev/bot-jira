@@ -26,23 +26,50 @@ import { UnreadBadge } from "./unread-badge";
 import { FreshnessBanner } from "./freshness-banner";
 import { ReconnectBanner } from "./reconnect-banner";
 import { GlobalSyncIndicator } from "./global-sync-indicator";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { cn } from "@/lib/utils";
 
-const baseNav = [
-  { href: "/board", label: "Bảng công việc", icon: LayoutGrid },
-  { href: "/stale", label: "Task cần xử lý", icon: BarChart3 },
-  { href: "/sentry", label: "Lỗi Sentry", icon: Bug },
-  { href: "/bulk", label: "Cập nhật hàng loạt", icon: ListChecks },
-  { href: "/release", label: "Quản lý phát hành", icon: Rocket },
-  { href: "/branches", label: "Nhánh & Delivery", icon: GitBranch },
-  { href: "/reports/projects", label: "Báo cáo dự án", icon: ChartNoAxesCombined },
-  { href: "/leaderboard", label: "Xếp hạng", icon: Trophy },
-  { href: "/watch", label: "Task theo dõi", icon: Eye },
-  { href: "/notifications", label: "Thông báo", icon: Bell },
-  { href: "/settings", label: "Cài đặt", icon: Settings },
+type NavItemDef = {
+  href: string;
+  label: string;
+  icon: typeof LayoutGrid;
+};
+
+type NavGroupDef = {
+  title: string;
+  items: NavItemDef[];
+};
+
+const navGroups: NavGroupDef[] = [
+  {
+    title: "Công việc",
+    items: [
+      { href: "/board", label: "Bảng công việc", icon: LayoutGrid },
+      { href: "/stale", label: "Task cần xử lý", icon: BarChart3 },
+      { href: "/watch", label: "Task theo dõi", icon: Eye },
+      { href: "/notifications", label: "Thông báo", icon: Bell },
+    ],
+  },
+  {
+    title: "Delivery",
+    items: [
+      { href: "/sentry", label: "Lỗi Sentry", icon: Bug },
+      { href: "/bulk", label: "Cập nhật hàng loạt", icon: ListChecks },
+      { href: "/release", label: "Quản lý phát hành", icon: Rocket },
+      { href: "/branches", label: "Nhánh & Delivery", icon: GitBranch },
+    ],
+  },
+  {
+    title: "Phân tích",
+    items: [
+      { href: "/reports/projects", label: "Báo cáo dự án", icon: ChartNoAxesCombined },
+      { href: "/leaderboard", label: "Xếp hạng", icon: Trophy },
+    ],
+  },
 ];
 
-const adminNavItem = { href: "/admin", label: "Quản trị", icon: ShieldCheck };
+const settingsNavItem: NavItemDef = { href: "/settings", label: "Cài đặt", icon: Settings };
+const adminNavItem: NavItemDef = { href: "/admin", label: "Quản trị", icon: ShieldCheck };
 
 export function AppShell({
   children,
@@ -54,7 +81,6 @@ export function AppShell({
   defaultCollapsed?: boolean;
 }) {
   const pathname = usePathname();
-  const nav = isAdmin ? [...baseNav, adminNavItem] : baseNav;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const collapsedRef = useRef(collapsed);
@@ -111,7 +137,7 @@ export function AppShell({
       <aside
         className={cn(
           "sticky top-0 z-50 hidden h-screen shrink-0 flex-col border-r bg-card transition-all duration-200 ease-in-out md:flex",
-          collapsed ? "w-16" : "w-56"
+          collapsed ? "w-16" : "w-60"
         )}
         aria-label="Thanh điều hướng chính"
       >
@@ -126,101 +152,181 @@ export function AppShell({
             <button
               type="button"
               onClick={toggleSidebar}
-              className="group relative flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors hover:bg-primary/20"
+              className="group relative flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-xs transition-opacity hover:opacity-90"
               title="Mở rộng menu (Ctrl+B)"
               aria-label="Mở rộng thanh điều hướng"
             >
-              <Bot className="h-4.5 w-4.5 transition-opacity group-hover:opacity-0" aria-hidden="true" />
-              <PanelLeftOpen className="absolute h-4.5 w-4.5 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />
+              <Bot className="h-5 w-5 transition-opacity group-hover:opacity-0" aria-hidden="true" />
+              <PanelLeftOpen className="absolute h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />
             </button>
           ) : (
             <>
               <div className="flex items-center gap-2.5 overflow-hidden">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                  <Bot className="h-4.5 w-4.5 text-primary" aria-hidden="true" />
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-xs">
+                  <Bot className="h-5 w-5" aria-hidden="true" />
                 </span>
-                <span className="font-semibold tracking-tight text-sm truncate select-none">
+                <span className="font-bold tracking-tight text-base truncate select-none text-foreground">
                   Team Task Web
                 </span>
               </div>
               <button
                 type="button"
                 onClick={toggleSidebar}
-                className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
                 title="Thu gọn menu (Ctrl+B)"
                 aria-label="Thu gọn thanh điều hướng"
               >
-                <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+                <PanelLeftClose className="h-4.5 w-4.5" aria-hidden="true" />
               </button>
             </>
           )}
         </div>
 
-        {/* Nav Links */}
+        {/* Nav Links grouped into 3 sections */}
         <nav
           className={cn(
-            "flex flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden",
-            collapsed ? "p-2 items-center" : "p-3"
+            "flex flex-1 flex-col overflow-y-auto overflow-x-hidden",
+            collapsed ? "p-2 items-center gap-2" : "p-3 gap-3"
           )}
         >
-          {nav.map((item) => {
-            const active = pathname?.startsWith(item.href);
-            const isNotification = item.href === "/notifications";
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                title={item.label}
-                className={cn(
-                  "relative flex rounded-md font-medium transition-colors",
-                  collapsed
-                    ? "h-10 w-10 items-center justify-center text-sm"
-                    : "items-center justify-between px-3 py-2 text-sm",
-                  active
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                )}
-              >
-                {collapsed ? (
-                  <>
-                    <item.icon className={cn("h-4.5 w-4.5 shrink-0", active && "text-primary")} aria-hidden="true" />
-                    <span className="sr-only">{item.label}</span>
-                    {isNotification && <UnreadBadge variant="collapsed" />}
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <item.icon className={cn("h-4 w-4 shrink-0", active && "text-primary")} aria-hidden="true" />
-                      <span className="truncate">{item.label}</span>
-                    </div>
-                    {isNotification && <UnreadBadge variant="inline" />}
-                  </>
-                )}
-              </Link>
-            );
-          })}
+          {navGroups.map((group, groupIdx) => (
+            <div
+              key={group.title}
+              className={cn("flex flex-col", collapsed ? "w-full items-center gap-1" : "gap-1")}
+            >
+              {!collapsed ? (
+                <div
+                  className={cn(
+                    "px-3 text-2xs font-semibold uppercase tracking-wider text-muted-foreground select-none",
+                    groupIdx === 0 ? "pt-1 pb-1" : "pt-2 pb-1"
+                  )}
+                >
+                  {group.title}
+                </div>
+              ) : groupIdx > 0 ? (
+                <div className="my-1 h-px w-6 bg-border/60" aria-hidden="true" />
+              ) : null}
+
+              {group.items.map((item) => {
+                const active = pathname?.startsWith(item.href);
+                const isNotification = item.href === "/notifications";
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    title={item.label}
+                    className={cn(
+                      "relative flex rounded-md font-medium transition-colors",
+                      collapsed
+                        ? "h-10 w-10 items-center justify-center"
+                        : "h-10 items-center justify-between px-3 text-sm gap-3",
+                      active
+                        ? "bg-primary-soft text-primary-soft-foreground font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r before:bg-primary"
+                        : "text-foreground/80 hover:bg-accent hover:text-foreground"
+                    )}
+                  >
+                    {collapsed ? (
+                      <>
+                        <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                        <span className="sr-only">{item.label}</span>
+                        {isNotification && <UnreadBadge variant="collapsed" />}
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                          <span className="truncate">{item.label}</span>
+                        </div>
+                        {isNotification && <UnreadBadge variant="inline" />}
+                      </>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
-        {/* Footer actions */}
-        <div className="border-t p-2 flex flex-col gap-1">
+        {/* Footer actions: Admin (if enabled), Settings, ThemeToggle, and Collapse Toggle */}
+        <div className={cn("border-t border-border p-2 flex flex-col gap-1", collapsed ? "items-center" : "")}>
+          {isAdmin && (
+            <Link
+              href={adminNavItem.href}
+              title={adminNavItem.label}
+              className={cn(
+                "relative flex rounded-md font-medium transition-colors",
+                collapsed
+                  ? "h-10 w-10 items-center justify-center"
+                  : "h-10 items-center justify-between px-3 text-sm gap-3",
+                pathname?.startsWith(adminNavItem.href)
+                  ? "bg-primary-soft text-primary-soft-foreground font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r before:bg-primary"
+                  : "text-foreground/80 hover:bg-accent hover:text-foreground"
+              )}
+            >
+              {collapsed ? (
+                <>
+                  <adminNavItem.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                  <span className="sr-only">{adminNavItem.label}</span>
+                </>
+              ) : (
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <adminNavItem.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                  <span className="truncate">{adminNavItem.label}</span>
+                </div>
+              )}
+            </Link>
+          )}
+
+          <Link
+            href={settingsNavItem.href}
+            title={settingsNavItem.label}
+            className={cn(
+              "relative flex rounded-md font-medium transition-colors",
+              collapsed
+                ? "h-10 w-10 items-center justify-center"
+                : "h-10 items-center justify-between px-3 text-sm gap-3",
+              pathname?.startsWith(settingsNavItem.href)
+                ? "bg-primary-soft text-primary-soft-foreground font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r before:bg-primary"
+                : "text-foreground/80 hover:bg-accent hover:text-foreground"
+            )}
+          >
+            {collapsed ? (
+              <>
+                <settingsNavItem.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                <span className="sr-only">{settingsNavItem.label}</span>
+              </>
+            ) : (
+              <div className="flex items-center gap-3 overflow-hidden">
+                <settingsNavItem.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                <span className="truncate">{settingsNavItem.label}</span>
+              </div>
+            )}
+          </Link>
+
+          {!collapsed ? (
+            <ThemeToggle className="my-1 self-start" />
+          ) : (
+            <ThemeToggle className="my-1" />
+          )}
+
           <button
             type="button"
             onClick={toggleSidebar}
             className={cn(
-              "flex cursor-pointer rounded-md font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+              "flex cursor-pointer rounded-md font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-foreground",
               collapsed
-                ? "h-9 w-full items-center justify-center"
-                : "w-full items-center gap-3 px-3 py-2 text-sm"
+                ? "h-10 w-10 items-center justify-center"
+                : "h-10 w-full items-center gap-3 px-3 text-sm"
             )}
             title={collapsed ? "Mở rộng menu (Ctrl+B)" : "Thu gọn menu (Ctrl+B)"}
-            aria-label={collapsed ? "Mở rộng menu" : "Thu gọn menu"}
+            aria-label={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
           >
             {collapsed ? (
-              <PanelLeftOpen className="h-4.5 w-4.5" aria-hidden="true" />
+              <PanelLeftOpen className="h-[18px] w-[18px]" aria-hidden="true" />
             ) : (
               <>
-                <PanelLeftClose className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span className="truncate text-xs text-muted-foreground">Thu gọn menu</span>
+                <PanelLeftClose className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                <span className="truncate text-sm">Thu gọn menu</span>
               </>
             )}
           </button>
@@ -231,29 +337,29 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile Header: Visible only on < md screens */}
         <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between border-b bg-card/80 px-4 backdrop-blur-sm md:hidden">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-              <Bot className="h-4.5 w-4.5 text-primary" />
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-xs">
+              <Bot className="h-5 w-5" aria-hidden="true" />
             </span>
-            <span className="font-semibold tracking-tight text-sm">Team Task Web</span>
+            <span className="font-bold tracking-tight text-base text-foreground">Team Task Web</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <Link
               href="/notifications"
-              className="relative flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              className="relative flex h-9 w-9 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
               aria-label="Thông báo"
             >
-              <Bell className="h-4.5 w-4.5" />
+              <Bell className="h-5 w-5" aria-hidden="true" />
               <UnreadBadge variant="mobile-bell" />
             </Link>
             <button
               type="button"
               onClick={() => setMobileOpen((v) => !v)}
-              className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
+              className="flex h-9 w-9 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
               aria-label="Menu"
               aria-expanded={mobileOpen}
             >
-              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              {mobileOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
             </button>
           </div>
         </header>
@@ -261,37 +367,81 @@ export function AppShell({
         {/* Mobile Menu Dropdown */}
         {mobileOpen && (
           <div className="border-b bg-card p-3 shadow-lg md:hidden">
-            <nav className="flex flex-col gap-1">
-              {nav.map((item) => {
-                const active = pathname?.startsWith(item.href);
-                const isNotification = item.href === "/notifications";
-                return (
+            <nav className="flex flex-col gap-3">
+              {navGroups.map((group) => (
+                <div key={group.title} className="flex flex-col gap-1">
+                  <div className="px-3 pt-1 pb-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
+                    {group.title}
+                  </div>
+                  {group.items.map((item) => {
+                    const active = pathname?.startsWith(item.href);
+                    const isNotification = item.href === "/notifications";
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMobileOpen(false)}
+                        className={cn(
+                          "relative flex h-10 items-center justify-between rounded-md px-3 text-sm font-medium transition-colors",
+                          active
+                            ? "bg-primary-soft text-primary-soft-foreground font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r before:bg-primary"
+                            : "text-foreground/80 hover:bg-accent hover:text-foreground"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                          <span className="truncate">{item.label}</span>
+                        </div>
+                        {isNotification && <UnreadBadge variant="inline" />}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+
+              {/* Footer items for mobile */}
+              <div className="border-t border-border pt-2 flex flex-col gap-1">
+                {isAdmin && (
                   <Link
-                    key={item.href}
-                    href={item.href}
+                    href={adminNavItem.href}
                     onClick={() => setMobileOpen(false)}
                     className={cn(
-                      "flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                      active
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                      "relative flex h-10 items-center justify-between rounded-md px-3 text-sm font-medium transition-colors",
+                      pathname?.startsWith(adminNavItem.href)
+                        ? "bg-primary-soft text-primary-soft-foreground font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r before:bg-primary"
+                        : "text-foreground/80 hover:bg-accent hover:text-foreground"
                     )}
                   >
                     <div className="flex items-center gap-3">
-                      <item.icon className={cn("h-4 w-4", active && "text-primary")} />
-                      <span>{item.label}</span>
+                      <adminNavItem.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                      <span className="truncate">{adminNavItem.label}</span>
                     </div>
-                    {isNotification && <UnreadBadge variant="inline" />}
                   </Link>
-                );
-              })}
+                )}
+                <Link
+                  href={settingsNavItem.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    "relative flex h-10 items-center justify-between rounded-md px-3 text-sm font-medium transition-colors",
+                    pathname?.startsWith(settingsNavItem.href)
+                      ? "bg-primary-soft text-primary-soft-foreground font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r before:bg-primary"
+                      : "text-foreground/80 hover:bg-accent hover:text-foreground"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <settingsNavItem.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                    <span className="truncate">{settingsNavItem.label}</span>
+                  </div>
+                </Link>
+                <ThemeToggle className="mt-1 self-start" />
+              </div>
             </nav>
           </div>
         )}
 
         <ReconnectBanner />
         <FreshnessBanner />
-        <main className="flex-1 overflow-x-auto p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-x-auto p-4 md:p-6 xl:p-8">{children}</main>
         <GlobalSyncIndicator />
       </div>
     </div>
