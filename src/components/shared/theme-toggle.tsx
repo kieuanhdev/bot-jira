@@ -1,7 +1,8 @@
 "use client";
 
 import { Sun, Moon, Monitor } from "lucide-react";
-import { THEME_TOGGLE_ENABLED, type ThemePref, useTheme } from "@/lib/theme";
+import { useTheme } from "@/hooks/use-theme";
+import { THEME_TOGGLE_ENABLED, type ThemePref } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 interface ThemeToggleProps {
