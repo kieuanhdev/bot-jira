@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReadonlyURLSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
@@ -73,6 +73,14 @@ export function useBulkConfigure({
 
   // Target status for transition mode
   const [targetStatus, setTargetStatus] = useState("");
+
+  const [prevFilterProject, setPrevFilterProject] = useState(filterProject);
+  if (filterProject !== prevFilterProject) {
+    setPrevFilterProject(filterProject);
+    setTargetStatus("");
+    setEnabledFields(new Set());
+    fieldState.resetFields();
+  }
 
   const [worklogDuration, setWorklogDuration] = useState("");
   const [worklogStarted, setWorklogStarted] = useState(() => {
@@ -164,50 +172,34 @@ export function useBulkConfigure({
   const isEstimateValid = isValidEstimate(fieldState.values.estimate);
   const isWorklogDurationValid = Boolean(worklogDuration.trim() && parseJiraDuration(worklogDuration.trim()));
 
-  const buildAction = useCallback(
-    (): BulkAction | null =>
-      buildBulkAction({
-        filterProject,
-        operationKind,
-        targetStatus,
-        worklogDuration,
-        isWorklogDurationValid,
-        worklogStarted,
-        worklogComment,
-        enabledFields,
-        clearAssignee: fieldState.values.clearAssignee,
-        assignee: fieldState.values.assignee,
-        clearLabels: fieldState.values.clearLabels,
-        label: fieldState.values.label,
-        priority: fieldState.values.priority,
-        issueType: fieldState.values.issueType,
-        clearPoints: fieldState.values.clearPoints,
-        points: fieldState.values.points,
-        availableFieldMap,
-        estimate: fieldState.values.estimate,
-        isEstimateValid,
-        clearDueDate: fieldState.values.clearDueDate,
-        dueDate: fieldState.values.dueDate,
-        clearFixVersions: fieldState.values.clearFixVersions,
-        fixVersions: fieldState.values.fixVersions,
-        clearEpic: fieldState.values.clearEpic,
-        epic: fieldState.values.epic,
-        people: fieldState.values.people,
-      }),
-    [
-      filterProject,
-      operationKind,
-      targetStatus,
-      worklogDuration,
-      isWorklogDurationValid,
-      worklogStarted,
-      worklogComment,
-      enabledFields,
-      fieldState.values,
-      availableFieldMap,
-      isEstimateValid,
-    ]
-  );
+  const action: BulkAction | null = buildBulkAction({
+    filterProject,
+    operationKind,
+    targetStatus,
+    worklogDuration,
+    isWorklogDurationValid,
+    worklogStarted,
+    worklogComment,
+    enabledFields,
+    clearAssignee: fieldState.values.clearAssignee,
+    assignee: fieldState.values.assignee,
+    clearLabels: fieldState.values.clearLabels,
+    label: fieldState.values.label,
+    priority: fieldState.values.priority,
+    issueType: fieldState.values.issueType,
+    clearPoints: fieldState.values.clearPoints,
+    points: fieldState.values.points,
+    availableFieldMap,
+    estimate: fieldState.values.estimate,
+    isEstimateValid,
+    clearDueDate: fieldState.values.clearDueDate,
+    dueDate: fieldState.values.dueDate,
+    clearFixVersions: fieldState.values.clearFixVersions,
+    fixVersions: fieldState.values.fixVersions,
+    clearEpic: fieldState.values.clearEpic,
+    epic: fieldState.values.epic,
+    people: fieldState.values.people,
+  });
 
   function toggleField(field: string) {
     if (availableFieldMap.get(field)?.available === false) return;
@@ -255,7 +247,7 @@ export function useBulkConfigure({
     allProjectStatuses,
     statusOptions,
     isEstimateValid,
-    buildAction,
+    action,
     resetConfigure,
   };
 }

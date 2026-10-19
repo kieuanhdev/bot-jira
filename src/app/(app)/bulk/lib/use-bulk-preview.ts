@@ -18,7 +18,7 @@ export interface UseBulkPreviewOptions {
   selectionMode: SelectionMode;
   taskFilters: IssueFilters;
   selected: Set<string>;
-  buildAction: () => BulkAction | null;
+  action: BulkAction | null;
   targetStatus: string;
   quickFilter?: string;
   onBeforePreview?: () => void;
@@ -29,7 +29,7 @@ export function useBulkPreview({
   selectionMode,
   taskFilters,
   selected,
-  buildAction,
+  action,
   targetStatus,
   quickFilter,
   onBeforePreview,
@@ -40,6 +40,13 @@ export function useBulkPreview({
   const [previewBasis, setPreviewBasis] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
+  const [prevFilterProject, setPrevFilterProject] = useState(filterProject);
+  if (filterProject !== prevFilterProject) {
+    setPrevFilterProject(filterProject);
+    setPreview(null);
+    setPreviewBasis(null);
+  }
+
   const resetPreview = useCallback(() => {
     setPreview(null);
     setPreviewBasis(null);
@@ -47,19 +54,18 @@ export function useBulkPreview({
 
   const currentBasis = useMemo(() => {
     return computePreviewBasis({
-      action: buildAction(),
+      action,
       selectionMode,
       filterProject,
       taskFilters,
       selected,
       quickFilter,
     });
-  }, [selectionMode, filterProject, taskFilters, selected, buildAction, quickFilter]);
+  }, [selectionMode, filterProject, taskFilters, selected, action, quickFilter]);
 
   const previewOutdated = preview != null && previewBasis !== currentBasis;
 
   async function doPreview() {
-    const action = buildAction();
     if (!action || !filterProject) return;
     if (selectionMode === "pick" && selected.size === 0) return;
     setPreviewing(true);
@@ -102,8 +108,8 @@ export function useBulkPreview({
 
   const previewCounts = countPreviewBuckets(preview);
   const visiblePreviewItems = preview?.items.filter((item) => previewBucket(item) === previewView) ?? [];
-  const isLogWorkOp = buildAction()?.kind === "log-work" || preview?.type === "log-work";
-  const isTransitionOp = buildAction()?.kind === "transition" || preview?.type === "transition";
+  const isLogWorkOp = action?.kind === "log-work" || preview?.type === "log-work";
+  const isTransitionOp = action?.kind === "transition" || preview?.type === "transition";
   const confirmLabel = getConfirmLabel({ preview, isLogWorkOp, isTransitionOp, targetStatus });
 
   return {

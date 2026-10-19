@@ -12,74 +12,53 @@ import {
   BulkWorklogForm,
 } from "./bulk-configure-step";
 import { BulkStepBadge } from "./bulk-step-badge";
-import type { OperationKind, ProjectStatus } from "./lib/bulk-logic";
-import type { BulkVersionOption, ProjectFieldOption } from "./lib/bulk-types";
-import type { useBulkFieldState } from "./lib/use-bulk-field-state";
+import type { BulkConfigureController } from "./lib/use-bulk-configure";
+import type { BulkSelectionController } from "./lib/use-bulk-selection";
 
 export interface BulkConfigureCardProps {
-  filterProject: string;
-  operationKind: OperationKind;
-  effectiveCount: number;
-  onOperationKindChange: (kind: OperationKind) => void;
-  // worklog
-  worklogDuration: string;
-  setWorklogDuration: (val: string) => void;
-  isWorklogDurationValid: boolean;
-  worklogStarted: string;
-  setWorklogStarted: (val: string) => void;
-  worklogComment: string;
-  setWorklogComment: (val: string) => void;
-  // transition
-  allProjectStatuses: ProjectStatus[];
-  targetStatus: string;
-  setTargetStatus: (val: string) => void;
-  // fields
-  fieldsLoading: boolean;
-  availableFieldMap: Map<string, ProjectFieldOption>;
-  enabledFields: Set<string>;
-  onToggleField: (field: string) => void;
-  values: ReturnType<typeof useBulkFieldState>["values"];
-  setters: ReturnType<typeof useBulkFieldState>["setters"];
-  availableAssignees: string[];
-  labelOptions: string[];
-  priorityOptions: string[];
-  versionOptions: BulkVersionOption[];
-  versionsLoading: boolean;
-  isEstimateValid: boolean;
+  configure: BulkConfigureController;
+  selection: BulkSelectionController;
   resetPreview: () => void;
   previewError: string | null;
 }
 
 export function BulkConfigureCard({
-  filterProject,
-  operationKind,
-  effectiveCount,
-  onOperationKindChange,
-  worklogDuration,
-  setWorklogDuration,
-  isWorklogDurationValid,
-  worklogStarted,
-  setWorklogStarted,
-  worklogComment,
-  setWorklogComment,
-  allProjectStatuses,
-  targetStatus,
-  setTargetStatus,
-  fieldsLoading,
-  availableFieldMap,
-  enabledFields,
-  onToggleField,
-  values,
-  setters,
-  availableAssignees,
-  labelOptions,
-  priorityOptions,
-  versionOptions,
-  versionsLoading,
-  isEstimateValid,
+  configure,
+  selection,
   resetPreview,
   previewError,
 }: BulkConfigureCardProps) {
+  const {
+    filterProject,
+    effectiveCount,
+    availableAssignees,
+    labelOptions,
+    priorityOptions,
+  } = selection;
+
+  const {
+    operationKind,
+    handleOperationKindChange: onOperationKindChange,
+    worklogDuration,
+    setWorklogDuration,
+    isWorklogDurationValid,
+    worklogStarted,
+    setWorklogStarted,
+    worklogComment,
+    setWorklogComment,
+    allProjectStatuses,
+    targetStatus,
+    setTargetStatus,
+    fieldsLoading,
+    availableFieldMap,
+    enabledFields,
+    toggleField: onToggleField,
+    fieldState,
+    versionOptions,
+    versionsLoading,
+    isEstimateValid,
+  } = configure;
+  const { values, setters } = fieldState;
   return (
     <Card className={effectiveCount === 0 ? "opacity-60" : undefined}>
       <CardHeader className="p-4 sm:p-5">

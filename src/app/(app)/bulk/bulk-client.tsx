@@ -40,7 +40,7 @@ export function BulkClient() {
     selectionMode: selection.selectionMode,
     taskFilters: selection.taskFilters,
     selected: selection.selected,
-    buildAction: configure.buildAction,
+    action: configure.action,
     targetStatus: configure.targetStatus,
     quickFilter: selection.quickFilter,
     onBeforePreview: () => operations.setActiveOp(null),
@@ -62,12 +62,6 @@ export function BulkClient() {
     el.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
   }, [operations.activeOp]);
 
-  function handleProjectChange(newProject: string) {
-    selection.handleProjectChange(newProject);
-    configure.resetConfigure();
-    preview.resetPreview();
-  }
-
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
       {/* Top Navigation Switcher */}
@@ -85,7 +79,7 @@ export function BulkClient() {
         filterProject={selection.filterProject}
         effectiveCount={selection.effectiveCount}
         operationKind={configure.operationKind}
-        actionReady={Boolean(configure.buildAction())}
+        actionReady={Boolean(configure.action)}
         hasPreview={Boolean(preview.preview)}
       />
 
@@ -96,76 +90,15 @@ export function BulkClient() {
 
       {/* Step 1 — Project Scope & Task Selection */}
       <BulkSelectCard
-        filterProject={selection.filterProject}
-        projectOptions={selection.projectOptions}
-        projectIssuesCount={selection.projectIssues.length}
-        onProjectChange={handleProjectChange}
-        selectionMode={selection.selectionMode}
-        taskFilters={selection.taskFilters}
-        availableAssignees={selection.availableAssignees}
+        selection={selection}
         statusOptions={configure.statusOptions}
-        epicOptions={selection.epicOptions}
-        labelOptions={selection.labelOptions}
-        priorityOptions={selection.priorityOptions}
-        typeOptions={selection.typeOptions}
-        fixVersionOptions={selection.fixVersionOptions}
-        reporterOptions={selection.reporterOptions}
-        approverOptions={selection.approverOptions}
-        testerOptions={selection.testerOptions}
-        peopleFieldData={selection.peopleFieldData}
-        displayNames={selection.displayNames}
-        quickFilter={selection.quickFilter}
-        onQuickFilterChange={selection.setQuickFilter}
         myName={session?.user?.jiraUsername}
-        filteredIssues={selection.filteredIssues}
-        onSelectionModeChange={selection.setSelectionMode}
-        onTaskFiltersChange={selection.setTaskFilters}
-        allSelected={selection.allSelected}
-        selected={selection.selected}
-        filterOnlySelected={selection.filterOnlySelected}
-        sortOption={selection.sortOption}
-        onToggleAll={selection.toggleAll}
-        onFilterOnlySelectedChange={selection.setFilterOnlySelected}
-        onSortOptionChange={selection.setSortOption}
-        isIssuesLoading={selection.isIssuesLoading}
-        initialKeysSet={selection.initialKeysSet}
-        jiraBaseUrl={selection.jiraBaseUrl}
-        onToggle={selection.toggle}
-        loadedCount={selection.issues.length}
-        totalServerIssues={selection.totalServerIssues}
-        isLoadingMore={selection.isLoadingMore}
-        effectiveCount={selection.effectiveCount}
-        onLoadMore={selection.handleLoadMore}
       />
 
       {/* Step 2 — Field selection & input */}
       <BulkConfigureCard
-        filterProject={selection.filterProject}
-        operationKind={configure.operationKind}
-        effectiveCount={selection.effectiveCount}
-        onOperationKindChange={configure.handleOperationKindChange}
-        worklogDuration={configure.worklogDuration}
-        setWorklogDuration={configure.setWorklogDuration}
-        isWorklogDurationValid={configure.isWorklogDurationValid}
-        worklogStarted={configure.worklogStarted}
-        setWorklogStarted={configure.setWorklogStarted}
-        worklogComment={configure.worklogComment}
-        setWorklogComment={configure.setWorklogComment}
-        allProjectStatuses={configure.allProjectStatuses}
-        targetStatus={configure.targetStatus}
-        setTargetStatus={configure.setTargetStatus}
-        fieldsLoading={configure.fieldsLoading}
-        availableFieldMap={configure.availableFieldMap}
-        enabledFields={configure.enabledFields}
-        onToggleField={configure.toggleField}
-        values={configure.fieldState.values}
-        setters={configure.fieldState.setters}
-        availableAssignees={selection.availableAssignees}
-        labelOptions={selection.labelOptions}
-        priorityOptions={selection.priorityOptions}
-        versionOptions={configure.versionOptions}
-        versionsLoading={configure.versionsLoading}
-        isEstimateValid={configure.isEstimateValid}
+        configure={configure}
+        selection={selection}
         resetPreview={preview.resetPreview}
         previewError={preview.previewError}
       />
@@ -186,7 +119,7 @@ export function BulkClient() {
             preview.previewing ||
             (selection.selectionMode === "pick" && selection.selected.size === 0) ||
             !selection.filterProject ||
-            !configure.buildAction()
+            !configure.action
           }
           label={
             selection.selectionMode === "filter"

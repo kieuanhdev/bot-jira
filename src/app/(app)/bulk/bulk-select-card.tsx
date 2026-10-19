@@ -1,8 +1,6 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { type IssueFilters } from "@/lib/issues/issue-filters";
-import { type IssueItem } from "@/hooks/use-issues";
 import {
   BulkNoProjectState,
   BulkProjectSelector,
@@ -13,105 +11,60 @@ import {
 } from "./bulk-select-step";
 import { BulkStepBadge } from "./bulk-step-badge";
 
+import type { BulkSelectionController } from "./lib/use-bulk-selection";
+
 export interface BulkSelectCardProps {
-  filterProject: string;
-  projectOptions: { key: string; openCount: number }[];
-  projectIssuesCount: number;
-  onProjectChange: (project: string) => void;
-  selectionMode: "pick" | "filter";
-  taskFilters: IssueFilters;
-  availableAssignees: string[];
+  selection: BulkSelectionController;
   statusOptions: string[];
-  epicOptions: { value: string; label: string }[];
-  labelOptions: string[];
-  priorityOptions: string[];
-  typeOptions?: string[];
-  fixVersionOptions?: string[];
-  reporterOptions?: string[];
-  approverOptions?: string[];
-  testerOptions?: string[];
-  peopleFieldData?: { fields: { reporter: string; approver?: string | null; tester?: string | null } } | null;
-  displayNames?: Record<string, string>;
-  quickFilter?: string;
-  onQuickFilterChange?: (filter: string) => void;
   myName?: string | null;
-  filteredIssues: IssueItem[];
-  onSelectionModeChange: (mode: "pick" | "filter") => void;
-  onTaskFiltersChange: (filters: IssueFilters) => void;
-  allSelected: boolean;
-  selected: Set<string>;
-  filterOnlySelected: boolean;
-  sortOption:
-    | "default"
-    | "name-asc"
-    | "name-desc"
-    | "created-desc"
-    | "created-asc"
-    | "updated-desc";
-  onToggleAll: () => void;
-  onFilterOnlySelectedChange: (value: boolean) => void;
-  onSortOptionChange: (
-    sort:
-      | "default"
-      | "name-asc"
-      | "name-desc"
-      | "created-desc"
-      | "created-asc"
-      | "updated-desc"
-  ) => void;
-  isIssuesLoading: boolean;
-  initialKeysSet: Set<string>;
-  jiraBaseUrl: string;
-  onToggle: (key: string) => void;
-  loadedCount: number;
-  totalServerIssues: number;
-  isLoadingMore: boolean;
-  effectiveCount: number;
-  onLoadMore: () => void;
 }
 
 export function BulkSelectCard({
-  filterProject,
-  projectOptions,
-  projectIssuesCount,
-  onProjectChange,
-  selectionMode,
-  taskFilters,
-  availableAssignees,
+  selection,
   statusOptions,
-  epicOptions,
-  labelOptions,
-  priorityOptions,
-  typeOptions,
-  fixVersionOptions,
-  reporterOptions,
-  approverOptions,
-  testerOptions,
-  peopleFieldData,
-  displayNames,
-  quickFilter,
-  onQuickFilterChange,
   myName,
-  filteredIssues,
-  onSelectionModeChange,
-  onTaskFiltersChange,
-  allSelected,
-  selected,
-  filterOnlySelected,
-  sortOption,
-  onToggleAll,
-  onFilterOnlySelectedChange,
-  onSortOptionChange,
-  isIssuesLoading,
-  initialKeysSet,
-  jiraBaseUrl,
-  onToggle,
-  loadedCount,
-  totalServerIssues,
-  isLoadingMore,
-  effectiveCount,
-  onLoadMore,
 }: BulkSelectCardProps) {
+  const {
+    filterProject,
+    projectOptions,
+    projectIssues,
+    handleProjectChange,
+    selectionMode,
+    taskFilters,
+    availableAssignees,
+    epicOptions,
+    labelOptions,
+    priorityOptions,
+    typeOptions,
+    fixVersionOptions,
+    reporterOptions,
+    approverOptions,
+    testerOptions,
+    peopleFieldData,
+    displayNames,
+    quickFilter,
+    setQuickFilter,
+    filteredIssues,
+    setSelectionMode,
+    setTaskFilters,
+    allSelected,
+    selected,
+    filterOnlySelected,
+    sortOption,
+    toggleAll,
+    setFilterOnlySelected,
+    setSortOption,
+    isIssuesLoading,
+    initialKeysSet,
+    jiraBaseUrl,
+    toggle,
+    issues,
+    totalServerIssues,
+    isLoadingMore,
+    effectiveCount,
+    handleLoadMore,
+  } = selection;
+
   return (
     <Card className="overflow-hidden">
       <CardHeader className="border-b p-4 sm:p-5">
@@ -125,8 +78,8 @@ export function BulkSelectCard({
         <BulkProjectSelector
           filterProject={filterProject}
           projectOptions={projectOptions}
-          issueCount={projectIssuesCount}
-          onProjectChange={onProjectChange}
+          issueCount={projectIssues.length}
+          onProjectChange={handleProjectChange}
         />
 
         {!filterProject ? (
@@ -150,11 +103,11 @@ export function BulkSelectCard({
               peopleFieldData={peopleFieldData}
               displayNames={displayNames}
               quickFilter={quickFilter}
-              onQuickFilterChange={onQuickFilterChange}
+              onQuickFilterChange={setQuickFilter}
               myName={myName}
               filteredCount={filteredIssues.length}
-              onSelectionModeChange={onSelectionModeChange}
-              onTaskFiltersChange={onTaskFiltersChange}
+              onSelectionModeChange={setSelectionMode}
+              onTaskFiltersChange={setTaskFilters}
             />
 
             <BulkTaskListToolbar
@@ -164,9 +117,9 @@ export function BulkSelectCard({
               filteredCount={filteredIssues.length}
               filterOnlySelected={filterOnlySelected}
               sortOption={sortOption}
-              onToggleAll={onToggleAll}
-              onFilterOnlySelectedChange={onFilterOnlySelectedChange}
-              onSortOptionChange={onSortOptionChange}
+              onToggleAll={toggleAll}
+              onFilterOnlySelectedChange={setFilterOnlySelected}
+              onSortOptionChange={setSortOption}
             />
 
             <BulkTaskList
@@ -176,17 +129,17 @@ export function BulkSelectCard({
               selected={selected}
               initialKeysSet={initialKeysSet}
               jiraBaseUrl={jiraBaseUrl}
-              onToggle={onToggle}
+              onToggle={toggle}
             />
             <BulkTaskListFooter
               filterProject={filterProject}
               filteredCount={filteredIssues.length}
-              loadedCount={loadedCount}
+              loadedCount={issues.length}
               totalServerIssues={totalServerIssues}
               isLoadingMore={isLoadingMore}
               effectiveCount={effectiveCount}
               selectionMode={selectionMode}
-              onLoadMore={onLoadMore}
+              onLoadMore={handleLoadMore}
             />
           </>
         )}
