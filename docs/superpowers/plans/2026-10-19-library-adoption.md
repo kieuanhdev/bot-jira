@@ -137,9 +137,9 @@ Năm trường hợp dễ gây lỗi nhất mà test theo từng task dễ bỏ 
 
 **Files:** `vitest.setup.ts`
 
-- [ ] Thêm `process.env.TZ ||= "UTC";` ở đầu file. Dùng `||=` để `npm run test:tz` vẫn ghi đè được.
-- [ ] `npm test` phải xanh. Các test nằm trong danh sách "chỉ fail ở +7" của Task 0.1 được phép đỏ ở `test:tz` cho tới khi Phase 2 xong. Ghi tên các test đó vào phụ lục B.
-- [ ] Commit `test: pin TZ=UTC by default, add test:tz script`.
+- [x] Thêm `process.env.TZ ||= "UTC";` ở đầu file. Dùng `||=` để `npm run test:tz` vẫn ghi đè được.
+- [x] `npm test` phải xanh. Các test nằm trong danh sách "chỉ fail ở +7" của Task 0.1 được phép đỏ ở `test:tz` cho tới khi Phase 2 xong. Ghi tên các test đó vào phụ lục B.
+- [x] Commit `test: pin TZ=UTC by default, add test:tz script`.
 
 ---
 
