@@ -46,7 +46,7 @@ export function Sheet({
       {/* Backdrop */}
       <div
         className={cn(
-          "fixed inset-0 z-50 bg-black/40 transition-opacity duration-200",
+          "fixed inset-0 z-50 bg-black/50 transition-opacity duration-200",
           open ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={() => onOpenChange(false)}
@@ -60,7 +60,7 @@ export function Sheet({
         aria-label={title}
         inert={!open}
         className={cn(
-          "fixed top-0 bottom-0 z-50 flex w-full max-w-md flex-col bg-background shadow-xl transition-transform duration-200 ease-out",
+          "fixed top-0 bottom-0 z-50 flex w-full max-w-md flex-col bg-background shadow-[var(--shadow-pop)] transition-transform duration-200 ease-out",
           side === "right" ? "right-0" : "left-0",
           open
             ? side === "right" ? "translate-x-0" : "translate-x-0"
@@ -72,7 +72,7 @@ export function Sheet({
           <div className="flex items-start justify-between border-b border-border px-5 py-4">
             <div className="min-w-0 flex-1">
               {title && (
-                <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+                <h2 className="text-lg font-semibold text-foreground">{title}</h2>
               )}
               {description && (
                 <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
