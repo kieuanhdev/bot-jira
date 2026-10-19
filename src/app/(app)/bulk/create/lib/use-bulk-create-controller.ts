@@ -5,15 +5,6 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tansta
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { boardKeys, bulkKeys } from "@/lib/query-keys";
-
-export function metadataQueryOptions(projectKey: string) {
-  return {
-    queryKey: bulkKeys.createMetadata(projectKey),
-    queryFn: () => api<BulkCreateProjectMetadata>(`/api/bulk/create/metadata?project=${projectKey}`),
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  };
-}
 import {
   type BulkCreateRowInput,
   type BulkCreateFieldDefaults,
@@ -34,6 +25,15 @@ import {
 } from "./bulk-create-controller-model";
 
 export type Step = "input" | "preview" | "progress";
+
+export function metadataQueryOptions(projectKey: string) {
+  return {
+    queryKey: bulkKeys.createMetadata(projectKey),
+    queryFn: () => api<BulkCreateProjectMetadata>(`/api/bulk/create/metadata?project=${projectKey}`),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  };
+}
 
 export const HANDOFF_MISSING_MESSAGE = "Không tìm thấy danh sách sub-task, hãy thử lại";
 
@@ -72,8 +72,8 @@ export function useBulkCreateController() {
 
   // Rows handed over via `?handoff=<id>` (AI sub-task split). While active, the
   // saved draft `bulk-create-draft:<project>` is left untouched: no restore
-  // banner, no autosave, no removal on confirm. The ref is read by effects in
-  // the same commit; the state drives rendering. Cleared on project change.
+  // banner, no autosave, no removal on confirm. The ref is read by the confirm
+  // handler; the state drives rendering and draft gating. Cleared on project change.
   const handoffModeRef = useRef(false);
   const handledHandoffRef = useRef<string | null>(null);
   const [handoffActive, setHandoffActive] = useState(false);
@@ -315,12 +315,14 @@ export function useBulkCreateController() {
     [searchParams, router, pathname]
   );
 
-  const handlePrefetchProjects = useCallback(() => {
-    const targets = availableProjects.filter((k) => k !== projectKey).slice(0, 10);
-    for (const key of targets) {
+  // Warm one project's metadata when the user hovers or focuses it in a picker.
+  const handlePrefetchProject = useCallback(
+    (key: string) => {
+      if (key === projectKey) return;
       void queryClient.prefetchQuery(metadataQueryOptions(key));
-    }
-  }, [availableProjects, projectKey, queryClient]);
+    },
+    [projectKey, queryClient]
+  );
 
   function handleProjectSelect(newKey: string) {
     if (step !== "input") return;
@@ -333,6 +335,7 @@ export function useBulkCreateController() {
       setUserSelectedProject(newKey);
       syncProjectUrl(newKey);
       exitHandoffMode();
+      previewMutation.reset();
     }
   }
 
@@ -349,6 +352,7 @@ export function useBulkCreateController() {
     setItems((prev) => sanitizeItemsForProjectChange(prev));
     setPreviewData(null);
     setActiveOperationId(null);
+    previewMutation.reset();
   }
 
   return {
@@ -400,6 +404,6 @@ export function useBulkCreateController() {
     pendingProjectKey,
     setPendingProjectKey,
     applyProjectChange,
-    handlePrefetchProjects,
+    handlePrefetchProject,
   };
 }

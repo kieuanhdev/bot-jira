@@ -76,7 +76,7 @@ export function BulkCreateClient() {
     pendingProjectKey,
     setPendingProjectKey,
     applyProjectChange,
-    handlePrefetchProjects,
+    handlePrefetchProject,
   } = useBulkCreateController();
 
   const hasNotices = Boolean(
@@ -135,7 +135,9 @@ export function BulkCreateClient() {
   ) : null;
 
   const blockedState =
-    metadataError && !metadataLoading ? (
+    // Only block the grid when the current project has no usable metadata; a
+    // failed background refetch keeps the cached data and the grid.
+    metadataError && !metadataLoading && !currentMetadata ? (
       <ErrorState
         title={`Không thể tải thông tin dự án ${projectKey}`}
         message={
@@ -209,7 +211,7 @@ export function BulkCreateClient() {
                 <Skeleton className="h-5 w-24 rounded" />
               ) : (
                 <span
-                  tabIndex={0}
+                  tabIndex={step !== "input" ? 0 : undefined}
                   className="block focus:outline-none"
                   title={
                     step === "preview"
@@ -222,9 +224,6 @@ export function BulkCreateClient() {
                   <Select
                     value={projectKey}
                     onValueChange={handleProjectSelect}
-                    onOpenChange={(open) => {
-                      if (open) handlePrefetchProjects();
-                    }}
                     disabled={availableProjects.length === 0 || step !== "input"}
                   >
                     <SelectTrigger className="h-7 border-0 p-0 text-xs font-bold text-foreground focus:ring-0 cursor-pointer shadow-none disabled:cursor-not-allowed disabled:opacity-60">
@@ -232,7 +231,13 @@ export function BulkCreateClient() {
                     </SelectTrigger>
                     <SelectContent>
                       {availableProjects.map((p) => (
-                        <SelectItem key={p} value={p} className="text-xs cursor-pointer font-medium">
+                        <SelectItem
+                          key={p}
+                          value={p}
+                          onPointerEnter={() => handlePrefetchProject(p)}
+                          onFocus={() => handlePrefetchProject(p)}
+                          className="text-xs cursor-pointer font-medium"
+                        >
                           {p}
                         </SelectItem>
                       ))}
@@ -332,18 +337,6 @@ export function BulkCreateClient() {
             />
           )}
 
-          {/* Permission Error State on initial load when no shell exists yet */}
-          {!shellMetadata && currentMetadata && !currentMetadata.canCreate && (
-            <FeedbackBanner tone="destructive" className="my-4">
-              <div className="font-semibold text-foreground">
-                Không thể tạo task trong dự án {projectKey}
-              </div>
-              <div className="mt-1 text-xs">
-                {currentMetadata.permissionReason ||
-                  "Tài khoản Jira của bạn không có quyền CREATE_ISSUES trên dự án này."}
-              </div>
-            </FeedbackBanner>
-          )}
 
           {/* Main Workspace when shellMetadata exists */}
           {shellMetadata && (
@@ -373,7 +366,7 @@ export function BulkCreateClient() {
               switchingToProject={projectKey}
               notices={notices}
               blockedState={blockedState}
-              onPrefetchProjects={handlePrefetchProjects}
+              onPrefetchProject={handlePrefetchProject}
             />
           )}
         </div>

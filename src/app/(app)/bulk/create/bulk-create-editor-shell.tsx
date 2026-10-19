@@ -66,7 +66,7 @@ interface BulkCreateEditorShellProps {
   switchingToProject?: string;
   notices?: React.ReactNode;
   blockedState?: React.ReactNode;
-  onPrefetchProjects?: () => void;
+  onPrefetchProject?: (key: string) => void;
 }
 
 export function BulkCreateEditorShell({
@@ -92,7 +92,7 @@ export function BulkCreateEditorShell({
   switchingToProject,
   notices,
   blockedState,
-  onPrefetchProjects,
+  onPrefetchProject,
 }: BulkCreateEditorShellProps) {
   // Preferences are read from localStorage on first render; the shell is only mounted client-side after metadata loads.
   const [density, setDensityState] = useState<GridDensity>(() => getStoredDensity());
@@ -320,7 +320,7 @@ export function BulkCreateEditorShell({
         projectKey={projectKey}
         availableProjects={availableProjects}
         onSelectProject={onSelectProject}
-        onPrefetchProjects={onPrefetchProjects}
+        onPrefetchProject={onPrefetchProject}
         defaults={defaults}
         onDefaultsChange={onDefaultsChange}
         onOpenImport={() => setImportDialogOpen(true)}

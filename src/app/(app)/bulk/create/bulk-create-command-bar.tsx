@@ -56,7 +56,7 @@ interface BulkCreateCommandBarProps {
   isFullscreen: boolean;
   onToggleFullscreen?: () => void;
   isSwitchingProject?: boolean;
-  onPrefetchProjects?: () => void;
+  onPrefetchProject?: (key: string) => void;
 }
 
 export function BulkCreateCommandBar({
@@ -82,7 +82,7 @@ export function BulkCreateCommandBar({
   isFullscreen,
   onToggleFullscreen,
   isSwitchingProject = false,
-  onPrefetchProjects,
+  onPrefetchProject,
 }: BulkCreateCommandBarProps) {
   const [defaultsDialogOpen, setDefaultsDialogOpen] = useState(false);
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
@@ -109,17 +109,20 @@ export function BulkCreateCommandBar({
             <Select
               value={projectKey}
               onValueChange={onSelectProject}
-              onOpenChange={(open) => {
-                if (open && onPrefetchProjects) onPrefetchProjects();
-              }}
-              disabled={availableProjects.length === 0 || isSwitchingProject}
+              disabled={availableProjects.length === 0}
             >
               <SelectTrigger className="h-8 text-xs cursor-pointer font-medium bg-background/80 hover:bg-background border-border/80 disabled:cursor-not-allowed disabled:opacity-60">
                 <SelectValue placeholder="Chọn dự án" />
               </SelectTrigger>
               <SelectContent>
                 {availableProjects.map((p) => (
-                  <SelectItem key={p} value={p} className="text-xs cursor-pointer">
+                  <SelectItem
+                    key={p}
+                    value={p}
+                    onPointerEnter={() => onPrefetchProject?.(p)}
+                    onFocus={() => onPrefetchProject?.(p)}
+                    className="text-xs cursor-pointer"
+                  >
                     {p}
                   </SelectItem>
                 ))}
