@@ -193,9 +193,9 @@ export function BulkPreviewCard({
         )}
 
         {isLogWorkOp && (
-          <div className="rounded-lg border border-teal-500/30 bg-teal-500/10 p-4 text-xs text-teal-800 dark:text-teal-200">
+          <div className="rounded-lg border border-primary/30 bg-primary-soft/40 p-4 text-xs text-foreground">
             <div className="font-semibold text-sm mb-1 flex items-center gap-1.5">
-              <Clock className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+              <Clock className="h-4 w-4 text-primary" />
               Ghi nhận thời gian hàng loạt
             </div>
             <div>
@@ -206,7 +206,7 @@ export function BulkPreviewCard({
               </strong>{" "}
               trên {preview.actionable} task.
             </div>
-            <div className="mt-1 text-muted-foreground text-[11px]">
+            <div className="mt-1 text-muted-foreground text-2xs">
               * Remaining Estimate của các task được giữ nguyên (adjustEstimate = leave).
             </div>
           </div>
@@ -225,7 +225,7 @@ export function BulkPreviewCard({
               </Badge>{" "}
               cho {preview.actionable} task.
             </div>
-            <div className="mt-1 text-muted-foreground text-[11px]">
+            <div className="mt-1 text-muted-foreground text-2xs">
               * Hệ thống tự động kiểm tra luồng workflow trên Jira. Các task không có bước chuyển hợp lệ sẽ được xếp vào mục &quot;Bị chặn&quot; và bỏ qua an toàn.
             </div>
           </div>
@@ -233,10 +233,10 @@ export function BulkPreviewCard({
 
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           {([
-            ["changes", "Sẽ thay đổi", previewCounts.changes, CheckCircle2, "text-emerald-700 dark:text-emerald-400"],
+            ["changes", "Sẽ thay đổi", previewCounts.changes, CheckCircle2, "text-success"],
             ["unchanged", "Không đổi", previewCounts.unchanged, CircleDashed, "text-muted-foreground"],
-            ["warnings", "Cảnh báo", previewCounts.warnings, CircleAlert, "text-amber-700 dark:text-amber-400"],
-            ["blocked", "Bị chặn", previewCounts.blocked, CircleX, "text-red-700 dark:text-red-400"],
+            ["warnings", "Cảnh báo", previewCounts.warnings, CircleAlert, "text-warning"],
+            ["blocked", "Bị chặn", previewCounts.blocked, CircleX, "text-destructive"],
           ] as const).map(([bucket, label, count, Icon, color]) => (
             <button
               key={bucket}

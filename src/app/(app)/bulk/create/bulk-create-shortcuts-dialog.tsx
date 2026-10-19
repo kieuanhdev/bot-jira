@@ -27,22 +27,22 @@ export function BulkCreateShortcutsDialog({
     {
       keys: ["Ctrl + Enter", "Cmd + Enter"],
       description: "Thêm ngay 1 dòng mới phía sau dòng đang đứng",
-      icon: <Plus className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />,
+      icon: <Plus className="h-4 w-4 text-success" aria-hidden="true" />,
     },
     {
       keys: ["Ctrl + D", "Cmd + D"],
       description: "Nhân bản dòng hiện tại với đầy đủ các thuộc tính",
-      icon: <Copy className="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden="true" />,
+      icon: <Copy className="h-4 w-4 text-info" aria-hidden="true" />,
     },
     {
       keys: ["Ctrl + V", "Cmd + V"],
       description: "Dán trực tiếp danh sách task hoặc bảng dữ liệu nhiều cột từ Excel / Google Sheets",
-      icon: <Table className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden="true" />,
+      icon: <Table className="h-4 w-4 text-warning" aria-hidden="true" />,
     },
     {
       keys: ["Shift + Space"],
       description: "Mở rộng / Thu gọn trình soạn thảo mô tả & thuộc tính nâng cao của dòng",
-      icon: <Expand className="h-4 w-4 text-purple-600 dark:text-purple-400" aria-hidden="true" />,
+      icon: <Expand className="h-4 w-4 text-primary" aria-hidden="true" />,
     },
     {
       keys: ["Esc"],
@@ -73,7 +73,7 @@ export function BulkCreateShortcutsDialog({
                   {s.keys.map((k, kIdx) => (
                     <kbd
                       key={kIdx}
-                      className="inline-flex items-center rounded border border-border bg-card px-2 py-0.5 font-mono text-[11px] font-semibold text-foreground shadow-2xs"
+                      className="inline-flex items-center rounded border border-border bg-card px-2 py-0.5 font-mono text-2xs font-semibold text-foreground shadow-2xs"
                     >
                       {k}
                     </kbd>

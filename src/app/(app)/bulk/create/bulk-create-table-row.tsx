@@ -125,7 +125,7 @@ export const BulkCreateTableRow = React.memo(function BulkCreateTableRow({
       {/* Sticky Index & Status */}
       <td
         className={cn(
-          "sticky left-9 z-10 px-2 py-2 text-center font-mono text-[11px] border-r border-border/40 transition-colors",
+          "sticky left-9 z-10 px-2 py-2 text-center font-mono text-2xs border-r border-border/40 transition-colors",
           stickyCellBg
         )}
       >
@@ -163,9 +163,9 @@ export const BulkCreateTableRow = React.memo(function BulkCreateTableRow({
             }
           }}
           rows={1}
-          className={`flex w-full rounded-md border bg-background px-2.5 py-1.5 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[34px] max-h-[72px] resize-none overflow-y-auto transition-colors ${
+          className={`flex w-full rounded-md border bg-background px-2.5 py-1.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[38px] max-h-[72px] resize-none overflow-y-auto transition-colors ${
             !item.summary.trim()
-              ? "border-amber-500/40 bg-amber-500/5 focus-visible:ring-amber-500"
+              ? "border-warning/40 bg-warning/5 focus-visible:ring-warning"
               : "border-input"
           }`}
           onInput={(e) => {

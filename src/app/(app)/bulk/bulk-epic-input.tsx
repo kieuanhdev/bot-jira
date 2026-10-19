@@ -142,10 +142,10 @@ export function EpicInput({
                       <span className="truncate text-muted-foreground">{item.summary}</span>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      <Badge variant="outline" className="text-[10px] px-1 py-0">
+                      <Badge variant="outline" className="text-2xs px-1.5 py-0.5">
                         {item.issueTypeName}
                       </Badge>
-                      <span className="text-[10px] text-muted-foreground">{item.status}</span>
+                      <span className="text-2xs text-muted-foreground">{item.status}</span>
                     </div>
                   </button>
                 </li>

@@ -53,7 +53,7 @@ export function BulkFieldPicker({
               <span>{label}</span>
             </div>
             {!isAvailable && (
-              <Badge variant="secondary" className="text-[10px] px-1 py-0 font-normal">
+              <Badge variant="secondary" className="text-2xs px-1.5 py-0.5 font-normal">
                 Không khả dụng
               </Badge>
             )}

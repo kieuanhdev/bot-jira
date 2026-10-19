@@ -179,7 +179,7 @@ export function BulkCreateClient() {
           >
             <ListPlus className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
             <span>Tạo task mới hàng loạt</span>
-            <span className="ml-0.5 text-[10px] px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-mono font-medium">
+            <span className="ml-0.5 text-2xs px-2 py-0.5 rounded-full bg-primary-soft text-primary-soft-foreground font-mono font-medium">
               DC REST v2
             </span>
           </Link>
@@ -191,7 +191,7 @@ export function BulkCreateClient() {
         <div>
           <div className="mb-1 flex items-center gap-2 text-primary">
             <PlusCircle className="h-4 w-4" aria-hidden="true" />
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Jira Data Center • Batch Operations</span>
+            <span className="text-2xs font-semibold uppercase tracking-wider">Jira Data Center • Batch Operations</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
             Tạo task hàng loạt theo dự án

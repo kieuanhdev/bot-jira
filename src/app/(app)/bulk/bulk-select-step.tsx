@@ -52,7 +52,7 @@ export function BulkProjectSelector({
           </Badge>
         </div>
       ) : (
-        <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+        <p className="text-xs text-warning font-medium">
           Vui lòng chọn dự án để tải danh sách task
         </p>
       )}
@@ -197,7 +197,7 @@ export function BulkTaskListFooter({
             size="sm"
             onClick={onLoadMore}
             disabled={isLoadingMore}
-            className="h-6 text-[11px] px-2 py-0 cursor-pointer"
+            className="h-7 text-2xs px-2.5 py-0 cursor-pointer"
           >
             {isLoadingMore ? (
               <>
@@ -213,7 +213,7 @@ export function BulkTaskListFooter({
       <div className="text-right">
         <span className="font-semibold text-primary">Tổng số task sẽ cập nhật: {label}</span>
         {isLowerBound && (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             Bộ lọc áp dụng trên toàn dự án ở server — số chính xác hiển thị ở bước xem trước.
           </p>
         )}

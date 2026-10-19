@@ -73,12 +73,12 @@ export function BulkCreateEditorTopbar({
       <div className="hidden md:flex items-center gap-2 text-xs">
         {isSavingDraft ? (
           <span className="flex items-center gap-1.5 text-muted-foreground">
-            <Loader2 className="h-3 w-3 animate-spin text-amber-500" aria-hidden="true" />
+            <Loader2 className="h-3 w-3 animate-spin text-warning" aria-hidden="true" />
             <span>Đang lưu bản nháp…</span>
           </span>
         ) : draftSavedTime ? (
           <span className="flex items-center gap-1.5 text-muted-foreground">
-            <Check className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
+            <Check className="h-3.5 w-3.5 text-success" aria-hidden="true" />
             <span>Đã lưu lúc {formatSavedTime(draftSavedTime)}</span>
           </span>
         ) : (

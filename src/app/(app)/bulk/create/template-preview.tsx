@@ -56,7 +56,7 @@ export function TemplatePreview({
           Quay lại danh sách task
         </Button>
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px] text-muted-foreground">Đang xem mẫu:</span>
+          <span className="text-2xs text-muted-foreground">Đang xem mẫu:</span>
           <Badge variant="secondary" className="font-mono text-xs font-semibold px-2 py-0.5">
             {selectedKey}
           </Badge>
@@ -105,7 +105,7 @@ export function TemplatePreview({
                     )}
                   </div>
                   {template.parentSummary && (
-                    <p className="text-muted-foreground text-[11px] line-clamp-2">
+                    <p className="text-muted-foreground text-2xs line-clamp-2">
                       {template.parentSummary}
                     </p>
                   )}
@@ -125,7 +125,7 @@ export function TemplatePreview({
                       <span className="font-semibold text-foreground">
                         Thêm cả task cha ({template.parentKey}) vào danh sách tạo mới
                       </span>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-2xs text-muted-foreground">
                         {includeParentRow
                           ? "Hệ thống sẽ thêm 2 dòng: task cha mới và sub-task này liên kết với task cha trong cùng batch."
                           : `Chỉ thêm 1 dòng sub-task, tự động gán vào task cha có sẵn ${template.parentKey} trên Jira.`}
@@ -148,7 +148,7 @@ export function TemplatePreview({
 
             {/* Editable Summary */}
             <div className="space-y-1">
-              <label className="text-[11px] font-medium text-muted-foreground">
+              <label className="text-xs font-medium text-muted-foreground">
                 Tiêu đề dòng mới (có thể chỉnh sửa):
               </label>
               <Input
@@ -161,50 +161,50 @@ export function TemplatePreview({
             {/* Field Badges */}
             <div className="flex flex-wrap gap-1.5 pt-1">
               {template.issueTypeName && (
-                <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-normal">
+                <Badge variant="outline" className="text-2xs px-2 py-0.5 font-normal">
                   Loại: {template.issueTypeName}
                   {template.issueTypeId && !metadata.issueTypes.some((t) => t.id === template.issueTypeId) && (
-                    <span className="ml-1 text-amber-600">⚠</span>
+                    <span className="ml-1 text-warning">⚠</span>
                   )}
                 </Badge>
               )}
               {template.assignee && (
-                <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-normal">
+                <Badge variant="outline" className="text-2xs px-2 py-0.5 font-normal">
                   Assignee: {template.assigneeDisplayName || template.assignee}
                 </Badge>
               )}
               {template.priorityName && (
-                <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-normal">
+                <Badge variant="outline" className="text-2xs px-2 py-0.5 font-normal">
                   Ưu tiên: {template.priorityName}
                 </Badge>
               )}
               {template.labels && template.labels.length > 0 && (
-                <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-normal">
+                <Badge variant="outline" className="text-2xs px-2 py-0.5 font-normal">
                   {template.labels.length} nhãn
                 </Badge>
               )}
               {template.points != null && (
-                <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-normal">
+                <Badge variant="outline" className="text-2xs px-2 py-0.5 font-normal">
                   {template.points} pts
                 </Badge>
               )}
               {template.originalEstimate && (
-                <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-normal">
+                <Badge variant="outline" className="text-2xs px-2 py-0.5 font-normal">
                   Est: {template.originalEstimate}
                 </Badge>
               )}
               {template.dueDate && (
-                <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-normal">
+                <Badge variant="outline" className="text-2xs px-2 py-0.5 font-normal">
                   Hạn: {template.dueDate}
                 </Badge>
               )}
               {template.fixVersionNames && template.fixVersionNames.length > 0 && (
-                <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-normal">
+                <Badge variant="outline" className="text-2xs px-2 py-0.5 font-normal">
                   Ver: {template.fixVersionNames.join(", ")}
                 </Badge>
               )}
               {template.description && (
-                <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-normal">
+                <Badge variant="outline" className="text-2xs px-2 py-0.5 font-normal">
                   Có mô tả
                 </Badge>
               )}
@@ -214,9 +214,9 @@ export function TemplatePreview({
           {/* Skipped fields warnings if any */}
           {template.skippedFields && template.skippedFields.length > 0 && (
             <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 space-y-1 text-xs">
-              <span className="text-[11px] font-semibold text-foreground">Trường bỏ qua</span>
+              <span className="text-2xs font-semibold text-foreground">Trường bỏ qua</span>
               {template.skippedFields.map((sf, i) => (
-                <div key={i} className="text-[11px] text-muted-foreground">
+                <div key={i} className="text-2xs text-muted-foreground">
                   <strong className="text-foreground">{sf.field}:</strong> {sf.reason}
                 </div>
               ))}

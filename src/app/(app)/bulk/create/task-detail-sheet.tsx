@@ -55,11 +55,11 @@ export function TaskDetailSheet({
         <div className="space-y-1.5 border-t border-border pt-3">
           <Label className="text-xs font-medium text-muted-foreground">Client Ref</Label>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="font-mono text-[10px]">
+            <Badge variant="outline" className="font-mono text-2xs">
               {item.clientRef}
             </Badge>
             <FileText className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
-            <span className="text-[10px] text-muted-foreground">Dùng để tham chiếu parent trong batch</span>
+            <span className="text-2xs text-muted-foreground">Dùng để tham chiếu parent trong batch</span>
           </div>
         </div>
       </div>

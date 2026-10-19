@@ -9,30 +9,22 @@ export const CATEGORY_ORDER = ["new", "indeterminate", "done"] as const;
 
 export const CATEGORY_DOTS: Record<string, string[]> = {
   new: [
-    "bg-sky-400",
-    "bg-cyan-500",
-    "bg-blue-400",
-    "bg-indigo-400",
-    "bg-teal-400",
-    "bg-sky-600",
-    "bg-cyan-400",
-    "bg-blue-500",
+    "bg-info",
+    "bg-info/90",
+    "bg-info/80",
+    "bg-info/70",
   ],
   indeterminate: [
     "bg-primary",
-    "bg-cyan-500",
-    "bg-sky-600",
-    "bg-blue-500",
-    "bg-indigo-500",
+    "bg-primary/90",
+    "bg-primary/80",
     "bg-primary/70",
   ],
   done: [
-    "bg-emerald-500",
-    "bg-green-500",
-    "bg-teal-500",
-    "bg-lime-500",
-    "bg-emerald-400",
-    "bg-green-400",
+    "bg-success",
+    "bg-success/90",
+    "bg-success/80",
+    "bg-success/70",
   ],
 };
 

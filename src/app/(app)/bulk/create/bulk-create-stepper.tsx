@@ -79,7 +79,7 @@ export function BulkCreateStepper({
                 className={cn(
                   "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition-transform duration-150",
                   s.done
-                    ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                    ? "border-success/30 bg-success/12 text-success"
                     : s.active
                       ? "border-primary bg-primary text-primary-foreground shadow-xs scale-105"
                       : "border-border bg-muted/60 text-muted-foreground"
@@ -92,10 +92,10 @@ export function BulkCreateStepper({
                 <div className="flex items-center gap-1.5">
                   <span className="truncate text-xs sm:text-sm font-semibold">{s.title}</span>
                   {s.clickable && (
-                    <span className="text-[10px] text-primary underline">Quay lại</span>
+                    <span className="text-2xs text-primary underline">Quay lại</span>
                   )}
                 </div>
-                <div className="truncate text-[11px] text-muted-foreground">{s.desc}</div>
+                <div className="truncate text-2xs text-muted-foreground">{s.desc}</div>
               </div>
             </Tag>
           </li>

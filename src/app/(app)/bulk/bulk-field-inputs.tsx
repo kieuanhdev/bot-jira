@@ -110,7 +110,7 @@ export function BulkFieldInputs({
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-foreground">Người phụ trách (Jira username)</span>
-            <span className="text-[10px] text-muted-foreground">Tự động gợi ý từ dự án</span>
+            <span className="text-2xs text-muted-foreground">Tự động gợi ý từ dự án</span>
           </div>
           <AssigneeInput
             value={assignee}
@@ -262,9 +262,9 @@ export function BulkFieldInputs({
             className={cn(!isEstimateValid && "border-destructive focus-visible:ring-destructive")}
           />
           {!isEstimateValid ? (
-            <span className="text-[11px] text-destructive font-medium">Định dạng không hợp lệ. Ví dụ hợp lệ: 30m, 2h, 1d 4h.</span>
+            <span className="text-2xs text-destructive font-medium">Định dạng không hợp lệ. Ví dụ hợp lệ: 30m, 2h, 1d 4h.</span>
           ) : (
-            <span className="text-[11px] text-muted-foreground">Hỗ trợ các đơn vị thời gian Jira: w (tuần), d (ngày), h (giờ), m (phút).</span>
+            <span className="text-2xs text-muted-foreground">Hỗ trợ các đơn vị thời gian Jira: w (tuần), d (ngày), h (giờ), m (phút).</span>
           )}
         </div>
       )}
@@ -333,7 +333,7 @@ export function BulkFieldInputs({
                   </label>
                 ))}
               </div>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-2xs text-muted-foreground">
                 Có thể chọn một hoặc nhiều version. Danh sách được lấy từ dự án {filterProject}.
               </span>
             </>
@@ -355,7 +355,7 @@ export function BulkFieldInputs({
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-foreground">Epic / Task cha</span>
-            <span className="text-[10px] text-muted-foreground">Gợi ý từ dự án {filterProject}</span>
+            <span className="text-2xs text-muted-foreground">Gợi ý từ dự án {filterProject}</span>
           </div>
           <EpicInput
             projectKey={filterProject}

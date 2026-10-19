@@ -17,14 +17,14 @@ export function BulkCreateDraftBanner({
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 shadow-2xs animate-in fade-in duration-200">
       <div className="flex items-center gap-2.5 text-xs">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15 text-primary shrink-0">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary-soft-foreground shrink-0">
           <Sparkles className="h-4 w-4" aria-hidden="true" />
         </div>
         <div>
           <div className="font-semibold text-foreground">
             Tìm thấy bản nháp chưa hoàn tất cho dự án {projectKey}
           </div>
-          <div className="text-muted-foreground text-[11px]">
+          <div className="text-muted-foreground text-2xs">
             Bạn có muốn khôi phục lại danh sách task và cài đặt mặc định đã soạn thảo từ phiên trước? Khôi phục sẽ thay thế danh sách hiện tại.
           </div>
         </div>

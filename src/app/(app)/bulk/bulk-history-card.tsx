@@ -68,7 +68,7 @@ export function BulkHistoryCard({
                     <span className="flex flex-wrap items-center gap-2">
                       <Badge variant={stateVariant(op.state)}>{op.state.replace("_", " ")}</Badge>
                       <span className="font-medium">{ACTION_LABELS[op.type] ?? op.type}</span>
-                      <span className="font-mono text-[11px] text-muted-foreground">#{op.id.slice(0, 8)}</span>
+                      <span className="font-mono text-2xs text-muted-foreground">#{op.id.slice(0, 8)}</span>
                     </span>
                     <span className="mt-1 block text-xs text-muted-foreground">
                       {op.succeeded}/{op.total} thành công · {op.failed} thất bại · {formatTime(op.completedAt ?? op.createdAt)}

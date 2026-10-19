@@ -270,7 +270,7 @@ export function CsvImportDialog({
                   onClick={handleDownloadExcelTemplate}
                   disabled={downloadingExcel || (metadata && !metadata.canCreate)}
                   title={`Tải mẫu Excel theo dự án ${projectKey}`}
-                  className="h-8 gap-1.5 text-xs cursor-pointer bg-teal-600 hover:bg-teal-700 text-white font-medium"
+                  className="h-8 gap-1.5 text-xs cursor-pointer bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
                 >
                   {downloadingExcel ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
@@ -378,7 +378,7 @@ export function CsvImportDialog({
                   </div>
                 ) : (
                   <>
-                    <FileSpreadsheet className="mb-2 h-9 w-9 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                    <FileSpreadsheet className="mb-2 h-9 w-9 text-primary" aria-hidden="true" />
                     <p className="text-sm font-medium text-foreground">
                       {fileName ? fileName : "Nhấp để chọn file Excel (.xlsx) / CSV hoặc kéo thả vào đây"}
                     </p>
@@ -401,7 +401,7 @@ export function CsvImportDialog({
                 onChange={(e) => handlePasteChange(e.target.value)}
                 className="font-mono text-xs leading-relaxed"
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-2xs text-muted-foreground">
                 Mẹo: Sao chép các cột từ Excel hoặc Google Sheets (bao gồm cả dòng tiêu đề) rồi dán trực tiếp vào ô trên.
               </p>
             </div>
@@ -412,7 +412,7 @@ export function CsvImportDialog({
 
           {/* File validation error */}
           {fileError && (
-            <div className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-400">
+            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
               <XCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
               <div>{fileError}</div>
             </div>

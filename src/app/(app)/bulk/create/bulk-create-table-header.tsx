@@ -37,7 +37,7 @@ export function BulkCreateTableHeader({
             <span>
               Tiêu đề (Summary) <span className="text-destructive">*</span>
             </span>
-            <span className="text-[10px] text-muted-foreground font-normal">
+            <span className="text-2xs text-muted-foreground font-normal">
               Hỗ trợ paste Excel
             </span>
           </div>

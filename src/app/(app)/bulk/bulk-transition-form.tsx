@@ -95,7 +95,7 @@ export function BulkTransitionForm({
         </div>
 
         {!targetStatus && (
-          <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+          <p className="text-2xs text-warning mt-1">
             Vui lòng chọn một trạng thái đích để tiếp tục xem trước thay đổi.
           </p>
         )}

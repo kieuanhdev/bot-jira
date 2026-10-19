@@ -34,13 +34,13 @@ export function TemplateIssueList({
             </>
           ) : (
             <>
-              <Clock className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+              <Clock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
               Task gần đây trong dự án {projectKey} ({issues.length})
             </>
           )}
         </span>
         {isIssuesFetching && (
-          <span className="flex items-center gap-1 text-[11px] text-teal-600 dark:text-teal-400">
+          <span className="flex items-center gap-1 text-2xs text-primary">
             <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
             Đang tìm...
           </span>
@@ -69,7 +69,7 @@ export function TemplateIssueList({
             <Search className="h-5 w-5" aria-hidden="true" />
           </div>
           <p className="text-xs font-semibold text-foreground">Không tìm thấy task phù hợp</p>
-          <p className="text-[11px] text-muted-foreground max-w-sm">
+          <p className="text-2xs text-muted-foreground max-w-sm">
             {debouncedQuery
               ? `Không có task nào khớp với "${debouncedQuery}" trong dự án ${projectKey}. Bạn có thể nhập trực tiếp mã task đầy đủ (vd: ${projectKey}-123).`
               : `Dự án ${projectKey} hiện chưa có task nào gần đây.`}
@@ -89,17 +89,17 @@ export function TemplateIssueList({
             >
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-xs font-semibold text-teal-700 dark:text-teal-400 group-hover:underline">
+                  <span className="font-mono text-xs font-semibold text-primary group-hover:underline">
                     {issue.key}
                   </span>
                   <Badge
                     variant={issue.isSubtask ? "secondary" : "outline"}
-                    className="text-[10px] px-1.5 py-0 font-normal"
+                    className="text-2xs px-2 py-0.5 font-normal"
                   >
                     {issue.issueTypeName}
                   </Badge>
                   {issue.status && (
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal text-muted-foreground">
+                    <Badge variant="outline" className="text-2xs px-2 py-0.5 font-normal text-muted-foreground">
                       {issue.status}
                     </Badge>
                   )}
@@ -110,8 +110,8 @@ export function TemplateIssueList({
                 </p>
 
                 {issue.isSubtask && issue.parentKey && (
-                  <p className="text-[11px] text-muted-foreground flex items-center gap-1 font-mono">
-                    <GitBranch className="h-3 w-3 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                  <p className="text-2xs text-muted-foreground flex items-center gap-1 font-mono">
+                    <GitBranch className="h-3 w-3 text-primary" aria-hidden="true" />
                     Task cha: {issue.parentKey}
                     {issue.parentSummary ? ` (${issue.parentSummary})` : ""}
                   </p>
@@ -119,7 +119,7 @@ export function TemplateIssueList({
               </div>
 
               <div className="shrink-0 flex items-center gap-1 pt-1 text-muted-foreground group-hover:text-foreground">
-                <span className="text-[11px] hidden sm:inline">Chọn mẫu</span>
+                <span className="text-2xs hidden sm:inline">Chọn mẫu</span>
                 <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
               </div>
             </button>

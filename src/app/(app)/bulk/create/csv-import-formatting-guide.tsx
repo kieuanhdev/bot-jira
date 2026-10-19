@@ -7,11 +7,11 @@ export function CsvImportFormattingGuide() {
         <Info className="h-4 w-4 text-primary" aria-hidden="true" />
         Bảng quy tắc cột chuẩn (Canonical Columns)
       </div>
-      <p className="text-muted-foreground leading-relaxed text-[11px]">
+      <p className="text-muted-foreground leading-relaxed text-2xs">
         Hệ thống hỗ trợ cả tiêu đề tiếng Anh và tiếng Việt. Tiêu đề không phân biệt chữ hoa, chữ thường.
       </p>
       <div className="overflow-x-auto rounded border border-border">
-        <table className="w-full text-left text-[11px]">
+        <table className="w-full text-left text-xs">
           <thead className="bg-muted/60 font-semibold text-muted-foreground">
             <tr>
               <th className="p-2">Cột chuẩn</th>

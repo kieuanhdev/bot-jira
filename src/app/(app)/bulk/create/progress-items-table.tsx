@@ -65,7 +65,7 @@ export const ProgressItemRow = React.memo(function ProgressItemRow({
             : "hover:bg-muted/15"
       }`}
     >
-      <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">
+      <td className="px-4 py-3 font-mono text-2xs text-muted-foreground">
         {item.rowIndex + 1}
       </td>
 
@@ -141,7 +141,7 @@ export const ProgressItemRow = React.memo(function ProgressItemRow({
             </span>
             {(item.retryable || isFailed) && isFinished && (
               <div>
-                <label className="inline-flex items-center gap-1.5 cursor-pointer text-[11px] text-muted-foreground hover:text-foreground">
+                <label className="inline-flex items-center gap-1.5 cursor-pointer text-2xs text-muted-foreground hover:text-foreground">
                   <input
                     type="checkbox"
                     checked={isSelectedRetry}
@@ -159,7 +159,7 @@ export const ProgressItemRow = React.memo(function ProgressItemRow({
                 size="sm"
                 onClick={() => onRetryBranch(item.clientRef)}
                 disabled={isRetryingBranch}
-                className="mt-1 h-7 gap-1 px-2 text-[11px] cursor-pointer text-primary border-primary/30 hover:bg-primary/10"
+                className="mt-1 h-7 gap-1 px-2.5 text-2xs cursor-pointer text-primary border-primary/30 hover:bg-primary-soft"
               >
                 {isRetryingBranch ? (
                   <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />

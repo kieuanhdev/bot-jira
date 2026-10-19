@@ -68,7 +68,7 @@ export function ExpandedRowEditor({
             <span className="text-xs font-semibold text-foreground">
               {item.summary ? item.summary : `Chi tiết công việc (${item.clientRef})`}
             </span>
-            <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground">
+            <Badge variant="outline" className="font-mono text-2xs text-muted-foreground">
               {item.clientRef}
             </Badge>
           </div>
@@ -116,7 +116,7 @@ export function ExpandedRowEditor({
           <div className={cn("grid gap-3 text-xs", isFullWidth ? "grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 pt-2 border-t border-border/60" : "lg:col-span-4 grid-cols-1 sm:grid-cols-2")}>
             {/* Issue Type */}
             <div className="space-y-1">
-              <span className="text-[11px] font-medium text-foreground">
+              <span className="text-xs font-medium text-foreground">
                 Loại task <span className="text-destructive">*</span>
               </span>
               <IssueTypeField
@@ -136,7 +136,7 @@ export function ExpandedRowEditor({
 
             {/* Parent / Epic */}
             <div className="space-y-1">
-              <span className="text-[11px] font-medium text-foreground">
+              <span className="text-xs font-medium text-foreground">
                 Task cha / Epic {isSubtask && <span className="text-destructive">*</span>}
               </span>
               <ParentCombobox
@@ -153,7 +153,7 @@ export function ExpandedRowEditor({
 
             {/* Priority */}
             <div className="space-y-1">
-              <span className="text-[11px] font-medium text-foreground">Mức ưu tiên</span>
+              <span className="text-xs font-medium text-foreground">Mức ưu tiên</span>
               <PriorityField
                 value={item.priorityId}
                 onChange={(priorityId) => onChange({ priorityId })}
@@ -164,7 +164,7 @@ export function ExpandedRowEditor({
 
             {/* Assignee */}
             <div className="space-y-1">
-              <span className="text-[11px] font-medium text-foreground">Người thực hiện</span>
+              <span className="text-xs font-medium text-foreground">Người thực hiện</span>
               <AssigneeCombobox
                 projectKey={projectKey}
                 value={item.assignee ?? null}
@@ -176,7 +176,7 @@ export function ExpandedRowEditor({
             {/* Components */}
             {metadata.components && metadata.components.length > 0 && (
               <div className="space-y-1">
-                <span className="text-[11px] font-medium text-foreground">Hợp phần (Components)</span>
+                <span className="text-xs font-medium text-foreground">Hợp phần (Components)</span>
                 <ComponentsField
                   metadata={metadata}
                   value={item.componentIds}
@@ -190,7 +190,7 @@ export function ExpandedRowEditor({
             {/* Points */}
             {metadata.pointsFieldId && (
               <div className="space-y-1">
-                <span className="text-[11px] font-medium text-foreground">Story Points</span>
+                <span className="text-xs font-medium text-foreground">Story Points</span>
                 <PointsField
                   value={item.points}
                   onChange={(points) => onChange({ points })}
@@ -202,7 +202,7 @@ export function ExpandedRowEditor({
             {/* Original Estimate */}
             {metadata.supportsTimeTracking && (
               <div className="space-y-1">
-                <span className="text-[11px] font-medium text-foreground">Ước tính (vd: 1d 4h)</span>
+                <span className="text-xs font-medium text-foreground">Ước tính (vd: 1d 4h)</span>
                 <EstimateField
                   value={item.originalEstimate}
                   onChange={(originalEstimate) => onChange({ originalEstimate })}
@@ -214,7 +214,7 @@ export function ExpandedRowEditor({
             {/* Due Date */}
             {metadata.supportsDueDate && (
               <div className="space-y-1">
-                <span className="text-[11px] font-medium text-foreground">Hạn chót</span>
+                <span className="text-xs font-medium text-foreground">Hạn chót</span>
                 <DueDateField
                   value={item.dueDate}
                   onChange={(dueDate) => onChange({ dueDate })}
@@ -225,7 +225,7 @@ export function ExpandedRowEditor({
             {/* Fix Version */}
             {metadata.versionOptions.length > 0 && (
               <div className="space-y-1">
-                <span className="text-[11px] font-medium text-foreground">Phiên bản</span>
+                <span className="text-xs font-medium text-foreground">Phiên bản</span>
                 <FixVersionField
                   value={item.fixVersionIds}
                   onChange={(fixVersionIds) => onChange({ fixVersionIds })}
@@ -237,7 +237,7 @@ export function ExpandedRowEditor({
 
             {/* Labels */}
             <div className={cn("space-y-1", isFullWidth ? "col-span-2 sm:col-span-4" : "sm:col-span-2")}>
-              <span className="text-[11px] font-medium text-foreground">Nhãn (Labels)</span>
+              <span className="text-xs font-medium text-foreground">Nhãn (Labels)</span>
               <LabelCombobox
                 projectKey={projectKey}
                 value={item.labels}

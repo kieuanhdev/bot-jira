@@ -44,7 +44,7 @@ export function BulkCreateColumnPicker({
         >
           <Columns3 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
           <span>Cột hiển thị</span>
-          <span className="ml-0.5 rounded-full bg-muted px-1.5 py-0.2 text-[10px] font-mono text-muted-foreground">
+          <span className="ml-0.5 rounded-full bg-muted px-1.5 py-0.5 text-2xs font-mono text-muted-foreground">
             {visibleCount}/{toggleableColumns.length}
           </span>
         </Button>

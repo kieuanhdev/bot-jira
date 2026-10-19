@@ -55,7 +55,7 @@ export function BulkCreateProjectDialog({
           <div>
             Chuyển sang <strong>{pendingProjectKey}</strong>.
           </div>
-          <ul className="list-disc pl-4 space-y-1 text-[11px]">
+          <ul className="list-disc pl-4 space-y-1 text-2xs">
             <li>
               <strong>Giữ lại:</strong> tiêu đề, mô tả, người thực hiện, ước lượng, hạn, điểm, nhãn.
             </li>
@@ -64,7 +64,7 @@ export function BulkCreateProjectDialog({
             </li>
           </ul>
           {hasTargetDraft && (
-            <p className="text-primary font-medium text-[11px] pt-1.5 border-t border-border/60">
+            <p className="text-primary font-medium text-2xs pt-1.5 border-t border-border/60">
               Dự án {pendingProjectKey} có bản nháp đã lưu, bạn sẽ được hỏi khôi phục sau khi chuyển.
             </p>
           )}

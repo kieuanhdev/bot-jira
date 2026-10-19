@@ -87,7 +87,7 @@ export const BulkCreateMobileCard = React.memo(function BulkCreateMobileCard({
             #{idx + 1}
           </span>
           {hasErrors && (
-            <Badge variant="danger" className="text-[10px] py-0 px-1.5 h-4">
+            <Badge variant="danger" className="text-2xs py-0.5 px-2">
               {rowVal?.errors[0].message}
             </Badge>
           )}
@@ -106,7 +106,7 @@ export const BulkCreateMobileCard = React.memo(function BulkCreateMobileCard({
             ) : (
               <ChevronDown className="h-3.5 w-3.5" />
             )}
-            <span className="text-[11px] ml-1">Mô tả</span>
+            <span className="text-2xs ml-1">Mô tả</span>
           </Button>
           <Button
             type="button"

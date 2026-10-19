@@ -100,7 +100,7 @@ export function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: 
             ) : (
               <span className="font-mono text-xs">{it.jiraKey}</span>
             )}
-            {it.attemptCount > 1 && <span className="text-[11px] text-muted-foreground">({it.attemptCount} lần thử)</span>}
+            {it.attemptCount > 1 && <span className="text-2xs text-muted-foreground">({it.attemptCount} lần thử)</span>}
             {it.error && <span className="truncate text-xs text-destructive">{it.error}</span>}
           </li>
         ))}

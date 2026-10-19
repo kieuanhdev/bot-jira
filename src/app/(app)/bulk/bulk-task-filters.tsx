@@ -165,9 +165,9 @@ export function BulkTaskFilters({
                 type="button"
                 onClick={() => onQuickFilterChange?.(quickFilter === key ? "" : key)}
                 className={cn(
-                  "h-7 cursor-pointer rounded-full border px-2.5 text-[11px] font-medium transition-colors",
+                  "h-8 cursor-pointer rounded-full border px-3 text-2xs font-medium transition-colors",
                   quickFilter === key
-                    ? "border-primary/50 bg-primary/10 text-primary"
+                    ? "border-primary/50 bg-primary-soft text-primary-soft-foreground"
                     : "bg-background hover:bg-muted"
                 )}
               >
@@ -177,7 +177,7 @@ export function BulkTaskFilters({
           </div>
         }
       />
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-2xs text-muted-foreground">
         {filteredCount} task khớp bộ lọc
         {selectionMode === "filter" ? " · khi chạy sẽ áp dụng cho toàn bộ task khớp trong dự án, không chỉ phần hiển thị" : ""}
       </p>

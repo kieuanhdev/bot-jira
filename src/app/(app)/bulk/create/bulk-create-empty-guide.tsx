@@ -14,7 +14,7 @@ export function BulkCreateEmptyGuide({
 }: BulkCreateEmptyGuideProps) {
   return (
     <div className="m-4 rounded-xl border border-dashed border-border/80 bg-muted/15 p-6 text-center animate-in fade-in duration-200">
-      <div className="mx-auto mb-2.5 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+      <div className="mx-auto mb-2.5 flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary-soft-foreground">
         <Sparkles className="h-5 w-5" aria-hidden="true" />
       </div>
       <h4 className="text-sm font-semibold text-foreground">
@@ -22,7 +22,7 @@ export function BulkCreateEmptyGuide({
       </h4>
       <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
         Bạn có thể gõ trực tiếp vào ô Tiêu đề, chọn ô rồi dán nhiều dòng từ Excel/Google Sheets (
-        <kbd className="rounded border border-border px-1 py-0.2 font-mono text-[10px] bg-muted/40">
+        <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-2xs bg-muted/40">
           Ctrl+V
         </kbd>
         ), hoặc thêm nhanh các dòng mẫu.

@@ -50,7 +50,7 @@ export function fieldRow(label: string, before: Record<string, unknown> | null, 
         <>
           <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
           <span className="truncate font-medium text-foreground">{aText}</span>
-          <Badge variant="success" className="ml-auto text-[10px] px-1.5 py-0">Thay đổi</Badge>
+          <Badge variant="success" className="ml-auto text-2xs px-2 py-0.5">Thay đổi</Badge>
         </>
       )}
     </div>

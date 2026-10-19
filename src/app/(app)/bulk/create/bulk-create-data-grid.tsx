@@ -342,7 +342,7 @@ export function BulkCreateDataGrid({
       {/* Desktop Spreadsheet Table (>= md) */}
       {isDesktop && (
         <div className="flex-1 min-h-0 overflow-auto bg-background border-t border-border">
-          <table className="w-full min-w-max border-collapse text-left text-xs">
+          <table className="w-full min-w-max border-collapse text-left text-sm">
             {/* Sticky Header */}
             <BulkCreateTableHeader
               allSelected={selectedRows.size === items.length && items.length > 0}

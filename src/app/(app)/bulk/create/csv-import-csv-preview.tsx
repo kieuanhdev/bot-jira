@@ -39,7 +39,7 @@ export function CsvImportCsvPreview({
             Kết quả nhận diện: {parsed.validCount} task hợp lệ
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
+        <div className="flex flex-wrap items-center gap-1.5 font-mono text-2xs">
           <Badge variant="outline">Tổng dòng: {parsed.totalRows}</Badge>
           <Badge variant="success">Hợp lệ: {parsed.validCount}</Badge>
           {parsed.errorCount > 0 && <Badge variant="danger">Lỗi: {parsed.errorCount}</Badge>}
@@ -100,13 +100,13 @@ export function CsvImportCsvPreview({
             <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" aria-hidden="true" />
             <div>
               <p className="font-semibold">Dữ liệu vượt quá sức chứa còn lại của bảng!</p>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+              <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
                 Tệp có <strong className="text-foreground">{parsed.items.length}</strong> task hợp lệ, nhưng theo chế độ đã chọn chỉ có thể nhận thêm <strong className="text-foreground">{remainingCapacity}</strong> task.{" "}
                 <strong className="text-foreground">{parsed.items.length - remainingCapacity}</strong> task ở cuối tệp sẽ bị bỏ qua.
               </p>
             </div>
           </div>
-          <label className="flex items-center gap-2 pt-1 cursor-pointer font-medium text-[11px]">
+          <label className="flex items-center gap-2 pt-1 cursor-pointer font-medium text-2xs">
             <input
               type="checkbox"
               checked={confirmTruncation}
@@ -124,7 +124,7 @@ export function CsvImportCsvPreview({
           <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" aria-hidden="true" />
           <div className="space-y-0.5">
             <p className="font-semibold">Các cột không nhận diện được sẽ bị bỏ qua:</p>
-            <p className="font-mono text-[11px]">{parsed.unrecognizedHeaders.join(", ")}</p>
+            <p className="font-mono text-2xs">{parsed.unrecognizedHeaders.join(", ")}</p>
           </div>
         </div>
       )}
@@ -135,14 +135,14 @@ export function CsvImportCsvPreview({
           <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" aria-hidden="true" />
           <div className="space-y-0.5">
             <p className="font-semibold">Phát hiện cột trùng trường dữ liệu:</p>
-            <p className="text-[11px]">{parsed.duplicateCanonicalHeaders.join(", ")}</p>
+            <p className="text-2xs">{parsed.duplicateCanonicalHeaders.join(", ")}</p>
           </div>
         </div>
       )}
 
       {/* Errors list */}
       {parsed.errors.length > 0 && (
-        <div className="rounded border border-destructive/30 bg-destructive/5 p-2.5 text-[11px] text-destructive space-y-1">
+        <div className="rounded border border-destructive/30 bg-destructive/5 p-2.5 text-2xs text-destructive space-y-1">
           <div className="font-semibold flex items-center gap-1.5">
             <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
             Các dòng có lỗi ({parsed.errors.length} lỗi):
@@ -160,7 +160,7 @@ export function CsvImportCsvPreview({
 
       {/* General warnings */}
       {parsed.warnings.length > 0 && (
-        <div className="space-y-1 text-[11px] text-warning">
+        <div className="space-y-1 text-2xs text-warning">
           {parsed.warnings.map((w, i) => (
             <p key={i}>⚠️ {w}</p>
           ))}
@@ -169,7 +169,7 @@ export function CsvImportCsvPreview({
 
       {/* Recognized columns */}
       {Object.keys(parsed.recognizedHeaders).length > 0 && (
-        <div className="text-[11px]">
+        <div className="text-2xs">
           <span className="font-medium text-muted-foreground">Cột tương ứng: </span>
           <span className="text-foreground font-mono">
             {Object.entries(parsed.recognizedHeaders)
@@ -182,11 +182,11 @@ export function CsvImportCsvPreview({
       {/* Preview table (up to 5 rows) */}
       {itemsToImport.length > 0 && (
         <div className="space-y-1.5">
-          <div className="font-medium text-muted-foreground text-[11px]">
+          <div className="font-medium text-muted-foreground text-2xs">
             Bản xem trước dữ liệu ({Math.min(5, itemsToImport.length)} / {itemsToImport.length} dòng):
           </div>
           <div className="overflow-x-auto rounded border border-border/50">
-            <table className="w-full text-left text-[11px]">
+            <table className="w-full text-left text-xs">
               <thead className="bg-muted/40 font-semibold text-muted-foreground">
                 <tr>
                   <th className="p-1.5 w-8">#</th>

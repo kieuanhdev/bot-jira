@@ -238,7 +238,7 @@ export function BulkCreateDefaultsDialog({
             <div className="space-y-1.5 sm:col-span-2">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-medium text-foreground">Mô tả mẫu mặc định</Label>
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-2xs text-muted-foreground">
                   {defaults.description?.length ?? 0} / {MAX_DESCRIPTION_LENGTH}
                 </span>
               </div>
@@ -247,7 +247,7 @@ export function BulkCreateDefaultsDialog({
                 rows={6}
                 value={defaults.description ?? ""}
                 onChange={(e) => updateField("description", e.target.value || undefined)}
-                className="text-xs resize-y min-h-[140px]"
+                className="text-sm resize-y min-h-[140px]"
               />
             </div>
 

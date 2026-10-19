@@ -65,9 +65,9 @@ export function BulkProgressSteps({
         >
           <span
             className={cn(
-              "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold",
+              "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-2xs font-semibold",
               step.done
-                ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                ? "border-success/30 bg-success/12 text-success"
                 : step.active
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border bg-muted"

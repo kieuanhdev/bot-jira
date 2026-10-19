@@ -68,14 +68,14 @@ export function BulkCreateStatusBar({
               variant="ghost"
               size="sm"
               onClick={onGoToNextError}
-              className="h-5 px-1.5 text-[11px] text-destructive hover:bg-destructive/15 cursor-pointer flex items-center gap-0.5 ml-1"
+              className="h-6 px-2 text-2xs text-destructive hover:bg-destructive/15 cursor-pointer flex items-center gap-0.5 ml-1"
             >
               <span>Tới lỗi</span>
               <ChevronRight className="h-3 w-3" aria-hidden="true" />
             </Button>
           </div>
         ) : filledItemsCount > 0 ? (
-          <div className="flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2 py-1 text-emerald-700 dark:text-emerald-400 font-medium border border-emerald-500/20">
+          <div className="flex items-center gap-1.5 rounded-md bg-success/12 px-2 py-1 text-success font-medium border border-success/20">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span>{filledItemsCount} task hợp lệ</span>
           </div>
@@ -87,7 +87,7 @@ export function BulkCreateStatusBar({
         )}
 
         {totalWarnings > 0 && (
-          <span className="flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-1 text-amber-700 dark:text-amber-400 border border-amber-500/20 font-medium">
+          <span className="flex items-center gap-1 rounded-md bg-warning/12 px-2 py-1 text-warning border border-warning/20 font-medium">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span>{totalWarnings} cảnh báo</span>
           </span>
@@ -96,15 +96,15 @@ export function BulkCreateStatusBar({
         <div className="h-4 w-px bg-border hidden md:block" aria-hidden="true" />
 
         {/* Autosave status indicator */}
-        <div className="hidden md:flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="hidden md:flex items-center gap-1.5 text-2xs text-muted-foreground">
           {isSavingDraft ? (
-            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+            <span className="flex items-center gap-1 text-warning">
               <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
               <span>Đang lưu bản nháp…</span>
             </span>
           ) : draftSavedTime ? (
             <span className="flex items-center gap-1 text-muted-foreground/80">
-              <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              <Check className="h-3 w-3 text-success" aria-hidden="true" />
               <span>Đã lưu lúc {formatSavedTime(draftSavedTime)}</span>
             </span>
           ) : (
@@ -114,21 +114,21 @@ export function BulkCreateStatusBar({
       </div>
 
       {/* Middle: Subtle keyboard shortcuts (hidden on smaller screens) */}
-      <div className="hidden xl:flex items-center gap-3 text-[11px] text-muted-foreground/70">
+      <div className="hidden xl:flex items-center gap-3 text-2xs text-muted-foreground/70">
         <span className="flex items-center gap-1">
-          <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[10px] bg-muted/60">Tab</kbd>
+          <kbd className="rounded border border-border px-1 py-0.5 font-mono text-2xs bg-muted/60">Tab</kbd>
           <span>di chuyển</span>
         </span>
         <span className="flex items-center gap-1">
-          <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[10px] bg-muted/60">Ctrl+Enter</kbd>
+          <kbd className="rounded border border-border px-1 py-0.5 font-mono text-2xs bg-muted/60">Ctrl+Enter</kbd>
           <span>thêm dòng</span>
         </span>
         <span className="flex items-center gap-1">
-          <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[10px] bg-muted/60">Ctrl+D</kbd>
+          <kbd className="rounded border border-border px-1 py-0.5 font-mono text-2xs bg-muted/60">Ctrl+D</kbd>
           <span>nhân bản</span>
         </span>
         <span className="flex items-center gap-1">
-          <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[10px] bg-muted/60">Ctrl+V</kbd>
+          <kbd className="rounded border border-border px-1 py-0.5 font-mono text-2xs bg-muted/60">Ctrl+V</kbd>
           <span>dán Excel</span>
         </span>
       </div>
@@ -137,12 +137,12 @@ export function BulkCreateStatusBar({
       <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
         <div className="flex items-center gap-2">
           {selectedCount > 0 && (
-            <Badge variant="info" className="text-[11px] font-mono px-2 py-0.5">
+            <Badge variant="info" className="text-2xs font-mono px-2 py-0.5">
               Đã chọn {selectedCount}
             </Badge>
           )}
 
-          <span className="font-mono text-[11px] text-muted-foreground">
+          <span className="font-mono text-2xs text-muted-foreground">
             {totalItems}/{MAX_BULK_CREATE_ITEMS}
           </span>
         </div>

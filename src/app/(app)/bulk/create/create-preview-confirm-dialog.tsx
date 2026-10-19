@@ -33,7 +33,7 @@ export function CreatePreviewConfirmDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-            <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+            <ShieldAlert className="h-5 w-5 text-warning" aria-hidden="true" />
             Xác nhận tạo task trên Jira
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -48,19 +48,19 @@ export function CreatePreviewConfirmDialog({
           </div>
           <div className="flex justify-between border-b pb-2">
             <span className="text-muted-foreground">Số task sẽ tạo:</span>
-            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+            <span className="font-semibold text-success">
               {preview.actionable} task
             </span>
           </div>
           {preview.blocked > 0 && (
             <div className="flex justify-between border-b pb-2">
               <span className="text-muted-foreground">Số task bị chặn (bỏ qua):</span>
-              <span className="font-semibold text-red-600 dark:text-red-400">
+              <span className="font-semibold text-destructive">
                 {preview.blocked} task
               </span>
             </div>
           )}
-          <div className="pt-1 text-[11px] text-muted-foreground leading-relaxed">
+          <div className="pt-1 text-2xs text-muted-foreground leading-relaxed">
             ⚠️ <strong>Lưu ý:</strong> Task được tạo trực tiếp trên Jira dưới danh nghĩa tài khoản cá nhân của bạn. Không có tính năng tự động xoá/rollback sau khi task đã tạo thành công.
           </div>
         </div>

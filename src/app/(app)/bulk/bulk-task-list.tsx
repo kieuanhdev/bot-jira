@@ -38,9 +38,9 @@ export const BulkTaskRow = memo(function BulkTaskRow({
       data-row
       className={cn(
         "flex cursor-pointer items-center gap-3 border-b border-l-[3px] px-3 py-2 text-sm last:border-b-0 hover:bg-accent/50",
-        cat === "new" && "border-l-sky-500/60",
+        cat === "new" && "border-l-info/60",
         cat === "indeterminate" && "border-l-primary/60",
-        cat === "done" && "border-l-emerald-500/60",
+        cat === "done" && "border-l-success/60",
         isChecked && "bg-accent/40",
         isStandardizing && "bg-primary/5 dark:bg-primary/10"
       )}
@@ -69,7 +69,7 @@ export const BulkTaskRow = memo(function BulkTaskRow({
       {isStandardizing && (
         <Badge
           variant="secondary"
-          className="text-[10px] py-0 px-1.5 h-4 shrink-0 font-medium bg-primary/15 text-primary border-primary/20"
+          className="text-2xs py-0.5 px-2 shrink-0 font-medium bg-primary-soft text-primary-soft-foreground border border-primary/20"
         >
           Chuẩn hóa
         </Badge>
@@ -77,7 +77,7 @@ export const BulkTaskRow = memo(function BulkTaskRow({
       <span className="min-w-0 flex-1 truncate">{i.summary}</span>
       {i.epic && (
         <span
-          className="hidden sm:inline-flex shrink-0 items-center rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 font-mono text-[10px] font-medium text-primary"
+          className="hidden sm:inline-flex shrink-0 items-center rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 font-mono text-2xs font-medium text-primary"
           title={`Epic: ${i.epic}`}
         >
           {i.epic}
@@ -85,7 +85,7 @@ export const BulkTaskRow = memo(function BulkTaskRow({
       )}
       {i.createdAt && (
         <span
-          className="hidden md:inline-flex shrink-0 items-center text-[11px] text-muted-foreground tabular-nums"
+          className="hidden md:inline-flex shrink-0 items-center text-xs text-muted-foreground tabular-nums"
           title={`Ngày tạo: ${new Date(i.createdAt).toLocaleString("vi-VN")}`}
         >
           <Clock className="h-3 w-3 mr-1 opacity-60" aria-hidden="true" />
@@ -107,7 +107,7 @@ export const BulkTaskRow = memo(function BulkTaskRow({
         <span className={CATEGORY_TEXT[cat]}>{i.status}</span>
       </span>
       {i.points != null && (
-        <span className="inline-flex h-4 shrink-0 items-center rounded-full bg-secondary px-1.5 font-mono text-[10px] font-semibold tabular-nums text-secondary-foreground">
+        <span className="inline-flex shrink-0 items-center rounded-full bg-secondary px-2 py-0.5 font-mono text-2xs font-semibold tabular-nums text-secondary-foreground">
           {i.points}pt
         </span>
       )}

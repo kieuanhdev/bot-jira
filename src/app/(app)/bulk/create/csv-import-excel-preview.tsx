@@ -41,7 +41,7 @@ export function CsvImportExcelPreview({
             Kết quả đọc file Excel: {excelResult.stats?.validCount ?? excelResult.items.length} task hợp lệ
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
+        <div className="flex flex-wrap items-center gap-1.5 font-mono text-2xs">
           {excelResult.manifest?.projectKey && (
             <Badge variant="outline" className="text-primary border-primary/30">
               Project: {excelResult.manifest.projectKey}
@@ -61,7 +61,7 @@ export function CsvImportExcelPreview({
           <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" aria-hidden="true" />
           <div className="space-y-0.5">
             <p className="font-semibold">Mẫu Excel cũ hơn cấu hình Jira hiện tại</p>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               Cấu hình của dự án trên Jira đã thay đổi kể từ khi file mẫu này được tải. Dữ liệu vẫn được nạp vào bảng và sẽ được kiểm tra lại với cấu hình mới nhất.
             </p>
           </div>
@@ -116,12 +116,12 @@ export function CsvImportExcelPreview({
             <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" aria-hidden="true" />
             <div>
               <p className="font-semibold">Dữ liệu vượt quá sức chứa còn lại của bảng!</p>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+              <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
                 Tệp có <strong className="text-foreground">{rawItems.length}</strong> task hợp lệ, nhưng theo chế độ đã chọn chỉ có thể nhận thêm <strong className="text-foreground">{remainingCapacity}</strong> task.
               </p>
             </div>
           </div>
-          <label className="flex items-center gap-2 pt-1 cursor-pointer font-medium text-[11px]">
+          <label className="flex items-center gap-2 pt-1 cursor-pointer font-medium text-2xs">
             <input
               type="checkbox"
               checked={confirmTruncation}
@@ -135,7 +135,7 @@ export function CsvImportExcelPreview({
 
       {/* Errors list */}
       {excelResult.errors && excelResult.errors.length > 0 && (
-        <div className="rounded border border-destructive/30 bg-destructive/5 p-2.5 text-[11px] text-destructive space-y-1">
+        <div className="rounded border border-destructive/30 bg-destructive/5 p-2.5 text-2xs text-destructive space-y-1">
           <div className="font-semibold flex items-center gap-1.5">
             <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
             Các dòng có lỗi ({excelResult.errors.length} lỗi):
@@ -154,7 +154,7 @@ export function CsvImportExcelPreview({
 
       {/* General warnings */}
       {excelResult.warnings && excelResult.warnings.length > 0 && (
-        <div className="space-y-1 text-[11px] text-amber-700 dark:text-amber-400">
+        <div className="space-y-1 text-2xs text-warning">
           {excelResult.warnings.map((w, i) => (
             <p key={i} className="flex items-start gap-1.5">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -167,11 +167,11 @@ export function CsvImportExcelPreview({
       {/* Preview table (up to 5 rows) */}
       {itemsToImport.length > 0 && (
         <div className="space-y-1.5">
-          <div className="font-medium text-muted-foreground text-[11px]">
+          <div className="font-medium text-muted-foreground text-2xs">
             Bản xem trước dữ liệu ({Math.min(5, itemsToImport.length)} / {itemsToImport.length} dòng):
           </div>
           <div className="overflow-x-auto rounded border border-border/50">
-            <table className="w-full text-left text-[11px]">
+            <table className="w-full text-left text-xs">
               <thead className="bg-muted/40 font-semibold text-muted-foreground">
                 <tr>
                   <th className="p-1.5 w-8">#</th>

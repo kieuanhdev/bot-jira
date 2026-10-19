@@ -148,7 +148,7 @@ export function BulkCreateCommandBar({
           <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Mặc định</span>
           {activeDefaultsCount > 0 && (
-            <Badge variant="info" className="px-1.5 py-0 text-[10px] font-mono">
+            <Badge variant="info" className="px-1.5 py-0.5 text-2xs font-mono">
               {activeDefaultsCount}
             </Badge>
           )}
@@ -179,7 +179,7 @@ export function BulkCreateCommandBar({
           onClick={onDownloadTemplate}
           disabled={isDownloadingTemplate || isSwitchingProject}
           title={`Tải mẫu file Excel có sẵn dropdown danh mục của dự án ${projectKey}`}
-          className="h-8 gap-1.5 text-xs cursor-pointer text-teal-700 dark:text-teal-400 hover:bg-teal-500/10 border-teal-500/20"
+          className="h-8 gap-1.5 text-xs cursor-pointer text-primary hover:bg-primary-soft border-primary/20"
         >
           {isDownloadingTemplate ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />

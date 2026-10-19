@@ -141,7 +141,7 @@ export function CreatePreview({
                 Chi tiết bản xem trước từng task
               </CardTitle>
               {preview.metrics?.durationMs != null && (
-                <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground font-normal">
+                <Badge variant="outline" className="text-2xs font-mono text-muted-foreground font-normal">
                   {preview.metrics.durationMs}ms
                 </Badge>
               )}
@@ -221,7 +221,7 @@ export function CreatePreview({
                         !isReady ? "bg-destructive/5 hover:bg-destructive/10" : "hover:bg-muted/15"
                       }`}
                     >
-                      <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">
+                      <td className="px-4 py-3 font-mono text-2xs text-muted-foreground">
                         {item.rowIndex + 1}
                       </td>
 
@@ -244,7 +244,7 @@ export function CreatePreview({
                         {item.normalizedFields.labels && item.normalizedFields.labels.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1">
                             {item.normalizedFields.labels.map((l) => (
-                              <Badge key={l} variant="outline" className="px-1.5 py-0 text-[10px]">
+                              <Badge key={l} variant="outline" className="px-1.5 py-0.5 text-2xs">
                                 {l}
                               </Badge>
                             ))}
@@ -325,13 +325,13 @@ export function CreatePreview({
               <button
                 type="button"
                 onClick={onResetConfirmError}
-                className="text-[11px] underline hover:no-underline cursor-pointer"
+                className="text-2xs underline hover:no-underline cursor-pointer"
               >
                 Đóng
               </button>
             )}
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             Dữ liệu xem trước vẫn được lưu giữ an toàn. Bạn có thể kiểm tra lại kết nối/token Jira rồi bấm xác nhận lại, hoặc quay lại chỉnh sửa dữ liệu.
           </p>
         </div>
