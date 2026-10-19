@@ -64,24 +64,24 @@ export function BoardCardBody({
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-lg border bg-card transition-all duration-150",
+        "group relative overflow-hidden rounded-xl border bg-card transition-all duration-150",
         dragging
           ? "border-primary/50 shadow-lg ring-2 ring-primary/25"
-          : "border-border/70 shadow-sm hover:-translate-y-px hover:border-primary/40 hover:shadow-md"
+          : "border-border/70 shadow-[var(--shadow-card)] hover:-translate-y-px hover:border-primary/40 hover:shadow-md"
       )}
     >
-      <span className={cn("absolute inset-y-0 left-0 w-[3px]", pm.rail)} aria-hidden />
-      <div className="py-2 pl-3.5 pr-2.5">
+      <span className={cn("absolute inset-y-0 left-0 w-1", pm.rail)} aria-hidden />
+      <div className="p-3 pl-3.5">
         <div className="flex items-center gap-1.5">
-          <span className="shrink-0 font-mono text-[11px] font-medium text-muted-foreground">{issue.jiraKey}</span>
+          <span className="shrink-0 font-mono text-xs font-semibold text-muted-foreground">{issue.jiraKey}</span>
           {issue.type && (
-            <span className="shrink-0 rounded bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-2xs font-medium text-muted-foreground">
               {typeShort(issue.type)}
             </span>
           )}
           <span className="ml-auto shrink-0" />
           {issue.points != null && (
-            <span className="inline-flex h-4 shrink-0 items-center rounded-full bg-secondary px-1.5 font-mono text-[10px] font-semibold tabular-nums text-secondary-foreground">
+            <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-secondary px-2 font-mono text-2xs font-semibold tabular-nums text-secondary-foreground">
               {issue.points}
             </span>
           )}
@@ -91,9 +91,9 @@ export function BoardCardBody({
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                 aria-label={`Actions for ${issue.jiraKey}`}
-                className="-mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus:opacity-100 hover:bg-accent hover:text-foreground"
+                className="-mr-1 flex h-7 w-7 cursor-pointer shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus:opacity-100 hover:bg-accent hover:text-foreground"
               >
-                <MoreHorizontal className="h-3.5 w-3.5" aria-hidden />
+                <MoreHorizontal className="h-4 w-4" aria-hidden />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52" onPointerDown={(e) => e.stopPropagation()}>
                 <DropdownMenuLabel className="font-mono text-xs">{issue.jiraKey}</DropdownMenuLabel>
@@ -102,7 +102,7 @@ export function BoardCardBody({
                     onSelect={(e) => { e.preventDefault(); onQuickAction(issue.jiraKey, { kind: "assignee", value: null }); }}
                     className="gap-2"
                   >
-                    <User className="h-3.5 w-3.5" aria-hidden /> Unassign
+                    <User className="h-4 w-4" aria-hidden /> Unassign
                   </DropdownMenuItem>
                   {assignees && assignees.length > 0 && (
                     <>
@@ -128,7 +128,7 @@ export function BoardCardBody({
                       onSelect={(e) => { e.preventDefault(); onQuickAction(issue.jiraKey, { kind: "priority", value: p }); }}
                       className="gap-2"
                     >
-                      <Flag className="h-3.5 w-3.5" aria-hidden />
+                      <Flag className="h-4 w-4" aria-hidden />
                       <span>{p}</span>
                       {p === issue.priority && <span className="ml-auto text-primary">•</span>}
                     </DropdownMenuItem>
@@ -137,69 +137,68 @@ export function BoardCardBody({
                 <DropdownMenuSeparator />
                 {!done && (
                   <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onQuickAction(issue.jiraKey, { kind: "done" }); }} className="gap-2">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" aria-hidden /> Mark done
+                    <CheckCircle2 className="h-4 w-4 text-success" aria-hidden /> Mark done
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onQuickAction(issue.jiraKey, { kind: "copyKey" }); }} className="gap-2">
-                  <Copy className="h-3.5 w-3.5" aria-hidden /> Copy key
+                  <Copy className="h-4 w-4" aria-hidden /> Copy key
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onQuickAction(issue.jiraKey, { kind: "openJira" }); }} className="gap-2">
-                  <ExternalLink className="h-3.5 w-3.5" aria-hidden /> Open in Jira
+                  <ExternalLink className="h-4 w-4" aria-hidden /> Open in Jira
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onQuickAction(issue.jiraKey, { kind: "openFull" }); }} className="gap-2">
-                  <CornerDownLeft className="h-3.5 w-3.5" aria-hidden /> Open full detail
+                  <CornerDownLeft className="h-4 w-4" aria-hidden /> Open full detail
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
         </div>
 
-        <p className="mt-1 line-clamp-2 text-[13px] font-medium leading-snug text-card-foreground">
+        <p className="mt-1.5 line-clamp-2 text-sm font-semibold leading-snug text-foreground">
           {issue.summary}
         </p>
 
         {(stale || overdue || isHighPriority(issue.priority) || (issue.delivery && issue.delivery.branchCount > 0)) && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {issue.delivery && issue.delivery.branchCount > 0 && (
               <Badge
-                variant="secondary"
-                className={cn(
-                  "h-4 gap-1 px-1.5 text-[10px] font-mono",
+                variant={
                   issue.delivery.prMerged
-                    ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                    ? "info"
                     : issue.delivery.prOpen
-                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                      : "bg-muted text-muted-foreground"
-                )}
+                      ? "success"
+                      : "neutral"
+                }
+                className="font-mono text-2xs"
                 title={`${issue.delivery.branchCount} branch liên kết${issue.delivery.prMerged ? " • PR merged" : issue.delivery.prOpen ? " • PR open" : ""}`}
               >
-                <GitBranch className="h-2.5 w-2.5" />
+                <GitBranch className="h-3 w-3" aria-hidden />
                 {issue.delivery.branchCount}b
                 {issue.delivery.prMerged ? " ✓" : issue.delivery.prOpen ? " PR" : ""}
               </Badge>
             )}
             {stale && (
-              <Badge variant="warning" className="h-4 gap-1 px-1.5 text-[10px]" title="Stale — not updated in 7+ days">
-                <Clock className="h-2.5 w-2.5" />
+              <Badge variant="warning" title="Stale — not updated in 7+ days">
+                <Clock className="h-3 w-3" aria-hidden />
                 {daysSince(issue.updatedAt)}d
               </Badge>
             )}
             {overdue && (
-              <Badge variant="danger" className="h-4 gap-1 px-1.5 text-[10px]" title={`Quá hạn ${new Date(issue.dueDate!).toLocaleDateString("vi-VN")}`}>
-                <CalendarClock className="h-2.5 w-2.5" aria-hidden /> Quá hạn
+              <Badge variant="danger" title={`Quá hạn ${new Date(issue.dueDate!).toLocaleDateString("vi-VN")}`}>
+                <CalendarClock className="h-3 w-3" aria-hidden /> Quá hạn
               </Badge>
             )}
             {isHighPriority(issue.priority) && (
-              <span className={cn("inline-flex h-4 items-center rounded-full px-1.5 text-[10px] font-semibold", pm.badge)}>
+              <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold", pm.badge)}>
                 {issue.priority}
               </span>
             )}
           </div>
         )}
 
-        <div className="mt-2 flex items-center gap-1.5">
+        <div className="mt-2.5 flex items-center gap-1.5">
           <JiraAvatar username={issue.assigneeJira} size="sm" title={issue.assigneeJira ?? "Unassigned"} />
-          <span className="truncate text-[11px] text-muted-foreground">{timeAgo(issue.updatedAt)}</span>
+          <span className="truncate text-xs text-muted-foreground">{timeAgo(issue.updatedAt)}</span>
           {([
             ['R', issue.reporterJira, 'Reporter'],
             ['A', issue.approverJira, 'Approver'],
@@ -221,18 +220,18 @@ export function BoardCardBody({
                 disabled={!canPrev}
                 aria-label="Move to previous column"
                 title="Move left"
-                className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:invisible"
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:invisible"
               >
-                <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+                <ChevronLeft className="h-4 w-4" aria-hidden />
               </button>
               <button
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTransition(issue.jiraKey, "__next__"); }}
                 disabled={!canNext}
                 aria-label="Move to next column"
                 title="Move right"
-                className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:invisible"
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:invisible"
               >
-                <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                <ChevronRight className="h-4 w-4" aria-hidden />
               </button>
             </span>
           )}

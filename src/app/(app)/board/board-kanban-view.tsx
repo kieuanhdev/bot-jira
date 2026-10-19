@@ -163,7 +163,7 @@ export function BoardKanbanView({
       <div
         ref={boardScrollRef}
         onPointerDown={onBoardPointerDown}
-        className="flex select-none h-[calc(100dvh-15rem)] min-h-[24rem] flex-none gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]"
+        className="flex select-none h-[calc(100dvh-15rem)] min-h-[24rem] flex-none gap-2.5 overflow-x-auto pb-2 [scrollbar-width:thin]"
       >
         {boardColumnsRender.map((col) => (
           <BoardColumnComponent
@@ -203,7 +203,7 @@ export function BoardKanbanView({
       </div>
       {marquee && (
         <div
-          className="pointer-events-none fixed z-40 rounded-sm border border-primary bg-primary/15"
+          className="pointer-events-none fixed z-40 rounded-sm border border-primary bg-primary-soft/30"
           style={{
             left: Math.min(marquee.x1, marquee.x2),
             top: Math.min(marquee.y1, marquee.y2),
@@ -223,7 +223,7 @@ export function BoardKanbanView({
             onClick={clearSelection}
             className="inline-flex cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
-            <X className="h-3.5 w-3.5" aria-hidden /> Bỏ chọn
+            <X className="h-4 w-4" aria-hidden /> Bỏ chọn
           </button>
         </div>
       )}

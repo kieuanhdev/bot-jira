@@ -1,6 +1,7 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
+import { cn } from "@/lib/utils";
 import type { BoardQuickFilter } from "./lib/board-filter-controller";
 
 export interface BoardQuickFilterChipsProps {
@@ -30,17 +31,18 @@ export function BoardQuickFilterChips({
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-1 border-l pl-2">
+    <div className="flex flex-wrap items-center gap-1.5 border-l border-border/60 pl-2.5">
       {chips.map(([key, label]) => (
         <button
           key={key}
           type="button"
           onClick={() => setQuickFilter((current: BoardQuickFilter) => (current === key ? "" : key))}
-          className={`h-7 cursor-pointer rounded-full border px-2.5 text-[11px] font-medium transition-colors ${
+          className={cn(
+            "h-8 cursor-pointer rounded-full border px-3 text-xs font-medium transition-colors",
             quickFilter === key
-              ? "border-primary/50 bg-primary/10 text-primary"
-              : "bg-background hover:bg-muted"
-          }`}
+              ? "border-primary/30 bg-primary-soft text-primary-soft-foreground font-semibold shadow-xs"
+              : "border-border/70 bg-card text-foreground hover:bg-muted hover:border-border"
+          )}
         >
           {label}
         </button>

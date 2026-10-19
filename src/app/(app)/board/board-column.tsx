@@ -3,6 +3,7 @@
 import { memo, useEffect } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { ChevronRight, EyeOff, Maximize2, Minimize2, MoreHorizontal } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -93,26 +94,28 @@ export const BoardColumn = memo(function BoardColumn({
           onClick={() => onToggleCollapse(id)}
           title={`Mở rộng cột ${label}`}
           aria-label={`Mở rộng cột ${label}`}
-          className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-border/60 bg-muted/25 px-1 py-2 transition-colors hover:border-primary/40 hover:bg-primary/5"
+          className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-border/60 bg-muted/60 px-1 py-2.5 transition-colors hover:border-primary/40 hover:bg-primary-soft/50"
         >
           <span className={cn("h-2.5 w-2.5 rounded-full", dotColor)} />
-          <span className="text-[10px] font-semibold tabular-nums text-muted-foreground">{total}</span>
+          <Badge variant="neutral" className="px-1 py-0 text-2xs font-semibold tabular-nums">
+            {total}
+          </Badge>
           <span
-            className="text-[10px] font-semibold tracking-tight"
+            className="text-2xs font-semibold tracking-tight"
             style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
           >
             {label}
           </span>
-          <Maximize2 className="mt-1 h-3 w-3 text-muted-foreground" aria-hidden />
+          <Maximize2 className="mt-1 h-3.5 w-3.5 text-muted-foreground" aria-hidden />
         </button>
         {canHide && onHideColumn && (
           <button
             onClick={() => onHideColumn(id)}
             title={`Ẩn hoàn toàn cột ${label}`}
             aria-label={`Ẩn hoàn toàn cột ${label}`}
-            className="cursor-pointer rounded p-1 text-muted-foreground/60 transition-colors hover:bg-rose-500/10 hover:text-rose-500"
+            className="cursor-pointer rounded p-1 text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive"
           >
-            <EyeOff className="h-3 w-3" aria-hidden />
+            <EyeOff className="h-3.5 w-3.5" aria-hidden />
           </button>
         )}
       </div>
@@ -123,25 +126,25 @@ export const BoardColumn = memo(function BoardColumn({
     <div className="flex min-h-0 min-w-64 flex-1 basis-72 flex-col">
       <div className="mb-2 flex items-center gap-1.5 px-0.5">
         <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dotColor)} />
-        <span className={cn("min-w-0 truncate text-[13px] font-semibold tracking-tight", text)} title={label}>
+        <span className={cn("min-w-0 truncate text-sm font-semibold tracking-tight", text)} title={label}>
           {label}
         </span>
         {wipOver && (
-          <span
-            className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400"
+          <Badge
+            variant="warning"
             title="Nhiều task đang chạy hơn mức khuyến nghị (WIP)"
           >
             WIP
-          </span>
+          </Badge>
         )}
         {dragBlocked ? (
-          <span className="ml-auto shrink-0 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400">
+          <Badge variant="danger" className="ml-auto">
             Không cho
-          </span>
+          </Badge>
         ) : (
-          <span className="ml-auto shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+          <Badge variant="neutral" className="ml-auto tabular-nums font-semibold">
             {total}
-          </span>
+          </Badge>
         )}
 
         {/* Dropdown Menu actions for Column: Ẩn cột, Thu gọn cột */}
@@ -150,18 +153,18 @@ export const BoardColumn = memo(function BoardColumn({
             <button
               title={`Tùy chọn cột ${label}`}
               aria-label={`Tùy chọn cột ${label}`}
-              className="shrink-0 cursor-pointer rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+              className="shrink-0 cursor-pointer rounded p-1 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
             >
-              <MoreHorizontal className="h-3.5 w-3.5" aria-hidden />
+              <MoreHorizontal className="h-4 w-4" aria-hidden />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
             {canHide && onHideColumn && (
               <DropdownMenuItem
                 onClick={() => onHideColumn(id)}
-                className="cursor-pointer gap-2 text-xs text-rose-600 focus:text-rose-600 dark:text-rose-400"
+                className="cursor-pointer gap-2 text-xs text-destructive focus:text-destructive"
               >
-                <EyeOff className="h-3.5 w-3.5" aria-hidden />
+                <EyeOff className="h-4 w-4" aria-hidden />
                 <span>Ẩn cột này</span>
               </DropdownMenuItem>
             )}
@@ -169,7 +172,7 @@ export const BoardColumn = memo(function BoardColumn({
               onClick={() => onToggleCollapse(id)}
               className="cursor-pointer gap-2 text-xs"
             >
-              <Minimize2 className="h-3.5 w-3.5" aria-hidden />
+              <Minimize2 className="h-4 w-4" aria-hidden />
               <span>Thu gọn cột</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -179,9 +182,9 @@ export const BoardColumn = memo(function BoardColumn({
           onClick={() => onToggleCollapse(id)}
           title={`Thu gọn cột ${label}`}
           aria-label={`Thu gọn cột ${label}`}
-          className="shrink-0 cursor-pointer rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+          className="shrink-0 cursor-pointer rounded p-1 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
         >
-          <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+          <ChevronRight className="h-4 w-4" aria-hidden />
         </button>
       </div>
       <div
@@ -189,19 +192,19 @@ export const BoardColumn = memo(function BoardColumn({
         className={cn(
           "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border transition-colors duration-150",
           dragBlocked
-            ? "border-rose-400/50 bg-rose-500/10"
+            ? "border-destructive/40 bg-destructive/10"
             : isOver
-              ? "border-primary/40 bg-primary/10"
-              : "border-border/60 bg-muted/25"
+              ? "border-primary/40 bg-primary-soft/50 ring-1 ring-primary"
+              : "border-border/60 bg-muted/60"
         )}
       >
-        <div className={cn("pointer-events-none absolute inset-x-0 top-0 h-0.5 opacity-80", dragBlocked ? "bg-rose-400" : dotColor)} aria-hidden />
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 [scrollbar-width:thin]">
+        <div className={cn("pointer-events-none absolute inset-x-0 top-0 h-0.5 opacity-80", dragBlocked ? "bg-destructive" : dotColor)} aria-hidden />
+        <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-2.5 [scrollbar-width:thin]">
           {items.length === 0 ? (
             <div
               className={cn(
-                "flex flex-1 items-center justify-center rounded-lg border border-dashed px-3 py-8 text-center text-[11px] transition-colors",
-                isOver ? "border-primary/50 bg-primary/5 text-primary" : "border-border/70 text-muted-foreground/70"
+                "flex flex-1 items-center justify-center rounded-lg border border-dashed px-3 py-8 text-center text-xs transition-colors",
+                isOver ? "border-primary/50 bg-primary-soft/30 text-primary" : "border-border/70 text-muted-foreground"
               )}
             >
               {isOver ? "Thả task vào đây" : emptyMessage || (isBacklog ? "Không có task Backlog" : "Không có task")}
@@ -245,7 +248,7 @@ export const BoardColumn = memo(function BoardColumn({
               {hasMore && (
                 <button
                   onClick={() => onGrow(id)}
-                  className="cursor-pointer rounded-lg border border-dashed border-border/70 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                  className="cursor-pointer rounded-lg border border-dashed border-border/70 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary-soft/30 hover:text-primary"
                 >
                   Xem thêm {total - items.length}
                 </button>
