@@ -128,10 +128,10 @@ Năm trường hợp dễ gây lỗi nhất mà test theo từng task dễ bỏ 
 
 **Files:** `package.json`, `package-lock.json`, phụ lục B của file plan này.
 
-- [ ] Chạy `npm install zod @radix-ui/react-popover cmdk date-fns @date-fns/tz lru-cache papaparse isomorphic-dompurify`, rồi `npm install -D @types/papaparse`. Lấy bản ổn định mới nhất tại thời điểm cài và ghi lại version vào phụ lục B.
-- [ ] Thêm script `"test:tz": "TZ=Asia/Ho_Chi_Minh vitest run"`.
-- [ ] Chạy `npm run typecheck`, `npm run lint`, `TZ=UTC npm test` và `npm run test:tz`. Ghi vào phụ lục B: số test pass/fail của từng lần chạy, và **danh sách test chỉ fail ở một trong hai múi giờ**. Danh sách này là đầu vào cho Phase 2.
-- [ ] Commit `chore(deps): add zod, radix popover, cmdk, date-fns, lru-cache, papaparse, dompurify`.
+- [x] Chạy `npm install zod @radix-ui/react-popover cmdk date-fns @date-fns/tz lru-cache papaparse isomorphic-dompurify`, rồi `npm install -D @types/papaparse`. Lấy bản ổn định mới nhất tại thời điểm cài và ghi lại version vào phụ lục B.
+- [x] Thêm script `"test:tz": "TZ=Asia/Ho_Chi_Minh vitest run"`.
+- [x] Chạy `npm run typecheck`, `npm run lint`, `TZ=UTC npm test` và `npm run test:tz`. Ghi vào phụ lục B: số test pass/fail của từng lần chạy, và **danh sách test chỉ fail ở một trong hai múi giờ**. Danh sách này là đầu vào cho Phase 2.
+- [x] Commit `chore(deps): add zod, radix popover, cmdk, date-fns, lru-cache, papaparse, dompurify`.
 
 #### Task 0.2: Cố định TZ khi chạy test
 
@@ -894,8 +894,17 @@ Cả hai áp dụng `MAX_LABEL_LENGTH`, `MAX_LABELS_COUNT`, so trùng không ph�
 
 ## Phụ lục B: Kết quả baseline (Task 0.1 điền)
 
-- Version đã cài: _(điền)_
-- `TZ=UTC npm test`: _(pass/fail)_
-- `npm run test:tz`: _(pass/fail)_
-- Test chỉ fail ở một múi giờ: _(liệt kê)_
-- Task tuỳ chọn bị bỏ và lý do: _(điền nếu có)_
+- Version đã cài:
+  - `zod`: `^4.6.7` (resolved `4.6.7`)
+  - `@radix-ui/react-popover`: `^1.3.1` (resolved `1.3.1`)
+  - `cmdk`: `^1.1.1` (resolved `1.1.1`)
+  - `date-fns`: `^4.4.0` (resolved `4.4.0`)
+  - `@date-fns/tz`: `^1.5.0` (resolved `1.5.0`)
+  - `lru-cache`: `^11.5.3` (resolved `11.5.3`)
+  - `papaparse`: `^5.7.0` (resolved `5.7.0`)
+  - `@types/papaparse`: `^5.5.2` (resolved `5.5.2`)
+  - `isomorphic-dompurify`: `^4.6.0` (resolved `4.6.0`)
+- `TZ=UTC npm test`: PASS (373 test files, 3242 passed, 0 failed, duration 48.48s)
+- `npm run test:tz`: PASS (373 test files, 3242 passed, 0 failed, duration 45.72s)
+- Test chỉ fail ở một múi giờ: Không có (cả 2 múi giờ đều pass toàn bộ 3242 tests)
+- Task tuỳ chọn bị bỏ và lý do: Không có (chưa thực hiện)
