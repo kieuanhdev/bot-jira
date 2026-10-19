@@ -109,14 +109,14 @@ export function StandardizationBanner({ count }: { count: number }) {
 /** Sticky bar so the primary action stays reachable while scrolling a long task list. */
 export function BulkActionBar({
   filterProject,
-  count,
+  countLabel,
   disabled,
   previewing,
   label,
   onPreview,
 }: {
   filterProject: string;
-  count: number;
+  countLabel: string;
   disabled: boolean;
   previewing: boolean;
   label: string;
@@ -125,7 +125,7 @@ export function BulkActionBar({
   return (
     <div className="sticky bottom-0 z-20 -mx-1 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-4 py-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <p className="min-w-0 truncate text-sm text-muted-foreground">
-        <span className="font-semibold tabular-nums text-foreground">{count}</span> task
+        <span className="font-semibold tabular-nums text-foreground">{countLabel}</span> task
         {filterProject ? <> · <span className="font-mono">{filterProject}</span></> : null}
       </p>
       <Button onClick={onPreview} disabled={disabled} className="shrink-0 cursor-pointer">

@@ -16,6 +16,7 @@ import { useBulkSelection } from "./lib/use-bulk-selection";
 import { useBulkConfigure } from "./lib/use-bulk-configure";
 import { useBulkPreview } from "./lib/use-bulk-preview";
 import { useBulkOperations } from "./lib/use-bulk-operations";
+import { effectiveCountLabel } from "./lib/bulk-utils";
 
 export function BulkClient() {
   const searchParams = useSearchParams();
@@ -172,7 +173,14 @@ export function BulkClient() {
       {!preview.preview && (
         <BulkActionBar
           filterProject={selection.filterProject}
-          count={selection.effectiveCount}
+          countLabel={
+            effectiveCountLabel({
+              selectionMode: selection.selectionMode,
+              effectiveCount: selection.effectiveCount,
+              loadedCount: selection.issues.length,
+              totalServerIssues: selection.totalServerIssues,
+            }).label
+          }
           previewing={preview.previewing}
           disabled={
             preview.previewing ||

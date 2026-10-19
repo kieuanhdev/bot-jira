@@ -181,6 +181,7 @@ export function BulkSelectCard({
               totalServerIssues={totalServerIssues}
               isLoadingMore={isLoadingMore}
               effectiveCount={effectiveCount}
+              selectionMode={selectionMode}
               onLoadMore={onLoadMore}
             />
           </>

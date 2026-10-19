@@ -10,6 +10,7 @@ import {
   Loader2,
 } from "lucide-react";
 import type { SelectionMode, SortOption } from "./lib/bulk-logic";
+import { effectiveCountLabel } from "./lib/bulk-utils";
 
 export { BulkTaskFilters } from "./bulk-task-filters";
 
@@ -165,6 +166,7 @@ export function BulkTaskListFooter({
   totalServerIssues,
   isLoadingMore,
   effectiveCount,
+  selectionMode,
   onLoadMore,
 }: {
   filterProject: string;
@@ -173,10 +175,18 @@ export function BulkTaskListFooter({
   totalServerIssues: number;
   isLoadingMore: boolean;
   effectiveCount: number;
+  selectionMode: SelectionMode;
   onLoadMore: () => void;
 }) {
+  const { label, isLowerBound } = effectiveCountLabel({
+    selectionMode,
+    effectiveCount,
+    loadedCount,
+    totalServerIssues,
+  });
+
   return (
-    <div className="flex items-center justify-between border-t bg-muted/30 px-3 py-2.5 text-xs">
+    <div className="flex flex-col gap-1 border-t bg-muted/30 px-3 py-2.5 text-xs sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground">
           Hiển thị {filteredCount} task (đã tải {loadedCount}/{totalServerIssues} của dự án {filterProject})
@@ -200,7 +210,14 @@ export function BulkTaskListFooter({
           </Button>
         )}
       </div>
-      <span className="font-semibold text-primary">Tổng số task sẽ cập nhật: {effectiveCount}</span>
+      <div className="text-right">
+        <span className="font-semibold text-primary">Tổng số task sẽ cập nhật: {label}</span>
+        {isLowerBound && (
+          <p className="text-[11px] text-muted-foreground">
+            Bộ lọc áp dụng trên toàn dự án ở server — số chính xác hiển thị ở bước xem trước.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

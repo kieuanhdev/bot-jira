@@ -1,10 +1,22 @@
 import { CATEGORY_DOTS } from "./bulk-types";
 import type { PreviewItem, PreviewBucket } from "./bulk-types";
+import type { SelectionMode } from "./bulk-logic";
 
 export const TERMINAL_OP_STATES: readonly string[] = ["completed", "partially_failed", "failed", "cancelled"];
 
 export function isTerminalOpState(state: string | null | undefined): boolean {
   return typeof state === "string" && TERMINAL_OP_STATES.includes(state);
+}
+
+export function effectiveCountLabel(input: {
+  selectionMode: SelectionMode;
+  effectiveCount: number;
+  loadedCount: number;
+  totalServerIssues: number;
+}): { label: string; isLowerBound: boolean } {
+  const isLowerBound = input.selectionMode === "filter" && input.loadedCount < input.totalServerIssues;
+  const label = isLowerBound ? `≥ ${input.effectiveCount}` : String(input.effectiveCount);
+  return { label, isLowerBound };
 }
 
 export function itemHasChange(item: PreviewItem): boolean {
