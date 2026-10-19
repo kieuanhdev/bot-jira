@@ -34,8 +34,8 @@ export default function LoginPage() {
         <div className="flex justify-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1 text-xs font-medium text-primary shadow-sm backdrop-blur-sm">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success/75 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
             </span>
             <span>Jira Data Center & Cloud Workspace</span>
           </div>

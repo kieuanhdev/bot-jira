@@ -198,7 +198,7 @@ export function SetupJiraClient({ step, availableProjects, initialProjects }: Pr
                 <span className="font-medium">{p}</span>
               </div>
               {customProjects.includes(p) && (
-                <span className="rounded bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-teal-600 dark:text-teal-400">
+                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-2xs font-semibold text-primary">
                   Mới thêm
                 </span>
               )}
@@ -248,7 +248,7 @@ export function SetupJiraClient({ step, availableProjects, initialProjects }: Pr
         </div>
         {validateError && <p className="mt-2 text-xs font-medium text-destructive">{validateError}</p>}
         {validateSuccess && (
-          <p className="mt-2 flex items-center gap-1 text-xs font-medium text-teal-600 dark:text-teal-400">
+          <p className="mt-2 flex items-center gap-1 text-xs font-medium text-success">
             <Check className="h-3.5 w-3.5" />
             {validateSuccess}
           </p>

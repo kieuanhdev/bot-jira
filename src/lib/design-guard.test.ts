@@ -27,6 +27,7 @@ export const MIGRATED_DIRS = [
   "src/app/(app)/notifications",
   "src/app/(app)/sentry",
   "src/app/(app)/watch",
+  "src/app/(auth)",
 ];
 
 const FORBIDDEN_MICRO_TEXT_REGEX = /text-\[(8|9|10|11|13)px\]/g;
