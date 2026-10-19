@@ -74,14 +74,6 @@ export function useBulkConfigure({
   // Target status for transition mode
   const [targetStatus, setTargetStatus] = useState("");
 
-  const [prevFilterProject, setPrevFilterProject] = useState(filterProject);
-  if (filterProject !== prevFilterProject) {
-    setPrevFilterProject(filterProject);
-    setTargetStatus("");
-    setEnabledFields(new Set());
-    fieldState.resetFields();
-  }
-
   const [worklogDuration, setWorklogDuration] = useState("");
   const [worklogStarted, setWorklogStarted] = useState(() => {
     const now = new Date();

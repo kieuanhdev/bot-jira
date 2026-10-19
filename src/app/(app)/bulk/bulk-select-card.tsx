@@ -15,12 +15,15 @@ import type { BulkSelectionController } from "./lib/use-bulk-selection";
 
 export interface BulkSelectCardProps {
   selection: BulkSelectionController;
+  /** Must also reset step 2/3 state, so the page owns it instead of `selection.handleProjectChange`. */
+  onProjectChange: (project: string) => void;
   statusOptions: string[];
   myName?: string | null;
 }
 
 export function BulkSelectCard({
   selection,
+  onProjectChange,
   statusOptions,
   myName,
 }: BulkSelectCardProps) {
@@ -28,7 +31,6 @@ export function BulkSelectCard({
     filterProject,
     projectOptions,
     projectIssues,
-    handleProjectChange,
     selectionMode,
     taskFilters,
     availableAssignees,
@@ -79,7 +81,7 @@ export function BulkSelectCard({
           filterProject={filterProject}
           projectOptions={projectOptions}
           issueCount={projectIssues.length}
-          onProjectChange={handleProjectChange}
+          onProjectChange={onProjectChange}
         />
 
         {!filterProject ? (

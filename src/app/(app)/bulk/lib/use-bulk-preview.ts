@@ -40,13 +40,6 @@ export function useBulkPreview({
   const [previewBasis, setPreviewBasis] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
-  const [prevFilterProject, setPrevFilterProject] = useState(filterProject);
-  if (filterProject !== prevFilterProject) {
-    setPrevFilterProject(filterProject);
-    setPreview(null);
-    setPreviewBasis(null);
-  }
-
   const resetPreview = useCallback(() => {
     setPreview(null);
     setPreviewBasis(null);

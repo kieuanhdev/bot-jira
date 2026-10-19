@@ -54,6 +54,12 @@ export function BulkClient() {
     onOperationConfirmed: () => preview.resetPreview(),
   });
 
+  function handleProjectChange(newProject: string) {
+    selection.handleProjectChange(newProject);
+    configure.resetConfigure();
+    preview.resetPreview();
+  }
+
   useEffect(() => {
     if (!operations.activeOp) return;
     const el = document.getElementById("bulk-run-card");
@@ -91,6 +97,7 @@ export function BulkClient() {
       {/* Step 1 — Project Scope & Task Selection */}
       <BulkSelectCard
         selection={selection}
+        onProjectChange={handleProjectChange}
         statusOptions={configure.statusOptions}
         myName={session?.user?.jiraUsername}
       />
