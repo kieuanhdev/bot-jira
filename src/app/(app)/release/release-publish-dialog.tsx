@@ -142,10 +142,10 @@ export function ReleasePublishDialog({
               {blockers.length > 0 && (
                 <div className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pl-1">
                   {blockers.map((b, idx) => (
-                    <div key={idx} className="flex flex-wrap items-center gap-1 text-[11px]">
+                    <div key={idx} className="flex flex-wrap items-center gap-1 text-2xs">
                       <span className="font-mono font-semibold text-foreground">{b.jiraKey}:</span>
                       <span>{b.summary}</span>
-                      <Badge variant="outline" className="text-[10px] py-0 h-4 border-destructive/30">
+                      <Badge variant="outline" className="text-2xs border-destructive/30">
                         {b.code}
                       </Badge>
                       {b.prUrl && (

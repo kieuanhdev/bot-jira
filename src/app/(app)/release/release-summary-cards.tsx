@@ -72,7 +72,7 @@ export function ReleaseSummaryCards({
           >
             <Archive className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Đã lưu trữ (Archived):</span>
-            <Badge variant="outline" className="h-4 px-1.5 py-0 text-[10px]">
+            <Badge variant="outline" className="text-2xs">
               {summary.archived}
             </Badge>
           </button>

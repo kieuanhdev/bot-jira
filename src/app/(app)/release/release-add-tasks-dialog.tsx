@@ -196,7 +196,7 @@ export function ReleaseAddTasksDialog({
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
                         <span className="font-mono font-semibold text-foreground">{item.jiraKey}</span>
-                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
                           {item.status}
                         </span>
                       </span>

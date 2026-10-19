@@ -220,7 +220,7 @@ export function ReleaseCard({
           </div>
 
           {/* Dates metadata */}
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground pt-1">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-2xs text-muted-foreground pt-1">
             <div className="flex items-center gap-3">
               {release.releaseDate && (
                 <span className="inline-flex items-center gap-1">
@@ -345,7 +345,7 @@ export function ReleaseCard({
 function renderStatusBadge(release: ReleaseCardItem) {
   if (release.archived) {
     return (
-      <Badge variant="outline" className="text-[11px] gap-1 border-muted-foreground/30 text-muted-foreground">
+      <Badge variant="outline" className="text-2xs gap-1 border-muted-foreground/30 text-muted-foreground">
         <Archive className="h-3 w-3" aria-hidden="true" />
         Đã lưu trữ
       </Badge>
@@ -354,7 +354,7 @@ function renderStatusBadge(release: ReleaseCardItem) {
 
   if (release.status === "released" || release.readiness === "released") {
     return (
-      <Badge variant="success" className="text-[11px] gap-1">
+      <Badge variant="success" className="text-2xs gap-1">
         <Rocket className="h-3 w-3" aria-hidden="true" />
         Đã phát hành
       </Badge>
@@ -363,7 +363,7 @@ function renderStatusBadge(release: ReleaseCardItem) {
 
   if (release.taskCount === 0) {
     return (
-      <Badge variant="outline" className="text-[11px] gap-1 border-muted-foreground/30 text-muted-foreground bg-muted/10">
+      <Badge variant="outline" className="text-2xs gap-1 border-muted-foreground/30 text-muted-foreground bg-muted/10">
         <AlertCircle className="h-3 w-3" aria-hidden="true" />
         Chưa có task
       </Badge>
@@ -372,7 +372,7 @@ function renderStatusBadge(release: ReleaseCardItem) {
 
   if (release.readiness === "ready") {
     return (
-      <Badge variant="info" className="text-[11px] gap-1">
+      <Badge variant="info" className="text-2xs gap-1">
         <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
         Sẵn sàng phát hành
       </Badge>
@@ -380,7 +380,7 @@ function renderStatusBadge(release: ReleaseCardItem) {
   }
 
   return (
-    <Badge variant="warning" className="text-[11px] gap-1">
+    <Badge variant="warning" className="text-2xs gap-1">
       <Clock className="h-3 w-3" aria-hidden="true" />
       Đang thực hiện
     </Badge>

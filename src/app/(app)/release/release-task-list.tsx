@@ -131,7 +131,7 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
                     </span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[11px] text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-2 mt-1.5 text-2xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
                       <User className="h-3 w-3" aria-hidden="true" />
                       <span>{t.assignee ?? "Chưa gán"}</span>
@@ -143,7 +143,7 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
                         onClick={() => assignToMe.mutate(t.jiraKey)}
                         disabled={assignToMe.isPending}
                         title={`Gán nhanh cho tôi (${meName})`}
-                        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/10 cursor-pointer transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs font-medium text-primary hover:bg-primary/10 cursor-pointer transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {assignToMe.isPending && assignToMe.variables === t.jiraKey ? (
                           <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -155,13 +155,13 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
                     )}
 
                     {t.points != null && (
-                      <span className="inline-flex items-center gap-0.5 bg-muted/60 px-1.5 py-0.2 rounded text-[10px] font-mono">
+                      <span className="inline-flex items-center gap-0.5 bg-muted/60 px-1.5 py-0.2 rounded text-2xs font-mono">
                         {t.points} pts
                       </span>
                     )}
 
                     {t.priority && (
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-2xs text-muted-foreground">
                         {t.priority}
                       </span>
                     )}
@@ -174,19 +174,19 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
                 {/* Jira Status Category */}
                 <Badge
                   variant={isDone ? "success" : "warning"}
-                  className="text-[11px] font-medium"
+                  className="text-2xs font-medium"
                 >
                   {t.status || (isDone ? "Done" : "In Progress")}
                 </Badge>
 
                 {/* Git Status Badge */}
                 {t.noCode ? (
-                  <Badge variant="secondary" className="text-[11px] gap-1 bg-muted text-muted-foreground">
+                  <Badge variant="secondary" className="text-2xs gap-1 bg-muted text-muted-foreground">
                     <Sparkles className="h-3 w-3" aria-hidden="true" />
                     Không cần code
                   </Badge>
                 ) : isGitComplete ? (
-                  <Badge variant="success" className="text-[11px] gap-1">
+                  <Badge variant="info" className="text-2xs gap-1">
                     <GitPullRequest className="h-3 w-3" aria-hidden="true" />
                     PR đã merge
                   </Badge>
@@ -224,7 +224,7 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
                   variant="outline"
                   size="sm"
                   onClick={() => setAttachTask({ jiraKey: t.jiraKey, summary: t.summary })}
-                  className="h-6 gap-1 px-2 text-[11px] cursor-pointer"
+                  className="h-6 gap-1 px-2 text-2xs cursor-pointer"
                 >
                   <Link2 className="h-3 w-3" aria-hidden="true" />
                   Gắn nhánh
@@ -234,8 +234,8 @@ export function ReleaseTaskList({ tasks, jiraBaseUrl, canManage = false }: Relea
 
             {/* Branch and PR reference */}
             {primaryBranch && !t.noCode && (
-              <div className="mt-1.5 ml-7 text-[11px] text-muted-foreground flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 font-mono text-[10px]">
+              <div className="mt-1.5 ml-7 text-2xs text-muted-foreground flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 font-mono text-2xs">
                   <GitBranch className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
                   {primaryBranch.repo} / {primaryBranch.branch}
                 </span>
@@ -277,7 +277,7 @@ function renderGitPendingBadge(blockers: ReleaseBlocker[]) {
 
   if (codes.has("NO_CONFIRMED_BRANCH")) {
     return (
-      <Badge variant="danger" className="text-[11px] gap-1">
+      <Badge variant="danger" className="text-2xs gap-1">
         <GitBranch className="h-3 w-3" aria-hidden="true" />
         Chưa có branch
       </Badge>
@@ -286,7 +286,7 @@ function renderGitPendingBadge(blockers: ReleaseBlocker[]) {
 
   if (codes.has("BRANCH_LINK_UNCONFIRMED")) {
     return (
-      <Badge variant="warning" className="text-[11px] gap-1">
+      <Badge variant="warning" className="text-2xs gap-1">
         <GitBranch className="h-3 w-3" aria-hidden="true" />
         Chờ xác nhận branch
       </Badge>
@@ -295,7 +295,7 @@ function renderGitPendingBadge(blockers: ReleaseBlocker[]) {
 
   if (codes.has("NO_PULL_REQUEST")) {
     return (
-      <Badge variant="warning" className="text-[11px] gap-1">
+      <Badge variant="warning" className="text-2xs gap-1">
         <GitPullRequest className="h-3 w-3" aria-hidden="true" />
         Chưa tạo PR
       </Badge>
@@ -304,7 +304,7 @@ function renderGitPendingBadge(blockers: ReleaseBlocker[]) {
 
   if (codes.has("PR_NOT_MERGED")) {
     return (
-      <Badge variant="warning" className="text-[11px] gap-1">
+      <Badge variant="warning" className="text-2xs gap-1">
         <GitPullRequest className="h-3 w-3" aria-hidden="true" />
         PR chưa merge
       </Badge>
@@ -313,7 +313,7 @@ function renderGitPendingBadge(blockers: ReleaseBlocker[]) {
 
   if (codes.has("WRONG_MERGE_DESTINATION")) {
     return (
-      <Badge variant="danger" className="text-[11px] gap-1">
+      <Badge variant="danger" className="text-2xs gap-1">
         <AlertTriangle className="h-3 w-3" aria-hidden="true" />
         Sai branch đích
       </Badge>
@@ -321,7 +321,7 @@ function renderGitPendingBadge(blockers: ReleaseBlocker[]) {
   }
 
   return (
-    <Badge variant="outline" className="text-[11px] gap-1 border-muted-foreground/30 text-muted-foreground">
+    <Badge variant="outline" className="text-2xs gap-1 border-muted-foreground/30 text-muted-foreground">
       <GitBranch className="h-3 w-3" aria-hidden="true" />
       Chưa hoàn tất Git
     </Badge>
