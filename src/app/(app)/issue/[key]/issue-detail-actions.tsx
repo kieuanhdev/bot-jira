@@ -94,7 +94,7 @@ export function IssueDetailActions({
           variant="secondary"
           size="sm"
           onClick={() => onAssign(meName)}
-          className="gap-1.5 text-xs text-primary hover:bg-primary/10"
+          className="gap-1.5 text-xs text-primary hover:bg-primary-soft"
           title={`Gán nhanh cho tôi (${meName})`}
         >
           <UserCheck className="h-3.5 w-3.5" />
@@ -146,13 +146,13 @@ export function IssueDetailActions({
         variant="outline"
         size="sm"
         onClick={onOpenLogWork}
-        className="gap-1.5 text-xs cursor-pointer border-teal-500/30 text-teal-700 dark:text-teal-300 hover:bg-teal-500/10"
+        className="gap-1.5 text-xs cursor-pointer border-primary/30 text-primary hover:bg-primary-soft"
         title="Ghi thời gian làm việc (Worklog) lên Jira"
       >
-        <Clock className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+        <Clock className="h-3.5 w-3.5 text-primary" />
         <span>Ghi thời gian</span>
         {timeSpentSeconds != null && timeSpentSeconds > 0 && (
-          <Badge variant="secondary" className="h-4 px-1 text-[10px] ml-0.5 font-mono">
+          <Badge variant="secondary" className="px-1.5 py-0.5 text-2xs ml-0.5 font-mono">
             {formatJiraDuration(timeSpentSeconds)}
           </Badge>
         )}

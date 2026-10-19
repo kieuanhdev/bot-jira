@@ -120,7 +120,7 @@ export function IssueDetailTabsBranches({
                                   ? "danger"
                                   : "outline"
                               }
-                              className="h-4 px-1 text-[10px]"
+                              className="px-1.5 py-0.5 text-2xs"
                             >
                               {b.prState}
                             </Badge>
@@ -169,18 +169,18 @@ export function IssueDetailTabsBranches({
 
         {/* Suggested Branches Section if any */}
         {branches?.suggestedItems && branches.suggestedItems.length > 0 && (
-          <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+          <div className="space-y-2 rounded-lg border border-warning/30 bg-warning/5 p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+              <span className="text-xs font-semibold uppercase tracking-wider text-warning">
                 Nhánh gợi ý ({branches.suggestedItems.length})
               </span>
-              <Button asChild variant="outline" size="sm" className="h-6 text-xs border-amber-500/30 text-amber-600 dark:text-amber-400">
+              <Button asChild variant="outline" size="sm" className="h-7 text-xs border-warning/30 text-warning">
                 <Link href={`/branches?view=all-branches&link=suggested&q=${encodeURIComponent(jiraKey)}`}>
                   Xem xét trong mục Nhánh →
                 </Link>
               </Button>
             </div>
-            <div className="divide-y divide-amber-500/20 text-xs">
+            <div className="divide-y divide-warning/20 text-xs">
               {branches.suggestedItems.map((sb, idx) => {
                 const sbUrl = getBitbucketBranchUrl(sb.repo, sb.branch, bitbucketBaseUrl, sb.prUrl);
                 return (
@@ -200,7 +200,7 @@ export function IssueDetailTabsBranches({
                       ) : (
                         <span className="font-semibold text-foreground">{sb.branch}</span>
                       )}
-                      <span className="text-[11px] text-muted-foreground">{sb.repo}</span>
+                      <span className="text-2xs text-muted-foreground">{sb.repo}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="warning">Chờ xác nhận</Badge>
@@ -210,7 +210,7 @@ export function IssueDetailTabsBranches({
                             size="sm"
                             variant="outline"
                             onClick={() => onConfirmBranch(sb.id!)}
-                            className="h-6 px-2 text-[11px] bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 border-teal-500/30 cursor-pointer"
+                            className="h-7 px-2 text-2xs bg-primary-soft text-primary-soft-foreground hover:bg-primary/20 border-primary/30 cursor-pointer"
                           >
                             Xác nhận
                           </Button>
@@ -218,7 +218,7 @@ export function IssueDetailTabsBranches({
                             size="sm"
                             variant="ghost"
                             onClick={() => onRejectBranch(sb.id!)}
-                            className="h-6 px-2 text-[11px] text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer"
+                            className="h-7 px-2 text-2xs text-destructive hover:bg-destructive/10 cursor-pointer"
                           >
                             Từ chối
                           </Button>

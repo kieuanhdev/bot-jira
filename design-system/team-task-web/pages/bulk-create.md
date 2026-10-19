@@ -46,5 +46,5 @@
 
 - Effects: Hover tooltips, chart zoom on click, row highlighting on hover, smooth filter animations, data loading spinners
 - Data Entry: Allow multi-select and bulk edit
-- Animation: Use skeleton screens or spinners
+- Animation: Use skeleton screens (`src/components/ui/skeleton.tsx`), never spinners
 - Sustainability: Prefer click-to-play; provide pause and captions; stop off-screen and honor reduced motion

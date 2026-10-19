@@ -15,6 +15,7 @@ export const MIGRATED_DIRS = [
   "src/components",
   "src/app/(app)",
   "src/app/(app)/board",
+  "src/app/(app)/issue",
 ];
 
 const FORBIDDEN_MICRO_TEXT_REGEX = /text-\[(8|9|10|11|13)px\]/g;

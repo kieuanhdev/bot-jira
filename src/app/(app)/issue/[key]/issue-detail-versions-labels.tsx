@@ -60,7 +60,7 @@ export function IssueDetailVersionsLabels({
           <span className="italic text-muted-foreground">Chưa có</span>
         )}
         {fixVersions.map((v) => (
-          <Badge key={v} variant="info" className="gap-1 text-[11px]">
+          <Badge key={v} variant="info" className="gap-1 text-2xs">
             {v}
             <button
               onClick={() => onRemoveVersion(v)}
@@ -75,7 +75,7 @@ export function IssueDetailVersionsLabels({
           <div className="flex items-center gap-1">
             {projectVersions.length > 0 ? (
               <Select onValueChange={(val) => handleSaveVersion(val)}>
-                <SelectTrigger className="h-6 w-32 text-xs">
+                <SelectTrigger className="h-7 w-32 text-xs">
                   <SelectValue placeholder="Chọn version…" />
                 </SelectTrigger>
                 <SelectContent>
@@ -96,14 +96,14 @@ export function IssueDetailVersionsLabels({
                   if (e.key === "Escape") setShowAddVersion(false);
                 }}
                 placeholder="1.0.0"
-                className="h-6 w-24 text-xs px-1.5"
+                className="h-7 w-24 text-xs px-1.5"
               />
             )}
             {!projectVersions.length && (
               <Button
                 size="sm"
                 variant="outline"
-                className="h-6 px-2 text-xs"
+                className="h-7 px-2.5 text-xs"
                 onClick={() => handleSaveVersion(newVersionInput)}
               >
                 Lưu
@@ -133,7 +133,7 @@ export function IssueDetailVersionsLabels({
           <span className="italic text-muted-foreground">Không có</span>
         )}
         {labels.map((l) => (
-          <Badge key={l} variant="outline" className="gap-1 text-[11px]">
+          <Badge key={l} variant="outline" className="gap-1 text-2xs">
             {l}
             <button
               onClick={() => onRemoveLabel(l)}

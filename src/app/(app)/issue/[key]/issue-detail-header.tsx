@@ -67,7 +67,7 @@ export function IssueDetailHeader({
           {issue.points != null && <Badge variant="secondary">{issue.points} điểm</Badge>}
           {issue.timeSpentSeconds != null && issue.timeSpentSeconds > 0 && (
             <Badge variant="outline" className="gap-1 text-xs font-mono">
-              <Clock className="h-3 w-3 text-teal-600 dark:text-teal-400" />
+              <Clock className="h-3 w-3 text-primary" />
               {formatJiraDuration(issue.timeSpentSeconds)}
             </Badge>
           )}
@@ -77,7 +77,7 @@ export function IssueDetailHeader({
             </Badge>
           )}
         </div>
-        <h1 className="mt-1 text-2xl font-semibold">{issue.summary}</h1>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight">{issue.summary}</h1>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>{issue.type}</span>
           {issue.priority && <span>· {issue.priority}</span>}
@@ -106,7 +106,7 @@ export function IssueDetailHeader({
             asChild
             variant="outline"
             size="sm"
-            className="gap-1.5 cursor-pointer text-xs font-semibold border-teal-500/30 text-teal-600 dark:text-teal-400 bg-teal-500/5 hover:bg-teal-500/10"
+            className="gap-1.5 cursor-pointer text-xs font-semibold border-primary/30 text-primary bg-primary-soft/40 hover:bg-primary-soft"
             title={`Mở nhánh ${primaryBranch?.branch} trên Git`}
           >
             <a href={primaryBranchUrl} target="_blank" rel="noreferrer">

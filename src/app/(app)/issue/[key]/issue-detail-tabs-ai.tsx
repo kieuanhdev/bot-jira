@@ -79,8 +79,8 @@ export function IssueDetailTabsAi({
             <p className="text-sm">{aiScore.reasoning}</p>
 
             {aiScore.missingInformation?.length > 0 && (
-              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
-                <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <div className="rounded-md border border-warning/40 bg-warning/10 p-3">
+                <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-warning">
                   <AlertTriangle className="h-3.5 w-3.5" /> Thông tin còn thiếu
                 </p>
                 <ul className="list-inside list-disc text-sm">
