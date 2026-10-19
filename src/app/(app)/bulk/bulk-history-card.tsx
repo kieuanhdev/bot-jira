@@ -6,20 +6,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { ChevronDown, History, RefreshCw } from "lucide-react";
-import { OperationDetail } from "./bulk-operation-detail";
 import { ACTION_LABELS, type OpListItem } from "./lib/bulk-types";
-import { formatTime, stateVariant } from "./lib/bulk-utils";
+import { formatTime, isTerminalOpState, stateVariant } from "./lib/bulk-utils";
 
 export function BulkHistoryCard({
   activeOp,
-  jiraBaseUrl,
   opsLoaded,
   ops,
   onSelectOp,
   onRetry,
 }: {
   activeOp: string | null;
-  jiraBaseUrl: string;
   opsLoaded: boolean;
   ops: OpListItem[];
   onSelectOp: (id: string) => void;
@@ -49,7 +46,6 @@ export function BulkHistoryCard({
         </button>
       </CardHeader>
       {open && <CardContent className="px-4 pb-4 sm:px-5 sm:pb-5">
-        {activeOp && <OperationDetail id={activeOp} jiraBaseUrl={jiraBaseUrl} />}
         {!opsLoaded ? (
           <div className="space-y-2">{[0, 1, 2].map((row) => <Skeleton key={row} className="h-16 w-full" />)}</div>
         ) : ops.length === 0 ? (
@@ -78,7 +74,7 @@ export function BulkHistoryCard({
                       {op.succeeded}/{op.total} thành công · {op.failed} thất bại · {formatTime(op.completedAt ?? op.createdAt)}
                     </span>
                   </button>
-                  {["completed", "partially_failed", "failed"].includes(op.state) && op.failed > 0 && (
+                  {isTerminalOpState(op.state) && op.state !== "cancelled" && op.failed > 0 && (
                     <Button size="sm" variant="outline" onClick={() => onRetry(op.id)}>
                       <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Thử lại
                     </Button>

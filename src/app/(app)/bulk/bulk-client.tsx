@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListChecks } from "lucide-react";
 import { BulkConfirmDialog } from "./bulk-confirm-dialog";
 import { BulkHistoryCard } from "./bulk-history-card";
+import { BulkRunCard } from "./bulk-run-card";
 import { BulkActionBar, BulkProgressSteps, BulkTopNav, StandardizationBanner } from "./bulk-header-parts";
 import { BulkPreviewCard } from "./bulk-preview-step";
 import { BulkSelectCard } from "./bulk-select-card";
@@ -50,6 +52,14 @@ export function BulkClient() {
     setPreviewError: preview.setPreviewError,
     onOperationConfirmed: () => preview.resetPreview(),
   });
+
+  useEffect(() => {
+    if (!operations.activeOp) return;
+    const el = document.getElementById("bulk-run-card");
+    if (!el) return;
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+  }, [operations.activeOp]);
 
   function handleProjectChange(newProject: string) {
     selection.handleProjectChange(newProject);
@@ -201,10 +211,18 @@ export function BulkClient() {
         />
       )}
 
+      {/* Run Progress */}
+      {operations.activeOp && (
+        <BulkRunCard
+          id={operations.activeOp}
+          jiraBaseUrl={selection.jiraBaseUrl}
+          onClose={() => operations.setActiveOp(null)}
+        />
+      )}
+
       {/* Operations History */}
       <BulkHistoryCard
         activeOp={operations.activeOp}
-        jiraBaseUrl={selection.jiraBaseUrl}
         opsLoaded={operations.opsLoaded}
         ops={operations.ops}
         onSelectOp={operations.setActiveOp}

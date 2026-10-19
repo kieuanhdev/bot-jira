@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ExternalLink, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ACTION_LABELS, type OpDetail } from "./lib/bulk-types";
-import { stateVariant, itemVariant } from "./lib/bulk-utils";
+import { stateVariant, itemVariant, isTerminalOpState } from "./lib/bulk-utils";
 import { getJiraIssueUrl } from "@/lib/jira/urls";
 
 export function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: string }) {
@@ -36,15 +36,16 @@ export function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: 
 
   const opState = op?.state;
   useEffect(() => {
-    if (opState && ["completed", "partially_failed", "failed", "cancelled"].includes(opState)) {
+    if (isTerminalOpState(opState)) {
       qc.invalidateQueries({ queryKey: issuesKeys.all });
       qc.invalidateQueries({ queryKey: staleKeys.all });
+      qc.invalidateQueries({ queryKey: bulkKeys.operations });
     }
   }, [opState, qc]);
 
   if (!op) {
     return (
-      <div className="mb-4 rounded-md border border-border p-3 space-y-3" aria-busy="true" aria-label="Đang tải chi tiết thao tác…">
+      <div className="rounded-md border border-border p-3 space-y-3" aria-busy="true" aria-label="Đang tải chi tiết thao tác…">
         <div className="flex items-center gap-2">
           <Skeleton className="h-5 w-20 rounded" />
           <Skeleton className="h-4 w-32" />
@@ -60,10 +61,10 @@ export function OperationDetail({ id, jiraBaseUrl }: { id: string; jiraBaseUrl: 
 
   const done = op.succeeded + op.failed;
   const pct = op.total > 0 ? Math.round((done / op.total) * 100) : 0;
-  const isTerminal = ["completed", "partially_failed", "failed", "cancelled"].includes(op.state);
+  const isTerminal = isTerminalOpState(op.state);
 
   return (
-    <div className="mb-4 rounded-md border border-border p-3">
+    <div className="rounded-md border border-border p-3">
       <div className="mb-2 flex items-center gap-2">
         <Badge variant={stateVariant(op.state)}>{op.state.replace("_", " ")}</Badge>
         <span className="text-sm font-medium">{ACTION_LABELS[op.type] ?? op.type}</span>

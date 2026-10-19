@@ -1,6 +1,12 @@
 import { CATEGORY_DOTS } from "./bulk-types";
 import type { PreviewItem, PreviewBucket } from "./bulk-types";
 
+export const TERMINAL_OP_STATES: readonly string[] = ["completed", "partially_failed", "failed", "cancelled"];
+
+export function isTerminalOpState(state: string | null | undefined): boolean {
+  return typeof state === "string" && TERMINAL_OP_STATES.includes(state);
+}
+
 export function itemHasChange(item: PreviewItem): boolean {
   return Object.keys(item.after).some(
     (key) => item.after[key] !== undefined && JSON.stringify(item.before[key]) !== JSON.stringify(item.after[key])
