@@ -38,10 +38,10 @@ export interface FormatDateOptions {
   day?: "numeric" | "2-digit";
 }
 
-const SECONDS_PER_MINUTE = 60;
-const SECONDS_PER_HOUR = 3600;
-const SECONDS_PER_DAY = 28800; // 8 hours in Jira working day
-const SECONDS_PER_WEEK = 144000; // 5 days in Jira working week
+export const SECONDS_PER_MINUTE = 60;
+export const SECONDS_PER_HOUR = 3600;
+export const SECONDS_PER_DAY = 28800; // 8 hours in Jira working day
+export const SECONDS_PER_WEEK = 144000; // 5 days in Jira working week
 
 /**
  * Format date/time to a relative string ("just now", "5m ago", "5 phút trước", etc.)

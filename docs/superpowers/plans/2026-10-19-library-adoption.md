@@ -676,9 +676,9 @@ Task 3.5 xong thì `grep -rn "\.json()" src/app/api src/lib/*/route-service.ts s
 - `isValidEstimate(s)` = `!s.trim() || JIRA_DURATION_RE.test(s.trim())`.
 - `client-validation` dùng `JIRA_DURATION_RE`.
 
-- [ ] **Test mới** trong `bulk-logic.test.ts`: `isValidEstimate("2 h")` === true, khớp với server. Các case cũ (`"", "  ", "2h", "1d 4h", "30m", "1w2d"` hợp lệ; `"abc", "2", "h", "1x", "2h foo"` không hợp lệ) giữ nguyên.
-- [ ] Ghi vào commit: thay đổi có chủ đích, client giờ nhận `"2 h"` giống server. Số thập phân (`1.5h`) **chưa** hỗ trợ.
-- [ ] Commit `refactor(worklogs): single Jira duration regex and constants`.
+- [x] **Test mới** trong `bulk-logic.test.ts`: `isValidEstimate("2 h")` === true, khớp với server. Các case cũ (`"", "  ", "2h", "1d 4h", "30m", "1w2d"` hợp lệ; `"abc", "2", "h", "1x", "2h foo"` không hợp lệ) giữ nguyên.
+- [x] Ghi vào commit: thay đổi có chủ đích, client giờ nhận `"2 h"` giống server. Số thập phân (`1.5h`) **chưa** hỗ trợ.
+- [x] Commit `refactor(worklogs): single Jira duration regex and constants`.
 
 #### Task 4.7 (tuỳ chọn): Bộ tách CSV bằng papaparse
 

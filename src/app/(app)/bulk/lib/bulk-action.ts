@@ -9,6 +9,7 @@ import type {
   PreviewBucket,
   ProjectFieldOption,
 } from "./bulk-types";
+import { JIRA_DURATION_RE } from "@/lib/worklogs/schema";
 import { previewBucket } from "./bulk-utils";
 import type { PeopleState } from "./use-bulk-field-state";
 
@@ -16,7 +17,7 @@ export type OperationKind = "update-fields" | "transition" | "log-work";
 export type SelectionMode = "pick" | "filter";
 
 export function isValidEstimate(estimate: string): boolean {
-  return !estimate.trim() || /^(?=.*\d)(?:\d+[wdhm]\s*)+$/i.test(estimate.trim());
+  return !estimate.trim() || JIRA_DURATION_RE.test(estimate.trim());
 }
 
 export interface BulkActionInput {

@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  SECONDS_PER_DAY,
+  SECONDS_PER_HOUR,
+  SECONDS_PER_MINUTE,
+  SECONDS_PER_WEEK,
+} from "@/lib/format/time";
 
 export type CreateWorklogInput = {
   timeSpent: string;
@@ -32,12 +38,6 @@ export type WorklogErrorCode =
 
 export const MAX_WORKLOG_COMMENT_LENGTH = 4000;
 export const JIRA_DURATION_RE = /^(?=.*\d)(?:\d+\s*[wdhm]\s*)+$/i;
-
-// Standard Jira defaults: 1 day = 8h, 1 week = 5 days (40h)
-const SECONDS_PER_MINUTE = 60;
-const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
-const SECONDS_PER_DAY = 8 * SECONDS_PER_HOUR;
-const SECONDS_PER_WEEK = 5 * SECONDS_PER_DAY;
 
 // Clock drift tolerance: up to 5 minutes into the future
 const FUTURE_TOLERANCE_MS = 5 * 60 * 1000;

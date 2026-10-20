@@ -224,7 +224,7 @@ describe("filterAndSortIssues", () => {
 
 describe("isValidEstimate", () => {
   it("accepts empty and Jira duration syntax only", () => {
-    for (const ok of ["", "  ", "2h", "1d 4h", "30m", "1w2d"]) expect(isValidEstimate(ok), ok).toBe(true);
+    for (const ok of ["", "  ", "2h", "2 h", "1d 4h", "30m", "1w2d"]) expect(isValidEstimate(ok), ok).toBe(true);
     for (const bad of ["abc", "2", "h", "1x", "2h foo"]) expect(isValidEstimate(bad), bad).toBe(false);
   });
 });

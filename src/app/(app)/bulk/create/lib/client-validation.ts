@@ -5,6 +5,7 @@ import {
   MAX_SUMMARY_LENGTH,
   MAX_DESCRIPTION_LENGTH,
 } from "@/lib/bulk/create-types";
+import { JIRA_DURATION_RE } from "@/lib/worklogs/schema";
 
 export interface CellIssue {
   field: string;
@@ -79,8 +80,7 @@ export function validateRow(
   // Estimate format validation (warning)
   if (row.originalEstimate) {
     const trimmedEst = row.originalEstimate.trim();
-    const estimatePattern = /^(\d+[wdhm]\s*)+$/i;
-    if (!estimatePattern.test(trimmedEst)) {
+    if (!JIRA_DURATION_RE.test(trimmedEst)) {
       warnings.push({
         field: "originalEstimate",
         message: "Định dạng ước tính nên là dạng: 2d 4h 30m",
