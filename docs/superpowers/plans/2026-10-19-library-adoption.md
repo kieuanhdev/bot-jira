@@ -398,7 +398,7 @@ Tham số `tz` mặc định là `APP_TIMEZONE`.
 - `endDate = zonedMidnight(<ngày đầu kỳ sau>) - 1ms`.
 - "Năm/tháng hiện tại" và `isCurrentPeriod` lấy từ `zonedParts(now)`.
 
-- [ ] **Test được đổi có chủ đích** (giá trị cũ → mới):
+- [x] **Test được đổi có chủ đích** (giá trị cũ → mới):
 
 | File:dòng | Cũ | Mới |
 |---|---|---|
@@ -408,11 +408,11 @@ Tham số `tz` mặc định là `APP_TIMEZONE`.
 | `period.test.ts:52-56` (fallback) | `now.getFullYear()`, `now.getMonth()+1` | `zonedParts(now).year`, `.month` |
 | `leaderboard.test.ts:48-71` | `startsWith("2026-09-01")`, end `"2026-09-30"` | so sánh `toDateKey(startDate)` === `"2026-09-01"`, `toDateKey(endDate)` === `"2026-09-30"` (tương tự cho Q3 và cả năm) |
 
-- [ ] **Test mới:** một task xong lúc `2026-09-30T18:00:00Z` (01:00 ngày 1/10 giờ VN) được tính vào tháng 10, không tính vào tháng 9.
-- [ ] Chạy `calculator.test.ts`. Nếu fixture nào gần mốc tháng bị đổi kết quả, dừng lại và báo kèm tên fixture, không tự sửa.
-- [ ] Rà người dùng `startDate`/`endDate`. Chỗ nào hiển thị ngày hoặc `toISOString().slice` thì đổi sang `toDateKey(...)`.
-- [ ] Chạy `npm test` và `npm run test:tz`.
-- [ ] Commit `fix(leaderboard): period bounds at Vietnam midnight`.
+- [x] **Test mới:** một task xong lúc `2026-09-30T18:00:00Z` (01:00 ngày 1/10 giờ VN) được tính vào tháng 10, không tính vào tháng 9.
+- [x] Chạy `calculator.test.ts`. Nếu fixture nào gần mốc tháng bị đổi kết quả, dừng lại và báo kèm tên fixture, không tự sửa.
+- [x] Rà người dùng `startDate`/`endDate`. Chỗ nào hiển thị ngày hoặc `toISOString().slice` thì đổi sang `toDateKey(...)`.
+- [x] Chạy `npm test` và `npm run test:tz`.
+- [x] Commit `fix(leaderboard): period bounds at Vietnam midnight`.
 
 #### Task 2.6: Các khoá "hôm nay" đang dùng ngày UTC
 

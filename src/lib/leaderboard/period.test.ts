@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { zonedParts } from "@/lib/date";
 import { computePeriodBounds, parseLeaderboardParams, getDefaultLeaderboardPeriod } from "./period";
 
 
@@ -11,8 +12,8 @@ describe("Leaderboard Period Bounds & Parsing", () => {
       expect(period.year).toBe(2026);
       expect(period.month).toBe(10);
       expect(period.quarter).toBeNull();
-      expect(period.startDate?.toISOString()).toBe("2026-10-01T00:00:00.000Z");
-      expect(period.endDate?.toISOString()).toBe("2026-10-31T23:59:59.999Z");
+      expect(period.startDate?.toISOString()).toBe("2026-09-30T17:00:00.000Z");
+      expect(period.endDate?.toISOString()).toBe("2026-10-31T16:59:59.999Z");
     });
 
     it("computes quarter bounds accurately", () => {
@@ -22,8 +23,8 @@ describe("Leaderboard Period Bounds & Parsing", () => {
       expect(q4.year).toBe(2026);
       expect(q4.month).toBeNull();
       expect(q4.quarter).toBe(4);
-      expect(q4.startDate?.toISOString()).toBe("2026-10-01T00:00:00.000Z");
-      expect(q4.endDate?.toISOString()).toBe("2026-12-31T23:59:59.999Z");
+      expect(q4.startDate?.toISOString()).toBe("2026-09-30T17:00:00.000Z");
+      expect(q4.endDate?.toISOString()).toBe("2026-12-31T16:59:59.999Z");
     });
 
     it("computes year bounds accurately", () => {
@@ -33,8 +34,8 @@ describe("Leaderboard Period Bounds & Parsing", () => {
       expect(year.year).toBe(2026);
       expect(year.month).toBeNull();
       expect(year.quarter).toBeNull();
-      expect(year.startDate?.toISOString()).toBe("2026-01-01T00:00:00.000Z");
-      expect(year.endDate?.toISOString()).toBe("2026-12-31T23:59:59.999Z");
+      expect(year.startDate?.toISOString()).toBe("2025-12-31T17:00:00.000Z");
+      expect(year.endDate?.toISOString()).toBe("2026-12-31T16:59:59.999Z");
     });
 
     it("computes all-time bounds with null dates", () => {
@@ -52,8 +53,8 @@ describe("Leaderboard Period Bounds & Parsing", () => {
     it("falls back to current year/month when out of range", () => {
       const invalidYear = computePeriodBounds("month", 1990, 15);
       const now = new Date();
-      expect(invalidYear.year).toBe(now.getFullYear());
-      expect(invalidYear.month).toBe(now.getMonth() + 1);
+      expect(invalidYear.year).toBe(zonedParts(now).year);
+      expect(invalidYear.month).toBe(zonedParts(now).month);
     });
   });
 

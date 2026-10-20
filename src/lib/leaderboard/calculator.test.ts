@@ -314,6 +314,47 @@ describe("Leaderboard Calculator", () => {
       expect(result.myPerformance?.pointsToNextRank).toBe(1); // 8 - 8 + 1 = 1
     });
 
+    it("counts task completed at 2026-09-30T18:00:00Z (01:00 Oct 1 VN) in October, not in September", () => {
+      const periodOct = computePeriodBounds("month", 2026, 10);
+      const periodSep = computePeriodBounds("month", 2026, 9);
+
+      const issue: RawLeaderboardIssue = {
+        jiraKey: "P-OCT1",
+        summary: "Early morning Oct 1 VN task",
+        status: "Done",
+        statusCategory: "done",
+        statusChangedAt: new Date("2026-09-30T18:00:00Z"),
+        updatedAt: new Date("2026-09-30T18:00:00Z"),
+        createdAt: new Date("2026-09-01T10:00:00Z"),
+        assigneeJira: "alice",
+        points: 5,
+        priority: "High",
+        projectKey: "PROJ",
+      };
+
+      const resultOct = calculateLeaderboard({
+        period: periodOct,
+        issues: [issue],
+        dbUsers,
+        myAliases: ["alice"],
+        activeProjects: ["PROJ"],
+        selectedProject: "PROJ",
+      });
+      expect(resultOct.summary.totalTeamPoints).toBe(5);
+      expect(resultOct.members[0].completedTasks).toBe(1);
+
+      const resultSep = calculateLeaderboard({
+        period: periodSep,
+        issues: [issue],
+        dbUsers,
+        myAliases: ["alice"],
+        activeProjects: ["PROJ"],
+        selectedProject: "PROJ",
+      });
+      expect(resultSep.summary.totalTeamPoints).toBe(0);
+      expect(resultSep.members[0].completedTasks).toBe(0);
+    });
+
     it("filters out non-current in-progress tasks when period is in the past", () => {
       // Historical period: 2026-01
       const pastPeriod = computePeriodBounds("month", 2026, 1);

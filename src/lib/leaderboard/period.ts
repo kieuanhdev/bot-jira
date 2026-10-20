@@ -1,4 +1,4 @@
-import { APP_TIMEZONE, zonedParts } from "@/lib/date";
+import { APP_TIMEZONE, zonedMidnight, zonedParts } from "@/lib/date";
 import type {
   LeaderboardTimeframe,
   LeaderboardPeriodBounds,
@@ -12,7 +12,8 @@ export function computePeriodBounds(
   quarter?: number
 ): LeaderboardPeriodBounds {
   const now = new Date();
-  const currentYear = year && year >= 2020 && year <= 2040 ? year : now.getFullYear();
+  const nowParts = zonedParts(now, APP_TIMEZONE);
+  const currentYear = year && year >= 2020 && year <= 2040 ? year : nowParts.year;
 
   if (timeframe === "all") {
     return {
@@ -28,9 +29,9 @@ export function computePeriodBounds(
   }
 
   if (timeframe === "year") {
-    const startDate = new Date(Date.UTC(currentYear, 0, 1, 0, 0, 0, 0));
-    const endDate = new Date(Date.UTC(currentYear, 11, 31, 23, 59, 59, 999));
-    const isCurrentPeriod = currentYear === now.getFullYear();
+    const startDate = zonedMidnight(currentYear, 1, 1);
+    const endDate = new Date(zonedMidnight(currentYear + 1, 1, 1).getTime() - 1);
+    const isCurrentPeriod = currentYear === nowParts.year;
     return {
       startDate,
       endDate,
@@ -44,16 +45,16 @@ export function computePeriodBounds(
   }
 
   if (timeframe === "quarter") {
+    const nowQuarter = Math.floor((nowParts.month - 1) / 3) + 1;
     const currentQ =
-      quarter && quarter >= 1 && quarter <= 4 ? quarter : Math.floor(now.getMonth() / 3) + 1;
-    const startMonth = (currentQ - 1) * 3;
-    const endMonth = startMonth + 2;
-
-    const startDate = new Date(Date.UTC(currentYear, startMonth, 1, 0, 0, 0, 0));
-    const endDay = new Date(Date.UTC(currentYear, endMonth + 1, 0)).getUTCDate();
-    const endDate = new Date(Date.UTC(currentYear, endMonth, endDay, 23, 59, 59, 999));
+      quarter && quarter >= 1 && quarter <= 4 ? quarter : nowQuarter;
+    const startMonth = (currentQ - 1) * 3 + 1;
+    const startDate = zonedMidnight(currentYear, startMonth, 1);
+    const nextYear = currentQ === 4 ? currentYear + 1 : currentYear;
+    const nextMonth = currentQ === 4 ? 1 : currentQ * 3 + 1;
+    const endDate = new Date(zonedMidnight(nextYear, nextMonth, 1).getTime() - 1);
     const isCurrentPeriod =
-      currentYear === now.getFullYear() && currentQ === Math.floor(now.getMonth() / 3) + 1;
+      currentYear === nowParts.year && currentQ === nowQuarter;
 
     return {
       startDate,
@@ -68,12 +69,13 @@ export function computePeriodBounds(
   }
 
   // Default: month
-  const targetMonth = month && month >= 1 && month <= 12 ? month : now.getMonth() + 1;
-  const startDate = new Date(Date.UTC(currentYear, targetMonth - 1, 1, 0, 0, 0, 0));
-  const endDay = new Date(Date.UTC(currentYear, targetMonth, 0)).getUTCDate();
-  const endDate = new Date(Date.UTC(currentYear, targetMonth - 1, endDay, 23, 59, 59, 999));
+  const targetMonth = month && month >= 1 && month <= 12 ? month : nowParts.month;
+  const startDate = zonedMidnight(currentYear, targetMonth, 1);
+  const nextYear = targetMonth === 12 ? currentYear + 1 : currentYear;
+  const nextMonth = targetMonth === 12 ? 1 : targetMonth + 1;
+  const endDate = new Date(zonedMidnight(nextYear, nextMonth, 1).getTime() - 1);
   const isCurrentPeriod =
-    currentYear === now.getFullYear() && targetMonth === now.getMonth() + 1;
+    currentYear === nowParts.year && targetMonth === nowParts.month;
 
   return {
     startDate,

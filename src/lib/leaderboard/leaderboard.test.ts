@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { toDateKey } from "@/lib/date";
 import { getTier, getNextTier, computePeriodBounds } from "./types";
 
 describe("Leaderboard Tier System", () => {
@@ -48,8 +49,8 @@ describe("Leaderboard Period Bounds", () => {
     const period = computePeriodBounds("month", 2026, 9);
     expect(period.timeframe).toBe("month");
     expect(period.periodLabel).toBe("Tháng 9/2026");
-    expect(period.startDate?.toISOString().startsWith("2026-09-01")).toBe(true);
-    expect(period.endDate?.toISOString().startsWith("2026-09-30")).toBe(true);
+    expect(toDateKey(period.startDate!)).toBe("2026-09-01");
+    expect(toDateKey(period.endDate!)).toBe("2026-09-30");
   });
 
   it("computes quarter bounds correctly", () => {
@@ -57,16 +58,16 @@ describe("Leaderboard Period Bounds", () => {
     expect(q3.timeframe).toBe("quarter");
     expect(q3.periodLabel).toBe("Quý 3/2026");
     // Q3 is Jul 1 - Sep 30
-    expect(q3.startDate?.toISOString().startsWith("2026-07-01")).toBe(true);
-    expect(q3.endDate?.toISOString().startsWith("2026-09-30")).toBe(true);
+    expect(toDateKey(q3.startDate!)).toBe("2026-07-01");
+    expect(toDateKey(q3.endDate!)).toBe("2026-09-30");
   });
 
   it("computes year bounds correctly", () => {
     const year = computePeriodBounds("year", 2026);
     expect(year.timeframe).toBe("year");
     expect(year.periodLabel).toBe("Năm 2026");
-    expect(year.startDate?.toISOString().startsWith("2026-01-01")).toBe(true);
-    expect(year.endDate?.toISOString().startsWith("2026-12-31")).toBe(true);
+    expect(toDateKey(year.startDate!)).toBe("2026-01-01");
+    expect(toDateKey(year.endDate!)).toBe("2026-12-31");
   });
 
   it("computes all-time bounds correctly", () => {
@@ -149,6 +150,24 @@ describe("Leaderboard Monthly Task Completion Logic", () => {
     const resolvedInSep = "2026-09-20T10:00:00.000Z";
     const included = shouldIncludeTaskInPeriod("done", null, resolvedInSep, updatedInOct, null, "month");
     expect(included).toBe(true);
+  });
+
+  it("counts task completed at 2026-09-30T18:00:00Z (01:00 Oct 1 VN) in October, not in September", () => {
+    const periodSep = computePeriodBounds("month", 2026, 9);
+    const periodOct = computePeriodBounds("month", 2026, 10);
+    const completedAt = new Date("2026-09-30T18:00:00Z");
+
+    const inSep = Boolean(
+      completedAt.getTime() >= periodSep.startDate!.getTime() &&
+      completedAt.getTime() <= periodSep.endDate!.getTime()
+    );
+    const inOct = Boolean(
+      completedAt.getTime() >= periodOct.startDate!.getTime() &&
+      completedAt.getTime() <= periodOct.endDate!.getTime()
+    );
+
+    expect(inSep).toBe(false);
+    expect(inOct).toBe(true);
   });
 });
 
