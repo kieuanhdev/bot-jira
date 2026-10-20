@@ -6,9 +6,13 @@ import { ListFilter, Plus, RefreshCw } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { meKeys } from "@/lib/query-keys";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 const tabCls = (active: boolean) =>
   "flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
@@ -30,15 +34,19 @@ export function SentryProjectTabs({
 
   const { data: prefs } = useQuery({
     queryKey: meKeys.prefs,
-    queryFn: () => api<{ projects: string[]; available: string[] }>("/api/me/preferences"),
+    queryFn: () =>
+      api<{ projects: string[]; available: string[] }>("/api/me/preferences"),
   });
 
   const preferred = useMemo(() => prefs?.projects ?? [], [prefs?.projects]);
-  const availableKeys = useMemo(() => prefs?.available ?? [], [prefs?.available]);
+  const availableKeys = useMemo(
+    () => prefs?.available ?? [],
+    [prefs?.available],
+  );
 
   const effectiveProjects = useMemo(
     () => (preferred.length === 0 ? availableKeys : preferred),
-    [preferred, availableKeys]
+    [preferred, availableKeys],
   );
 
   const [showPicker, setShowPicker] = useState(false);
@@ -63,7 +71,10 @@ export function SentryProjectTabs({
   };
 
   const savePrefs = async (next: string[]) => {
-    await api("/api/me/preferences", { method: "PUT", body: { projects: next } });
+    await api("/api/me/preferences", {
+      method: "PUT",
+      body: { projects: next },
+    });
     await qc.invalidateQueries({ queryKey: meKeys.prefs });
   };
 
@@ -91,9 +102,13 @@ export function SentryProjectTabs({
     setValidating(true);
     setValidateError(null);
     try {
-      const res = await api<{ exists: boolean; key: string }>(`/api/projects/validate?key=${encodeURIComponent(k)}`);
+      const res = await api<{ exists: boolean; key: string }>(
+        `/api/projects/validate?key=${encodeURIComponent(k)}`,
+      );
       if (res.exists) {
-        const next = Array.from(new Set([...(pickerSelection ?? effectiveProjects), res.key]));
+        const next = Array.from(
+          new Set([...(pickerSelection ?? effectiveProjects), res.key]),
+        );
         setPickerSelection(next);
         setNewKey("");
       } else {
@@ -127,94 +142,104 @@ export function SentryProjectTabs({
         </button>
       ))}
 
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => (showPicker ? closePicker() : openPicker())}
-          className={
-            "flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
-            (preferred.length > 0
-              ? "border border-primary/40 bg-primary/10 text-primary"
-              : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground")
-          }
-        >
-          <ListFilter className="h-4 w-4" />
-          {preferred.length > 0 ? `${preferred.length} đã chọn` : "Chọn dự án"}
-        </button>
-
-        {showPicker && (
-          <Card className="absolute left-0 top-full z-20 mt-1 w-72 p-3 shadow-lg">
-            <p className="mb-2 text-xs font-semibold text-muted-foreground">
-              Hiển thị dự án
-            </p>
-            <div className="flex max-h-56 flex-col gap-1 overflow-auto">
-              {availableKeys.map((key) => (
-                <label
-                  key={key}
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
-                >
-                  <Checkbox
-                    checked={pickerSet.has(key)}
-                    onCheckedChange={() => toggleKey(key)}
-                  />
-                  <span className="flex-1 font-medium">{key}</span>
-                </label>
-              ))}
-            </div>
-
-            <div className="mt-2.5 border-t border-border pt-2.5">
-              <p className="mb-1 text-2xs font-semibold text-muted-foreground">
-                Nhập dự án muốn có
-              </p>
-              <div className="flex gap-1.5">
-                <Input
-                  value={newKey}
-                  onChange={(e) => setNewKey(e.target.value)}
-                  placeholder="Mã dự án (VD: ABC)"
-                  className="h-8 font-mono text-xs uppercase"
-                  disabled={validating}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      void addProject();
-                    }
-                  }}
-                />
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={validating || !newKey.trim()}
-                  onClick={() => void addProject()}
-                  className="h-8 shrink-0 cursor-pointer px-2.5 text-xs gap-1"
-                >
-                  {validating ? (
-                    <RefreshCw className="h-3 w-3 animate-spin motion-reduce:animate-none" />
-                  ) : (
-                    <Plus className="h-3 w-3" />
-                  )}
-                  Thêm
-                </Button>
-              </div>
-              {validateError && (
-                <p className="mt-1 text-2xs font-medium text-destructive">{validateError}</p>
-              )}
-            </div>
-
-            <div className="mt-2.5 flex items-center justify-between border-t border-border pt-2">
-              <button
-                type="button"
-                onClick={selectAll}
-                className="cursor-pointer text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+      <Popover
+        open={showPicker}
+        onOpenChange={(o) => (o ? openPicker() : closePicker())}
+      >
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={
+              "flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
+              (preferred.length > 0
+                ? "border border-primary/40 bg-primary/10 text-primary"
+                : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground")
+            }
+          >
+            <ListFilter className="h-4 w-4" />
+            {preferred.length > 0
+              ? `${preferred.length} đã chọn`
+              : "Chọn dự án"}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72 p-3">
+          <p className="mb-2 text-xs font-semibold text-muted-foreground">
+            Hiển thị dự án
+          </p>
+          <div className="flex max-h-56 flex-col gap-1 overflow-auto">
+            {availableKeys.map((key) => (
+              <label
+                key={key}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
               >
-                Chọn tất cả
-              </button>
-              <Button size="sm" variant="ghost" className="cursor-pointer" onClick={() => void commitPicker()}>
-                Xong
+                <Checkbox
+                  checked={pickerSet.has(key)}
+                  onCheckedChange={() => toggleKey(key)}
+                />
+                <span className="flex-1 font-medium">{key}</span>
+              </label>
+            ))}
+          </div>
+
+          <div className="mt-2.5 border-t border-border pt-2.5">
+            <p className="mb-1 text-2xs font-semibold text-muted-foreground">
+              Nhập dự án muốn có
+            </p>
+            <div className="flex gap-1.5">
+              <Input
+                value={newKey}
+                onChange={(e) => setNewKey(e.target.value)}
+                placeholder="Mã dự án (VD: ABC)"
+                className="h-8 font-mono text-xs uppercase"
+                disabled={validating}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void addProject();
+                  }
+                }}
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={validating || !newKey.trim()}
+                onClick={() => void addProject()}
+                className="h-8 shrink-0 cursor-pointer px-2.5 text-xs gap-1"
+              >
+                {validating ? (
+                  <RefreshCw className="h-3 w-3 animate-spin motion-reduce:animate-none" />
+                ) : (
+                  <Plus className="h-3 w-3" />
+                )}
+                Thêm
               </Button>
             </div>
-          </Card>
-        )}
-      </div>
+            {validateError && (
+              <p className="mt-1 text-2xs font-medium text-destructive">
+                {validateError}
+              </p>
+            )}
+          </div>
+
+          <div className="mt-2.5 flex items-center justify-between border-t border-border pt-2">
+            <button
+              type="button"
+              onClick={selectAll}
+              className="cursor-pointer text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              Chọn tất cả
+            </button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="cursor-pointer"
+              onClick={() => void commitPicker()}
+            >
+              Xong
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

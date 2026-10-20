@@ -802,10 +802,10 @@ Cả hai áp dụng `MAX_LABEL_LENGTH`, `MAX_LABELS_COUNT`, so trùng không ph�
 
 **Interfaces:** `Popover open={showPicker} onOpenChange={(o) => (o ? openPicker() : closePicker())}`. Sentry làm tương tự với state riêng của nó.
 
-- [ ] Quy tắc: đóng popup bằng Esc hoặc bấm ra ngoài thì **bỏ** lựa chọn nháp, giống `closePicker`. Chỉ nút "Xong" mới lưu.
-- [ ] Nội dung (danh sách checkbox, ô thêm project, "Chọn tất cả", "Xong") giữ nguyên, chuyển vào `PopoverContent className="w-72 p-3"`.
-- [ ] QA tay: Esc đóng popup, bấm ra ngoài đóng popup, mở lại thì thấy lựa chọn đã lưu chứ không phải bản nháp.
-- [ ] Commit `fix(board,sentry): project pickers close on Escape and outside click`.
+- [x] Quy tắc: đóng popup bằng Esc hoặc bấm ra ngoài thì **bỏ** lựa chọn nháp, giống `closePicker`. Chỉ nút "Xong" mới lưu.
+- [x] Nội dung (danh sách checkbox, ô thêm project, "Chọn tất cả", "Xong") giữ nguyên, chuyển vào `PopoverContent className="w-72 p-3"`.
+- [x] QA tay: Esc đóng popup, bấm ra ngoài đóng popup, mở lại thì thấy lựa chọn đã lưu chứ không phải bản nháp.
+- [x] Commit `fix(board,sentry): project pickers close on Escape and outside click`.
 
 #### Task 5.8: QuickPanel dùng `ui/sheet`, xoá `useFocusTrap`
 
