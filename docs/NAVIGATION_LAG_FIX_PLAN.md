@@ -250,6 +250,12 @@ Kết quả đo (production build, Chrome headless, script `nav.mjs`: click side
 | `getProjectMembers` MHRM | ~155 | ~54 |
 | `getLeaderboardData` | ~100-140 | ~41 |
 
+### Phase 3.4 / 3.6 đã triển khai, 3.5 bỏ qua (2026-10-20)
+
+- 3.4: thêm tuỳ chọn `facetsOnly` cho `queryBranches` ([branch-query.ts](../src/lib/bitbucket/branch-query.ts)), chỉ tính facets + freshness, bỏ qua truy vấn rows, count và 6 count của summary. Trang `/branches` và `/api/branches?facetsOnly=1` dùng nó thay cho `pageSize=1`. Facets và freshness giống hệt bản cũ; thời gian warm ~79 ms → ~11 ms (cold ~383 → ~19 ms).
+- 3.6: list `/api/issues` không còn select `reasoning`, `risks`, `missingInformation`, `similarTasks` của `aiScore`; không component board nào đọc các trường này (chỉ trang chi tiết, dùng `live.ts` riêng). Chưa đo kích thước payload.
+- 3.5: **bỏ qua.** `listActiveProjects` ~2,2 ms và một lần đọc user ~1,5 ms mỗi lần gọi, không đáng để thêm cache TTL (kèm rủi ro dữ liệu catalog cũ ở 29 chỗ gọi).
+
 ## 9. Thứ tự triển khai đề xuất
 
 1. Phase 0 (đo).
