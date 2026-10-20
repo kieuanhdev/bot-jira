@@ -97,7 +97,12 @@ export interface RetryOptions<T> {
   baseDelayMs: number;
   retryOn: (err: unknown, result?: T) => boolean;
   sleep?: (ms: number) => Promise<void>;
-  getDelayMs?: (err: unknown, result: T | undefined, defaultDelayMs: number) => number;
+  getDelayMs?: (
+    err: unknown,
+    result: T | undefined,
+    defaultDelayMs: number,
+    attempt: number
+  ) => number;
 }
 
 /**
@@ -139,7 +144,7 @@ export async function withRetry<T>(
         }
 
         if (getDelayMs) {
-          delay = getDelayMs(undefined, result, delay);
+          delay = getDelayMs(undefined, result, delay, attempt);
         }
 
         await sleep(delay);
@@ -154,7 +159,7 @@ export async function withRetry<T>(
         );
 
         if (getDelayMs) {
-          delay = getDelayMs(err, undefined, delay);
+          delay = getDelayMs(err, undefined, delay, attempt);
         }
 
         await sleep(delay);

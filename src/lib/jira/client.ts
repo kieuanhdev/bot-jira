@@ -1,5 +1,5 @@
 import { env } from "@/lib/env";
-import { timeoutSignal } from "@/lib/http/fetch-with-timeout";
+import { parseRetryAfterHeader, timeoutSignal, withRetry } from "@/lib/http/fetch-with-timeout";
 import { getEpicLinkFieldIds, isEpicLinkField, setEpicLinkFieldIds } from "@/lib/issues/epic";
 import type { JiraFieldDefinition, JiraMyPermissions, JiraUser } from "./types";
 import type { JiraAuth } from "./auth";
@@ -101,14 +101,6 @@ export function jiraPointsFromFields(fields: Record<string, unknown>): {
     }
   }
   return { points: null, fieldId: candidates[0]?.id ?? null };
-}
-
-function parseRetryAfterMs(value: string | null): number | null {
-  if (!value) return null;
-  const seconds = Number(value);
-  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
-  const date = Date.parse(value);
-  return Number.isNaN(date) ? null : Math.max(0, date - Date.now());
 }
 
 export function extractJiraErrorDetail(
@@ -327,7 +319,7 @@ async function requestOnce<T>(
         response.status,
         response.status === 408 || response.status === 429 || response.status >= 500,
         detail,
-        parseRetryAfterMs(response.headers.get("retry-after"))
+        parseRetryAfterHeader(response.headers.get("retry-after"))
       );
     }
     if (response.status === 204) return undefined as T;
@@ -359,22 +351,18 @@ async function request<T>(
   init: RequestInit = {},
   auth?: JiraAuth
 ): Promise<T> {
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      return await requestOnce<T>(path, init, auth);
-    } catch (error) {
-      lastError = error;
-      const isRetryable = error instanceof JiraRequestError && error.retryable;
-      if (!isRetryable || attempt >= MAX_RETRIES) break;
+  return withRetry(() => requestOnce<T>(path, init, auth), {
+    retries: MAX_RETRIES,
+    baseDelayMs: RETRY_BASE_MS,
+    retryOn: (error) => error instanceof JiraRequestError && error.retryable,
+    getDelayMs: (error, _result, _defaultDelayMs, attempt) => {
       const retryAfterMs = error instanceof JiraRequestError ? error.retryAfterMs : null;
-      const delayMs =
-        Math.min(retryAfterMs ?? RETRY_BASE_MS * 2 ** attempt, MAX_RETRY_DELAY_MS) +
-        Math.floor(Math.random() * 500);
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
-  }
-  throw lastError;
+      return (
+        Math.min(retryAfterMs ?? RETRY_BASE_MS * 2 ** (attempt - 1), MAX_RETRY_DELAY_MS) +
+        Math.floor(Math.random() * 500)
+      );
+    },
+  });
 }
 
 export function jiraWith(auth?: JiraAuth) {

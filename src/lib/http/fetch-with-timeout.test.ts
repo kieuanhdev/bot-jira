@@ -258,4 +258,16 @@ describe("withRetry", () => {
     expect(fn).toHaveBeenCalledTimes(3); // attempt 1 + 2 retries
     expect(sleep).toHaveBeenCalledTimes(2);
   });
+
+  it("passes the failed attempt number (from 1) to getDelayMs", async () => {
+    const fn = vi.fn().mockRejectedValue(new Error("boom"));
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const getDelayMs = vi.fn().mockReturnValue(1);
+
+    await expect(
+      withRetry(fn, { retries: 2, baseDelayMs: 50, retryOn: () => true, sleep, getDelayMs })
+    ).rejects.toThrow("boom");
+
+    expect(getDelayMs.mock.calls.map((c) => c[3])).toEqual([1, 2]);
+  });
 });

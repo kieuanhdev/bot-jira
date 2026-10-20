@@ -603,8 +603,8 @@ Task 3.5 xong thì `grep -rn "\.json()" src/app/api src/lib/*/route-service.ts s
 - `RetryOptions.getDelayMs` hiện không nhận `attempt`. Thêm tham số thứ tư không bắt buộc: `getDelayMs?(err, result, defaultDelayMs, attempt: number)`, với `attempt` là lần vừa fail (đếm từ 1). Caller Bitbucket không bị ảnh hưởng. Thêm 1 test `withRetry` khẳng định `attempt` truyền vào là 1, rồi 2.
 - Xoá `parseRetryAfterMs`. `requestOnce` gọi `parseRetryAfterHeader`.
 
-- [ ] 6 test transport ở `client-transport.test.ts:157-247` và các test của `withRetry` phải xanh mà không sửa test. Lưu ý `attempt` của `withRetry` đếm từ 1, của vòng cũ đếm từ 0.
-- [ ] Commit `refactor(jira): reuse withRetry and parseRetryAfterHeader`.
+- [x] 6 test transport ở `client-transport.test.ts:157-247` và các test của `withRetry` phải xanh mà không sửa test. Lưu ý `attempt` của `withRetry` đếm từ 1, của vòng cũ đếm từ 0.
+- [x] Commit `refactor(jira): reuse withRetry and parseRetryAfterHeader`.
 
 #### Task 4.3: Cache policy có giới hạn bằng lru-cache; board-options dùng chung
 
