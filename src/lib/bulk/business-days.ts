@@ -3,6 +3,8 @@
  * Implements section 18.6 of docs/AI_BULK_TASK_GENERATION_PLAN.md.
  */
 
+import { dateKeyToUtcMidnight, isDateKey, utcMidnightToDateKey } from "@/lib/date";
+
 export type ProjectCalendar = {
   /** Array of ISO dates 'YYYY-MM-DD' that are non-working holidays */
   holidays?: string[];
@@ -33,41 +35,25 @@ export type DueDateEvaluationResult = {
   calculatedBaselineDate: string | null;
 };
 
-const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-
 /**
  * Validates whether a string is a valid ISO date YYYY-MM-DD.
  */
 export function isValidDateString(dateStr: string | null | undefined): boolean {
-  if (!dateStr || typeof dateStr !== "string") return false;
-  if (!ISO_DATE_REGEX.test(dateStr)) return false;
-  const [year, month, day] = dateStr.split("-").map((v) => parseInt(v, 10));
-  if (month < 1 || month > 12) return false;
-  if (day < 1 || day > 31) return false;
-  const d = new Date(Date.UTC(year, month - 1, day));
-  return (
-    d.getUTCFullYear() === year &&
-    d.getUTCMonth() === month - 1 &&
-    d.getUTCDate() === day
-  );
+  return isDateKey(dateStr);
 }
 
 /**
  * Formats a Date object to YYYY-MM-DD in UTC.
  */
 export function formatIsoDate(d: Date): string {
-  const year = d.getUTCFullYear();
-  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return utcMidnightToDateKey(d);
 }
 
 /**
- * Parses YYYY-MM-DD string into a UTC Date object at midnight.
+ * Parses YYYY-MM-DD string into a UTC Date object at midnight. Throws on an invalid date.
  */
 export function parseIsoDate(dateStr: string): Date {
-  const [year, month, day] = dateStr.split("-").map((v) => parseInt(v, 10));
-  return new Date(Date.UTC(year, month - 1, day));
+  return dateKeyToUtcMidnight(dateStr);
 }
 
 /**

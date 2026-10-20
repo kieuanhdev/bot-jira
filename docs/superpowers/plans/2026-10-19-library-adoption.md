@@ -453,8 +453,8 @@ Tham số `tz` mặc định là `APP_TIMEZONE`.
 - `isValidIsoDate` (ở cả csv-parser và validation) và `isValidDateString` (business-days) giữ tên export, bên trong gọi `isDateKey`.
 - `parseIsoDate`/`formatIsoDate` trong business-days thành `dateKeyToUtcMidnight`/`utcMidnightToDateKey`.
 
-- [ ] Toàn bộ test hiện có của `csv-parser`, `validation`, `business-days` và `detail-route-service` phải xanh mà không sửa test.
-- [ ] Commit `refactor(date): single ISO date validator`.
+- [x] Toàn bộ test hiện có của `csv-parser`, `validation`, `business-days` và `detail-route-service` phải xanh mà không sửa test.
+- [x] Commit `refactor(date): single ISO date validator`.
 
 ---
 

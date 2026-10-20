@@ -10,6 +10,7 @@ import { audit } from "@/lib/audit";
 import { markIssuesDeleted } from "@/lib/issues/deleted";
 import { getProjectPeopleFields } from "@/lib/jira/people-fields";
 import { logSwallowed } from "@/lib/logger";
+import { isDateKey } from "@/lib/date";
 
 export async function handleIssueDetailRequest(req: Request, ctx: { params: Promise<{ key: string }> }) {
   const session = await getSession();
@@ -96,7 +97,7 @@ export async function handleIssueUpdateRequest(
 
     if (patch.issueType !== undefined) updatePayload.issueType = patch.issueType;
     if (patch.dueDate !== undefined) {
-      if (patch.dueDate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(patch.dueDate)) {
+      if (patch.dueDate !== null && !isDateKey(patch.dueDate)) {
         return NextResponse.json({ error: "dueDate must be YYYY-MM-DD" }, { status: 400 });
       }
       updatePayload.dueDate = patch.dueDate;

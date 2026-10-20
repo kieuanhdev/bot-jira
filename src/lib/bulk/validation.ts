@@ -9,6 +9,7 @@ import {
   MAX_KEYS,
   MAX_FILTER_KEYS,
 } from "./contracts";
+import { isDateKey } from "@/lib/date";
 
 export type { ValidationResult } from "./contracts";
 
@@ -44,9 +45,7 @@ export function normalizeKey(k: string): string {
 }
 
 export function isValidIsoDate(value: string): boolean {
-  if (!ISO_DATE_RE.test(value)) return false;
-  const date = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  return isDateKey(value);
 }
 
 export function isNonEmptyString(v: unknown): v is string {

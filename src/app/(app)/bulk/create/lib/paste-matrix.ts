@@ -4,6 +4,7 @@ import {
   MAX_BULK_CREATE_ITEMS,
 } from "@/lib/bulk/create-types";
 import { generateUniqueClientRef } from "@/lib/bulk/client-ref";
+import { isDateKey } from "@/lib/date";
 
 export interface PasteResult {
   items: BulkCreateRowInput[];
@@ -104,7 +105,7 @@ export function parsePastedSpreadsheet(
         }
 
         // Try match date (YYYY-MM-DD or DD/MM/YYYY)
-        if (metadata.supportsDueDate && /^\d{4}-\d{2}-\d{2}$/.test(val) && !targetRow.dueDate) {
+        if (metadata.supportsDueDate && isDateKey(val) && !targetRow.dueDate) {
           targetRow.dueDate = val;
           continue;
         }

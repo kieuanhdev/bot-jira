@@ -4,6 +4,7 @@ import {
   MAX_BULK_CREATE_ITEMS,
 } from "./create-types";
 import { generateUniqueClientRef } from "./client-ref";
+import { isDateKey } from "@/lib/date";
 
 export type ParsedCsvRowError = {
   line: number;
@@ -122,13 +123,7 @@ const CANONICAL_FIELD_MAP: Record<string, keyof BulkCreateRowInput | "parentRef"
  * Validates strictly that date string is YYYY-MM-DD and exists in calendar (handles leap years, month lengths).
  */
 export function isValidIsoDate(dateStr: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
-  const [y, m, d] = dateStr.split("-").map((v) => parseInt(v, 10));
-  if (m < 1 || m > 12) return false;
-  if (d < 1) return false;
-  const isLeap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
-  const daysInMonth = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  return d <= daysInMonth[m - 1];
+  return isDateKey(dateStr);
 }
 
 /**
