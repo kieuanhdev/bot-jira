@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { redactSecrets } from "@/lib/ai/sanitizer";
 
 export type SentryIssue = {
   id: number;
@@ -31,15 +32,7 @@ const DEFAULT_TIMEOUT_MS = 15_000;
  */
 export function sanitizeSentryErrorMessage(raw: string): string {
   if (!raw) return "";
-  let sanitized = raw;
-
-  // Redact Bearer / auth tokens
-  sanitized = sanitized.replace(/\bBearer\s+[A-Za-z0-9._~+/-]{10,}/gi, "Bearer [REDACTED_TOKEN]");
-
-  // Redact sensitive query parameters
-  sanitized = sanitized.replace(/([?&](?:token|auth|key|secret)=)[^&\s]+/gi, "$1[REDACTED]");
-
-  return sanitized.slice(0, 300);
+  return redactSecrets(raw).slice(0, 300);
 }
 
 /** Non-2xx response from Sentry. `message` is already sanitized (no tokens or secret query params). */

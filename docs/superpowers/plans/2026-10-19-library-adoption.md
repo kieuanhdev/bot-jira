@@ -262,13 +262,13 @@ Năm trường hợp dễ gây lỗi nhất mà test theo từng task dễ bỏ 
   - token trong Discord webhook
 - Không đổi chữ ký các hàm sau, chỉ đổi phần bên trong: `sanitizeErrorMessage` (cắt 500), `sanitizeSentryErrorMessage` (cắt 300), `sanitizeSyncError` (null vào thì null ra, cắt 300).
 
-- [ ] **Viết test trước** trong `sanitizer.test.ts`:
+- [x] **Viết test trước** trong `sanitizer.test.ts`:
   - `redactSecrets("Bot abcdefghijklmnop")` === `"Bot [REDACTED_TOKEN]"`
   - `redactSecrets("x?auth=abc123")` chứa `auth=[REDACTED]`
   - `redactSecrets("password=hunter2hunter2")` không chứa `hunter2`
-- [ ] **Cài đặt:** 3 hàm còn lại gọi `redactSecrets(raw).slice(0, N)`.
-- [ ] **Test được đổi có chủ đích:** `project-sync.test.ts` hiện kỳ vọng `token=***`, đổi thành kỳ vọng định dạng `[REDACTED]` của `redactSecrets`. Ghi rõ từng assertion cũ → mới trong commit message.
-- [ ] Commit `refactor(security): single redactSecrets used by notify, sentry and sync errors`.
+- [x] **Cài đặt:** 3 hàm còn lại gọi `redactSecrets(raw).slice(0, N)`.
+- [x] **Test được đổi có chủ đích:** `project-sync.test.ts` hiện kỳ vọng `token=***`, đổi thành kỳ vọng định dạng `[REDACTED]` của `redactSecrets`. Ghi rõ từng assertion cũ → mới trong commit message.
+- [x] Commit `refactor(security): single redactSecrets used by notify, sentry and sync errors`.
 
 ---
 

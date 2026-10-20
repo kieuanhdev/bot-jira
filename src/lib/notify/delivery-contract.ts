@@ -1,3 +1,5 @@
+import { redactSecrets } from "@/lib/ai/sanitizer";
+
 /**
  * Notification delivery contract, error classification, and outbox state machine.
  *
@@ -48,27 +50,7 @@ const MAX_ERROR_LENGTH = 500;
  */
 export function sanitizeErrorMessage(raw: string): string {
   if (!raw) return "";
-  let sanitized = raw;
-
-  // Redact Discord webhook token in URLs: https://discord.com/api/webhooks/<id>/<token>
-  sanitized = sanitized.replace(
-    /(https?:\/\/(?:[a-zA-Z0-9-]+\.)?discord(?:app)?\.com\/api(?:\/v\d+)?\/webhooks\/\d+\/)([A-Za-z0-9_-]+)/g,
-    "$1[REDACTED_WEBHOOK_TOKEN]"
-  );
-
-  // Redact Bot or Bearer tokens
-  sanitized = sanitized.replace(
-    /\b(Bot|Bearer)\s+[A-Za-z0-9._~+/-]{10,}/gi,
-    "$1 [REDACTED_TOKEN]"
-  );
-
-  // Redact generic token query params: ?token=xxx or &token=xxx
-  sanitized = sanitized.replace(
-    /([?&](?:token|secret|key|api_key)=)[^&\s]+/gi,
-    "$1[REDACTED]"
-  );
-
-  return sanitized.slice(0, MAX_ERROR_LENGTH);
+  return redactSecrets(raw).slice(0, MAX_ERROR_LENGTH);
 }
 
 /**

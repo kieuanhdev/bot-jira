@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
+import { redactSecrets } from "@/lib/ai/sanitizer";
 import { normalizeProjectKey, setProjectSyncEnabled } from "@/lib/jira/project-catalog";
 import { enqueueJiraDispatch, enqueueJiraProjectSync } from "@/lib/queue/boss";
 import {
@@ -33,7 +34,8 @@ type Actor = { id: string; email?: string | null };
 
 /** Strip credential-looking fragments before showing a sync error in the browser. */
 export function sanitizeSyncError(error: string | null): string | null {
-  return error ? error.replace(/(token|password|bearer|auth)[=:\s]+[^\s,;]+/gi, "$1=***").slice(0, 300) : null;
+  if (error === null) return null;
+  return redactSecrets(error).slice(0, 300);
 }
 
 export function deriveSyncState(

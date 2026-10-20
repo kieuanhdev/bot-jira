@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sanitizeAiErrorMessage } from "./sanitizer";
+import { redactSecrets, sanitizeAiErrorMessage } from "./sanitizer";
 
 describe("sanitizeAiErrorMessage", () => {
   it("returns empty string when input is empty or null-like", () => {
@@ -63,5 +63,19 @@ describe("sanitizeAiErrorMessage", () => {
     const sanitized = sanitizeAiErrorMessage(longMsg);
     expect(sanitized.length).toBe(500);
     expect(sanitized).toBe("A".repeat(500));
+  });
+});
+
+describe("redactSecrets", () => {
+  it("redacts Bot authorization tokens", () => {
+    expect(redactSecrets("Bot abcdefghijklmnop")).toBe("Bot [REDACTED_TOKEN]");
+  });
+
+  it("redacts auth query parameters", () => {
+    expect(redactSecrets("x?auth=abc123")).toContain("auth=[REDACTED]");
+  });
+
+  it("redacts password key-value assignments", () => {
+    expect(redactSecrets("password=hunter2hunter2")).not.toContain("hunter2");
   });
 });

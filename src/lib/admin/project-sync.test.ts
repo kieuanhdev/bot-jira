@@ -66,7 +66,7 @@ describe("admin project sync", () => {
   });
 
   it("masks credentials in sync errors", () => {
-    expect(sanitizeSyncError("401 token=abc123 rejected")).toBe("401 token=*** rejected");
+    expect(sanitizeSyncError("401 token=abc123 rejected")).toBe("401 token=[REDACTED] rejected");
     expect(sanitizeSyncError(null)).toBeNull();
   });
 
