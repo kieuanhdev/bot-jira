@@ -13,7 +13,7 @@ export function SessionHydrator({
   children: ReactNode;
 }) {
   return (
-    <SessionProvider session={session}>
+    <SessionProvider session={session} refetchOnWindowFocus={false}>
       <NotificationEvents />
       {children}
     </SessionProvider>

@@ -10,7 +10,10 @@ import { queryPolicy } from "@/lib/query-policy";
 // 1. Root SessionProvider does NOT receive initial session to keep public auth routes
 //    (/login, /register) completely static (TASK-11). Passing session at root layout would
 //    force all pages into dynamic SSR. A single mount-time /api/auth/session call is an intentional tradeoff.
-// 2. SessionCacheBoundary MUST remain here at root level rather than moving into SessionHydrator.
+// 2. Both SessionProviders set refetchOnWindowFocus={false}: returning to the tab would otherwise
+//    fire /api/auth/session twice (root + (app) hydrator). The session is still refreshed on mount
+//    and on sign-in/out.
+// 3. SessionCacheBoundary MUST remain here at root level rather than moving into SessionHydrator.
 //    Client-side login (login-client.tsx) uses signIn(..., { redirect: false }) + router.push.
 //    If the boundary were inside (app)/SessionHydrator, it would remount with undefined ref upon entering
 //    (app) and miss user changes, leaking user A cached queries to user B. Root placement ensures
@@ -46,7 +49,7 @@ export function Providers({ children }: { children: ReactNode }) {
       })
   );
   return (
-    <SessionProvider>
+    <SessionProvider refetchOnWindowFocus={false}>
       <QueryClientProvider client={queryClient}>
         <SessionCacheBoundary />
         {children}
