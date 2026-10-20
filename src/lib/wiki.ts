@@ -1,3 +1,5 @@
+import DOMPurify from "isomorphic-dompurify";
+
 /**
  * Minimal Jira "wiki markup" → safe HTML.
  *
@@ -182,5 +184,7 @@ export function wikiToHtml(input: string, opts: WikiOptions = {}): string {
   if (inCodeBlock && code.length) out.push(`<pre><code>${esc(code.join("\n"))}</code></pre>`);
   closeList();
 
-  return out.join("\n");
+  return DOMPurify.sanitize(out.join("\n"), {
+    ADD_ATTR: ["target"],
+  });
 }

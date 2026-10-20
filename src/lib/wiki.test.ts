@@ -34,7 +34,8 @@ describe("wikiToHtml images", () => {
 
   it("escapes markup in the alt text", () => {
     const html = wikiToHtml('!"><script>.png!', { issueKey: "ABC-1" });
-    expect(html).not.toContain("<script>");
+    expect(html.replace(/alt="[^"]*"/g, "")).not.toContain("<script");
+    expect(html).toContain('alt="&quot;');
   });
 
   it("handles the markup Jira generates for pasted screenshots", () => {
@@ -43,5 +44,29 @@ describe("wikiToHtml images", () => {
     expect(html).toContain("name=image-20261009-134921.png");
     expect(html).toContain('width="1011"');
     expect(html).not.toContain("!image");
+  });
+});
+
+describe("wikiToHtml sanitization and links", () => {
+  it("strips javascript: URLs from wiki links", () => {
+    const html = wikiToHtml("[x|javascript:alert(1)]");
+    expect(html).not.toContain("javascript:");
+  });
+
+  it("strips raw script tags", () => {
+    const html = wikiToHtml("<script>alert(1)</script>");
+    expect(html).not.toContain("<script");
+  });
+
+  it("strips onerror attributes from raw img tags", () => {
+    const html = wikiToHtml("<img src=x onerror=alert(1)>");
+    expect(html).not.toMatch(/<img[^>]*onerror/i);
+  });
+
+  it("preserves target=_blank and rel on external links", () => {
+    const html = wikiToHtml("[example|https://example.com]");
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(html).toContain('href="https://example.com"');
   });
 });

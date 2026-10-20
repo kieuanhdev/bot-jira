@@ -187,27 +187,27 @@ Năm trường hợp dễ gây lỗi nhất mà test theo từng task dễ bỏ 
 
 **Interfaces:** `wikiToHtml(input: string, opts?: WikiOptions): string` giữ nguyên chữ ký. Output giờ đi qua sanitize.
 
-- [ ] **Viết test trước** (thêm vào `wiki.test.ts`):
+- [x] **Viết test trước** (thêm vào `wiki.test.ts`):
   - `wikiToHtml("[x|javascript:alert(1)]")` không chứa `javascript:`.
   - `wikiToHtml("<script>alert(1)</script>")` không chứa `<script`.
   - `wikiToHtml("<img src=x onerror=alert(1)>")` không khớp `/<img[^>]*onerror/i`. Không assert "không chứa chữ `onerror`": `wiki.ts` đã escape `<`, nên chuỗi này được hiển thị dưới dạng chữ, không thành thẻ.
   - Link ngoài vẫn giữ `target="_blank"` và `rel` (nếu `wiki.ts` hiện đang sinh ra).
   - 7 test ảnh hiện có phải cho **cùng nội dung** như trước.
-- [ ] Chạy test. Kỳ vọng: test XSS PASS hoặc FAIL tuỳ code hiện tại. Ghi lại kết quả. 7 test ảnh phải PASS.
-- [ ] **Cài đặt:** bọc kết quả cuối bằng `DOMPurify.sanitize(html, { ADD_ATTR: ["target"] })`, import `DOMPurify` từ `isomorphic-dompurify`.
+- [x] Chạy test. Kỳ vọng: test XSS PASS hoặc FAIL tuỳ code hiện tại. Ghi lại kết quả. 7 test ảnh phải PASS.
+- [x] **Cài đặt:** bọc kết quả cuối bằng `DOMPurify.sanitize(html, { ADD_ATTR: ["target"] })`, import `DOMPurify` từ `isomorphic-dompurify`.
   - **Không đặt `ALLOWED_URI_REGEXP`.** Regex này áp dụng cho mọi attribute không thuộc nhóm "URI-safe", nên sẽ xoá `width`, `rel`, `loading`, `target`.
   - Regex mặc định đã chặn `javascript:` và giữ được `/`, `https:`, `width="200"`, `data-*`. Đã kiểm chứng ngày 2026-10-20.
-- [ ] **Assertion cũ được đổi có chủ đích (đã duyệt):** test `escapes markup in the alt text` đổi `expect(html).not.toContain("<script>")` thành `expect(html.replace(/alt="[^"]*"/g, "")).not.toContain("<script")`.
+- [x] **Assertion cũ được đổi có chủ đích (đã duyệt):** test `escapes markup in the alt text` đổi `expect(html).not.toContain("<script>")` thành `expect(html.replace(/alt="[^"]*"/g, "")).not.toContain("<script")`.
   - Lý do: DOMPurify serialize theo chuẩn HTML5, không escape `<`/`>` bên trong giá trị attribute có nháy, nên chuỗi `<script>` nằm trong `alt="…"` là chữ vô hại.
   - Thêm assertion `expect(html).toContain('alt="&quot;')`: dấu nháy vẫn bị escape nên không thoát khỏi attribute được.
-- [ ] Chạy test. Kỳ vọng: tất cả PASS.
+- [x] Chạy test. Kỳ vọng: tất cả PASS.
   - **Được phép đổi test** nếu khác biệt chỉ nằm ở cách serialize (ví dụ `<img … />` thành `<img …>`, hoặc cách viết entity). Phải liệt kê từng assertion cũ → mới trong commit.
   - Mọi khác biệt khác (mất attribute, mất `src`) thì dừng lại và báo.
-- [ ] Chạy `npm run build`. Nếu build lỗi vì jsdom:
+- [x] Chạy `npm run build`. Nếu build lỗi vì jsdom:
   - Đọc `node_modules/next/dist/docs/` để biết tên key đúng của Next 16 cho package ngoài bundle server (hiện là `serverExternalPackages`).
   - Thêm `isomorphic-dompurify` và `jsdom` vào `next.config.ts`, ghi lý do trong commit, rồi build lại.
-- [ ] QA tay: mở một issue có ảnh đính kèm trong mô tả. Bấm vào ảnh, lightbox vẫn mở. Link ngoài vẫn bấm được.
-- [ ] Commit `fix(security): sanitize rendered Jira wiki HTML with DOMPurify`.
+- [x] QA tay: mở một issue có ảnh đính kèm trong mô tả. Bấm vào ảnh, lightbox vẫn mở. Link ngoài vẫn bấm được.
+- [x] Commit `fix(security): sanitize rendered Jira wiki HTML with DOMPurify`.
 
 #### Task 1.3: Tên branch giữ chữ tiếng Việt và tương thích tên cũ
 
