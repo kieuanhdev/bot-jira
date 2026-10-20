@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export type CreateWorklogInput = {
   timeSpent: string;
   startedAt: string; // ISO-8601 with timezone
@@ -149,114 +151,124 @@ export type ValidationResult<T> =
   | { success: true; data: T }
   | { success: false; error: string; code: WorklogErrorCode };
 
+function worklogIssue(ctx: z.RefinementCtx, code: WorklogErrorCode, message: string): void {
+  ctx.addIssue({ code: "custom", message, params: { worklogCode: code } });
+}
+
+/**
+ * Business and security rules for the create-worklog payload. Checks run in a
+ * fixed order and stop at the first failure so the error code stays stable.
+ */
+export const CreateWorklogSchema = z
+  .unknown()
+  .superRefine((raw, ctx) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      worklogIssue(ctx, "BAD_REQUEST", "Dữ liệu yêu cầu không hợp lệ (cần là JSON object)");
+      return;
+    }
+    const body = raw as Record<string, unknown>;
+
+    // 1. timeSpent
+    if (typeof body.timeSpent !== "string" || !body.timeSpent.trim()) {
+      worklogIssue(
+        ctx,
+        "INVALID_DURATION",
+        "Thời lượng (timeSpent) là bắt buộc. Ví dụ: 30m, 2h, 1d 4h."
+      );
+      return;
+    }
+    const parsedSeconds = parseJiraDuration(body.timeSpent);
+    if (!parsedSeconds || parsedSeconds <= 0) {
+      worklogIssue(
+        ctx,
+        "INVALID_DURATION",
+        "Thời lượng không hợp lệ. Vui lòng nhập đúng định dạng Jira (ví dụ: 30m, 2h, 1d 4h)."
+      );
+      return;
+    }
+
+    // 2. startedAt
+    if (typeof body.startedAt !== "string" || !body.startedAt.trim()) {
+      worklogIssue(ctx, "INVALID_STARTED_AT", "Thời điểm bắt đầu (startedAt) là bắt buộc.");
+      return;
+    }
+    const startedDate = new Date(body.startedAt.trim());
+    if (isNaN(startedDate.getTime())) {
+      worklogIssue(
+        ctx,
+        "INVALID_STARTED_AT",
+        "Thời điểm bắt đầu không hợp lệ (cần định dạng ISO-8601)."
+      );
+      return;
+    }
+    if (startedDate.getTime() - Date.now() > FUTURE_TOLERANCE_MS) {
+      worklogIssue(
+        ctx,
+        "FUTURE_STARTED_AT",
+        "Thời điểm bắt đầu không được lớn hơn thời điểm hiện tại quá 5 phút."
+      );
+      return;
+    }
+
+    // 3. comment (optional)
+    if (body.comment !== undefined && body.comment !== null) {
+      if (typeof body.comment !== "string") {
+        worklogIssue(ctx, "BAD_REQUEST", "Ghi chú (comment) phải là chuỗi ký tự.");
+        return;
+      }
+      if (body.comment.length > MAX_WORKLOG_COMMENT_LENGTH) {
+        worklogIssue(
+          ctx,
+          "COMMENT_TOO_LONG",
+          `Ghi chú quá dài (tối đa ${MAX_WORKLOG_COMMENT_LENGTH} ký tự).`
+        );
+        return;
+      }
+    }
+
+    // 4. adjustEstimate (MVP only allows "leave" or undefined)
+    if (body.adjustEstimate !== undefined && body.adjustEstimate !== "leave") {
+      worklogIssue(
+        ctx,
+        "INVALID_ADJUST_ESTIMATE",
+        "MVP chỉ hỗ trợ adjustEstimate='leave' để giữ nguyên Remaining Estimate."
+      );
+      return;
+    }
+
+    // 5. idempotencyKey
+    if (typeof body.idempotencyKey !== "string" || !body.idempotencyKey.trim()) {
+      worklogIssue(
+        ctx,
+        "INVALID_IDEMPOTENCY_KEY",
+        "idempotencyKey là bắt buộc để đảm bảo an toàn ghi nhận."
+      );
+    }
+  })
+  .transform((raw): CreateWorklogInput => {
+    const body = raw as Record<string, string | null | undefined>;
+    const cleanComment = body.comment?.trim();
+    return {
+      timeSpent: body.timeSpent!.trim(),
+      startedAt: body.startedAt!.trim(),
+      ...(cleanComment ? { comment: cleanComment } : {}),
+      adjustEstimate: "leave",
+      idempotencyKey: body.idempotencyKey!.trim(),
+    };
+  });
+
 /**
  * Validates the CreateWorklogInput payload against all business and security rules.
  */
 export function validateCreateWorklogInput(raw: unknown): ValidationResult<CreateWorklogInput> {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return {
-      success: false,
-      error: "Dữ liệu yêu cầu không hợp lệ (cần là JSON object)",
-      code: "BAD_REQUEST",
-    };
-  }
-
-  const body = raw as Record<string, unknown>;
-
-  // 1. timeSpent
-  if (typeof body.timeSpent !== "string" || !body.timeSpent.trim()) {
-    return {
-      success: false,
-      error: "Thời lượng (timeSpent) là bắt buộc. Ví dụ: 30m, 2h, 1d 4h.",
-      code: "INVALID_DURATION",
-    };
-  }
-
-  const parsedSeconds = parseJiraDuration(body.timeSpent);
-  if (!parsedSeconds || parsedSeconds <= 0) {
-    return {
-      success: false,
-      error: "Thời lượng không hợp lệ. Vui lòng nhập đúng định dạng Jira (ví dụ: 30m, 2h, 1d 4h).",
-      code: "INVALID_DURATION",
-    };
-  }
-
-  // 2. startedAt
-  if (typeof body.startedAt !== "string" || !body.startedAt.trim()) {
-    return {
-      success: false,
-      error: "Thời điểm bắt đầu (startedAt) là bắt buộc.",
-      code: "INVALID_STARTED_AT",
-    };
-  }
-
-  const startedDate = new Date(body.startedAt.trim());
-  if (isNaN(startedDate.getTime())) {
-    return {
-      success: false,
-      error: "Thời điểm bắt đầu không hợp lệ (cần định dạng ISO-8601).",
-      code: "INVALID_STARTED_AT",
-    };
-  }
-
-  const now = Date.now();
-  if (startedDate.getTime() - now > FUTURE_TOLERANCE_MS) {
-    return {
-      success: false,
-      error: "Thời điểm bắt đầu không được lớn hơn thời điểm hiện tại quá 5 phút.",
-      code: "FUTURE_STARTED_AT",
-    };
-  }
-
-  // 3. comment (optional)
-  let cleanComment: string | undefined = undefined;
-  if (body.comment !== undefined && body.comment !== null) {
-    if (typeof body.comment !== "string") {
-      return {
-        success: false,
-        error: "Ghi chú (comment) phải là chuỗi ký tự.",
-        code: "BAD_REQUEST",
-      };
-    }
-    if (body.comment.length > MAX_WORKLOG_COMMENT_LENGTH) {
-      return {
-        success: false,
-        error: `Ghi chú quá dài (tối đa ${MAX_WORKLOG_COMMENT_LENGTH} ký tự).`,
-        code: "COMMENT_TOO_LONG",
-      };
-    }
-    if (body.comment.trim()) {
-      cleanComment = body.comment.trim();
-    }
-  }
-
-  // 4. adjustEstimate (MVP only allows "leave" or undefined)
-  if (body.adjustEstimate !== undefined && body.adjustEstimate !== "leave") {
-    return {
-      success: false,
-      error: "MVP chỉ hỗ trợ adjustEstimate='leave' để giữ nguyên Remaining Estimate.",
-      code: "INVALID_ADJUST_ESTIMATE",
-    };
-  }
-
-  // 5. idempotencyKey
-  if (typeof body.idempotencyKey !== "string" || !body.idempotencyKey.trim()) {
-    return {
-      success: false,
-      error: "idempotencyKey là bắt buộc để đảm bảo an toàn ghi nhận.",
-      code: "INVALID_IDEMPOTENCY_KEY",
-    };
-  }
-
+  const result = CreateWorklogSchema.safeParse(raw);
+  if (result.success) return { success: true, data: result.data };
+  const issue = result.error.issues[0];
+  const params = (issue as { params?: { worklogCode?: WorklogErrorCode } }).params;
   return {
-    success: true,
-    data: {
-      timeSpent: body.timeSpent.trim(),
-      startedAt: body.startedAt.trim(),
-      ...(cleanComment ? { comment: cleanComment } : {}),
-      adjustEstimate: "leave",
-      idempotencyKey: body.idempotencyKey.trim(),
-    },
+    success: false,
+    error: issue.message,
+    code: params?.worklogCode ?? "BAD_REQUEST",
   };
 }
 

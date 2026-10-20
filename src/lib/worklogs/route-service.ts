@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { readJsonBody } from "@/lib/api/json-body";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { jiraWith, JiraRequestError } from "@/lib/jira/client";
@@ -46,17 +48,15 @@ export async function handleCreateWorklogRequest(
   }
 
   // 3. Parse and validate JSON input
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
+  const parsedBody = await readJsonBody(req, z.unknown());
+  if (!parsedBody.ok) {
     return NextResponse.json(
       { error: "Dữ liệu JSON không hợp lệ.", code: "BAD_REQUEST" },
       { status: 400 }
     );
   }
 
-  const validation = validateCreateWorklogInput(body);
+  const validation = validateCreateWorklogInput(parsedBody.data);
   if (!validation.success) {
     return NextResponse.json(
       { error: validation.error, code: validation.code },

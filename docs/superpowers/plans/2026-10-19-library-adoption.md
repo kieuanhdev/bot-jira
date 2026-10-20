@@ -532,8 +532,8 @@ Task 3.5 xong thì `grep -rn "\.json()" src/app/api src/lib/*/route-service.ts s
 - Bên trong dùng `CreateWorklogSchema`. Mỗi lỗi map sang `WorklogErrorCode` bằng `.superRefine` với thông báo tiếng Việt như hiện tại.
 - `parseJiraDuration` và `formatJiraStartedAt` giữ nguyên.
 
-- [ ] 22 test của `schema.test.ts` phải xanh mà **không sửa test**. Nếu có test không đạt được, dừng lại và báo.
-- [ ] Commit `refactor(worklogs): zod schema for create-worklog input`.
+- [x] 22 test của `schema.test.ts` phải xanh mà **không sửa test**. Nếu có test không đạt được, dừng lại và báo.
+- [x] Commit `refactor(worklogs): zod schema for create-worklog input`.
 
 #### Task 3.7: `env.ts` bằng zod
 
