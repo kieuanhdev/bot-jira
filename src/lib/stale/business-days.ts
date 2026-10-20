@@ -1,3 +1,9 @@
+import {
+  businessDaysInclusive,
+  toDateKey,
+  utcMidnightToDateKey,
+} from "@/lib/date";
+
 /**
  * Business-days helper (Monday–Friday, no holidays).
  * Used by the stale analytics page to measure "age" and "cycle time"
@@ -12,21 +18,7 @@
  */
 export function businessDaysBetween(from: Date | null | undefined, to: Date): number {
   if (!from) return 0;
-  const start = new Date(from);
-  const end = new Date(to);
-  start.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
-
-  if (end.getTime() < start.getTime()) return 0;
-
-  let count = 0;
-  const d = new Date(start);
-  while (d.getTime() <= end.getTime()) {
-    const day = d.getDay(); // 0=Sun, 6=Sat
-    if (day !== 0 && day !== 6) count++;
-    d.setDate(d.getDate() + 1);
-  }
-  return count;
+  return businessDaysInclusive(toDateKey(from), toDateKey(to));
 }
 
 /**
@@ -35,10 +27,8 @@ export function businessDaysBetween(from: Date | null | undefined, to: Date): nu
  */
 export function overdueBusinessDays(dueDate: Date | null | undefined, now: Date): number {
   if (!dueDate) return 0;
-  const due = new Date(dueDate);
-  due.setHours(0, 0, 0, 0);
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  if (today.getTime() <= due.getTime()) return 0;
-  return businessDaysBetween(due, today);
+  const dueKey = utcMidnightToDateKey(dueDate);
+  const todayKey = toDateKey(now);
+  if (todayKey <= dueKey) return 0;
+  return businessDaysInclusive(dueKey, todayKey);
 }

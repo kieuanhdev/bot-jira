@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { computeStaleInsights, getIsoWeekStart } from "./calculator";
 import type { StaleIssueRecord, StaleQueryParams } from "./types";
 
@@ -224,12 +224,13 @@ describe("computeStaleInsights", () => {
   });
 
   it("calculates trend buckets correctly", () => {
-    const weekStart = getIsoWeekStart(refDate);
+    const fixedNow = new Date("2026-10-07T03:00:00Z");
     const issues: StaleIssueRecord[] = [
       createMockIssue({
         jiraKey: "TEST-1",
-        status: "In Progress",
-        statusChangedAt: refDate,
+        status: "Blocked",
+        statusCategory: "indeterminate",
+        statusChangedAt: new Date("2026-10-05T03:00:00Z"),
       }),
     ];
 
@@ -238,11 +239,37 @@ describe("computeStaleInsights", () => {
       params: DEFAULT_PARAMS,
       myUsername: "alice",
       myAliases: ["alice"],
-      now: refDate,
+      now: fixedNow,
     });
 
-    const currentWeekBucket = result.trend.find((t) => t.week === weekStart);
-    expect(currentWeekBucket).toBeDefined();
+    expect(result.trend.map((t) => t.week)).toEqual([
+      "2026-08-17",
+      "2026-08-24",
+      "2026-08-31",
+      "2026-09-07",
+      "2026-09-14",
+      "2026-09-21",
+      "2026-09-28",
+      "2026-10-05",
+    ]);
+    const currentWeekBucket = result.trend.find((t) => t.week === "2026-10-05");
+    expect(currentWeekBucket?.count).toBe(1);
     expect(result.trend).toHaveLength(8);
+  });
+});
+
+describe("getIsoWeekStart", () => {
+  const origTz = process.env.TZ;
+  describe.each(["UTC", "Asia/Ho_Chi_Minh"])("when TZ=%s", (tz) => {
+    beforeEach(() => {
+      process.env.TZ = tz;
+    });
+    afterEach(() => {
+      process.env.TZ = origTz;
+    });
+
+    it("computes ISO Monday start in Vietnam time", () => {
+      expect(getIsoWeekStart(new Date("2026-10-04T18:00:00Z"))).toBe("2026-10-05");
+    });
   });
 });

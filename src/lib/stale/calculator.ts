@@ -1,3 +1,4 @@
+import { addDaysToKey, startOfIsoWeekKey } from "@/lib/date";
 import { statusGroup } from "@/lib/status-groups";
 import { computeAges } from "./age";
 import { classifyStale, STALE_REASON_LABELS, type StaleReason } from "./classify";
@@ -35,10 +36,7 @@ export interface StaleCalculationContext {
  * Computes ISO Monday start of week string (YYYY-MM-DD).
  */
 export function getIsoWeekStart(d: Date): string {
-  const date = new Date(d);
-  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-  date.setHours(0, 0, 0, 0);
-  return date.toISOString().slice(0, 10);
+  return startOfIsoWeekKey(d);
 }
 
 /**
@@ -224,10 +222,9 @@ export function computeStaleInsights(
 
   // Weekly trend: 8 weekly buckets with Monday start.
   const trendMap = new Map<string, number>();
+  const currentWeek = startOfIsoWeekKey(now);
   for (let i = 7; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i * 7);
-    trendMap.set(getIsoWeekStart(d), 0);
+    trendMap.set(addDaysToKey(currentWeek, -7 * i), 0);
   }
   for (const t of filtered) {
     const refDate = t.statusChangedAt ?? t.createdAt;

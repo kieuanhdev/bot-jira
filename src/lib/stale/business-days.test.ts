@@ -12,8 +12,13 @@ describe("businessDaysBetween", () => {
   });
 
   it("counts 1 for same business day", () => {
-    // Mon Jan 5 09:00 → Mon Jan 5 17:00 (local time) = 1 business day
-    expect(businessDaysBetween(new Date(2026, 0, 5, 9), new Date(2026, 0, 5, 17))).toBe(1);
+    // Mon Jan 5 09:00 → Mon Jan 5 17:00 (Vietnam time) = 1 business day
+    expect(
+      businessDaysBetween(
+        new Date("2026-01-05T02:00:00Z"),
+        new Date("2026-01-05T10:00:00Z"),
+      ),
+    ).toBe(1);
   });
 
   it("counts Fri to Mon as 2 business days (Fri + Mon, inclusive)", () => {

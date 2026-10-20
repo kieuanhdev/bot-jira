@@ -358,12 +358,12 @@ Tham số `tz` mặc định là `APP_TIMEZONE`.
   - Nếu `todayKey <= dueKey` thì trả 0. Ngược lại trả `businessDaysInclusive(dueKey, todayKey)`.
 - 8 bucket trend được tạo bằng `addDaysToKey(startOfIsoWeekKey(now), -7*i)`.
 
-- [ ] **Viết test trước:**
+- [x] **Viết test trước:**
   - `getIsoWeekStart(new Date("2026-10-04T18:00:00Z"))` === `"2026-10-05"`, chạy được ở cả hai TZ.
   - Thay test tự tham chiếu ở `calculator.test.ts:226` bằng giá trị cố định: với `now = 2026-10-07T03:00Z`, 8 bucket là `2026-08-17`, `08-24`, `08-31`, `09-07`, `09-14`, `09-21`, `09-28`, `10-05`.
-- [ ] **Test được đổi có chủ đích** (`business-days.test.ts`): đổi input dạng `new Date(2026,0,5,9)` (giờ local) thành instant ISO có `Z` cho cùng ngày VN, ví dụ `new Date("2026-01-05T02:00:00Z")`. **Kỳ vọng số giữ nguyên:** 2, 6, 11, 0, 1, 0 và overdue 0, 2, 2.
-- [ ] Chạy `npm test` và `npm run test:tz` cho `src/lib/stale src/lib/reports`. Kỳ vọng: PASS cả hai.
-- [ ] Commit `fix(stale): compute ISO week and business days in Vietnam time`.
+- [x] **Test được đổi có chủ đích** (`business-days.test.ts`): đổi input dạng `new Date(2026,0,5,9)` (giờ local) thành instant ISO có `Z` cho cùng ngày VN, ví dụ `new Date("2026-01-05T02:00:00Z")`. **Kỳ vọng số giữ nguyên:** 2, 6, 11, 0, 1, 0 và overdue 0, 2, 2.
+- [x] Chạy `npm test` và `npm run test:tz` cho `src/lib/stale src/lib/reports`. Kỳ vọng: PASS cả hai.
+- [x] Commit `fix(stale): compute ISO week and business days in Vietnam time`.
 
 #### Task 2.4: Quá hạn, health deadline, selection
 
