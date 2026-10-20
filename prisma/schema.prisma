@@ -85,6 +85,8 @@ model IssueCache {
   statusId       String?
   statusCategory String        @default("unknown")
   statusChangedAt DateTime?
+  // Jira Done At (customfield_10706) ?? resolutiondate, extracted from raw so reports need not read the jsonb.
+  completedAt    DateTime?
   assigneeJira   String?
   reporterJira   String?
   approverJira   String?

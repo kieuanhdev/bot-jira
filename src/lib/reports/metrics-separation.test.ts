@@ -312,7 +312,7 @@ describe("Batch 6.2 - Metrics Separation, Timezone & Empty Data", () => {
         createdAt: new Date("2026-10-01T22:00:00.000Z"),
         updatedAt: new Date("2026-10-01T22:00:00.000Z"),
         labels: [],
-        raw: null,
+        completedAt: null,
         lastSyncedAt: new Date(),
         fixVersionNames: ["v1.0"],
       };
@@ -445,7 +445,7 @@ describe("Batch 6.2 - Metrics Separation, Timezone & Empty Data", () => {
         createdAt: new Date("2026-07-01T00:00:00.000Z"),
         updatedAt: new Date("2026-08-01T00:00:00.000Z"),
         labels: [],
-        raw: null,
+        completedAt: null,
         lastSyncedAt: new Date("2026-10-01T00:00:00.000Z"),
         fixVersionNames: ["1.0"],
       };

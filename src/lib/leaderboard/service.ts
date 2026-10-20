@@ -65,7 +65,7 @@ export async function getLeaderboardData(
       points: true,
       priority: true,
       projectKey: true,
-      raw: true,
+      completedAt: true,
     },
     orderBy: { updatedAt: "desc" },
     take: 5000,

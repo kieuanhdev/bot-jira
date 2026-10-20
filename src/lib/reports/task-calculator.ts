@@ -62,7 +62,7 @@ export function evaluateTaskExplorerItems(
       status: issue.status,
       statusCategory: issue.statusCategory,
       statusChangedAt: issue.statusChangedAt,
-      raw: issue.raw,
+      completedAt: issue.completedAt,
     });
 
     const isCreatedInPeriod = ignoreDateRange || isDateInPeriod(

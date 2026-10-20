@@ -21,6 +21,7 @@ export interface RawLeaderboardIssue {
   priority: string | null;
   projectKey: string;
   raw?: unknown;
+  completedAt?: Date | null;
 }
 
 export interface LeaderboardDbUser {
@@ -100,6 +101,7 @@ export function resolveCompletionDate(issue: RawLeaderboardIssue): Date | null {
   return (
     rawDoneAt ??
     rawResolution ??
+    issue.completedAt ??
     issue.statusChangedAt ??
     issue.updatedAt ??
     issue.createdAt ??

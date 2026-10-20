@@ -71,6 +71,7 @@ export function calculateFlowMetrics(input: CalculateFlowMetricsInput): {
       statusCategory: issue.statusCategory,
       statusChangedAt: issue.statusChangedAt,
       raw: issue.raw,
+      completedAt: issue.completedAt,
       transitionDoneDate,
     });
 

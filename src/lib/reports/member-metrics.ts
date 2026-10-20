@@ -89,6 +89,7 @@ export function calculateMemberMetrics(
       statusCategory: issue.statusCategory,
       statusChangedAt: issue.statusChangedAt,
       raw: issue.raw,
+      completedAt: issue.completedAt,
     });
 
     if (

@@ -20,7 +20,7 @@ function makeTask(overrides: Partial<RawReportTaskRecord> = {}): RawReportTaskRe
     createdAt: new Date("2026-10-05T00:00:00.000Z"),
     updatedAt: new Date("2026-10-10T00:00:00.000Z"),
     labels: ["frontend"],
-    raw: null,
+    completedAt: null,
     lastSyncedAt: new Date("2026-10-10T00:00:00.000Z"),
     fixVersionNames: ["v1.0"],
     ...overrides,

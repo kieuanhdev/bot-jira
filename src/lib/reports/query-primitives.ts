@@ -25,7 +25,7 @@ export const REPORT_ISSUE_SELECT = {
   createdAt: true,
   updatedAt: true,
   labels: true,
-  raw: true,
+  completedAt: true,
   lastSyncedAt: true,
 } as const;
 
@@ -67,7 +67,7 @@ export function mapIssueRecordToReportInput(
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     labels: record.labels,
-    raw: record.raw,
+    completedAt: record.completedAt,
   };
 }
 
@@ -325,6 +325,7 @@ export function isIssueRelevantToPeriod(
     statusCategory: issue.statusCategory,
     statusChangedAt: issue.statusChangedAt,
     raw: issue.raw,
+    completedAt: issue.completedAt,
   });
 
   const completionDate = resolved.date || issue.statusChangedAt;

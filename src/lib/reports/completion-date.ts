@@ -20,6 +20,8 @@ export function resolveCompletionDate(issue: {
   statusCategory?: string | null;
   statusChangedAt?: Date | null;
   raw?: unknown;
+  /** Pre-extracted Done At / resolutiondate (IssueCache.completedAt); used when raw is not loaded. */
+  completedAt?: Date | null;
   transitionDoneDate?: Date | null;
 }): ResolvedCompletionDate {
   const group = normalizeStatusToGroup(issue.status, issue.statusCategory || undefined);
@@ -52,6 +54,10 @@ export function resolveCompletionDate(issue: {
         return { date: parsed, source: "resolution_date", confidence: "high" };
       }
     }
+  }
+
+  if (issue.completedAt && !isNaN(issue.completedAt.getTime())) {
+    return { date: issue.completedAt, source: "resolution_date", confidence: "high" };
   }
 
   // 3. Transition event if available

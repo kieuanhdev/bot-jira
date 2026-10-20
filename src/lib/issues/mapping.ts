@@ -87,6 +87,10 @@ export function mapJiraIssueToCacheData(issue: JiraIssue, context: IssueMappingC
       parseJiraDate((fields as Record<string, unknown>).resolutiondate as string | undefined) ??
       parseJiraDate(fields.statuscategorychangedate) ??
       null,
+    completedAt:
+      parseJiraDate((fields as Record<string, unknown>).customfield_10706 as string | undefined) ??
+      parseJiraDate((fields as Record<string, unknown>).resolutiondate as string | undefined) ??
+      null,
     assigneeJira: fields.assignee?.name ?? null,
     reporterJira: jiraUsername(fields[peopleFields.reporter]),
     approverJira: jiraUsername(fields[peopleFields.approver]),

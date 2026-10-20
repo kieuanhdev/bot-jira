@@ -62,7 +62,7 @@ describe("Reports Query Primitives", () => {
         createdAt: new Date("2026-09-01T00:00:00Z"),
         updatedAt: new Date("2026-10-02T00:00:00Z"),
         labels: ["backend", "urgent"],
-        raw: { id: "1001" },
+        completedAt: null,
         lastSyncedAt: new Date("2026-10-03T00:00:00Z"),
       };
 
@@ -83,7 +83,7 @@ describe("Reports Query Primitives", () => {
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
         labels: ["backend", "urgent"],
-        raw: { id: "1001" },
+        completedAt: null,
       });
     });
   });
@@ -301,7 +301,7 @@ describe("Reports Query Primitives", () => {
         createdAt: new Date("2026-10-01T00:00:00Z"),
         updatedAt: null,
         labels: [],
-        raw: {},
+        completedAt: null,
         lastSyncedAt: new Date("2026-10-02T00:00:00Z"),
       };
       mocks.issueCacheFindMany.mockResolvedValue([dbRow]);

@@ -10,6 +10,7 @@ export interface HistoryIssueInput {
   statusChangedAt: Date | null;
   createdAt: Date | null;
   raw?: unknown;
+  completedAt?: Date | null;
   points?: number | null;
 }
 
@@ -54,6 +55,7 @@ export function calculateHistoryMetrics(
       statusCategory: issue.statusCategory,
       statusChangedAt: issue.statusChangedAt,
       raw: issue.raw,
+      completedAt: issue.completedAt,
     });
     return {
       jiraKey: issue.jiraKey,

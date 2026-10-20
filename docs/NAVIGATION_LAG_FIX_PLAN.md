@@ -234,6 +234,22 @@ Kết quả đo (production build, Chrome headless, script `nav.mjs`: click side
 - **3.2 (bỏ `raw`) không làm được nếu không có migration.** Đọc `raw` EPM tốn ~500-800ms so với ~70ms khi bỏ cột. Thử trích hai trường bằng SQL (`raw->'fields'->'customfield_10706'`, `resolutiondate`) vẫn ~500ms vì Postgres phải giải nén toàn bộ jsonb (TOAST). Chỉ cột riêng `resolvedAt`/`doneAt` (Phase 4.1, cần duyệt migration) mới loại được chi phí này.
 - Chưa làm: 3.4 (branches), 3.5, 3.6.
 
+### Phase 4.1 đã triển khai (2026-10-20, đã được duyệt migration)
+
+- Migration `20261020100000_issue_cache_completed_at`: thêm cột `IssueCache.completedAt` (Done At `customfield_10706` ?? `resolutiondate`) và backfill từ `raw` trong cùng migration. Backfill đối chiếu với `raw` trên 7.762 dòng: 0 lệch (7.129 dòng có giá trị).
+- `mapJiraIssueToCacheData` ghi `completedAt` khi sync; `REPORT_ISSUE_SELECT` và leaderboard không còn đọc `raw`; `resolveCompletionDate` nhận `completedAt` (vẫn ưu tiên `raw` nếu được truyền vào).
+- Chỉ mục `resolvedAt` và các index khác của 4.2 chưa làm.
+
+| Hàm | Trước 4.1 (ms) | Sau 4.1 (ms) |
+|---|---|---|
+| `getProjectHistory` EPM | ~1.010 | ~365 |
+| `getProjectTasks` EPM | ~940 | ~436 |
+| `getProjectMembers` EPM | ~620 | ~171 |
+| `getProjectHistory` MHRM | ~160 | ~73 |
+| `getProjectTasks` MHRM | ~223 | ~133 |
+| `getProjectMembers` MHRM | ~155 | ~54 |
+| `getLeaderboardData` | ~100-140 | ~41 |
+
 ## 9. Thứ tự triển khai đề xuất
 
 1. Phase 0 (đo).

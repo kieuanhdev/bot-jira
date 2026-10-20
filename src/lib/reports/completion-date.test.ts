@@ -104,3 +104,29 @@ describe("resolveCompletionDate", () => {
     });
   });
 });
+
+describe("resolveCompletionDate with completedAt column", () => {
+  it("uses completedAt when raw is not loaded", () => {
+    const completedAt = new Date("2026-10-05T03:00:00.000Z");
+    const resolved = resolveCompletionDate({
+      status: "Done",
+      statusCategory: "done",
+      statusChangedAt: new Date("2026-10-09T00:00:00.000Z"),
+      completedAt,
+    });
+    expect(resolved.date).toEqual(completedAt);
+    expect(resolved.confidence).toBe("high");
+  });
+
+  it("falls back to statusChangedAt when completedAt is null", () => {
+    const changed = new Date("2026-10-09T00:00:00.000Z");
+    const resolved = resolveCompletionDate({
+      status: "Done",
+      statusCategory: "done",
+      statusChangedAt: changed,
+      completedAt: null,
+    });
+    expect(resolved.source).toBe("status_changed_at");
+    expect(resolved.date).toEqual(changed);
+  });
+});

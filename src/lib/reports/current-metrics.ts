@@ -62,6 +62,7 @@ export function calculateSnapshotMetrics(
         statusCategory: issue.statusCategory,
         statusChangedAt: issue.statusChangedAt,
         raw: issue.raw,
+      completedAt: issue.completedAt,
       });
 
       if (resolved.date) {

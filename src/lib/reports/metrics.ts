@@ -35,6 +35,7 @@ export interface ReportIssueInput {
   updatedAt: Date | null;
   labels: string[];
   raw?: unknown;
+  completedAt?: Date | null;
 }
 
 /**
@@ -175,6 +176,7 @@ export function calculateStatusDistribution(
           statusCategory: i.statusCategory,
           statusChangedAt: i.statusChangedAt,
           raw: i.raw,
+        completedAt: i.completedAt,
         });
 
         const completionDate = resolved.date || i.statusChangedAt;
