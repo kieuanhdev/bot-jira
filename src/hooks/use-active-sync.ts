@@ -3,10 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import { syncKeys, issuesTouchingProjects, boardKeys, freshnessKeys, reportsKeys } from "@/lib/query-keys";
+import { syncKeys, issuesTouchingProjects, boardKeys, freshnessKeys, reportsTouchingProjects } from "@/lib/query-keys";
 import type { ActiveJiraSyncResponse } from "@/lib/contracts/jira-sync";
 
-export function useActiveSync(specificProject?: string) {
+/**
+ * Polls active Jira syncs. Pass `refreshOnFinish` from exactly one mounted
+ * consumer: each hook instance tracks sync completion on its own, so enabling it
+ * in several places would run the post-sync invalidations several times.
+ */
+export function useActiveSync(
+  specificProject?: string,
+  { refreshOnFinish = false }: { refreshOnFinish?: boolean } = {},
+) {
   const qc = useQueryClient();
   const [justFinished, setJustFinished] = useState<string[]>([]);
   const prevSyncingRef = useRef<string[]>([]);
@@ -18,7 +26,7 @@ export function useActiveSync(specificProject?: string) {
       const activeCount = queryState.state.data?.syncingProjects?.length ?? 0;
       return activeCount > 0 ? 2500 : 15000;
     },
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
     retry: 1,
   });
 
@@ -34,11 +42,13 @@ export function useActiveSync(specificProject?: string) {
       if (finished.length > 0) {
         setJustFinished(finished);
 
-        // Auto-refresh queries when sync completes
-        void qc.invalidateQueries({ predicate: issuesTouchingProjects(finished) });
-        void qc.invalidateQueries({ queryKey: boardKeys.projects });
-        void qc.invalidateQueries({ queryKey: freshnessKeys.all });
-        void qc.invalidateQueries({ queryKey: reportsKeys.all });
+        if (refreshOnFinish) {
+          // Auto-refresh only what the finished projects can have changed.
+          void qc.invalidateQueries({ predicate: issuesTouchingProjects(finished) });
+          void qc.invalidateQueries({ queryKey: boardKeys.projects, exact: true });
+          void qc.invalidateQueries({ queryKey: freshnessKeys.all });
+          void qc.invalidateQueries({ predicate: reportsTouchingProjects(finished) });
+        }
 
         // Auto-clear justFinished after 3.5s
         const t = setTimeout(() => {
@@ -48,7 +58,7 @@ export function useActiveSync(specificProject?: string) {
       }
     }
     prevSyncingRef.current = syncingProjects;
-  }, [syncingProjects, qc]);
+  }, [syncingProjects, qc, refreshOnFinish]);
 
   const isAnySyncing = syncingProjects.length > 0;
   const isTargetSyncing = specificProject

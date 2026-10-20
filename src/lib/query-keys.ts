@@ -243,6 +243,21 @@ export const reportsKeys = {
     ["reports", "history", projectKey.trim().toUpperCase(), normalizeReportParams(params)] as const,
 };
 
+/**
+ * Predicate for `invalidateQueries` that refreshes report queries of `projects`
+ * plus the portfolio (which aggregates every project), leaving other projects'
+ * cached project/tasks/members/history reports alone.
+ */
+export function reportsTouchingProjects(projects: string[]) {
+  const wanted = new Set(projects.map((p) => p.trim().toUpperCase()));
+  return (query: { queryKey: readonly unknown[] }): boolean => {
+    const key = query.queryKey;
+    if (key[0] !== "reports") return false;
+    if (key[1] === "portfolio") return true;
+    const projectKey = key[2];
+    return typeof projectKey === "string" ? wanted.has(projectKey.toUpperCase()) : true;
+  };
+}
 
 export const sentryKeys = {
   all: ["sentry"] as const,

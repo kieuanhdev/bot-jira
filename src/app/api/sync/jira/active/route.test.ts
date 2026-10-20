@@ -3,13 +3,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   session: vi.fn(),
   findMany: vi.fn(),
+  findUser: vi.fn(),
+  listActiveProjects: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getSession: mocks.session }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     integrationCursor: { findMany: mocks.findMany },
+    user: { findUnique: mocks.findUser },
   },
+}));
+vi.mock("@/lib/jira/project-catalog", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/jira/project-catalog")>()),
+  listActiveProjects: mocks.listActiveProjects,
 }));
 
 import { GET } from "./route";
@@ -18,12 +25,31 @@ describe("GET /api/sync/jira/active", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.session.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.findUser.mockResolvedValue({ boardProjects: [] });
+    mocks.listActiveProjects.mockResolvedValue([{ key: "EPM" }, { key: "CRM" }]);
   });
 
   it("returns 401 when unauthenticated", async () => {
     mocks.session.mockResolvedValue(null);
     const res = await GET();
     expect(res.status).toBe(401);
+  });
+
+  it("only queries cursors of the user's board projects", async () => {
+    mocks.findUser.mockResolvedValue({ boardProjects: ["epm", "ZZZ"] });
+    mocks.findMany.mockResolvedValue([]);
+    await GET();
+    expect(mocks.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { integration: "jira", scope: { in: ["EPM"] } } }),
+    );
+  });
+
+  it("falls back to all active catalog projects when the user has no board projects", async () => {
+    mocks.findMany.mockResolvedValue([]);
+    await GET();
+    expect(mocks.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { integration: "jira", scope: { in: ["EPM", "CRM"] } } }),
+    );
   });
 
   it("returns empty lists when no cursors exist", async () => {

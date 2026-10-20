@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 export function GlobalSyncIndicator() {
-  const { syncingProjects, justFinished, isAnySyncing } = useActiveSync();
+  const { syncingProjects, justFinished, isAnySyncing } = useActiveSync(undefined, { refreshOnFinish: true });
   const [dismissedProjects, setDismissedProjects] = useState<string[]>([]);
 
   // Dismissed only when all currently syncing projects were already dismissed

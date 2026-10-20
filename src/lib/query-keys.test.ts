@@ -10,6 +10,7 @@ import {
   freshnessKeys,
   issuesKeys,
   issuesTouchingProjects,
+  reportsTouchingProjects,
   leaderboardKeys,
   meKeys,
   notificationsKeys,
@@ -127,5 +128,21 @@ describe("query-keys factory", () => {
     expect(predicate({ queryKey: ["issues", "projectList=ABC,CICM"] })).toBe(true);
     // Unscoped ("all"): refreshed
     expect(predicate({ queryKey: ["issues", "all"] })).toBe(true);
+  });
+});
+
+describe("reportsTouchingProjects", () => {
+  const match = (projects: string[], key: unknown[]) =>
+    reportsTouchingProjects(projects)({ queryKey: key });
+
+  it("refreshes the portfolio and the synced project's reports only", () => {
+    expect(match(["EPM"], ["reports", "portfolio", {}])).toBe(true);
+    expect(match(["EPM"], ["reports", "tasks", "EPM", {}])).toBe(true);
+    expect(match(["epm"], ["reports", "history", "EPM", {}])).toBe(true);
+    expect(match(["EPM"], ["reports", "tasks", "MHRM", {}])).toBe(false);
+  });
+
+  it("ignores non-report queries", () => {
+    expect(match(["EPM"], ["issues", "all"])).toBe(false);
   });
 });

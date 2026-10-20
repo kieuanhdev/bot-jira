@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { listActiveProjects } from "@/lib/jira/project-catalog";
+import { resolveAllowedProjects } from "@/lib/stale/params";
 import type {
   ActiveJiraSync,
   ActiveJiraSyncResponse,
@@ -23,8 +25,19 @@ export async function GET() {
     const now = new Date();
     const nowMs = now.getTime();
 
+    // Only report syncs of projects this user works with; a sync elsewhere must
+    // not trigger refetches on their screens.
+    const [dbUser, catalog] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { boardProjects: true },
+      }),
+      listActiveProjects(),
+    ]);
+    const allowedProjects = resolveAllowedProjects(dbUser?.boardProjects ?? [], catalog);
+
     const cursors = await prisma.integrationCursor.findMany({
-      where: { integration: "jira" },
+      where: { integration: "jira", scope: { in: allowedProjects } },
       select: {
         scope: true,
         lastStartedAt: true,
