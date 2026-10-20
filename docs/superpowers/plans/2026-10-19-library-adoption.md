@@ -790,8 +790,8 @@ Cả hai áp dụng `MAX_LABEL_LENGTH`, `MAX_LABELS_COUNT`, so trùng không ph�
 
 **Files:** `src/components/task-fields/components-combobox.tsx`
 
-- [ ] Cả hai layout (compact và full) dùng `Popover` + `Command`, với bộ lọc có sẵn của cmdk (`shouldFilter` mặc định). Ô tìm kiếm chỉ hiện khi có hơn 5 option ở chế độ compact. Mục đã chọn có icon `Check`.
-- [ ] Commit `refactor(task-fields): components combobox on Popover + cmdk`.
+- [x] Cả hai layout (compact và full) dùng `Popover` + `Command`, với bộ lọc có sẵn của cmdk (`shouldFilter` mặc định). Ô tìm kiếm chỉ hiện khi có hơn 5 option ở chế độ compact. Mục đã chọn có icon `Check`.
+- [x] Commit `refactor(task-fields): components combobox on Popover + cmdk`.
 
 #### Task 5.7: Popup chọn project (board, sentry)
 
