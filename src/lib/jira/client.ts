@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { timeoutSignal } from "@/lib/http/fetch-with-timeout";
 import { getEpicLinkFieldIds, isEpicLinkField, setEpicLinkFieldIds } from "@/lib/issues/epic";
 import type { JiraFieldDefinition, JiraMyPermissions, JiraUser } from "./types";
 import type { JiraAuth } from "./auth";
@@ -300,19 +301,12 @@ async function requestOnce<T>(
   }
 
   const url = env.jiraBaseUrl.replace(/\/$/, "") + path;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), env.jiraRequestTimeoutMs);
-  const abortFromCaller = () => controller.abort();
-  if (init.signal?.aborted) {
-    controller.abort(init.signal.reason);
-  } else {
-    init.signal?.addEventListener("abort", abortFromCaller, { once: true });
-  }
+  const { signal, timedOut, dispose } = timeoutSignal(env.jiraRequestTimeoutMs, init.signal);
 
   try {
     const response = await fetch(url, {
       ...init,
-      signal: controller.signal,
+      signal,
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
@@ -343,7 +337,7 @@ async function requestOnce<T>(
     if (!body.trim()) return undefined as T;
     return JSON.parse(body) as T;
   } catch (error) {
-    if (controller.signal.aborted && !init.signal?.aborted) {
+    if (timedOut() && !init.signal?.aborted) {
       throw new JiraRequestError(
         `Jira ${init.method ?? "GET"} ${path.split("?")[0]} -> timeout`,
         null,
@@ -352,8 +346,7 @@ async function requestOnce<T>(
     }
     throw error;
   } finally {
-    clearTimeout(timeout);
-    init.signal?.removeEventListener("abort", abortFromCaller);
+    dispose();
   }
 }
 

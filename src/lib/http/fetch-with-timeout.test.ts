@@ -4,8 +4,45 @@ import {
   HttpTimeoutError,
   parseRetryAfterHeader,
   shouldRetryStatus,
+  timeoutSignal,
   withRetry,
 } from "./fetch-with-timeout";
+
+describe("timeoutSignal", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("aborts and reports timedOut after the timeout", async () => {
+    const t = timeoutSignal(500);
+    expect(t.signal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(501);
+    expect(t.signal.aborted).toBe(true);
+    expect(t.timedOut()).toBe(true);
+    t.dispose();
+  });
+
+  it("is aborted but not timedOut when the caller aborted first", async () => {
+    const caller = new AbortController();
+    caller.abort();
+    const t = timeoutSignal(500, caller.signal);
+    expect(t.signal.aborted).toBe(true);
+    await vi.advanceTimersByTimeAsync(501);
+    expect(t.timedOut()).toBe(false);
+    t.dispose();
+  });
+
+  it("dispose cancels the timer", async () => {
+    const t = timeoutSignal(500);
+    t.dispose();
+    await vi.advanceTimersByTimeAsync(501);
+    expect(t.signal.aborted).toBe(false);
+  });
+});
 
 describe("fetchWithTimeout", () => {
   beforeEach(() => {

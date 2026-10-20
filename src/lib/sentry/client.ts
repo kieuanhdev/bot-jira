@@ -26,6 +26,11 @@ export interface SentryRequestOptions {
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
+function withTimeout(signal: AbortSignal | undefined, timeoutMs = DEFAULT_TIMEOUT_MS): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
 /**
  * Scrub secrets (Bearer tokens, secret query parameters) from error messages
  * to prevent credential leakage into server logs or audit trails.
@@ -59,7 +64,7 @@ async function fetchSentry<T>(
   const base = env.sentryBaseUrl.replace(/\/$/, "");
   const url = `${base}/api/0/${fullPath}`;
 
-  const signal = options?.signal ?? AbortSignal.timeout(options?.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const signal = withTimeout(options?.signal, options?.timeoutMs);
 
   const res = await fetch(url, {
     headers: {
@@ -124,7 +129,7 @@ export async function getLatestEvent(
 ): Promise<SentryEvent> {
   const path = `issues/${encodeURIComponent(issueId)}/events/latest/`;
   const shared: SentryRequestOptions = {
-    signal: options?.signal ?? AbortSignal.timeout(options?.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+    signal: withTimeout(options?.signal, options?.timeoutMs),
   };
   try {
     return await requestSentryOrg<SentryEvent>(path, creds, shared);

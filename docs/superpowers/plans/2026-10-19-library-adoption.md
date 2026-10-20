@@ -582,12 +582,12 @@ Task 3.5 xong thì `grep -rn "\.json()" src/app/api src/lib/*/route-service.ts s
   - Phân biệt timeout với việc người gọi huỷ bằng `timedOut()`.
 - `fetchWithTimeout`, `HttpTimeoutError` và thông báo timeout của Jira (`Jira <METHOD> <path> -> timeout`) giữ nguyên.
 
-- [ ] **Viết test trước** (`fetch-with-timeout.test.ts`): `timeoutSignal(500)` sau `advanceTimersByTimeAsync(501)` thì `signal.aborted === true` và `timedOut() === true`. Nếu caller đã huỷ trước thì `signal.aborted === true` và `timedOut() === false`.
-- [ ] **Cài đặt:**
+- [x] **Viết test trước** (`fetch-with-timeout.test.ts`): `timeoutSignal(500)` sau `advanceTimersByTimeAsync(501)` thì `signal.aborted === true` và `timedOut() === true`. Nếu caller đã huỷ trước thì `signal.aborted === true` và `timedOut() === false`.
+- [x] **Cài đặt:**
   - `fetchWithTimeout`, `requestOnce` của Jira và 2 hàm trong dev-status dùng `timeoutSignal`. Đổi tên closure `fetchWithTimeout` trong dev-status thành `fetchDevStatusPath`.
   - Sentry: đổi `options?.signal ?? AbortSignal.timeout(...)` thành `AbortSignal.any([options.signal, AbortSignal.timeout(...)])` khi có signal.
-- [ ] `fetch-with-timeout.test.ts`, `client-transport.test.ts` (6 test retry/timeout), `dev-status.test.ts` và `sentry/client.test.ts` phải xanh mà không sửa test.
-- [ ] Commit `refactor(http): shared timeoutSignal merging caller signals with AbortSignal.any`.
+- [x] `fetch-with-timeout.test.ts`, `client-transport.test.ts` (6 test retry/timeout), `dev-status.test.ts` và `sentry/client.test.ts` phải xanh mà không sửa test.
+- [x] Commit `refactor(http): shared timeoutSignal merging caller signals with AbortSignal.any`.
 
 #### Task 4.2: Jira client dùng chung `withRetry`
 

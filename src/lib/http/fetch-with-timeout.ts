@@ -19,6 +19,30 @@ export interface FetchWithTimeoutInit extends RequestInit {
 }
 
 /**
+ * Abort signal that fires after `ms`, merged with an optional caller signal.
+ * Uses a plain timer (not `AbortSignal.timeout`) so fake timers can drive it.
+ * `timedOut()` tells a timeout apart from a caller abort; call `dispose()` when done.
+ */
+export function timeoutSignal(
+  ms: number,
+  caller?: AbortSignal | null
+): { signal: AbortSignal; timedOut: () => boolean; dispose: () => void } {
+  const own = new AbortController();
+  let didTimeOut = false;
+  const timer = setTimeout(() => {
+    if (caller?.aborted) return;
+    didTimeOut = true;
+    own.abort(new DOMException(`Request timed out after ${ms}ms`, "TimeoutError"));
+  }, ms);
+  const signal = caller ? AbortSignal.any([caller, own.signal]) : own.signal;
+  return {
+    signal,
+    timedOut: () => didTimeOut,
+    dispose: () => clearTimeout(timer),
+  };
+}
+
+/**
  * Fetch with an explicit timeout.
  * Aborts when `timeoutMs` expires and rethrows a typed `HttpTimeoutError`.
  * If caller provided `signal` is aborted, propagates the caller's abort.
@@ -30,34 +54,12 @@ export async function fetchWithTimeout(
   const { timeoutMs, signal: callerSignal, ...restInit } = init;
   const urlStr = typeof input === "string" ? input : input.toString();
 
-  const controller = new AbortController();
-  let timedOut = false;
-
-  const timeoutId = setTimeout(() => {
-    timedOut = true;
-    controller.abort(new DOMException(`Request timed out after ${timeoutMs}ms`, "TimeoutError"));
-  }, timeoutMs);
-
-  const abortListener = () => {
-    controller.abort(callerSignal?.reason ?? new DOMException("This operation was aborted", "AbortError"));
-  };
-
-  if (callerSignal) {
-    if (callerSignal.aborted) {
-      clearTimeout(timeoutId);
-      throw callerSignal.reason ?? new DOMException("This operation was aborted", "AbortError");
-    }
-    callerSignal.addEventListener("abort", abortListener, { once: true });
-  }
+  const { signal, timedOut, dispose } = timeoutSignal(timeoutMs, callerSignal);
 
   try {
-    const response = await fetch(input, {
-      ...restInit,
-      signal: controller.signal,
-    });
-    return response;
+    return await fetch(input, { ...restInit, signal });
   } catch (err: unknown) {
-    if (timedOut) {
+    if (timedOut()) {
       throw new HttpTimeoutError(
         `Request to ${urlStr} timed out after ${timeoutMs}ms`,
         timeoutMs,
@@ -66,10 +68,7 @@ export async function fetchWithTimeout(
     }
     throw err;
   } finally {
-    clearTimeout(timeoutId);
-    if (callerSignal) {
-      callerSignal.removeEventListener("abort", abortListener);
-    }
+    dispose();
   }
 }
 

@@ -1,6 +1,7 @@
 import { recomputePrimaryLink, upsertBranchLink } from "@/lib/bitbucket/branch-links";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
+import { timeoutSignal } from "@/lib/http/fetch-with-timeout";
 import { getSystemJiraAuth, jiraWith, type JiraAuth, JiraRequestError } from "./client";
 import { bitbucket } from "@/lib/bitbucket/client";
 import { isSystemOrReleaseBranch } from "@/lib/bitbucket/branch-linker";
@@ -101,13 +102,12 @@ export async function fetchJiraDevStatusDetail(
     Authorization: authHeader,
   };
 
-  const fetchWithTimeout = async (path: string) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const fetchDevStatusPath = async (path: string) => {
+    const { signal, dispose } = timeoutSignal(timeoutMs);
     try {
       const res = await fetch(`${base}${path}`, {
         headers,
-        signal: controller.signal,
+        signal,
       });
       if (!res.ok) {
         logDevStatus("detail request failed", { path: path.replace(/^.*issueId=/, ""), status: res.status });
@@ -125,19 +125,19 @@ export async function fetchJiraDevStatusDetail(
       logDevStatus("detail request threw", { path: path.replace(/^.*issueId=/, ""), error: (err as Error).message });
       return null;
     } finally {
-      clearTimeout(timer);
+      dispose();
     }
   };
 
   // Fetch pull requests, branches, and repositories in parallel for stash (Bitbucket Server)
   const [prData, branchData, repoData] = await Promise.all([
-    fetchWithTimeout(
+    fetchDevStatusPath(
       `/rest/dev-status/1.0/issue/detail?issueId=${encodeURIComponent(issueId)}&applicationType=stash&dataType=pullrequest`
     ),
-    fetchWithTimeout(
+    fetchDevStatusPath(
       `/rest/dev-status/1.0/issue/detail?issueId=${encodeURIComponent(issueId)}&applicationType=stash&dataType=branch`
     ),
-    fetchWithTimeout(
+    fetchDevStatusPath(
       `/rest/dev-status/1.0/issue/detail?issueId=${encodeURIComponent(issueId)}&applicationType=stash&dataType=repository`
     ),
   ]);
@@ -205,12 +205,11 @@ export async function fetchJiraDevStatusSummary(
     auth.authMode === "basic"
       ? `Basic ${Buffer.from(`${auth.user}:${auth.token}`).toString("base64")}`
       : `Bearer ${auth.token}`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const { signal, dispose } = timeoutSignal(timeoutMs);
   try {
     const res = await fetch(
       `${base}/rest/dev-status/1.0/issue/summary?issueId=${encodeURIComponent(issueId)}`,
-      { headers: { Accept: "application/json", Authorization: authHeader }, signal: controller.signal }
+      { headers: { Accept: "application/json", Authorization: authHeader }, signal }
     );
     if (!res.ok) {
       logDevStatus("summary request failed", { issueId, status: res.status });
@@ -234,7 +233,7 @@ export async function fetchJiraDevStatusSummary(
     logDevStatus("summary request threw", { issueId, error: (err as Error).message });
     return null;
   } finally {
-    clearTimeout(timer);
+    dispose();
   }
 }
 
