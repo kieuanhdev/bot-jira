@@ -861,9 +861,9 @@ Cả hai áp dụng `MAX_LABEL_LENGTH`, `MAX_LABELS_COUNT`, so trùng không ph�
 
 **Files:** `src/app/(app)/app-shell.tsx:84,339-436`
 
-- [ ] `<Sheet open={mobileOpen} onOpenChange={setMobileOpen} side="left" title="Menu">` chứa navGroups, link admin/settings và `ThemeToggle`. Thêm effect đóng menu khi `pathname` đổi.
+- [x] `<Sheet open={mobileOpen} onOpenChange={setMobileOpen} side="left" title="Menu">` chứa navGroups, link admin/settings và `ThemeToggle`. Thêm effect đóng menu khi `pathname` đổi.
 - [ ] QA ở 375px: Esc, bấm ra ngoài, và chọn link đều đóng menu. Focus quay về nút menu.
-- [ ] Commit `refactor(shell): mobile navigation in Sheet`.
+- [x] Commit `refactor(shell): mobile navigation in Sheet`.
 
 ---
 

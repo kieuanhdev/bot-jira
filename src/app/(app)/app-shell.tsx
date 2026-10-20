@@ -15,7 +15,6 @@ import {
   ListChecks,
   Bell,
   Menu,
-  X,
   ChartNoAxesCombined,
   PanelLeftClose,
   PanelLeftOpen,
@@ -26,6 +25,7 @@ import { UnreadBadge } from "./unread-badge";
 import { FreshnessBanner } from "./freshness-banner";
 import { ReconnectBanner } from "./reconnect-banner";
 import { GlobalSyncIndicator } from "./global-sync-indicator";
+import { Sheet } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +82,14 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close the mobile menu when the route changes (adjust state during render).
+  const [menuPathname, setMenuPathname] = useState(pathname);
+  if (menuPathname !== pathname) {
+    setMenuPathname(pathname);
+    setMobileOpen(false);
+  }
+
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const collapsedRef = useRef(collapsed);
 
@@ -354,90 +362,88 @@ export function AppShell({
             </Link>
             <button
               type="button"
-              onClick={() => setMobileOpen((v) => !v)}
+              onClick={() => setMobileOpen(true)}
               className="flex h-9 w-9 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
               aria-label="Menu"
               aria-expanded={mobileOpen}
             >
-              {mobileOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
+              <Menu className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
         </header>
 
-        {/* Mobile Menu Dropdown */}
-        {mobileOpen && (
-          <div className="border-b bg-card p-3 shadow-lg md:hidden">
-            <nav className="flex flex-col gap-3">
-              {navGroups.map((group) => (
-                <div key={group.title} className="flex flex-col gap-1">
-                  <div className="px-3 pt-1 pb-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
-                    {group.title}
-                  </div>
-                  {group.items.map((item) => {
-                    const active = pathname?.startsWith(item.href);
-                    const isNotification = item.href === "/notifications";
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setMobileOpen(false)}
-                        className={cn(
-                          "relative flex h-10 items-center justify-between rounded-md px-3 text-sm font-medium transition-colors",
-                          active
-                            ? "bg-primary-soft text-primary-soft-foreground font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r before:bg-primary"
-                            : "text-foreground/80 hover:bg-accent hover:text-foreground"
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-                          <span className="truncate">{item.label}</span>
-                        </div>
-                        {isNotification && <UnreadBadge variant="inline" />}
-                      </Link>
-                    );
-                  })}
+        {/* Mobile Menu */}
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen} side="left" title="Menu" className="max-w-xs md:hidden">
+          <nav className="flex flex-col gap-3">
+            {navGroups.map((group) => (
+              <div key={group.title} className="flex flex-col gap-1">
+                <div className="px-3 pt-1 pb-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground select-none">
+                  {group.title}
                 </div>
-              ))}
-
-              {/* Footer items for mobile */}
-              <div className="border-t border-border pt-2 flex flex-col gap-1">
-                {isAdmin && (
-                  <Link
-                    href={adminNavItem.href}
-                    onClick={() => setMobileOpen(false)}
-                    className={cn(
-                      "relative flex h-10 items-center justify-between rounded-md px-3 text-sm font-medium transition-colors",
-                      pathname?.startsWith(adminNavItem.href)
-                        ? "bg-primary-soft text-primary-soft-foreground font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r before:bg-primary"
-                        : "text-foreground/80 hover:bg-accent hover:text-foreground"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <adminNavItem.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-                      <span className="truncate">{adminNavItem.label}</span>
-                    </div>
-                  </Link>
-                )}
+                {group.items.map((item) => {
+                  const active = pathname?.startsWith(item.href);
+                  const isNotification = item.href === "/notifications";
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMobileOpen(false)}
+                      className={cn(
+                        "relative flex h-10 items-center justify-between rounded-md px-3 text-sm font-medium transition-colors",
+                        active
+                          ? "bg-primary-soft text-primary-soft-foreground font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r before:bg-primary"
+                          : "text-foreground/80 hover:bg-accent hover:text-foreground"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                        <span className="truncate">{item.label}</span>
+                      </div>
+                      {isNotification && <UnreadBadge variant="inline" />}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+  
+            {/* Footer items for mobile */}
+            <div className="border-t border-border pt-2 flex flex-col gap-1">
+              {isAdmin && (
                 <Link
-                  href={settingsNavItem.href}
+                  href={adminNavItem.href}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     "relative flex h-10 items-center justify-between rounded-md px-3 text-sm font-medium transition-colors",
-                    pathname?.startsWith(settingsNavItem.href)
+                    pathname?.startsWith(adminNavItem.href)
                       ? "bg-primary-soft text-primary-soft-foreground font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r before:bg-primary"
                       : "text-foreground/80 hover:bg-accent hover:text-foreground"
                   )}
                 >
                   <div className="flex items-center gap-3">
-                    <settingsNavItem.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-                    <span className="truncate">{settingsNavItem.label}</span>
+                    <adminNavItem.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                    <span className="truncate">{adminNavItem.label}</span>
                   </div>
                 </Link>
-                <ThemeToggle className="mt-1 self-start" />
-              </div>
-            </nav>
-          </div>
-        )}
+              )}
+              <Link
+                href={settingsNavItem.href}
+                onClick={() => setMobileOpen(false)}
+                className={cn(
+                  "relative flex h-10 items-center justify-between rounded-md px-3 text-sm font-medium transition-colors",
+                  pathname?.startsWith(settingsNavItem.href)
+                    ? "bg-primary-soft text-primary-soft-foreground font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r before:bg-primary"
+                    : "text-foreground/80 hover:bg-accent hover:text-foreground"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <settingsNavItem.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                  <span className="truncate">{settingsNavItem.label}</span>
+                </div>
+              </Link>
+              <ThemeToggle className="mt-1 self-start" />
+            </div>
+          </nav>
+        </Sheet>
 
         <ReconnectBanner />
         <FreshnessBanner />
