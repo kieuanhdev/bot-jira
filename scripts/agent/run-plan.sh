@@ -9,7 +9,9 @@
 #   --only 1.3   run just this task (even if marked done)
 #   --no-review  skip the Claude review step
 #   --yes        do not pause for manual QA on UI tasks
-# Env: AGY_MODEL (agy --model), AGY_TIMEOUT (default 90m), FIX_ROUNDS (default 1)
+#   --watch      open agy's interactive CLI so you can watch it work; exit it (Ctrl+C twice) when it says done
+# Env: AGY_MODEL (agy --model), REVIEW_MODEL (claude --model; default = your Claude Code default),
+#      AGY_TIMEOUT (default 90m), FIX_ROUNDS (default 1)
 
 set -euo pipefail
 
@@ -22,6 +24,7 @@ LOG_DIR="$RUN_DIR/logs"
 DONE_FILE="$RUN_DIR/done.txt"
 HANDOFF="$RUN_DIR/HANDOFF.md"
 BLOCKED="$RUN_DIR/BLOCKED.md"
+CURRENT_FILE="$RUN_DIR/current"   # "<task id> <base sha>" while a task is in progress
 BRANCH="refactor/library-adoption"
 AGY_TIMEOUT="${AGY_TIMEOUT:-90m}"
 FIX_ROUNDS="${FIX_ROUNDS:-1}"
@@ -40,7 +43,7 @@ TASKS=(
 FORBIDDEN_RE='^(\.env|Dockerfile|compose\.yaml|AGENTS\.md|CLAUDE\.md|autoimprove/|\.kilo/|prisma/migrations/)'
 DEPS_RE='^(package\.json|package-lock\.json)$'
 
-DRY_RUN=0; UNTIL=""; ONLY=""; REVIEW=1; ASSUME_YES=0
+DRY_RUN=0; UNTIL=""; ONLY=""; REVIEW=1; ASSUME_YES=0; WATCH=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
@@ -48,6 +51,7 @@ while [[ $# -gt 0 ]]; do
     --only) ONLY="$2"; shift ;;
     --no-review) REVIEW=0 ;;
     --yes) ASSUME_YES=1 ;;
+    --watch) WATCH=1 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -68,7 +72,10 @@ preflight() {
   touch "$DONE_FILE" "$HANDOFF"
   grep -qxF "/$RUN_DIR/" .git/info/exclude 2>/dev/null || echo "/$RUN_DIR/" >> .git/info/exclude
   [[ $DRY_RUN -eq 0 ]] || return 0
-  [[ -z "$(git status --porcelain)" ]] || fail "working tree is not clean; commit or stash first"
+  # An interrupted task (e.g. quota ran out) may leave partial changes; those are resumed, not rejected.
+  if [[ ! -s "$CURRENT_FILE" ]]; then
+    [[ -z "$(git status --porcelain)" ]] || fail "working tree is not clean; commit or stash first"
+  fi
   local current; current="$(git branch --show-current)"
   if [[ "$current" != "$BRANCH" ]]; then
     if git show-ref --verify --quiet "refs/heads/$BRANCH"; then git switch "$BRANCH"
@@ -118,6 +125,18 @@ $(cat "$review_file")
 EOF
 }
 
+resume_prompt() {
+  local id="$1" flags="$2" base="$3"
+  cat <<EOF
+RESUMING AN INTERRUPTED SESSION. The previous worker on this task stopped mid-way (for example it ran out of quota).
+Its partial work is in the repository: inspect 'git status', 'git diff', and 'git log --oneline $base..HEAD'.
+Keep what is correct, finish what is missing, and do not redo steps already done.
+$( [[ -s "$LOG_DIR/review-$id.txt" ]] && echo "A reviewer already rejected an earlier attempt; also fix every issue in $LOG_DIR/review-$id.txt." )
+
+$(task_prompt "$id" "$flags")
+EOF
+}
+
 review_prompt() {
   local id="$1" base="$2"
   cat <<EOF
@@ -138,9 +157,24 @@ EOF
 
 run_agy() {
   local prompt="$1" log="$2"
+  if [[ $WATCH -eq 1 ]]; then
+    # Interactive CLI: the agent's work is visible live; the session ends when the user exits it.
+    local iargs=(-i "$prompt
+
+When the task is finished (committed) or blocked, end with the line: XONG - thoát bằng Ctrl+C hai lần để script chạy tiếp."
+      --add-dir "$ROOT" --dangerously-skip-permissions)
+    [[ -n "${AGY_MODEL:-}" ]] && iargs+=(--model "$AGY_MODEL")
+    echo "[interactive session, output not captured]" >> "$log"
+    agy "${iargs[@]}" || true
+    return 0
+  fi
   local args=(-p "$prompt" --add-dir "$ROOT" --dangerously-skip-permissions --print-timeout "$AGY_TIMEOUT")
   [[ -n "${AGY_MODEL:-}" ]] && args+=(--model "$AGY_MODEL")
-  agy "${args[@]}" 2>&1 | tee -a "$log" || true
+  local code=0
+  agy "${args[@]}" 2>&1 | tee -a "$log" || code="${PIPESTATUS[0]}"
+  if [[ "$code" -ne 0 ]]; then
+    fail "agy exited with code $code (quota/network?). Partial work is kept; re-run the same command later to resume (log: $log)"
+  fi
 }
 
 verify() {
@@ -166,11 +200,16 @@ verify() {
 review() {
   local id="$1" base="$2" out="$3"
   say "Claude review for Task $id"
-  claude -p "$(review_prompt "$id" "$base")" \
+  local model_args=()
+  [[ -n "${REVIEW_MODEL:-}" ]] && model_args=(--model "$REVIEW_MODEL")
+  claude -p "$(review_prompt "$id" "$base")" "${model_args[@]}" \
     --allowedTools "Read" "Grep" "Glob" "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)" \
     --disallowedTools "Edit" "Write" "NotebookEdit" \
     > "$out" 2>&1 || true
   cat "$out"
+  if ! grep -qE '^VERDICT: (PASS|FAIL)' "$out"; then
+    fail "review for Task $id did not finish (Claude quota/network?). Commits are kept; re-run later to redo only the review"
+  fi
   tail -n 5 "$out" | grep -q '^VERDICT: PASS'
 }
 
@@ -178,14 +217,31 @@ run_task() {
   local id="$1" flags="$2"
   local log="$LOG_DIR/task-$id.log"
   local base; base="$(git rev-parse HEAD)"
-  : > "$BLOCKED"
-
-  if [[ $DRY_RUN -eq 1 ]]; then
-    say "Next task: $id (flags: ${flags:-none})"; task_prompt "$id" "$flags"; exit 0
+  local resuming=0
+  if [[ -s "$CURRENT_FILE" ]]; then
+    local cur_id cur_base
+    read -r cur_id cur_base < "$CURRENT_FILE"
+    [[ "$cur_id" == "$id" ]] || fail "Task $cur_id is in progress ($CURRENT_FILE); finish it first or delete that file"
+    base="$cur_base"; resuming=1
   fi
 
-  say "Task $id — fresh agy session (log: $log)"
-  run_agy "$(task_prompt "$id" "$flags")" "$log"
+  if [[ $DRY_RUN -eq 1 ]]; then
+    say "Next task: $id (flags: ${flags:-none}, resuming: $resuming)"; task_prompt "$id" "$flags"; exit 0
+  fi
+
+  echo "$id $base" > "$CURRENT_FILE"
+  : > "$BLOCKED"
+
+  if [[ $resuming -eq 1 && -z "$(git status --porcelain)" && "$(git rev-parse HEAD)" != "$base" ]]; then
+    # Implementation was committed before the interruption: only re-check and review.
+    say "Task $id — resuming at verification/review (commits since ${base:0:7} kept)"
+  elif [[ $resuming -eq 1 ]]; then
+    say "Task $id — resuming interrupted work in a fresh agy session (log: $log)"
+    run_agy "$(resume_prompt "$id" "$flags" "$base")" "$log"
+  else
+    say "Task $id — fresh agy session (log: $log)"
+    run_agy "$(task_prompt "$id" "$flags")" "$log"
+  fi
   verify "$id" "$flags" "$base" "$log"
 
   if [[ $REVIEW -eq 1 ]]; then
@@ -207,6 +263,7 @@ run_task() {
   fi
 
   echo "$id $(git rev-parse --short HEAD) $(date -Iseconds)" >> "$DONE_FILE"
+  : > "$CURRENT_FILE"
   say "Task $id done"
 }
 
