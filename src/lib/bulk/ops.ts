@@ -1,3 +1,4 @@
+import { mapWithConcurrency } from "@/lib/async/concurrency";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { env, bitbucketRepoList } from "@/lib/env";
@@ -580,19 +581,9 @@ export async function executeBulkOperation(operationId: string): Promise<void> {
   // `skipped` at preview time are never touched here.
   const pending = await findPendingBulkOperationItems(operationId);
 
-  // Simple bounded pool: `concurrency` workers drain the pending list.
-  const queue = [...pending];
-  const runners = Array.from(
-    { length: Math.min(concurrency, queue.length) },
-    async () => {
-      while (queue.length > 0) {
-        const item = queue.shift();
-        if (!item) break;
-        await processWithRetry(operationId, item.id, item.jiraKey, auth, concurrency);
-      }
-    }
+  await mapWithConcurrency(pending, concurrency, (item) =>
+    processWithRetry(operationId, item.id, item.jiraKey, auth, concurrency)
   );
-  await Promise.all(runners);
 
   // BULK-003 — aggregate counters from the database, not from the in-process
   // results. This stays correct across retries (items that succeeded in an

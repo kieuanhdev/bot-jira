@@ -1,3 +1,4 @@
+import { mapWithConcurrency } from "@/lib/async/concurrency";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { jiraWith } from "@/lib/jira/client";
@@ -342,33 +343,26 @@ export async function executeBulkCreateOperation(operationId: string): Promise<v
     totalRounds++;
 
     // Bounded worker pool for this round
-    const queue = [...pendingItems];
-    const results: Array<{ id: string; clientRef: string; success: boolean }> = [];
-    const runners = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
-      while (queue.length > 0) {
-        const item = queue.shift();
-        if (!item) break;
-        const itemStart = Date.now();
-        const success = await processCreateItem({
-          operationId,
-          itemId: item.id,
-          rowIndex: item.rowIndex,
-          projectKey,
-          auth,
-          jira,
-          pointsFieldId,
-          epicLinkFieldId,
-          meta,
-        });
-        const itemLatency = Date.now() - itemStart;
-        itemLatenciesMs.push(itemLatency);
-        if (itemLatency > SLOW_ITEM_THRESHOLD_MS) {
-          slowItemCount++;
-        }
-        results.push({ id: item.id, clientRef: item.clientRef, success });
+    const results = await mapWithConcurrency(pendingItems, concurrency, async (item) => {
+      const itemStart = Date.now();
+      const success = await processCreateItem({
+        operationId,
+        itemId: item.id,
+        rowIndex: item.rowIndex,
+        projectKey,
+        auth,
+        jira,
+        pointsFieldId,
+        epicLinkFieldId,
+        meta,
+      });
+      const itemLatency = Date.now() - itemStart;
+      itemLatenciesMs.push(itemLatency);
+      if (itemLatency > SLOW_ITEM_THRESHOLD_MS) {
+        slowItemCount++;
       }
+      return { id: item.id, clientRef: item.clientRef, success };
     });
-    await Promise.all(runners);
 
     // Unlock children of succeeded parents; block children of failed parents
     for (const result of results) {

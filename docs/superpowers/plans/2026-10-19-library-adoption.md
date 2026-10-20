@@ -658,10 +658,10 @@ Task 3.5 xong thì `grep -rn "\.json()" src/app/api src/lib/*/route-service.ts s
 
 **Interfaces:** Consumes `mapWithConcurrency(items, limit, fn)`.
 
-- [ ] `ops.ts`: `await mapWithConcurrency(pending, concurrency, (item) => processWithRetry(operationId, item.id, item.jiraKey, auth, concurrency))`.
-- [ ] `create-execution.ts`: `mapWithConcurrency` trả `results` theo thứ tự input. Phần đo latency và `slowItemCount` chuyển vào trong mapper. Giữ nguyên cách đọc concurrency từ `process.env.BULK_CREATE_CONCURRENCY`.
-- [ ] Test của `ops` và `create-execution` phải xanh mà không sửa test.
-- [ ] Commit `refactor(bulk): use mapWithConcurrency for bulk worker pools`.
+- [x] `ops.ts`: `await mapWithConcurrency(pending, concurrency, (item) => processWithRetry(operationId, item.id, item.jiraKey, auth, concurrency))`.
+- [x] `create-execution.ts`: `mapWithConcurrency` trả `results` theo thứ tự input. Phần đo latency và `slowItemCount` chuyển vào trong mapper. Giữ nguyên cách đọc concurrency từ `process.env.BULK_CREATE_CONCURRENCY`.
+- [x] Test của `ops` và `create-execution` phải xanh mà không sửa test.
+- [x] Commit `refactor(bulk): use mapWithConcurrency for bulk worker pools`.
 
 #### Task 4.6: Một regex thời lượng Jira, một bộ hằng số
 
