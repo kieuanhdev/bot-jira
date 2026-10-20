@@ -2,12 +2,12 @@ import { TZDate } from "@date-fns/tz";
 import {
   addDays,
   differenceInCalendarDays,
-  isWeekend,
   startOfDay,
   startOfISOWeek,
 } from "date-fns";
 
 export const APP_TIMEZONE = "Asia/Ho_Chi_Minh";
+const MS_PER_DAY = 86_400_000;
 
 export type DateKey = string; // YYYY-MM-DD
 
@@ -156,14 +156,16 @@ export function businessDaysInclusive(from: DateKey, to: DateKey): number {
   if (fromDate > toDate) {
     return 0;
   }
-  let count = 0;
-  let cur = new TZDate(fromDate, "UTC");
-  const end = new TZDate(toDate, "UTC");
-  while (cur <= end) {
-    if (!isWeekend(cur)) {
+  const totalDays = Math.round((toDate.getTime() - fromDate.getTime()) / MS_PER_DAY) + 1;
+  const fullWeeks = Math.floor(totalDays / 7);
+  let count = fullWeeks * 5;
+  // Remaining days (0-6) start on the weekday of `from`; getUTCDay: 0 = Sunday, 6 = Saturday.
+  const startDay = fromDate.getUTCDay();
+  for (let i = 0; i < totalDays % 7; i++) {
+    const day = (startDay + i) % 7;
+    if (day !== 0 && day !== 6) {
       count++;
     }
-    cur = addDays(cur, 1);
   }
   return count;
 }
