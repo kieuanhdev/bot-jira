@@ -559,8 +559,8 @@ Task 3.5 xong thì `grep -rn "\.json()" src/app/api src/lib/*/route-service.ts s
 
 #### Task 3.8 (tuỳ chọn, làm sau cùng): `bulk/validation.ts` bằng zod
 
-- [ ] Viết lại `validateBulkRequest` bằng `z.discriminatedUnion` cho selector và action kind, giữ nguyên `ValidationResult` và **nguyên văn các thông báo lỗi tiếng Anh**.
-- [ ] **Điều kiện dừng:** 25 test của `validation.test.ts`, cùng `ops.test.ts` và `branch-name.test.ts`, phải xanh mà không sửa test. Nếu không đạt thì revert, không commit, và ghi lý do vào phụ lục B.
+- [x] Viết lại `validateBulkRequest` bằng `z.discriminatedUnion` cho selector và action kind, giữ nguyên `ValidationResult` và **nguyên văn các thông báo lỗi tiếng Anh**.
+- [x] **Điều kiện dừng:** 25 test của `validation.test.ts`, cùng `ops.test.ts` và `branch-name.test.ts`, phải xanh mà không sửa test. Nếu không đạt thì revert, không commit, và ghi lý do vào phụ lục B.
 - [ ] `create-validator.ts` **không** chuyển trong plan này.
 
 ---
