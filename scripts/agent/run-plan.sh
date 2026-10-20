@@ -9,7 +9,8 @@
 #   --only 1.3   run just this task (even if marked done)
 #   --no-review  skip the Claude review step
 #   --yes        do not pause for manual QA on UI tasks
-#   --watch      open agy's interactive CLI so you can watch it work; exit it (Ctrl+C twice) when it says done
+#   --watch      open agy's interactive CLI instead (you must exit it with Ctrl+C twice after each task)
+# Without --watch the agent runs unattended and its steps are still shown live.
 # Env: AGY_MODEL (agy --model), REVIEW_MODEL (claude --model; default = your Claude Code default),
 #      AGY_TIMEOUT (default 90m), FIX_ROUNDS (default 1)
 
@@ -171,7 +172,9 @@ When the task is finished (committed) or blocked, end with the line: XONG - thoÃ
   local args=(-p "$prompt" --add-dir "$ROOT" --dangerously-skip-permissions --print-timeout "$AGY_TIMEOUT")
   [[ -n "${AGY_MODEL:-}" ]] && args+=(--model "$AGY_MODEL")
   local code=0
-  agy "${args[@]}" 2>&1 | tee -a "$log" || code="${PIPESTATUS[0]}"
+  # stream-json gives live step events; the raw JSON goes to the log, a readable view to the terminal.
+  args+=(--output-format stream-json)
+  agy "${args[@]}" 2>&1 | tee -a "$log" | node "$ROOT/scripts/agent/agy-view.mjs" || code="${PIPESTATUS[0]}"
   if [[ "$code" -ne 0 ]]; then
     fail "agy exited with code $code (quota/network?). Partial work is kept; re-run the same command later to resume (log: $log)"
   fi
