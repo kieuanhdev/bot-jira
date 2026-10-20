@@ -158,7 +158,7 @@ Năm trường hợp dễ gây lỗi nhất mà test theo từng task dễ bỏ 
   - `export const CSV_FORMULA_RE: RegExp`
   - `export function toCsv(rows: unknown[][], opts?: { bom?: boolean }): string`
 
-- [ ] **Viết test trước** (`write.test.ts`):
+- [x] **Viết test trước** (`write.test.ts`):
   - `toCsv([["=SUM(A1)"]])` === `"'=SUM(A1)"`
   - `toCsv([["+1 call"], ["@user"]])` có `'+1 call` và `'@user`
   - `toCsv([[-3, "-3", "-2.5"]])` === `"-3,-3,-2.5"`
@@ -166,17 +166,17 @@ Năm trường hợp dễ gây lỗi nhất mà test theo từng task dễ bỏ 
   - `toCsv([['a"b', "x,y", "l1\nl2"]])` === `'"a""b","x,y","l1\nl2"'`
   - `toCsv([[null, undefined]])` === `","`
   - `toCsv([["a"]], { bom: true }).startsWith("﻿")`
-- [ ] **Kiểm tra output thật của papaparse trước khi chốt assertion.** Chạy `node -e 'const P=require("papaparse");console.log(JSON.stringify(P.unparse([["=SUM(A1)"," x ","-3",-3]],{escapeFormulae:/^(?:[=+@\t\r]|-(?!\d+(?:\.\d+)?$))/})))'`. Có hai khả năng:
+- [x] **Kiểm tra output thật của papaparse trước khi chốt assertion.** Chạy `node -e 'const P=require("papaparse");console.log(JSON.stringify(P.unparse([["=SUM(A1)"," x ","-3",-3]],{escapeFormulae:/^(?:[=+@\t\r]|-(?!\d+(?:\.\d+)?$))/})))'`. Có hai khả năng:
   - **Không có ô nào bị bọc thêm dấu nháy** (ngoài các ô vốn cần nháy) thì giữ assertion như trên.
   - **papaparse bọc thêm nháy** (cho ô đã escape, hoặc ô có khoảng trắng đầu/cuối) thì **không dùng `Papa.unparse`**. Giữ `escapeCsvCell` 12 dòng hiện tại, chuyển nó sang `src/lib/csv/write.ts` và thêm bước chặn bằng `CSV_FORMULA_RE`. Như vậy `export.test.ts` không phải đổi.
   - Ghi lựa chọn và output vừa chạy vào phụ lục B.
-- [ ] Chạy `npx vitest run src/lib/csv/write.test.ts`. Kỳ vọng: FAIL.
-- [ ] **Cài đặt** (nếu dùng papaparse) bằng `Papa.unparse(rows, { escapeFormulae: CSV_FORMULA_RE, newline: <giữ đúng ký tự xuống dòng export.ts đang dùng> })`.
+- [x] Chạy `npx vitest run src/lib/csv/write.test.ts`. Kỳ vọng: FAIL.
+- [x] **Cài đặt** (nếu dùng papaparse) bằng `Papa.unparse(rows, { escapeFormulae: CSV_FORMULA_RE, newline: <giữ đúng ký tự xuống dòng export.ts đang dùng> })`.
   - `CSV_FORMULA_RE = /^(?:[=+@\t\r]|-(?!\d+(?:\.\d+)?$))/`: bắt ký tự công thức ở đầu ô, và dấu `-` nếu phần sau không phải là số.
   - `null` và `undefined` thành ô rỗng.
-- [ ] Thay `escapeCsvCell` và `toCsvRow` trong `export.ts` bằng `toCsv(rows, { bom: true })`. Thay phần escape inline ở `export-operation-csv.ts` bằng `toCsv`.
-- [ ] `export.test.ts` và `export-operation-csv.test.ts` phải xanh mà không sửa test.
-- [ ] Commit `fix(security): neutralise CSV formula injection in report and bulk exports`.
+- [x] Thay `escapeCsvCell` và `toCsvRow` trong `export.ts` bằng `toCsv(rows, { bom: true })`. Thay phần escape inline ở `export-operation-csv.ts` bằng `toCsv`.
+- [x] `export.test.ts` và `export-operation-csv.test.ts` phải xanh mà không sửa test.
+- [x] Commit `fix(security): neutralise CSV formula injection in report and bulk exports`.
 
 #### Task 1.2: Lọc HTML wiki bằng DOMPurify
 
@@ -908,3 +908,6 @@ Cả hai áp dụng `MAX_LABEL_LENGTH`, `MAX_LABELS_COUNT`, so trùng không ph�
 - `npm run test:tz`: PASS (373 test files, 3242 passed, 0 failed, duration 45.72s)
 - Test chỉ fail ở một múi giờ: Không có (cả 2 múi giờ đều pass toàn bộ 3242 tests)
 - Task tuỳ chọn bị bỏ và lý do: Không có (chưa thực hiện)
+- Task 1.1 (CSV escape formula):
+  - Output lệnh kiểm tra papaparse: `node -e 'const P=require("papaparse");console.log(JSON.stringify(P.unparse([["=SUM(A1)"," x ","-3",-3]],{escapeFormulae:/^(?:[=+@\t\r]|-(?!\d+(?:\.\d+)?$))/})))'` -> `"\"'=SUM(A1)\",\" x \",-3,-3"`.
+  - Lựa chọn: papaparse tự động bọc thêm dấu nháy kép cho các ô escape và ô có khoảng trắng viền (`" x "`), làm thay đổi định dạng output mong đợi của `export.test.ts`. Do đó, theo phương án 2 của plan, ta không dùng `Papa.unparse` trực tiếp mà triển khai `escapeCsvCell` trong `src/lib/csv/write.ts` kết hợp `CSV_FORMULA_RE` để vô hiệu hoá formula injection chuẩn RFC 4180 và giữ nguyên định dạng cho các test hiện có.

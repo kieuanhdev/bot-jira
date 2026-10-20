@@ -1,3 +1,5 @@
+import { toCsv } from "@/lib/csv/write";
+
 export interface OperationExportItem {
   rowIndex?: number;
   clientRef?: string;
@@ -9,11 +11,17 @@ export interface OperationExportItem {
 
 export function generateOperationCsv(items: OperationExportItem[]): string {
   const headers = ["STT", "Client Ref", "Jira Key", "Summary", "Trạng thái", "Lỗi / Chi tiết"];
+  const headerLine = toCsv([headers], { bom: true });
+
+  if (items.length === 0) {
+    return headerLine;
+  }
+
   const rows = items.map((item, idx) => {
     const stt = String((item.rowIndex ?? idx) + 1);
     const clientRef = item.clientRef || "";
     const jiraKey = item.jiraKey || "";
-    const summary = (item.requested?.summary || "").replace(/"/g, '""');
+    const summary = item.requested?.summary || "";
     const statusText =
       item.status === "succeeded"
         ? "Thành công"
@@ -22,11 +30,11 @@ export function generateOperationCsv(items: OperationExportItem[]): string {
           : item.status === "blocked_by_parent"
             ? "Chờ task cha"
             : item.status;
-    const errorText = (item.error || "").replace(/"/g, '""');
-    return `"${stt}","${clientRef}","${jiraKey}","${summary}","${statusText}","${errorText}"`;
+    const errorText = item.error || "";
+    return [stt, clientRef, jiraKey, summary, statusText, errorText];
   });
 
-  return "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+  return `${headerLine}\r\n${toCsv(rows, { quoteStrings: true })}`;
 }
 
 export function exportOperationCsv(
