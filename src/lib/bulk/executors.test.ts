@@ -528,6 +528,30 @@ describe("Bulk Action Executors (M4-03 / M4-04)", () => {
       expect(res.branch).toBeDefined();
     });
 
+    it("reuses existing legacy branch for Vietnamese status when new branch does not exist", async () => {
+      const jira = createMockJira();
+      vi.mocked(prisma.issueCache.findUnique).mockResolvedValue({ status: "Đang làm" } as never);
+      vi.mocked(bitbucket.getBranch).mockImplementation(async (_repo, branch) => {
+        if (branch === "ang-lm/ABC-1") {
+          return { name: "ang-lm/ABC-1" } as never;
+        }
+        return null as never;
+      });
+
+      const res = await createBranchForIssue(
+        jira,
+        "ABC-1",
+        { repo: "my-repo", nameTemplate: "{status}/{project}-{number}" },
+        { user: "u", token: "t" }
+      );
+
+      expect(bitbucket.getBranch).toHaveBeenCalledWith("my-repo", "dang-lam/ABC-1", { user: "u", token: "t" });
+      expect(bitbucket.getBranch).toHaveBeenCalledWith("my-repo", "ang-lm/ABC-1", { user: "u", token: "t" });
+      expect(bitbucket.createBranch).not.toHaveBeenCalled();
+      expect(recordExplicitBranchLink).toHaveBeenCalledWith("my-repo", "ang-lm/ABC-1", "ABC-1");
+      expect(res.branch).toBe("ang-lm/ABC-1");
+    });
+
     it("executeBranchAction fails when bitbucket creds missing", async () => {
       const jira = createMockJira();
       const ctx: BulkExecutionContext = { jira, bitbucket: null };

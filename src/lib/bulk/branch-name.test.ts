@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderBranchName, defaultBranchTemplate } from "./branch-name";
+import { renderBranchName, renderLegacyBranchName, defaultBranchTemplate } from "./branch-name";
 import {
   computePreview,
   normalizeKey,
@@ -44,6 +44,19 @@ describe("renderBranchName", () => {
 
   it("returns a stable default template", () => {
     expect(defaultBranchTemplate()).toBe("{project}-{number}");
+  });
+
+  it("transliterates Vietnamese status in branch names (Đ/đ -> d, diacritics removed)", () => {
+    const template = `{status}/${defaultBranchTemplate()}`;
+    expect(renderBranchName(template, "ABC-1", "Đang làm")).toBe("dang-lam/ABC-1");
+    expect(renderBranchName(template, "ABC-1", "Chờ review")).toBe("cho-review/ABC-1");
+    expect(renderBranchName("{status}", "ABC-1", "Chờ review")).toBe("cho-review");
+  });
+
+  it("retains legacy branch naming in renderLegacyBranchName", () => {
+    const template = `{status}/${defaultBranchTemplate()}`;
+    expect(renderLegacyBranchName(template, "ABC-1", "Đang làm")).toBe("ang-lm/ABC-1");
+    expect(renderLegacyBranchName("{status}", "ABC-1", "Đang làm")).toBe("ang-lm");
   });
 });
 

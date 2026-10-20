@@ -222,15 +222,15 @@ Năm trường hợp dễ gây lỗi nhất mà test theo từng task dễ bỏ 
   - `renderBranchName(template, key, status): string`: chữ ký giữ nguyên, nhưng status được bỏ dấu (Đ/đ thành d).
   - `export function renderLegacyBranchName(template: string, key: string, status: string): string`: thuật toán cũ, chỉ dùng để tra cứu.
 
-- [ ] **Viết test trước:**
+- [x] **Viết test trước:**
   - `renderBranchName("{status}/{key}", "ABC-1", "Đang làm")` === `"dang-lam/ABC-1"`. Dùng placeholder thật trong `defaultBranchTemplate`.
   - `renderBranchName(..., "Chờ review")` cho ra `cho-review`.
   - `renderLegacyBranchName(..., "Đang làm")` cho ra `ang-lm`, tức là giữ đúng hành vi cũ.
   - 8 test cũ không đổi.
-- [ ] **Cài đặt:** chuẩn hoá status bằng `.normalize("NFD").replace(/\p{M}/gu, "").replace(/[đĐ]/g, "d")` trước bước lọc `[a-z0-9-]`. `renderLegacyBranchName` là bản sao của thuật toán hiện tại.
-- [ ] **Tra cứu tương thích:** ở `executors.ts` và `ops.ts`, nếu tên cũ khác tên mới thì gọi `getBranch` với tên mới trước. Nếu không thấy thì thử tên cũ. Nếu tên cũ tồn tại thì dùng tên cũ, không tạo branch mới.
+- [x] **Cài đặt:** chuẩn hoá status bằng `.normalize("NFD").replace(/\p{M}/gu, "").replace(/[đĐ]/g, "d")` trước bước lọc `[a-z0-9-]`. `renderLegacyBranchName` là bản sao của thuật toán hiện tại.
+- [x] **Tra cứu tương thích:** ở `executors.ts` và `ops.ts`, nếu tên cũ khác tên mới thì gọi `getBranch` với tên mới trước. Nếu không thấy thì thử tên cũ. Nếu tên cũ tồn tại thì dùng tên cũ, không tạo branch mới.
   - Test trong `executors` hoặc `ops` test (dùng mock `bitbucket.getBranch` có sẵn): branch cũ `ang-lm/ABC-1` tồn tại thì `createBranch` không được gọi, và kết quả trả về tên cũ.
-- [ ] Commit `fix(bulk): transliterate Vietnamese status in branch names, keep legacy lookup`.
+- [x] Commit `fix(bulk): transliterate Vietnamese status in branch names, keep legacy lookup`.
 
 #### Task 1.4: Sinh ID ngẫu nhiên bằng crypto
 

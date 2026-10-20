@@ -4,7 +4,7 @@ import { env, bitbucketRepoList } from "@/lib/env";
 import { bitbucket, type BbCreds } from "@/lib/bitbucket/client";
 import { extractEpicKey } from "@/lib/issues/epic";
 import { userJiraAuth, userBitbucketCreds } from "@/lib/user-creds";
-import { renderBranchName } from "./branch-name";
+import { renderBranchName, renderLegacyBranchName } from "./branch-name";
 import { expandDependencies } from "@/lib/issues/dependencies";
 import { getProjectPeopleFields } from "@/lib/jira/people-fields";
 
@@ -354,9 +354,22 @@ export async function previewBulk(
       const repo = action.value.repo ?? bitbucketRepoList[0] ?? "";
       const template = action.value.nameTemplate ?? DEFAULT_BRANCH_TEMPLATE;
       branchName = renderBranchName(template, key, issue.status);
+      const legacyBranchName = renderLegacyBranchName(template, key, issue.status);
       try {
         const existing = await bitbucket.getBranch(repo, branchName, bitbucketCreds);
-        branchExists = existing != null;
+        if (existing != null) {
+          branchExists = true;
+        } else if (legacyBranchName !== branchName) {
+          const legacyExisting = await bitbucket.getBranch(repo, legacyBranchName, bitbucketCreds);
+          if (legacyExisting != null) {
+            branchExists = true;
+            branchName = legacyBranchName;
+          } else {
+            branchExists = false;
+          }
+        } else {
+          branchExists = false;
+        }
       } catch {
         // Could not check (no bitbucket config / network). Leave unknown.
       }

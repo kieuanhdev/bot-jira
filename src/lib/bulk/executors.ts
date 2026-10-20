@@ -5,7 +5,7 @@ import { bitbucket, type BbCreds } from "@/lib/bitbucket/client";
 import { refreshJiraIssueCache } from "@/lib/issues/cache";
 import { notifyWatchersOfComment } from "@/lib/issues/notify-watchers";
 import type { JiraIssue } from "@/lib/jira/types";
-import { renderBranchName } from "./branch-name";
+import { renderBranchName, renderLegacyBranchName } from "./branch-name";
 import { recordExplicitBranchLink } from "@/lib/bitbucket/link-service";
 import { audit } from "@/lib/audit";
 import { getProjectPeopleFields } from "@/lib/jira/people-fields";
@@ -135,10 +135,20 @@ export async function createBranchForIssue(
     where: { jiraKey: key },
     select: { status: true },
   });
-  const branchName = renderBranchName(template, key, cached?.status ?? "task");
+  const rawStatus = cached?.status ?? "task";
+  let branchName = renderBranchName(template, key, rawStatus);
+  const legacyBranchName = renderLegacyBranchName(template, key, rawStatus);
 
   // Idempotency: skip if the branch already exists.
-  const existing = await bitbucket.getBranch(repo, branchName, creds);
+  // Check the new transliterated name first. If not found and legacy name differs, check legacy name.
+  let existing = await bitbucket.getBranch(repo, branchName, creds);
+  if (!existing && legacyBranchName !== branchName) {
+    const legacyExisting = await bitbucket.getBranch(repo, legacyBranchName, creds);
+    if (legacyExisting) {
+      existing = legacyExisting;
+      branchName = legacyBranchName;
+    }
+  }
   if (existing) {
     await linkBranch(key, repo, branchName);
     return { branch: branchName, repo };

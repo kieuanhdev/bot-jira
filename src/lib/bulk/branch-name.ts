@@ -21,6 +21,27 @@ export function defaultBranchTemplate(): string {
 export function renderBranchName(template: string, key: string, status: string): string {
   const project = key.split("-")[0] ?? key;
   const number = key.includes("-") ? key.slice(key.indexOf("-") + 1) : key;
+  const safeStatus = status
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[đĐ]/g, "d")
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+  const name = template
+    .replaceAll("{issue}", key)
+    .replaceAll("{project}", project)
+    .replaceAll("{number}", number)
+    .replaceAll("{status}", safeStatus || "task");
+  return name.replace(/[^a-zA-Z0-9/_.-]/g, "-");
+}
+
+/**
+ * Legacy branch name rendering algorithm (retained for backward-compatible lookup).
+ */
+export function renderLegacyBranchName(template: string, key: string, status: string): string {
+  const project = key.split("-")[0] ?? key;
+  const number = key.includes("-") ? key.slice(key.indexOf("-") + 1) : key;
   const safeStatus = status.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
   const name = template
     .replaceAll("{issue}", key)
