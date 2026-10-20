@@ -300,7 +300,7 @@ export function businessDaysInclusive(from: DateKey, to: DateKey): number; // Mo
 
 Tham số `tz` mặc định là `APP_TIMEZONE`.
 
-- [ ] **Viết test trước.** Bọc toàn bộ trong `describe.each(["UTC", "Asia/Ho_Chi_Minh", "America/New_York"])`, đặt `process.env.TZ` ở `beforeEach` và khôi phục ở `afterEach`.
+- [x] **Viết test trước.** Bọc toàn bộ trong `describe.each(["UTC", "Asia/Ho_Chi_Minh", "America/New_York"])`, đặt `process.env.TZ` ở `beforeEach` và khôi phục ở `afterEach`.
   - `toDateKey(new Date("2026-10-01T16:59:59Z"))` === `"2026-10-01"`
   - `toDateKey(new Date("2026-10-01T17:00:00Z"))` === `"2026-10-02"`
   - `toDateKey(new Date("2026-10-01T17:30:00Z"), "UTC")` === `"2026-10-01"`
@@ -314,10 +314,10 @@ Tham số `tz` mặc định là `APP_TIMEZONE`.
   - `businessDaysInclusive("2026-10-02", "2026-10-05")` === 2 (thứ Sáu → thứ Hai)
   - `businessDaysInclusive("2026-10-05", "2026-10-12")` === 6
   - `businessDaysInclusive("2026-10-03", "2026-10-04")` === 0 (thứ Bảy → Chủ nhật)
-- [ ] Chạy test. Kỳ vọng: FAIL vì module chưa tồn tại.
-- [ ] **Cài đặt:** dùng `TZDate` / `tz()` của `@date-fns/tz` cùng `date-fns` (`addDays`, `differenceInCalendarDays`, `startOfISOWeek`, `isWeekend`). Không dùng getter local (`getDate`, `setHours`).
-- [ ] Chạy `npx vitest run src/lib/date` và `TZ=Asia/Ho_Chi_Minh npx vitest run src/lib/date`. Kỳ vọng: cả hai PASS.
-- [ ] Commit `feat(date): add timezone-safe date module on date-fns/tz`.
+- [x] Chạy test. Kỳ vọng: FAIL vì module chưa tồn tại.
+- [x] **Cài đặt:** dùng `TZDate` / `tz()` của `@date-fns/tz` cùng `date-fns` (`addDays`, `differenceInCalendarDays`, `startOfISOWeek`, `isWeekend`). Không dùng getter local (`getDate`, `setHours`).
+- [x] Chạy `npx vitest run src/lib/date` và `TZ=Asia/Ho_Chi_Minh npx vitest run src/lib/date`. Kỳ vọng: cả hai PASS.
+- [x] Commit `feat(date): add timezone-safe date module on date-fns/tz`.
 
 #### Task 2.2: Dùng module cho các bản sao mẹo en-CA
 
