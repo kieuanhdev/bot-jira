@@ -646,9 +646,9 @@ Task 3.5 xong thì `grep -rn "\.json()" src/app/api src/lib/*/route-service.ts s
 - Xoá `setAvatarCache`, trường `expiresAt` và `setInterval` dọn dẹp.
 - `_clearAvatarCache` xoá cả hai cache **và** hai map in-flight. `_getAvatarCacheSize` trả `avatarCache.size`.
 
-- [ ] **Viết test trước:** ghi 5001 user URL thì `userAvatarUrlCache.size === 5000`. Export `_getUserUrlCacheSize()` để test đọc.
-- [ ] Test "evicts oldest entries when cache exceeds cap" (dòng 166) và các test bảo mật phải xanh mà không sửa test.
-- [ ] Commit `refactor(avatar): lru-cache for avatar and user-url caches, drop sweeper`.
+- [x] **Viết test trước:** ghi 5001 user URL thì `userAvatarUrlCache.size === 5000`. Export `_getUserUrlCacheSize()` để test đọc.
+- [x] Test "evicts oldest entries when cache exceeds cap" (dòng 166) và các test bảo mật phải xanh mà không sửa test.
+- [x] Commit `refactor(avatar): lru-cache for avatar and user-url caches, drop sweeper`.
 
 #### Task 4.5: Bỏ 2 worker pool viết tay
 

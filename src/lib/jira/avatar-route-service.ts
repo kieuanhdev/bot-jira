@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHash } from "crypto";
+import { LRUCache } from "lru-cache";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { userJiraAuth } from "@/lib/user-creds";
@@ -25,36 +26,41 @@ const ALLOWED_AVATAR_HOSTS = new Set([
   "avatar-management--avatars.us-west-2.prod.public.atl-paas.net",
 ]);
 
-type CachedAvatar = {
+type AvatarEntry = {
   data: Buffer;
   contentType: string;
-  expiresAt: number;
 };
 
-const avatarCache = new Map<string, CachedAvatar>();
-const userAvatarUrlCache = new Map<string, { urls: Record<string, string>; expiresAt: number }>();
+const MAX_USER_URL_CACHE_ENTRIES = 5000;
+
+const avatarCache = new LRUCache<string, AvatarEntry>({
+  max: MAX_AVATAR_CACHE_ENTRIES,
+  ttl: AVATAR_CACHE_TTL_MS,
+});
+const userAvatarUrlCache = new LRUCache<string, Record<string, string>>({
+  max: MAX_USER_URL_CACHE_ENTRIES,
+  ttl: USER_URLS_CACHE_TTL_MS,
+});
 const inFlightUserLookups = new Map<string, Promise<Record<string, string> | null>>();
 const inFlightImageFetches = new Map<string, Promise<{ data: Buffer; contentType: string } | null>>();
-
-function setAvatarCache(key: string, value: CachedAvatar) {
-  if (avatarCache.has(key)) {
-    avatarCache.delete(key);
-  } else if (avatarCache.size >= MAX_AVATAR_CACHE_ENTRIES) {
-    const oldestKey = avatarCache.keys().next().value;
-    if (oldestKey !== undefined) {
-      avatarCache.delete(oldestKey);
-    }
-  }
-  avatarCache.set(key, value);
-}
 
 export function _clearAvatarCache(): void {
   avatarCache.clear();
   userAvatarUrlCache.clear();
+  inFlightUserLookups.clear();
+  inFlightImageFetches.clear();
 }
 
 export function _getAvatarCacheSize(): number {
   return avatarCache.size;
+}
+
+export function _getUserUrlCacheSize(): number {
+  return userAvatarUrlCache.size;
+}
+
+export function _setUserUrlCacheForTest(key: string, urls: Record<string, string>): void {
+  userAvatarUrlCache.set(key, urls);
 }
 
 /**
@@ -74,24 +80,6 @@ export function isJiraOrigin(rawUrl: string, jiraBaseUrl: string): boolean {
   } catch {
     return false;
   }
-}
-
-// Periodic cleanup every 10 minutes to prevent memory leak
-if (typeof setInterval !== "undefined") {
-  const timer = setInterval(() => {
-    const now = Date.now();
-    for (const [key, value] of avatarCache.entries()) {
-      if (value.expiresAt <= now) {
-        avatarCache.delete(key);
-      }
-    }
-    for (const [key, value] of userAvatarUrlCache.entries()) {
-      if (value.expiresAt <= now) {
-        userAvatarUrlCache.delete(key);
-      }
-    }
-  }, 10 * 60 * 1000);
-  if (timer.unref) timer.unref();
 }
 
 function selectAvatarUrl(urls: Record<string, string>, size: string): string | null {
@@ -132,8 +120,8 @@ async function lookupUserAvatarUrls(
 
   // 1. Memory cache
   const cached = userAvatarUrlCache.get(normUser);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.urls;
+  if (cached) {
+    return cached;
   }
 
   // 2. In-flight promise deduplication
@@ -171,10 +159,7 @@ async function lookupUserAvatarUrls(
                 Object.keys(u.avatarUrls).length > 0 &&
                 !isBlankGravatar(u.avatarUrls)
               ) {
-                userAvatarUrlCache.set(normUser, {
-                  urls: u.avatarUrls,
-                  expiresAt: Date.now() + USER_URLS_CACHE_TTL_MS,
-                });
+                userAvatarUrlCache.set(normUser, u.avatarUrls);
                 return u.avatarUrls;
               }
             }
@@ -221,10 +206,7 @@ async function lookupUserAvatarUrls(
       }
 
       if (foundUrls) {
-        userAvatarUrlCache.set(normUser, {
-          urls: foundUrls,
-          expiresAt: Date.now() + USER_URLS_CACHE_TTL_MS,
-        });
+        userAvatarUrlCache.set(normUser, foundUrls);
         return foundUrls;
       }
     } catch {
@@ -370,7 +352,7 @@ export async function handleAvatarRequest(req: Request) {
     ? `url:${validatedTargetUrl}`
     : `user:${username?.toLowerCase()}:${size}`;
   const cached = avatarCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
+  if (cached) {
     const cleanContentType = (cached.contentType.split(";")[0] || "image/png").trim();
     const etag = `"${createHash("md5").update(cached.data).digest("hex")}"`;
     if (req.headers.get("if-none-match") === etag) {
@@ -461,10 +443,9 @@ export async function handleAvatarRequest(req: Request) {
       if (fallbackUrl !== targetUrl) {
         const fallbackResult = await fetchImageWithDedup(fallbackUrl, authHeaderValue, base);
         if (fallbackResult) {
-          setAvatarCache(cacheKey, {
+          avatarCache.set(cacheKey, {
             data: fallbackResult.data,
             contentType: fallbackResult.contentType,
-            expiresAt: Date.now() + AVATAR_CACHE_TTL_MS,
           });
           const cleanContentType = (fallbackResult.contentType.split(";")[0] || "image/png").trim();
           const etag = `"${createHash("md5").update(fallbackResult.data).digest("hex")}"`;
@@ -483,10 +464,9 @@ export async function handleAvatarRequest(req: Request) {
     return NextResponse.json({ error: "Avatar not found on Jira" }, { status: 404 });
   }
 
-  setAvatarCache(cacheKey, {
+  avatarCache.set(cacheKey, {
     data: imgResult.data,
     contentType: imgResult.contentType,
-    expiresAt: Date.now() + AVATAR_CACHE_TTL_MS,
   });
 
   const cleanContentType = (imgResult.contentType.split(";")[0] || "image/png").trim();

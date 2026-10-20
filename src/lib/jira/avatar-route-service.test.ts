@@ -31,6 +31,8 @@ import {
   isJiraOrigin,
   _clearAvatarCache,
   _getAvatarCacheSize,
+  _getUserUrlCacheSize,
+  _setUserUrlCacheForTest,
 } from "./avatar-route-service";
 import { _resetRateLimits } from "@/lib/rate-limit";
 
@@ -181,5 +183,12 @@ describe("handleAvatarRequest security hardening", () => {
     }
 
     expect(_getAvatarCacheSize()).toBeLessThanOrEqual(500);
+  });
+
+  it("caps the user avatar URL cache at 5000 entries", () => {
+    for (let i = 0; i <= 5000; i++) {
+      _setUserUrlCacheForTest(`user-${i}`, { "24x24": `https://jira.example.test/a-${i}.png` });
+    }
+    expect(_getUserUrlCacheSize()).toBe(5000);
   });
 });
