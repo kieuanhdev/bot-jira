@@ -33,10 +33,6 @@ export type IssueItem = {
   aiScore: {
     points: number;
     confidence: number | null;
-    reasoning: string;
-    risks: string[];
-    missingInformation: string[];
-    similarTasks: string[];
     model: string;
     promptVersion: string | null;
     scoredAt: string;

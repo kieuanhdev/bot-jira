@@ -59,10 +59,7 @@ export function createIssueListSelect(includeDescription = false) {
       select: {
         points: true,
         confidence: true,
-        reasoning: true,
-        risks: true,
-        missingInformation: true,
-        similarTasks: true,
+        // reasoning / risks / missingInformation / similarTasks are long; only the detail view needs them.
         model: true,
         promptVersion: true,
         scoredAt: true,
