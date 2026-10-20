@@ -16,6 +16,9 @@ const ingestMock = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/events/store", () => ingestMock);
+vi.mock("@/lib/queue/boss", () => ({
+  enqueueWebhookEvent: vi.fn().mockResolvedValue("job-1"),
+}));
 
 import { POST as ciWebhookPost } from "./ci/route";
 import { _resetWebhookRateLimits } from "./_shared";
