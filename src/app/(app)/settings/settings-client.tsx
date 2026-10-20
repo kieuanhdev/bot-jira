@@ -15,7 +15,7 @@ import { ProjectPeopleFieldsSettings } from "./project-people-fields-settings";
 import { ProjectLeadersSettings } from "./project-leaders-settings";
 import { useSettingsController } from "./lib/use-settings-controller";
 import { getServiceHealthBadge, type User } from "./lib/settings-model";
-import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { ThemeCards } from "@/components/shared/theme-cards";
 import { THEME_TOGGLE_ENABLED } from "@/lib/theme";
 
 export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boolean }) {
@@ -43,7 +43,7 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ThemeToggle />
+            <ThemeCards />
           </CardContent>
         </Card>
       )}

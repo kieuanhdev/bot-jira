@@ -20,6 +20,7 @@ import {
   PanelLeftOpen,
   ShieldCheck,
   Bug,
+  Palette,
 } from "lucide-react";
 import { UnreadBadge } from "./unread-badge";
 import { FreshnessBanner } from "./freshness-banner";
@@ -320,7 +321,13 @@ export function AppShell({
           </Link>
 
           {!collapsed ? (
-            <ThemeToggle className="my-1 self-start" />
+            <div className="flex h-10 w-full items-center justify-between rounded-md px-3 text-sm text-foreground/80 hover:bg-accent/40 transition-colors">
+              <div className="flex items-center gap-3 overflow-hidden select-none">
+                <Palette className="h-[18px] w-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="truncate">Giao diện</span>
+              </div>
+              <ThemeToggle />
+            </div>
           ) : (
             <ThemeToggle compact className="my-1" />
           )}
@@ -448,7 +455,13 @@ export function AppShell({
                   <span className="truncate">{settingsNavItem.label}</span>
                 </div>
               </Link>
-              <ThemeToggle className="mt-1 self-start" />
+              <div className="flex h-10 w-full items-center justify-between rounded-md px-3 text-sm text-foreground/80 hover:bg-accent/40 transition-colors">
+                <div className="flex items-center gap-3 select-none">
+                  <Palette className="h-[18px] w-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span className="truncate">Giao diện</span>
+                </div>
+                <ThemeToggle />
+              </div>
             </div>
           </nav>
         </Sheet>
