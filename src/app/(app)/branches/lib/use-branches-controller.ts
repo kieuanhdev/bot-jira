@@ -91,7 +91,7 @@ export function useBranchesController() {
 
   const facetQueryResult = useQuery<BranchesQueryResult>({
     queryKey: branchesKeys.facets,
-    queryFn: () => api<BranchesQueryResult>("/api/branches?pageSize=1"),
+    queryFn: () => api<BranchesQueryResult>("/api/branches?facetsOnly=1"),
     staleTime: 5 * 60 * 1000,
   });
 

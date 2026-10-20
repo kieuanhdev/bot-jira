@@ -18,6 +18,7 @@ export interface ListBranchesOptions {
   order?: "asc" | "desc";
   page?: number;
   pageSize?: number;
+  facetsOnly?: boolean;
 }
 
 export async function listBranchesForUser(
@@ -51,6 +52,7 @@ export async function listBranchesForUser(
     order: options.order,
     page: isNaN(page) ? 1 : Math.max(1, page),
     pageSize: isNaN(pageSize) ? 25 : Math.max(1, pageSize),
+    facetsOnly: options.facetsOnly,
   });
 
   return JSON.parse(

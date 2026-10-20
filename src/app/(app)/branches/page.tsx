@@ -57,7 +57,7 @@ export default async function BranchesPage({ searchParams }: BranchesPageProps) 
             }),
         queryClient.prefetchQuery({
           queryKey: branchesKeys.facets,
-          queryFn: () => listBranchesForUser(session.user, { pageSize: 1 }),
+          queryFn: () => listBranchesForUser(session.user, { facetsOnly: true }),
         }),
         queryClient.prefetchQuery({
           queryKey: meKeys.status,

@@ -17,6 +17,8 @@ export type BranchQueryParams = {
   order?: "asc" | "desc";
   page?: number;
   pageSize?: number;
+  /** Only compute facets + freshness (skips rows, count and summary queries). */
+  facetsOnly?: boolean;
 };
 
 export type CountOption = {
@@ -91,6 +93,85 @@ export type BranchesQueryResult = {
   jiraBaseUrl?: string | null;
 };
 
+async function queryBranchFacets(
+  scope: string[],
+  scopeWhere: Prisma.BranchInfoWhereInput
+): Promise<BranchesQueryResult["facets"]> {
+  // Calculate facets from distinct active values (BR-010: do not silently cap top 20 repos)
+  const [repoGroups, prGroups, statusGroups, assigneeGroups] = await Promise.all([
+    prisma.branchInfo.groupBy({
+      by: ["repo"],
+      where: { deletedAt: null, AND: [scopeWhere] },
+      _count: { _all: true },
+      orderBy: { _count: { repo: "desc" } },
+    }),
+    prisma.branchInfo.groupBy({
+      by: ["prState"],
+      where: { deletedAt: null, AND: [scopeWhere], prState: { not: null } },
+      _count: { _all: true },
+    }),
+    prisma.issueCache.groupBy({
+      by: ["status"],
+      where: {
+        deletedAt: null,
+        ...(scope.length > 0 ? { projectKey: { in: scope } } : {}),
+        branches: { some: { deletedAt: null } },
+      },
+      _count: { _all: true },
+      orderBy: { _count: { status: "desc" } },
+    }),
+    prisma.issueCache.groupBy({
+      by: ["assigneeJira"],
+      where: {
+        deletedAt: null,
+        ...(scope.length > 0 ? { projectKey: { in: scope } } : {}),
+        assigneeJira: { not: null },
+        branches: { some: { deletedAt: null } },
+      },
+      _count: { _all: true },
+      orderBy: { _count: { assigneeJira: "desc" } },
+    }),
+  ]);
+
+  const projectsMap = new Map<string, number>();
+  for (const r of repoGroups) {
+    const proj = r.repo.split("/")[0] ?? r.repo;
+    projectsMap.set(proj, (projectsMap.get(proj) ?? 0) + r._count._all);
+  }
+
+  const facets = {
+    projects: Array.from(projectsMap.entries()).map(([value, count]) => ({
+      value,
+      label: value,
+      count,
+    })),
+    repositories: repoGroups.map((r) => ({
+      value: r.repo,
+      label: r.repo,
+      count: r._count._all,
+    })),
+    prStates: prGroups.map((p) => ({
+      value: p.prState ?? "none",
+      label: p.prState ?? "No PR",
+      count: p._count._all,
+    })),
+    taskStatuses: statusGroups.map((s) => ({
+      value: s.status,
+      label: s.status,
+      count: s._count._all,
+    })),
+    assignees: assigneeGroups
+      .filter((a): a is { assigneeJira: string; _count: { _all: number } } => Boolean(a.assigneeJira))
+      .map((a) => ({
+        value: a.assigneeJira,
+        label: a.assigneeJira,
+        count: a._count._all,
+      })),
+  };
+
+  return facets;
+}
+
 export async function queryBranches(params: BranchQueryParams): Promise<BranchesQueryResult> {
   const pageIndex = Math.max(1, params.page ?? 1);
   const pageSize = Math.min(100, Math.max(10, params.pageSize ?? 25));
@@ -126,6 +207,16 @@ export async function queryBranches(params: BranchQueryParams): Promise<Branches
           ],
         }
       : {};
+
+  if (params.facetsOnly) {
+    return {
+      items: [],
+      page: { index: 1, size: 0, totalItems: 0, totalPages: 1 },
+      summary: { active: 0, linked: 0, suggested: 0, unlinked: 0, openPr: 0, attention: 0 },
+      facets: await queryBranchFacets(scope, scopeWhere),
+      freshness,
+    };
+  }
 
   const andConditions: Prisma.BranchInfoWhereInput[] = [
     { deletedAt: null },
@@ -350,77 +441,7 @@ export async function queryBranches(params: BranchQueryParams): Promise<Branches
     };
   });
 
-  // Calculate facets from distinct active values (BR-010: do not silently cap top 20 repos)
-  const [repoGroups, prGroups, statusGroups, assigneeGroups] = await Promise.all([
-    prisma.branchInfo.groupBy({
-      by: ["repo"],
-      where: { deletedAt: null, AND: [scopeWhere] },
-      _count: { _all: true },
-      orderBy: { _count: { repo: "desc" } },
-    }),
-    prisma.branchInfo.groupBy({
-      by: ["prState"],
-      where: { deletedAt: null, AND: [scopeWhere], prState: { not: null } },
-      _count: { _all: true },
-    }),
-    prisma.issueCache.groupBy({
-      by: ["status"],
-      where: {
-        deletedAt: null,
-        ...(scope.length > 0 ? { projectKey: { in: scope } } : {}),
-        branches: { some: { deletedAt: null } },
-      },
-      _count: { _all: true },
-      orderBy: { _count: { status: "desc" } },
-    }),
-    prisma.issueCache.groupBy({
-      by: ["assigneeJira"],
-      where: {
-        deletedAt: null,
-        ...(scope.length > 0 ? { projectKey: { in: scope } } : {}),
-        assigneeJira: { not: null },
-        branches: { some: { deletedAt: null } },
-      },
-      _count: { _all: true },
-      orderBy: { _count: { assigneeJira: "desc" } },
-    }),
-  ]);
-
-  const projectsMap = new Map<string, number>();
-  for (const r of repoGroups) {
-    const proj = r.repo.split("/")[0] ?? r.repo;
-    projectsMap.set(proj, (projectsMap.get(proj) ?? 0) + r._count._all);
-  }
-
-  const facets = {
-    projects: Array.from(projectsMap.entries()).map(([value, count]) => ({
-      value,
-      label: value,
-      count,
-    })),
-    repositories: repoGroups.map((r) => ({
-      value: r.repo,
-      label: r.repo,
-      count: r._count._all,
-    })),
-    prStates: prGroups.map((p) => ({
-      value: p.prState ?? "none",
-      label: p.prState ?? "No PR",
-      count: p._count._all,
-    })),
-    taskStatuses: statusGroups.map((s) => ({
-      value: s.status,
-      label: s.status,
-      count: s._count._all,
-    })),
-    assignees: assigneeGroups
-      .filter((a): a is { assigneeJira: string; _count: { _all: number } } => Boolean(a.assigneeJira))
-      .map((a) => ({
-        value: a.assigneeJira,
-        label: a.assigneeJira,
-        count: a._count._all,
-      })),
-  };
+  const facets = await queryBranchFacets(scope, scopeWhere);
 
   return {
     items,

@@ -42,6 +42,7 @@ export async function GET(req: Request) {
     order,
     page,
     pageSize,
+    facetsOnly: url.searchParams.get("facetsOnly") === "1",
   });
 
   return NextResponse.json(data);
