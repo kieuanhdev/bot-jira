@@ -27,6 +27,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Progress } from "@/components/ui/progress";
 import {
   Table,
@@ -47,6 +56,7 @@ import { PageContainer } from "@/components/shared/page-container";
 export function UIGalleryClient() {
   const [selectedMetric, setSelectedMetric] = useState<string>("active");
   const [checkboxChecked, setCheckboxChecked] = useState(true);
+  const [popoverValue, setPopoverValue] = useState<string>("");
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 md:p-8">
@@ -299,6 +309,37 @@ export function UIGalleryClient() {
               <label htmlFor="gallery-checkbox" className="text-sm cursor-pointer select-none">
                 Áp dụng thay đổi cho toàn bộ dự án
               </label>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <Checkbox id="gallery-checkbox-indeterminate" checked="indeterminate" />
+              <label htmlFor="gallery-checkbox-indeterminate" className="text-sm cursor-pointer select-none">
+                Chọn một phần (indeterminate)
+              </label>
+            </div>
+            <div className="space-y-2 md:col-span-2 pt-2">
+              <label className="text-xs font-semibold text-foreground">Popover + Command</label>
+              <div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline">{popoverValue || "Chọn thành viên..."}</Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-0">
+                    <Command>
+                      <CommandInput placeholder="Tìm thành viên..." />
+                      <CommandList>
+                        <CommandEmpty>Không có kết quả</CommandEmpty>
+                        <CommandGroup heading="Thành viên">
+                          {["An", "Bình", "Chi"].map((name) => (
+                            <CommandItem key={name} value={name} onSelect={setPopoverValue}>
+                              {name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
             <div className="space-y-1.5 md:col-span-2 pt-2">
               <div className="flex justify-between text-xs font-medium">

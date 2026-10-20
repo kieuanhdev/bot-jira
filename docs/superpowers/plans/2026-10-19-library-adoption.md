@@ -725,9 +725,9 @@ QA tay của mọi task trong phase này: `npm run dev`, kiểm tra cả light v
 - `Command`, `CommandInput`, `CommandList`, `CommandEmpty`, `CommandGroup`, `CommandItem`, `CommandSeparator` (bọc `cmdk`).
 - Checkbox: khi `checked === "indeterminate"` thì hiện icon `Minus` và nền primary.
 
-- [ ] Chỉ dùng token, không dùng màu palette. `design-guard.test.ts` phải xanh.
-- [ ] Thêm cả ba vào trang `ui-gallery` để QA hai mode.
-- [ ] Commit `feat(ui): popover and command primitives, indeterminate checkbox`.
+- [x] Chỉ dùng token, không dùng màu palette. `design-guard.test.ts` phải xanh.
+- [x] Thêm cả ba vào trang `ui-gallery` để QA hai mode.
+- [x] Commit `feat(ui): popover and command primitives, indeterminate checkbox`.
 
 #### Task 5.3: Assignee — `AssigneeCombobox` và `AssigneeInput`
 
