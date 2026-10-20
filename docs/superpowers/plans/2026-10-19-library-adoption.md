@@ -707,10 +707,10 @@ QA tay của mọi task trong phase này: `npm run dev`, kiểm tra cả light v
 - Thêm `onEscapeKeyDown?: (e: KeyboardEvent) => void`, truyền xuống `DialogPrimitive.Content`.
 - Bên trong: Root, Portal, Overlay (`bg-black/50`), Content theo mẫu `branches/branch-detail-sheet.tsx`. Có `Title` (dùng `VisuallyHidden` nếu không có title) và nút Close dùng icon lucide `X`.
 
-- [ ] Kiểm tra 4 file import (`task-detail-sheet.tsx`, `error-sheet.tsx`, `project-features-sheet.tsx`, `task-create-dialog.tsx`): có cái nào cần giữ state của children khi sheet đóng không? Nếu có thì dùng `forceMount` + `hidden` cho riêng chỗ đó và ghi vào commit.
-- [ ] Test SSR (`src/components/ui/sheet.test.ts`, theo mẫu `renderToString` của `use-focus-trap.test.ts`): `open=false` render không lỗi. Không thêm thư viện test DOM.
-- [ ] QA tay: mở sheet tạo task. Tab không thoát ra khỏi sheet, Esc đóng sheet, focus quay về nút đã mở.
-- [ ] Commit `refactor(ui): Sheet on Radix Dialog with focus trap`.
+- [x] Kiểm tra 4 file import (`task-detail-sheet.tsx`, `error-sheet.tsx`, `project-features-sheet.tsx`, `task-create-dialog.tsx`): có cái nào cần giữ state của children khi sheet đóng không? Nếu có thì dùng `forceMount` + `hidden` cho riêng chỗ đó và ghi vào commit.
+- [x] Test SSR (`src/components/ui/sheet.test.ts`, theo mẫu `renderToString` của `use-focus-trap.test.ts`): `open=false` render không lỗi. Không thêm thư viện test DOM.
+- [x] QA tay: mở sheet tạo task. Tab không thoát ra khỏi sheet, Esc đóng sheet, focus quay về nút đã mở.
+- [x] Commit `refactor(ui): Sheet on Radix Dialog with focus trap`.
 
 #### Task 5.2: Primitive `ui/popover`, `ui/command`, và checkbox có trạng thái indeterminate
 
