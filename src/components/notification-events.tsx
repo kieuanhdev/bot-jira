@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { notificationsKeys, issuesKeys, branchesKeys } from "@/lib/query-keys";
+import { notificationEventQueryKeys } from "./notification-events-keys";
 
 export function NotificationEvents() {
   const { data: session } = useSession();
@@ -18,10 +18,9 @@ export function NotificationEvents() {
       // Debounce invalidation to batch rapid notification bursts
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
-        void queryClient.invalidateQueries({ queryKey: notificationsKeys.all });
-        void queryClient.invalidateQueries({ queryKey: issuesKeys.all });
-        void queryClient.invalidateQueries({ queryKey: branchesKeys.all });
-        void queryClient.invalidateQueries({ queryKey: branchesKeys.tasksAll });
+        for (const queryKey of notificationEventQueryKeys()) {
+          void queryClient.invalidateQueries({ queryKey });
+        }
       }, 300);
     };
 
