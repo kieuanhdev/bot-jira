@@ -54,6 +54,12 @@ export function NotificationsClient() {
 
   // UI state
   const [expandedBodies, setExpandedBodies] = useState<Set<string>>(new Set());
+  const [sessionReadIds, setSessionReadIds] = useState<Set<string>>(new Set());
+  const [prevTab, setPrevTab] = useState(tab);
+  if (prevTab !== tab) {
+    setPrevTab(tab);
+    setSessionReadIds(new Set());
+  }
   const [confirmDeleteDialog, setConfirmDeleteDialog] = useState<"selected" | "allRead" | null>(null);
 
   // Infinite query fetching notifications with maxPages constraint
@@ -98,7 +104,7 @@ export function NotificationsClient() {
   const filteredItems = useMemo(() => {
     return rawItems.filter((item) => {
       if (tab === "read" && !item.read) return false;
-      if (tab === "unread" && item.read) return false;
+      if (tab === "unread" && item.read && !sessionReadIds.has(item.id)) return false;
 
       if (severityFilter === "attention") {
         if (item.severity !== "warning" && item.severity !== "danger") return false;
@@ -117,7 +123,7 @@ export function NotificationsClient() {
 
       return true;
     });
-  }, [rawItems, tab, severityFilter, searchQuery]);
+  }, [rawItems, tab, severityFilter, searchQuery, sessionReadIds]);
 
   const allFilteredIds = useMemo(() => filteredItems.map((n) => n.id), [filteredItems]);
 
@@ -150,20 +156,44 @@ export function NotificationsClient() {
     return { total, unread, read, attention };
   }, [rawItems]);
 
+  const handleMarkSingleRead = (id: string) => {
+    setSessionReadIds((prev) => new Set(prev).add(id));
+    void markRead([id]);
+  };
+
   const handleCardClick = (n: Notification) => {
     if (!n.read) {
-      void markRead([n.id]);
+      handleMarkSingleRead(n.id);
     }
     if (n.link) {
-      router.push(n.link);
+      if (n.link.startsWith("http://") || n.link.startsWith("https://")) {
+        window.open(n.link, "_blank", "noopener,noreferrer");
+      } else {
+        router.push(n.link);
+      }
+    } else if (n.sourceLink) {
+      window.open(n.sourceLink, "_blank", "noopener,noreferrer");
+    } else if (n.body && n.body.length > 140) {
+      setExpandedBodies((prev) => {
+        const next = new Set(prev);
+        if (next.has(n.id)) next.delete(n.id);
+        else next.add(n.id);
+        return next;
+      });
     }
   };
 
   const handleToggleRead = async (e: React.MouseEvent, n: Notification) => {
     e.stopPropagation();
     if (n.read) {
+      setSessionReadIds((prev) => {
+        const next = new Set(prev);
+        next.delete(n.id);
+        return next;
+      });
       await markUnread([n.id]);
     } else {
+      setSessionReadIds((prev) => new Set(prev).add(n.id));
       await markRead([n.id]);
     }
     qc.invalidateQueries({ queryKey: notificationsKeys.infiniteAll() });
@@ -372,6 +402,7 @@ export function NotificationsClient() {
         onCardClick={handleCardClick}
         onToggleRead={handleToggleRead}
         onDeleteSingle={handleDeleteSingle}
+        onMarkRead={handleMarkSingleRead}
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
         onFetchNextPage={() => fetchNextPage()}

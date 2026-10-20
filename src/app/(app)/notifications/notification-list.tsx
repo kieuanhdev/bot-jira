@@ -30,6 +30,7 @@ type NotificationListProps = {
   onCardClick: (n: Notification) => void;
   onToggleRead: (e: React.MouseEvent, n: Notification) => void;
   onDeleteSingle: (e: React.MouseEvent, n: Notification) => void;
+  onMarkRead?: (id: string) => void;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   onFetchNextPage: () => void;
@@ -53,6 +54,7 @@ export function NotificationList({
   onCardClick,
   onToggleRead,
   onDeleteSingle,
+  onMarkRead,
   hasNextPage,
   isFetchingNextPage,
   onFetchNextPage,
@@ -177,6 +179,7 @@ export function NotificationList({
                 onToggleRead={onToggleRead}
                 onDeleteSingle={onDeleteSingle}
                 onToggleExpand={onToggleExpand}
+                onMarkRead={onMarkRead}
               />
             ))}
           </div>

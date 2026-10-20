@@ -20,13 +20,15 @@ export async function api<T = unknown>(
     method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
     body?: object;
     revalidate?: boolean | number;
+    keepalive?: boolean;
   } = {}
 ): Promise<T> {
-  const { method = "GET", body, revalidate } = options;
+  const { method = "GET", body, revalidate, keepalive } = options;
   const res = await fetch(path, {
     method,
     headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    keepalive,
     cache:
       revalidate === true
         ? "no-store"

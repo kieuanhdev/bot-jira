@@ -25,6 +25,7 @@ type NotificationRowProps = {
   onToggleRead: (e: React.MouseEvent, n: Notification) => void;
   onDeleteSingle: (e: React.MouseEvent, n: Notification) => void;
   onToggleExpand: (e: React.MouseEvent, id: string) => void;
+  onMarkRead?: (id: string) => void;
 };
 
 export function NotificationRow({
@@ -36,6 +37,7 @@ export function NotificationRow({
   onToggleRead,
   onDeleteSingle,
   onToggleExpand,
+  onMarkRead,
 }: NotificationRowProps) {
   const isUnread = !n.read;
   const category = getCategoryConfig(n.type);
@@ -144,7 +146,10 @@ export function NotificationRow({
             {n.body.length > 140 && (
               <button
                 type="button"
-                onClick={(e) => onToggleExpand(e, n.id)}
+                onClick={(e) => {
+                  onToggleExpand(e, n.id);
+                  if (isUnread && onMarkRead) onMarkRead(n.id);
+                }}
                 className="mt-1 text-2xs text-primary hover:underline font-medium inline-flex items-center gap-0.5 cursor-pointer"
               >
                 {isExpanded ? (
@@ -165,7 +170,15 @@ export function NotificationRow({
               {n.link && (
                 <a
                   href={n.link}
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.button === 0) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onCardClick(n);
+                    } else {
+                      if (isUnread && onMarkRead) onMarkRead(n.id);
+                    }
+                  }}
                   className="inline-flex cursor-pointer items-center gap-1 font-medium text-primary transition-colors duration-200 hover:underline"
                 >
                   Mở trên web
@@ -177,7 +190,10 @@ export function NotificationRow({
                   href={n.sourceLink}
                   target="_blank"
                   rel="noreferrer"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isUnread && onMarkRead) onMarkRead(n.id);
+                  }}
                   className="inline-flex cursor-pointer items-center gap-1 font-medium text-primary transition-colors duration-200 hover:underline"
                 >
                   {n.sourceType === "jira" ? "Mở trên Jira" : "Mở trên Git"}

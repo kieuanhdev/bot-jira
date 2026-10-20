@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { notificationsKeys } from "@/lib/query-keys";
 
@@ -46,20 +46,44 @@ export function useMarkNotifications() {
       api<{ ok: boolean; unreadCount: number }>("/api/notify/mark-read", {
         method: "POST",
         body,
+        keepalive: true,
       }),
     onMutate: async (variables) => {
       await qc.cancelQueries({ queryKey: notificationsKeys.all });
 
       const prevUnread = qc.getQueryData<{ unread: number }>(notificationsKeys.unreadCount);
+      const markRead = !variables.unread;
+      const nowIso = new Date().toISOString();
+
+      // Optimistically update notifications infinite queries
+      qc.setQueriesData<InfiniteData<NotificationResponse>>(
+        { queryKey: notificationsKeys.infiniteAll() },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              items: page.items.map((item) => {
+                if (variables.all || (variables.ids && variables.ids.includes(item.id))) {
+                  return {
+                    ...item,
+                    read: markRead,
+                    readAt: markRead ? nowIso : null,
+                  };
+                }
+                return item;
+              }),
+            })),
+          };
+        }
+      );
 
       // Optimistically update notifications list queries
       qc.setQueriesData<NotificationResponse>(
         { queryKey: notificationsKeys.lists() },
         (old) => {
           if (!old) return old;
-          const markRead = !variables.unread;
-          const nowIso = new Date().toISOString();
-
           const items = old.items.map((item) => {
             if (variables.all || (variables.ids && variables.ids.includes(item.id))) {
               return {
@@ -78,7 +102,22 @@ export function useMarkNotifications() {
         }
       );
 
+      // Optimistically update unreadCount
+      if (variables.all) {
+        qc.setQueryData(notificationsKeys.unreadCount, { unread: 0 });
+      } else if (variables.ids && variables.ids.length > 0) {
+        const current = prevUnread?.unread ?? 0;
+        const delta = variables.ids.length;
+        const nextUnread = variables.unread ? current + delta : Math.max(0, current - delta);
+        qc.setQueryData(notificationsKeys.unreadCount, { unread: nextUnread });
+      }
+
       return { prevUnread };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.prevUnread) {
+        qc.setQueryData(notificationsKeys.unreadCount, context.prevUnread);
+      }
     },
     onSuccess: (data) => {
       if (typeof data?.unreadCount === "number") {
@@ -87,6 +126,7 @@ export function useMarkNotifications() {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: notificationsKeys.all });
+      qc.invalidateQueries({ queryKey: notificationsKeys.infiniteAll() });
     },
   });
 
@@ -111,6 +151,26 @@ export function useDeleteNotifications() {
       await qc.cancelQueries({ queryKey: notificationsKeys.all });
 
       const prevUnread = qc.getQueryData<{ unread: number }>(notificationsKeys.unreadCount);
+
+      // Optimistically update notifications infinite queries
+      qc.setQueriesData<InfiniteData<NotificationResponse>>(
+        { queryKey: notificationsKeys.infiniteAll() },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              items: page.items.filter((item) => {
+                if (variables.all) return false;
+                if (variables.allRead && item.read) return false;
+                if (variables.ids && variables.ids.includes(item.id)) return false;
+                return true;
+              }),
+            })),
+          };
+        }
+      );
 
       qc.setQueriesData<NotificationResponse>(
         { queryKey: notificationsKeys.lists() },
