@@ -1,3 +1,4 @@
+import Papa from "papaparse";
 import {
   type BulkCreateRowInput,
   type BulkParentRef,
@@ -163,91 +164,41 @@ export function tokenizeDelimitedText(
   }
   text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-  // Autodetect delimiter if not specified
-  const firstLine = text.split("\n")[0] || "";
-  let delimiter = preferredDelimiter;
-  if (!delimiter) {
-    const tabs = (firstLine.match(/\t/g) || []).length;
-    const commas = (firstLine.match(/,/g) || []).length;
-    const semicolons = (firstLine.match(/;/g) || []).length;
-    if (tabs > commas && tabs > semicolons) {
-      delimiter = "\t";
-    } else if (semicolons > commas && semicolons > tabs) {
-      delimiter = ";";
-    } else {
-      delimiter = ",";
-    }
-  }
-
   const rows: Array<{ cells: string[]; line: number }> = [];
-  let currentRow: string[] = [];
-  let currentField = "";
-  let insideQuotes = false;
-  let currentLine = 1;
-  let rowStartLine = 1;
-  let quoteStartLine = 1;
+  let hasUnclosedQuote = false;
+  let unclosedQuoteLine: number | undefined;
+  const lineAt = (offset: number) => countNewlines(text.slice(0, offset)) + 1;
+  let prevCursor = 0;
 
-  let i = 0;
-  while (i < text.length) {
-    const char = text[i];
+  Papa.parse<string[]>(text, {
+    delimiter: preferredDelimiter ?? "",
+    delimitersToGuess: ["\t", ";", ","],
+    skipEmptyLines: false,
+    step: (result) => {
+      rows.push({ cells: result.data, line: lineAt(prevCursor) });
+      prevCursor = result.meta.cursor;
+      for (const err of result.errors) {
+        if (err.code === "MissingQuotes") {
+          hasUnclosedQuote = true;
+          unclosedQuoteLine = lineAt(err.index ?? 0);
+        }
+      }
+    },
+  });
 
-    if (insideQuotes) {
-      if (char === '"') {
-        if (i + 1 < text.length && text[i + 1] === '"') {
-          currentField += '"';
-          i += 2;
-          continue;
-        } else {
-          insideQuotes = false;
-          i++;
-          continue;
-        }
-      } else {
-        if (char === "\n") {
-          currentLine++;
-        }
-        currentField += char;
-        i++;
-        continue;
-      }
-    } else {
-      if (char === '"') {
-        insideQuotes = true;
-        quoteStartLine = currentLine;
-        i++;
-        continue;
-      }
-      if (char === delimiter) {
-        currentRow.push(currentField);
-        currentField = "";
-        i++;
-        continue;
-      }
-      if (char === "\n") {
-        currentRow.push(currentField);
-        rows.push({ cells: currentRow, line: rowStartLine });
-        currentRow = [];
-        currentField = "";
-        currentLine++;
-        rowStartLine = currentLine;
-        i++;
-        continue;
-      }
-      currentField += char;
-      i++;
-    }
+  // Papaparse emits a trailing empty row after a final newline; the old tokenizer did not.
+  const last = rows[rows.length - 1];
+  if (last && text.endsWith("\n") && last.cells.length === 1 && last.cells[0] === "") {
+    rows.pop();
   }
 
-  if (currentField.length > 0 || currentRow.length > 0) {
-    currentRow.push(currentField);
-    rows.push({ cells: currentRow, line: rowStartLine });
-  }
+  return { rows, hasUnclosedQuote, unclosedQuoteLine };
+}
 
-  return {
-    rows,
-    hasUnclosedQuote: insideQuotes,
-    unclosedQuoteLine: insideQuotes ? quoteStartLine : undefined,
-  };
+function countNewlines(str: string): number {
+  let count = 0;
+  for (let i = str.indexOf("\n"); i !== -1; i = str.indexOf("\n", i + 1)) count++;
+  return count;
 }
 
 /**

@@ -689,8 +689,8 @@ Task 3.5 xong thì `grep -rn "\.json()" src/app/api src/lib/*/route-service.ts s
 - Dòng bắt đầu của mỗi row tính từ `meta.cursor` của row trước: đếm số `\n` trong `text.slice(0, prevCursor)` rồi cộng 1. Làm sau khi đã bỏ BOM và chuẩn hoá CRLF.
 - Lỗi `MissingQuotes` thì đặt `hasUnclosedQuote` và `unclosedQuoteLine`.
 
-- [ ] **Điều kiện dừng:** khoảng 32 test của `csv-parser.test.ts` (gồm "Delimiter & Encoding" và số dòng trong thông báo lỗi) phải xanh mà không sửa test. Nếu không đạt thì revert và ghi lý do vào phụ lục B.
-- [ ] Commit `refactor(bulk): papaparse tokenizer for CSV import`.
+- [x] **Điều kiện dừng:** khoảng 32 test của `csv-parser.test.ts` (gồm "Delimiter & Encoding" và số dòng trong thông báo lỗi) phải xanh mà không sửa test. Nếu không đạt thì revert và ghi lý do vào phụ lục B.
+- [x] Commit `refactor(bulk): papaparse tokenizer for CSV import`.
 
 ---
 
