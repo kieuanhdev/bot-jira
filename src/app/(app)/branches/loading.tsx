@@ -1,9 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { PageContainer } from "@/components/shared/page-container";
 
 export default function BranchesLoading() {
   return (
-    <PageContainer size="wide">
       <div className="flex flex-col gap-6">
         {/* Header Skeleton */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
@@ -60,6 +58,5 @@ export default function BranchesLoading() {
           ))}
         </div>
       </div>
-    </PageContainer>
   );
 }

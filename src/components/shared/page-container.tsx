@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 const containerSizes = {
   narrow: "max-w-2xl",
   default: "max-w-5xl",
-  wide: "max-w-6xl",
+  wide: "max-w-7xl",
   full: "max-w-none",
 } as const;
 

@@ -6,7 +6,6 @@ import { getServerQueryClient } from "@/lib/query-server";
 import { adminKeys } from "@/lib/query-keys";
 import { listAdminProjectSync } from "@/lib/admin/project-sync";
 import { logSwallowed } from "@/lib/logger";
-import { PageContainer } from "@/components/shared/page-container";
 import { AdminNav } from "./admin-nav";
 
 export const dynamic = "force-dynamic";
@@ -32,12 +31,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <PageContainer size="wide">
-        <div className="flex flex-col gap-4">
-          <AdminNav />
-          {children}
-        </div>
-      </PageContainer>
+      <div className="flex flex-col gap-4">
+        <AdminNav />
+        {children}
+      </div>
     </HydrationBoundary>
   );
 }

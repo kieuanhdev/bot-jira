@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { timeAgo } from "@/lib/utils";
 import { Eye } from "lucide-react";
-import { PageContainer } from "@/components/shared/page-container";
 import { PageHeader } from "@/components/shared/page-header";
 import { AsyncState, ErrorState } from "@/components/shared/async-state";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -49,7 +48,6 @@ export function WatchClient() {
   const items = data?.items ?? [];
 
   return (
-    <PageContainer size="wide">
       <div className="flex flex-col gap-4">
         <PageHeader
           title="Đang theo dõi"
@@ -103,6 +101,5 @@ export function WatchClient() {
           </div>
         </AsyncState>
       </div>
-    </PageContainer>
   );
 }

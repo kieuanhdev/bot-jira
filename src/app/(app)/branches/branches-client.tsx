@@ -4,7 +4,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
-import { PageContainer } from "@/components/shared/page-container";
 import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState } from "@/components/shared/async-state";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -81,7 +80,6 @@ export function BranchesClient() {
   const counts = taskQueryResult.data?.counts;
 
   return (
-    <PageContainer size="wide">
     <div className="relative flex flex-col gap-5 pb-10">
       {/* Toast Feedback */}
       {toast && (
@@ -345,6 +343,5 @@ export function BranchesClient() {
         />
       )}
     </div>
-    </PageContainer>
   );
 }

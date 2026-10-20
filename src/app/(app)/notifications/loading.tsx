@@ -3,7 +3,7 @@ import { MetricGrid } from "@/components/shared/metric-grid";
 
 export default function NotificationsLoading() {
   return (
-    <div className="container max-w-6xl mx-auto py-6 space-y-6 px-4">
+    <div className="space-y-6">
       {/* Header Skeleton */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-5">
         <div className="space-y-2">

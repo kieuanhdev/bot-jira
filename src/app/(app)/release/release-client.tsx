@@ -65,7 +65,7 @@ export function ReleaseClient() {
   } = useReleaseController();
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-4 py-6">
+    <div className="space-y-6">
       {/* Header */}
       <PageHeader
         icon={Rocket}

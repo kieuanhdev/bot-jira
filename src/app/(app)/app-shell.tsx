@@ -26,6 +26,7 @@ import { FreshnessBanner } from "./freshness-banner";
 import { ReconnectBanner } from "./reconnect-banner";
 import { GlobalSyncIndicator } from "./global-sync-indicator";
 import { Sheet } from "@/components/ui/sheet";
+import { PageContainer } from "@/components/shared/page-container";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -70,6 +71,13 @@ const navGroups: NavGroupDef[] = [
 
 const settingsNavItem: NavItemDef = { href: "/settings", label: "Cài đặt", icon: Settings };
 const adminNavItem: NavItemDef = { href: "/admin", label: "Quản trị", icon: ShieldCheck };
+
+/** Routes whose content (kanban/table) needs the whole viewport width instead of the shared page width. */
+const FULL_WIDTH_ROUTES = ["/board"];
+
+function isFullWidthRoute(pathname: string | null) {
+  return FULL_WIDTH_ROUTES.some((route) => pathname?.startsWith(route));
+}
 
 export function AppShell({
   children,
@@ -447,7 +455,11 @@ export function AppShell({
 
         <ReconnectBanner />
         <FreshnessBanner />
-        <main className="flex-1 overflow-x-auto p-4 md:p-6 xl:p-8">{children}</main>
+        <main className="flex-1 overflow-x-auto p-4 md:p-6 xl:p-8">
+          <PageContainer size={isFullWidthRoute(pathname) ? "full" : "wide"} className="h-full">
+            {children}
+          </PageContainer>
+        </main>
         <GlobalSyncIndicator />
       </div>
     </div>

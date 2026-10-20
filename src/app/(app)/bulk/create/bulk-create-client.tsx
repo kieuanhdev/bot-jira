@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PageHeader } from "@/components/shared/page-header";
 import { useBulkCreateController } from "./lib/use-bulk-create-controller";
 import { BulkCreateEditorShell } from "./bulk-create-editor-shell";
 import { CreatePreview } from "./create-preview";
@@ -162,7 +163,7 @@ export function BulkCreateClient() {
     ) : null;
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-5">
+    <div className="flex flex-col gap-5">
       {/* Top Segmented Navigation Switcher */}
       <nav aria-label="Điều hướng tác vụ hàng loạt" className="flex items-center">
         <div className="inline-flex items-center gap-1.5 p-1 rounded-xl bg-muted/60 border border-border/80 shadow-2xs">
@@ -186,23 +187,13 @@ export function BulkCreateClient() {
         </div>
       </nav>
 
-      {/* Header Hero */}
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-border/80 bg-card/60 p-4 sm:p-5 backdrop-blur-xs shadow-xs">
-        <div>
-          <div className="mb-1 flex items-center gap-2 text-primary">
-            <PlusCircle className="h-4 w-4" aria-hidden="true" />
-            <span className="text-2xs font-semibold uppercase tracking-wider">Jira Data Center • Batch Operations</span>
-          </div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-            Tạo task hàng loạt theo dự án
-          </h1>
-          <p className="mt-1 max-w-2xl text-xs text-muted-foreground leading-relaxed">
-            Soạn thảo danh sách công việc, copy-paste từ Excel/Google Sheets hoặc nhập file CSV. Hệ thống kiểm tra hợp lệ thời gian thực và tạo task an toàn qua hàng đợi background.
-          </p>
-        </div>
-
-        {/* Project Selector & Actions in Header */}
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start sm:self-center">
+      <PageHeader
+        eyebrow="Jira Data Center • Batch Operations"
+        icon={PlusCircle}
+        title="Tạo task hàng loạt theo dự án"
+        description="Soạn thảo danh sách công việc, copy-paste từ Excel/Google Sheets hoặc nhập file CSV. Hệ thống kiểm tra hợp lệ thời gian thực và tạo task an toàn qua hàng đợi background."
+        actions={
+          <>
           <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 shadow-2xs">
             <FolderKanban className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
             <span className="text-xs text-muted-foreground font-medium">Dự án:</span>
@@ -251,8 +242,9 @@ export function BulkCreateClient() {
           <Badge variant={filledCount > 0 ? "info" : "secondary"} className="h-8 px-2.5 text-xs font-medium">
             {filledCount} task sẵn sàng
           </Badge>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {/* Interactive Progress Steps */}
       <BulkCreateStepper

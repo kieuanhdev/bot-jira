@@ -88,9 +88,7 @@ export default async function ProjectPortfolioPage(props: {
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <Suspense fallback={<ReportsProjectsLoading />}>
-        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-          <ProjectPortfolioClient />
-        </div>
+        <ProjectPortfolioClient />
       </Suspense>
     </HydrationBoundary>
   );

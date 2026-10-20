@@ -191,9 +191,7 @@ export default async function ProjectDetailPage(props: {
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <Suspense fallback={<ProjectDetailLoading />}>
-        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-          <ProjectReportClient projectKey={projectKey} />
-        </div>
+        <ProjectReportClient projectKey={projectKey} />
       </Suspense>
     </HydrationBoundary>
   );

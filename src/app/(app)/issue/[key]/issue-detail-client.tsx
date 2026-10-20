@@ -88,7 +88,7 @@ export function IssueDetailClient({
     : null;
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <IssueDetailHeader
         issue={issue}
         jiraUrl={jiraUrl}

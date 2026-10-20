@@ -87,7 +87,7 @@ export function LeaderboardClient() {
   const top3 = members.length > 2 && members[2].completedPoints > 0 ? members[2] : null;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-12">
+    <div className="space-y-6 pb-12">
       {/* ── Page Header ────────────────────────────────────────── */}
       <PageHeader
         icon={Trophy}

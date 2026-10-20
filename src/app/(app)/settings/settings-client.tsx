@@ -1,5 +1,7 @@
 "use client";
 
+import { Settings as SettingsIcon } from "lucide-react";
+import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +28,12 @@ export function SettingsClient({ users, isAdmin }: { users: User[]; isAdmin: boo
   } = useSettingsController();
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        icon={SettingsIcon}
+        title="Cài đặt"
+        description="Giao diện, tích hợp cá nhân, thông báo và cấu hình dự án."
+      />
       {THEME_TOGGLE_ENABLED && (
         <Card>
           <CardHeader>

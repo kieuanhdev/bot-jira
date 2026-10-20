@@ -70,7 +70,7 @@ export function BulkClient() {
   }, [operations.activeOp]);
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-5">
+    <div className="flex flex-col gap-5">
       {/* Top Navigation Switcher */}
       <BulkTopNav />
 
