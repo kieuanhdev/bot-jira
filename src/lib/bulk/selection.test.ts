@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { resolveFilterKeys, resolveSelectorKeys } from "./selection";
 import { prisma } from "@/lib/prisma";
 import { MAX_FILTER_KEYS } from "./contracts";
+import { startOfTodayForDueDates } from "@/lib/due-date";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -251,6 +252,46 @@ describe("Bulk selection (resolveFilterKeys & resolveSelectorKeys)", () => {
 
       const mixed = await resolveFilterKeys("EPM", { epics: ["EPM-20", "unassigned"] });
       expect(mixed).toEqual(["EPM-2", "EPM-3", "EPM-4"]);
+    });
+
+    it("filters overdue tasks strictly before start of today so tasks due today are not selected", async () => {
+      vi.mocked(prisma.issueCache.findMany).mockResolvedValue([{ jiraKey: "EPM-1" }] as never);
+
+      await resolveFilterKeys("EPM", { overdue: true });
+
+      const todayStart = startOfTodayForDueDates();
+      expect(prisma.issueCache.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              { dueDate: { lt: todayStart }, statusCategory: { not: "done" } },
+            ]),
+          }),
+        })
+      );
+
+      // Verify boundary logic: today's due date is NOT < todayStart, whereas yesterday is < todayStart
+      const dueToday = new Date(todayStart);
+      const dueYesterday = new Date(todayStart.getTime() - 86_400_000);
+      expect(dueToday.getTime() < todayStart.getTime()).toBe(false);
+      expect(dueYesterday.getTime() < todayStart.getTime()).toBe(true);
+    });
+
+    it("applies overdue condition via quickFilter: 'overdue'", async () => {
+      vi.mocked(prisma.issueCache.findMany).mockResolvedValue([{ jiraKey: "EPM-1" }] as never);
+
+      await resolveFilterKeys("EPM", { quickFilter: "overdue" });
+
+      const todayStart = startOfTodayForDueDates();
+      expect(prisma.issueCache.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              { dueDate: { lt: todayStart }, statusCategory: { not: "done" } },
+            ]),
+          }),
+        })
+      );
     });
 
     it("respects custom maxKeys limit", async () => {

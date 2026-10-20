@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { extractEpicKey } from "@/lib/issues/epic";
+import { startOfTodayForDueDates } from "@/lib/due-date";
 import {
   type BulkFilterCriteria,
   type BulkSelector,
@@ -157,7 +158,7 @@ export async function resolveFilterKeys(
     const existingAnd = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
     where.AND = [
       ...existingAnd,
-      { dueDate: { lt: new Date() }, statusCategory: { not: "done" } },
+      { dueDate: { lt: startOfTodayForDueDates() }, statusCategory: { not: "done" } },
     ];
   }
 
@@ -165,7 +166,7 @@ export async function resolveFilterKeys(
     const qf = filters.quickFilter;
     const existingAnd = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
     if (qf === "overdue") {
-      where.AND = [...existingAnd, { dueDate: { lt: new Date() }, statusCategory: { not: "done" } }];
+      where.AND = [...existingAnd, { dueDate: { lt: startOfTodayForDueDates() }, statusCategory: { not: "done" } }];
     } else if (qf === "unassigned") {
       where.AND = [...existingAnd, { OR: [{ assigneeJira: null }, { assigneeJira: "" }] }];
     } else if (qf === "unestimated") {

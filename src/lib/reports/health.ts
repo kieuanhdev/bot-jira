@@ -3,6 +3,7 @@ import type { ReportIssueInput } from "./metrics";
 import { normalizeStatusToGroup, isDoneGroup } from "./status";
 import { isBlockedStatus, slaForStatus, slaExceeded } from "@/lib/stale/sla";
 import { businessDaysBetween, overdueBusinessDays } from "@/lib/stale/business-days";
+import { diffDays, toDateKey, utcMidnightToDateKey } from "@/lib/date";
 
 export interface HealthEvaluationInput {
   issues: ReportIssueInput[];
@@ -117,14 +118,8 @@ export function calculateProjectHealth(input: HealthEvaluationInput): HealthEval
   let daysUntilDeadline: number | null = null;
 
   if (mode === "delivery" && input.releaseDate) {
-    const rel = new Date(input.releaseDate);
-    rel.setHours(0, 0, 0, 0);
-    const today = new Date(now);
-    today.setHours(0, 0, 0, 0);
-    const diffMs = rel.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    daysUntilDeadline = diffDays;
-    if (diffDays < 0 && openCount > 0) {
+    daysUntilDeadline = diffDays(toDateKey(now), utcMidnightToDateKey(input.releaseDate));
+    if (daysUntilDeadline < 0 && openCount > 0) {
       deadlinePassed = true;
     }
   }

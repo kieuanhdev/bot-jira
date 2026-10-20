@@ -1,9 +1,11 @@
+import { dateKeyToUtcMidnight, toDateKey } from "@/lib/date";
+
 /**
  * Jira due dates are date-only and stored at 00:00 UTC, so "overdue" must compare
  * against the start of today's calendar date, not the current instant.
  */
 export function startOfTodayForDueDates(now: Date = new Date()): Date {
-  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  return dateKeyToUtcMidnight(toDateKey(now));
 }
 
 export function isOverdue(

@@ -378,13 +378,13 @@ Tham số `tz` mặc định là `APP_TIMEZONE`.
 - Health: `daysUntilDeadline = diffDays(toDateKey(now), utcMidnightToDateKey(releaseDate))`.
 - Selection: điều kiện quá hạn đổi thành `dueDate: { lt: startOfTodayForDueDates() }`, giống board.
 
-- [ ] **Test được đổi có chủ đích** (`due-date.test.ts`):
+- [x] **Test được đổi có chủ đích** (`due-date.test.ts`):
   - `now = new Date(2026,9,7,15,30)` → `new Date("2026-10-07T08:30:00Z")`. Kỳ vọng `"2026-10-07T00:00:00.000Z"` giữ nguyên.
   - Thêm case `new Date("2026-10-07T18:00:00Z")` → `"2026-10-08T00:00:00.000Z"`.
-- [ ] **Test mới:** health với releaseDate `2026-10-10T00:00Z` và now `2026-10-09T18:00Z` (01:00 ngày 10 giờ VN) cho `daysUntilDeadline === 0` và `deadlinePassed === false`.
-- [ ] **Test mới:** selection với bộ lọc "quá hạn" không chọn task có dueDate là hôm nay.
-- [ ] Ghi vào commit: **thay đổi hành vi có chủ đích** — selection "quá hạn" bên bulk không còn tính task đến hạn hôm nay.
-- [ ] Commit `fix(dates): overdue and release deadlines use Vietnam calendar day`.
+- [x] **Test mới:** health với releaseDate `2026-10-10T00:00Z` và now `2026-10-09T18:00Z` (01:00 ngày 10 giờ VN) cho `daysUntilDeadline === 0` và `deadlinePassed === false`.
+- [x] **Test mới:** selection với bộ lọc "quá hạn" không chọn task có dueDate là hôm nay.
+- [x] Ghi vào commit: **thay đổi hành vi có chủ đích** — selection "quá hạn" bên bulk không còn tính task đến hạn hôm nay.
+- [x] Commit `fix(dates): overdue and release deadlines use Vietnam calendar day`.
 
 #### Task 2.5: Kỳ leaderboard theo 0h giờ VN
 

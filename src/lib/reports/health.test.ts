@@ -192,4 +192,24 @@ describe("calculateProjectHealth (Section 5.9, RPT-102)", () => {
     expect(res.status).toBe("healthy");
     expect(res.reasons.some((r) => r.code === "ON_TRACK")).toBe(true);
   });
+
+  it("evaluates deadline in Vietnam calendar day (0 days left and not passed when now is 01:00 VN on release day)", () => {
+    const issues = [makeIssue({ status: "In Progress", statusCategory: "indeterminate" })];
+    const progress: ProgressMetric = { percentage: 50, done: 1, total: 2, unit: "tasks" };
+    const releaseDate = new Date("2026-10-10T00:00:00Z");
+    const lateNow = new Date("2026-10-09T18:00:00Z"); // 01:00 on 2026-10-10 in Asia/Ho_Chi_Minh
+
+    const res = calculateProjectHealth({
+      issues,
+      progress,
+      freshness: freshFreshness,
+      releaseDate,
+      now: lateNow,
+    });
+
+    expect(res.reasons.some((r) => r.code === "DEADLINE_PASSED")).toBe(false);
+    const imminent = res.reasons.find((r) => r.code === "DEADLINE_IMMINENT_LOW_PROGRESS");
+    expect(imminent).toBeDefined();
+    expect(imminent?.message).toBe("Hạn chót còn 0 ngày nhưng tiến độ mới đạt 50%.");
+  });
 });
