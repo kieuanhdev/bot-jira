@@ -761,10 +761,10 @@ QA tay của mọi task trong phase này: `npm run dev`, kiểm tra cả light v
 - Tối đa 10 kết quả.
 - Bỏ chính item hiện tại và các item có loại subtask.
 
-- [ ] **Viết test trước** cho đủ 4 quy tắc trên.
-- [ ] `ParentCombobox` dùng `PopoverTrigger` (giữ Button và nút X riêng), cùng `CommandGroup` "Trong batch này" và "Trên Jira". Giờ có thêm điều hướng bằng mũi tên và Enter, vì cmdk có sẵn.
-- [ ] `EpicInput`: ô tự do làm anchor, `onOpenAutoFocus` preventDefault, giữ việc tự viết hoa khi gõ.
-- [ ] Commit `refactor(task-fields): parent and epic pickers on Popover + cmdk`.
+- [x] **Viết test trước** cho đủ 4 quy tắc trên.
+- [x] `ParentCombobox` dùng `PopoverTrigger` (giữ Button và nút X riêng), cùng `CommandGroup` "Trong batch này" và "Trên Jira". Giờ có thêm điều hướng bằng mũi tên và Enter, vì cmdk có sẵn.
+- [x] `EpicInput`: ô tự do làm anchor, `onOpenAutoFocus` preventDefault, giữ việc tự viết hoa khi gõ.
+- [x] Commit `refactor(task-fields): parent and epic pickers on Popover + cmdk`.
 
 #### Task 5.5: `LabelCombobox`
 
