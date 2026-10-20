@@ -1,3 +1,14 @@
+import {
+  APP_TIMEZONE,
+  addDaysToKey,
+  dateKeyToUtcMidnight,
+  diffDays,
+  isDateKey,
+  startOfIsoWeekKey,
+  toDateKey,
+  utcMidnightToDateKey,
+} from "@/lib/date";
+
 export type ReportPeriodPreset =
   | "this_week"
   | "last_week"
@@ -18,20 +29,14 @@ export interface PeriodResolutionResult {
   error?: string;
 }
 
-export const DEFAULT_REPORT_TIMEZONE = "Asia/Ho_Chi_Minh";
+export const DEFAULT_REPORT_TIMEZONE = APP_TIMEZONE;
 
 /**
  * Format a Date to YYYY-MM-DD in the given timezone
  */
 export function formatDateInTimezone(date: Date, timezone: string = DEFAULT_REPORT_TIMEZONE): string {
   try {
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    return formatter.format(date); // en-CA gives YYYY-MM-DD
+    return toDateKey(date, timezone);
   } catch {
     // Fallback if timezone is invalid
     return date.toISOString().split("T")[0];
@@ -42,32 +47,24 @@ export function formatDateInTimezone(date: Date, timezone: string = DEFAULT_REPO
  * Parse YYYY-MM-DD into a UTC midnight Date
  */
 export function parseDateString(dateStr: string): Date | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
-  const parts = dateStr.split("-").map(Number);
-  const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
-  if (isNaN(date.getTime())) return null;
-  return date;
+  if (!isDateKey(dateStr)) return null;
+  return dateKeyToUtcMidnight(dateStr);
 }
 
 /**
  * Add days to YYYY-MM-DD string
  */
 export function addDays(dateStr: string, days: number): string {
-  const date = parseDateString(dateStr);
-  if (!date) return dateStr;
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().split("T")[0];
+  if (!isDateKey(dateStr)) return dateStr;
+  return addDaysToKey(dateStr, days);
 }
 
 /**
  * Count inclusive days between two YYYY-MM-DD strings
  */
 export function countDays(fromStr: string, toStr: string): number {
-  const from = parseDateString(fromStr);
-  const to = parseDateString(toStr);
-  if (!from || !to) return 0;
-  const diffTime = to.getTime() - from.getTime();
-  return Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  if (!isDateKey(fromStr) || !isDateKey(toStr)) return 0;
+  return diffDays(fromStr, toStr) + 1;
 }
 
 /**
@@ -78,25 +75,17 @@ export function getWeekBounds(
   offsetWeeks: number = 0,
   timezone: string = DEFAULT_REPORT_TIMEZONE
 ): { from: string; to: string } {
-  // Format current date in timezone
-  const todayStr = formatDateInTimezone(refDate, timezone);
-  const today = parseDateString(todayStr)!;
+  let mondayKey: string;
+  try {
+    mondayKey = startOfIsoWeekKey(refDate, timezone);
+  } catch {
+    mondayKey = startOfIsoWeekKey(refDate, "UTC");
+  }
 
-  // Day of week: 0 is Sunday, 1 is Monday ... 6 is Saturday
-  const day = today.getUTCDay();
-  // Monday distance: if day === 0 (Sunday), distance from last Monday is 6. Otherwise day - 1.
-  const diffToMonday = day === 0 ? 6 : day - 1;
+  const from = offsetWeeks === 0 ? mondayKey : addDaysToKey(mondayKey, offsetWeeks * 7);
+  const to = addDaysToKey(from, 6);
 
-  const monday = new Date(today);
-  monday.setUTCDate(today.getUTCDate() - diffToMonday + offsetWeeks * 7);
-
-  const sunday = new Date(monday);
-  sunday.setUTCDate(monday.getUTCDate() + 6);
-
-  return {
-    from: monday.toISOString().split("T")[0],
-    to: sunday.toISOString().split("T")[0],
-  };
+  return { from, to };
 }
 
 /**
@@ -118,8 +107,8 @@ export function getMonthBounds(
   const lastDay = new Date(Date.UTC(firstDay.getUTCFullYear(), firstDay.getUTCMonth() + 1, 0));
 
   return {
-    from: firstDay.toISOString().split("T")[0],
-    to: lastDay.toISOString().split("T")[0],
+    from: utcMidnightToDateKey(firstDay),
+    to: utcMidnightToDateKey(lastDay),
   };
 }
 

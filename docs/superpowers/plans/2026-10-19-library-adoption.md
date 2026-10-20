@@ -337,10 +337,10 @@ Tham số `tz` mặc định là `APP_TIMEZONE`.
 - `parseDateString` dùng `isDateKey`. Hệ quả: `2026-02-30` giờ trả về `null` thay vì bị cuộn sang tháng sau.
 - `addDays`, `countDays` (= `diffDays + 1`) và `getWeekBounds`/`getMonthBounds` dùng các hàm của module.
 
-- [ ] **Viết test trước:** thêm `parseDateString("2026-02-30")` → `null` vào `period.test.ts`. Mọi test hiện có của `period.test.ts`, `metrics-separation.test.ts:237-255`, `snapshot.test.ts` và `notify-unmerged-prs.test.ts` phải **giữ nguyên**.
-- [ ] Cài đặt. Sau đó `grep -rn '"en-CA"' src --include=*.ts` chỉ còn lại kết quả trong `src/lib/date/`. Literal `"Asia/Ho_Chi_Minh"` chỉ còn trong `src/lib/date/index.ts`, ngoại trừ `schedules.ts` (Task 2.7 sẽ import hằng).
-- [ ] Chạy `npm test` và `npm run test:tz`. Kỳ vọng: các test vừa nêu xanh ở cả hai.
-- [ ] Commit `refactor(date): route all timezone day-key helpers through src/lib/date`.
+- [x] **Viết test trước:** thêm `parseDateString("2026-02-30")` → `null` vào `period.test.ts`. Mọi test hiện có của `period.test.ts`, `metrics-separation.test.ts:237-255`, `snapshot.test.ts` và `notify-unmerged-prs.test.ts` phải **giữ nguyên**.
+- [x] Cài đặt. Sau đó `grep -rn '"en-CA"' src --include=*.ts` chỉ còn lại kết quả trong `src/lib/date/`. Literal `"Asia/Ho_Chi_Minh"` chỉ còn trong `src/lib/date/index.ts`, ngoại trừ `schedules.ts` (Task 2.7 sẽ import hằng).
+- [x] Chạy `npm test` và `npm run test:tz`. Kỳ vọng: các test vừa nêu xanh ở cả hai.
+- [x] Commit `refactor(date): route all timezone day-key helpers through src/lib/date`.
 
 #### Task 2.3: Stale — đầu tuần và ngày làm việc theo giờ VN
 

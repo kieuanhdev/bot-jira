@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { APP_TIMEZONE, toDateKey } from "@/lib/date";
 import { confirmedBranchLinkFilter } from "@/lib/bitbucket/branch-links";
 import { deliverToChat } from "@/lib/notify/chat-delivery";
 import { jiraUsernameAliases } from "@/lib/user-creds";
 import type { WorkerLog } from "../guard";
 
-export const UNMERGED_PR_TIMEZONE = "Asia/Ho_Chi_Minh";
+export const UNMERGED_PR_TIMEZONE = APP_TIMEZONE;
 const MAX_LISTED_TASKS = 15;
 
 export type UnmergedPrTask = {
@@ -15,7 +16,11 @@ export type UnmergedPrTask = {
 
 /** Calendar day in the team's timezone, used so each day's reminder is sent once. */
 export function localDateKey(now: Date, timeZone = UNMERGED_PR_TIMEZONE): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone }).format(now);
+  try {
+    return toDateKey(now, timeZone);
+  } catch {
+    return now.toISOString().split("T")[0];
+  }
 }
 
 export function buildUnmergedPrMessage(tasks: UnmergedPrTask[]): { title: string; body: string } {

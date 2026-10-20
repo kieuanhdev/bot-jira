@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { APP_TIMEZONE } from "@/lib/date";
 import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { resolveUserProjectScope } from "@/lib/reports/scope";
@@ -51,7 +52,7 @@ export async function GET(req: Request) {
     period: periodParam || "this_week",
     from: fromParam || "",
     to: toParam || "",
-    timezone: timezoneParam || "Asia/Ho_Chi_Minh",
+    timezone: timezoneParam || APP_TIMEZONE,
   });
 
   try {

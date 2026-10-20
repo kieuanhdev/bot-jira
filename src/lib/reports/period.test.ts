@@ -4,6 +4,7 @@ import {
   countDays,
   getPeriodDisplayLabel,
   getAdjacentPeriod,
+  parseDateString,
 } from "./period";
 
 describe("period utilities", () => {
@@ -118,5 +119,9 @@ describe("period utilities", () => {
   it("formats display label properly", () => {
     const week = resolveReportPeriod({ period: "this_week", now: refDate }).period;
     expect(getPeriodDisplayLabel(week)).toContain("Tuần này");
+  });
+
+  it("rejects invalid calendar dates like 2026-02-30 in parseDateString", () => {
+    expect(parseDateString("2026-02-30")).toBeNull();
   });
 });

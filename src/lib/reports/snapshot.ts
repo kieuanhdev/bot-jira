@@ -1,3 +1,5 @@
+import { APP_TIMEZONE, dateKeyToUtcMidnight } from "@/lib/date";
+import { formatDateInTimezone } from "./period";
 import { normalizeStatusToGroup } from "./status";
 import { calculateCoverage, type ReportIssueInput } from "./metrics";
 import { businessDaysBetween } from "@/lib/stale/business-days";
@@ -27,15 +29,8 @@ export interface CaptureSnapshotsOptions {
 /**
  * Normalize date to midnight 00:00:00.000 UTC representing the start of day in the specified timezone.
  */
-export function getMidnightDate(date: Date = new Date(), timezone = "Asia/Ho_Chi_Minh"): Date {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const dateStr = formatter.format(date); // Format: "YYYY-MM-DD"
-  return new Date(`${dateStr}T00:00:00.000Z`);
+export function getMidnightDate(date: Date = new Date(), timezone = APP_TIMEZONE): Date {
+  return dateKeyToUtcMidnight(formatDateInTimezone(date, timezone));
 }
 
 export type SnapshotIssue = ReportIssueInput & {

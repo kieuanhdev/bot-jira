@@ -1,3 +1,4 @@
+import { formatDateInTimezone } from "./period";
 import { isDoneGroup, normalizeStatusToGroup } from "./status";
 
 export interface ResolvedCompletionDate {
@@ -76,17 +77,6 @@ export function isDateInPeriod(
   timezone: string
 ): boolean {
   if (!date) return false;
-  try {
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    const dateStr = formatter.format(date);
-    return dateStr >= fromStr && dateStr <= toStr;
-  } catch {
-    const dateStr = date.toISOString().split("T")[0];
-    return dateStr >= fromStr && dateStr <= toStr;
-  }
+  const dateStr = formatDateInTimezone(date, timezone);
+  return dateStr >= fromStr && dateStr <= toStr;
 }

@@ -1,3 +1,4 @@
+import { APP_TIMEZONE, zonedParts } from "@/lib/date";
 import type {
   LeaderboardTimeframe,
   LeaderboardPeriodBounds,
@@ -133,14 +134,7 @@ export function parseLeaderboardParams(
  * so server and client stay synchronized regardless of system local timezone.
  */
 export function getDefaultLeaderboardPeriod(date: Date = new Date()) {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    year: "numeric",
-    month: "numeric",
-  });
-  const parts = formatter.formatToParts(date);
-  const year = parseInt(parts.find((p) => p.type === "year")?.value || String(date.getFullYear()), 10);
-  const month = parseInt(parts.find((p) => p.type === "month")?.value || String(date.getMonth() + 1), 10);
+  const { year, month } = zonedParts(date, APP_TIMEZONE);
   const quarter = Math.floor((month - 1) / 3) + 1;
 
   return {

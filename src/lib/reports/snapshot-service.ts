@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { APP_TIMEZONE } from "@/lib/date";
 import {
   getMidnightDate,
   calculateSnapshotMetrics,
@@ -15,7 +16,7 @@ import {
 export async function captureProjectReportSnapshots(
   options: CaptureSnapshotsOptions = {}
 ): Promise<CaptureSnapshotsResult> {
-  const timezone = options.timezone ?? "Asia/Ho_Chi_Minh";
+  const timezone = options.timezone ?? APP_TIMEZONE;
   const snapshotDate = getMidnightDate(options.targetDate ?? new Date(), timezone);
   const now = new Date();
 

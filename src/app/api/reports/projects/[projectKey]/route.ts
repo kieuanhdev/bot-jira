@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { APP_TIMEZONE } from "@/lib/date";
 import { guardProjectReport } from "@/lib/reports/route-guard";
 import { getProjectReportDetail } from "@/lib/reports/project-query";
 import type { ReportUnit } from "@/lib/reports/types";
@@ -37,7 +38,7 @@ export async function GET(
     period: period || "this_week",
     from: from || "",
     to: to || "",
-    timezone: timezone || "Asia/Ho_Chi_Minh",
+    timezone: timezone || APP_TIMEZONE,
     comparePrevious,
     includeSubtasks,
   });
