@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition, useCallback, useMemo } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useState, useCallback, useMemo } from "react";
+import { useSearchParams, usePathname } from "next/navigation";
+import { replaceUrlState } from "@/lib/url-state";
 import { useQuery } from "@tanstack/react-query";
 import { api, getErrorMessage } from "@/lib/api-client";
 import { branchesKeys, meKeys } from "@/lib/query-keys";
@@ -22,10 +23,8 @@ import {
 } from "./branches-filter-model";
 
 export function useBranchesController() {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [, startTransition] = useTransition();
 
   const [toast, setToast] = useState<string | null>(null);
   const [selectedBranchForDrawer, setSelectedBranchForDrawer] = useState<BranchRowItem | null>(null);
@@ -61,18 +60,14 @@ export function useBranchesController() {
       const next = { ...filters, ...patch };
       const params = buildBranchFilterParams(next);
       const queryStr = params.toString();
-      startTransition(() => {
-        router.replace(`${pathname}${queryStr ? `?${queryStr}` : ""}`, { scroll: false });
-      });
+      replaceUrlState(`${pathname}${queryStr ? `?${queryStr}` : ""}`);
     },
-    [filters, pathname, router]
+    [filters, pathname]
   );
 
   const resetFilters = useCallback(() => {
-    startTransition(() => {
-      router.replace(pathname, { scroll: false });
-    });
-  }, [pathname, router]);
+    replaceUrlState(pathname);
+  }, [pathname]);
 
   const taskQueryUrl = useMemo(() => buildTaskQueryUrl(filters), [filters]);
   const branchQueryUrl = useMemo(() => buildBranchQueryUrl(filters), [filters]);

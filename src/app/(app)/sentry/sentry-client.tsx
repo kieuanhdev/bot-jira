@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { replaceUrlState } from "@/lib/url-state";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bug, CheckCircle2, Inbox, RefreshCw, Siren, Sparkles } from "lucide-react";
 import { api, getErrorMessage } from "@/lib/api-client";
@@ -44,7 +45,6 @@ function hasTargetProject(row: SentryRowItem): row is MappedSentryRow {
 type TriageView = "actionable" | "noise" | "all";
 
 export function SentryClient() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
 
@@ -120,7 +120,7 @@ export function SentryClient() {
     if (nextFilter !== "review") params.set("filter", nextFilter);
     if (nextProject) params.set("project", nextProject);
     const qs = params.toString();
-    router.replace(qs ? `/sentry?${qs}` : "/sentry", { scroll: false });
+    replaceUrlState(qs ? `/sentry?${qs}` : "/sentry");
   };
 
   const changeView = (next: TriageView) => {

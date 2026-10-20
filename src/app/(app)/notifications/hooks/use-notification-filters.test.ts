@@ -7,10 +7,11 @@ const mockReplace = vi.fn();
 let mockSearchParams = new URLSearchParams();
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    replace: mockReplace,
-  }),
   useSearchParams: () => mockSearchParams,
+}));
+
+vi.mock("@/lib/url-state", () => ({
+  replaceUrlState: (url: string) => mockReplace(url),
 }));
 
 function TestNotificationFiltersComponent({
@@ -79,7 +80,7 @@ describe("useNotificationFilters", () => {
     );
 
     hookResult.setTab("unread");
-    expect(mockReplace).toHaveBeenCalledWith("/notifications?tab=unread", { scroll: false });
+    expect(mockReplace).toHaveBeenCalledWith("/notifications?tab=unread");
   });
 
   it("removes tab when set to all", () => {
@@ -94,7 +95,7 @@ describe("useNotificationFilters", () => {
     );
 
     hookResult.setTab("all");
-    expect(mockReplace).toHaveBeenCalledWith("/notifications", { scroll: false });
+    expect(mockReplace).toHaveBeenCalledWith("/notifications");
   });
 
   it("resets all filters", () => {
@@ -109,6 +110,6 @@ describe("useNotificationFilters", () => {
     );
 
     hookResult.resetFilters();
-    expect(mockReplace).toHaveBeenCalledWith("/notifications", { scroll: false });
+    expect(mockReplace).toHaveBeenCalledWith("/notifications");
   });
 });

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { replaceUrlState } from "@/lib/url-state";
 import { useQueryClient } from "@tanstack/react-query";
 import type { IssueItem } from "@/hooks/use-issues";
 import {
@@ -84,8 +85,8 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
   const [sortMode, setSortMode] = useState<SortMode>(() => loadStoredSortMode() ?? "updated");
 
   const replaceBoardUrl = useCallback(
-    (url: string) => router.replace(url, { scroll: false }),
-    [router]
+    (url: string) => replaceUrlState(url),
+    []
   );
 
   const picker = useBoardProjectPicker({

@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { pushUrlState, replaceUrlState } from "@/lib/url-state";
 import type { ReportPeriod, ReportUnit, ReportStatusGroup } from "@/lib/reports/types";
 import { parsePeriodParams } from "@/app/(app)/reports/lib/parse-period-params";
 import {
@@ -78,14 +79,14 @@ export function useReportUrlState() {
 
       if (mode === "push") {
         pendingNavigationUrlRef.current = nextUrl;
-        router.push(nextUrl, { scroll: false });
+        pushUrlState(nextUrl);
       } else {
         if (shouldReplaceReportUrl(nextUrl, currentUrl, pendingNavigationUrlRef.current)) {
-          router.replace(nextUrl, { scroll: false });
+          replaceUrlState(nextUrl);
         }
       }
     },
-    [pathname, router, searchParams]
+    [pathname, searchParams]
   );
 
   const setPeriod = useCallback(

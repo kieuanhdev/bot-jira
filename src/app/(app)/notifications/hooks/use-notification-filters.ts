@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { replaceUrlState } from "@/lib/url-state";
 
 export type NotificationTab = "all" | "unread" | "read";
 export type NotificationSeverity = "all" | "attention" | "info";
@@ -22,7 +23,6 @@ export interface UseNotificationFiltersReturn {
 }
 
 export function useNotificationFilters(): UseNotificationFiltersReturn {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   // Read raw values from URL
@@ -55,12 +55,10 @@ export function useNotificationFilters(): UseNotificationFiltersReturn {
       const nextQuery = nextParams.toString();
 
       if (nextQuery !== currentQuery) {
-        router.replace(nextQuery ? `/notifications?${nextQuery}` : "/notifications", {
-          scroll: false,
-        });
+        replaceUrlState(nextQuery ? `/notifications?${nextQuery}` : "/notifications");
       }
     },
-    [router, searchParams]
+    [searchParams]
   );
 
   // Debounce search query syncing to URL

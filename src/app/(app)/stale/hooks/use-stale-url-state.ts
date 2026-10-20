@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { replaceUrlState } from "@/lib/url-state";
 import { ALL } from "../lib/stale-types";
 import { TEAM_VIEW_ENABLED } from "../lib/stale-flags";
 import {
@@ -34,7 +35,6 @@ function pickOne<T extends string>(
 }
 
 export function useStaleUrlState() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   // Read URL query parameters directly from searchParams (no window.location.search)
@@ -82,7 +82,7 @@ export function useStaleUrlState() {
     setStdSearch(urlQ);
   }
 
-  // General URL updater: updates searchParams in place and calls router.replace
+  // General URL updater: updates searchParams in place and replaces the URL without a navigation
   const updateUrl = useCallback(
     (updater: (params: URLSearchParams) => void) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -90,12 +90,10 @@ export function useStaleUrlState() {
       const nextQuery = params.toString();
       const currentQuery = searchParams.toString();
       if (nextQuery !== currentQuery) {
-        router.replace(nextQuery ? `/stale?${nextQuery}` : "/stale", {
-          scroll: false,
-        });
+        replaceUrlState(nextQuery ? `/stale?${nextQuery}` : "/stale");
       }
     },
-    [router, searchParams]
+    [searchParams]
   );
 
   // Debounce search update to URL
