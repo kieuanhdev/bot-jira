@@ -86,4 +86,42 @@ describe("getLeaderboardData", () => {
     );
     expect(excluded.project).toBeNull();
   });
+
+  it("only queries and includes users who have logged in with a Jira token", async () => {
+    mocks.userFindMany.mockResolvedValue([
+      {
+        id: "u-1",
+        displayName: "Alice",
+        jiraUsername: "alice",
+        jiraUserEnc: null,
+        jiraTokenEnc: "enc-token-alice",
+        email: "alice@example.com",
+        role: "developer",
+      },
+      {
+        id: "u-2",
+        displayName: "No Token User",
+        jiraUsername: "notoken",
+        jiraUserEnc: null,
+        jiraTokenEnc: "   ",
+        email: "notoken@example.com",
+        role: "developer",
+      },
+    ]);
+
+    const result = await getLeaderboardData({
+      currentUserId: "user-1",
+      timeframe: "all",
+    });
+
+    expect(mocks.userFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          jiraTokenEnc: { not: null },
+        },
+      })
+    );
+    expect(result.members.map((m) => m.jiraUsername)).toContain("alice");
+    expect(result.members.map((m) => m.jiraUsername)).not.toContain("notoken");
+  });
 });

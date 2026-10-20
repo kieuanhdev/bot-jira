@@ -578,5 +578,56 @@ describe("Leaderboard Calculator", () => {
       });
       expect(excludedSelfResult.myPerformance).toBeNull();
     });
+
+    it("excludes tasks belonging to assignees who are not in dbUsers (not logged in with jira token)", () => {
+      const issuesWithUnknownAssignee: RawLeaderboardIssue[] = [
+        {
+          jiraKey: "P-ALICE",
+          summary: "Alice task",
+          status: "Done",
+          statusCategory: "done",
+          statusChangedAt: new Date("2026-10-10T10:00:00Z"),
+          updatedAt: new Date("2026-10-10T10:00:00Z"),
+          createdAt: new Date("2026-10-01T10:00:00Z"),
+          assigneeJira: "alice",
+          points: 5,
+          priority: "High",
+          projectKey: "PROJ",
+        },
+        {
+          jiraKey: "P-EXTERNAL",
+          summary: "External dev task",
+          status: "Done",
+          statusCategory: "done",
+          statusChangedAt: new Date("2026-10-10T10:00:00Z"),
+          updatedAt: new Date("2026-10-10T10:00:00Z"),
+          createdAt: new Date("2026-10-01T10:00:00Z"),
+          assigneeJira: "external_dev",
+          points: 50,
+          priority: "High",
+          projectKey: "PROJ",
+        },
+      ];
+
+      const result = calculateLeaderboard({
+        period,
+        issues: issuesWithUnknownAssignee,
+        dbUsers, // Only alice, bob, charlie
+        myAliases: ["alice"],
+        activeProjects: ["PROJ"],
+        selectedProject: "PROJ",
+      });
+
+      // external_dev is NOT in dbUsers, so they should NOT be in the leaderboard
+      const memberUsernames = result.members.map((m) => m.jiraUsername.toLowerCase());
+      expect(memberUsernames).not.toContain("external_dev");
+      expect(result.members.length).toBe(3); // Alice, Bob, Charlie (dbUsers)
+
+      // Only Alice's 5 points count towards team points
+      expect(result.summary.totalTeamPoints).toBe(5);
+      expect(result.summary.totalTeamTasks).toBe(1);
+      expect(result.members[0].jiraUsername).toBe("alice");
+      expect(result.members[0].completedPoints).toBe(5);
+    });
   });
 });

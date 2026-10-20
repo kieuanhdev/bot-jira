@@ -131,26 +131,20 @@ export function calculateLeaderboard(input: CalculateLeaderboardInput): Leaderbo
     (u) => !isExcludedLeaderboardUser(u.jiraUsername) && !isExcludedLeaderboardUser(u.email)
   );
 
-  // Build alias lookup map: lowercase alias -> dbUser
-  const userMap = new Map<string, LeaderboardDbUser>();
-  for (const u of dbUsers) {
-    if (u.jiraUsername) {
-      for (const alias of jiraUsernameAliases(u.jiraUsername)) {
-        userMap.set(alias.toLowerCase(), u);
-      }
-    }
-  }
-
   const memberMap = new Map<string, MemberAccumulator>();
+  const aliasToMemberKey = new Map<string, string>();
 
-  // Pre-populate DB users so team members with 0 points are also present
+  // Pre-populate DB users so team members with 0 points are also present.
+  // dbUsers contains only users who have logged in with a Jira token.
   for (const u of dbUsers) {
-    if (!u.jiraUsername) continue;
-    const norm = u.jiraUsername.toLowerCase().replace(/_mb$/i, "");
+    const rawUsername = u.jiraUsername || (u.email ? u.email.split("@")[0] : null) || u.displayName;
+    const norm = rawUsername.toLowerCase().replace(/_mb$/i, "");
     if (!memberMap.has(norm)) {
-      const isCurrent = myAliases.includes(norm);
+      const isCurrent = myAliases.some(
+        (alias) => alias.toLowerCase().replace(/_mb$/i, "") === norm
+      );
       memberMap.set(norm, {
-        jiraUsername: u.jiraUsername,
+        jiraUsername: u.jiraUsername ?? rawUsername,
         displayName: u.displayName,
         email: u.email,
         role: u.role,
@@ -162,6 +156,19 @@ export function calculateLeaderboard(input: CalculateLeaderboardInput): Leaderbo
         tasks: [],
       });
     }
+
+    if (u.jiraUsername) {
+      for (const alias of jiraUsernameAliases(u.jiraUsername)) {
+        aliasToMemberKey.set(alias.toLowerCase(), norm);
+      }
+    }
+    if (u.email) {
+      for (const alias of jiraUsernameAliases(u.email)) {
+        aliasToMemberKey.set(alias.toLowerCase(), norm);
+      }
+    }
+    aliasToMemberKey.set(rawUsername.toLowerCase(), norm);
+    aliasToMemberKey.set(norm, norm);
   }
 
   for (const issue of issues) {
@@ -172,24 +179,20 @@ export function calculateLeaderboard(input: CalculateLeaderboardInput): Leaderbo
     const pts = issue.points ?? 0;
     if (pts <= 0) continue;
 
-    // Resolve member record
-    let member = memberMap.get(normKey);
+    // Resolve member record - ONLY for users who have logged in with Jira token
+    const memberKey =
+      aliasToMemberKey.get(rawAssignee.toLowerCase()) ??
+      aliasToMemberKey.get(normKey) ??
+      (memberMap.has(normKey) ? normKey : null);
+
+    if (!memberKey) {
+      // Assignee has not logged in with Jira token -> excluded from leaderboard
+      continue;
+    }
+
+    const member = memberMap.get(memberKey);
     if (!member) {
-      const matchedUser = userMap.get(rawAssignee.toLowerCase());
-      const isCurrent = myAliases.includes(normKey);
-      member = {
-        jiraUsername: matchedUser?.jiraUsername ?? rawAssignee,
-        displayName: matchedUser?.displayName ?? rawAssignee,
-        email: matchedUser?.email ?? null,
-        role: matchedUser?.role ?? null,
-        completedPoints: 0,
-        inProgressPoints: 0,
-        completedTasks: 0,
-        inProgressTasks: 0,
-        isCurrentUser: isCurrent,
-        tasks: [],
-      };
-      memberMap.set(normKey, member);
+      continue;
     }
 
     const isDone = issue.statusCategory.toLowerCase() === "done";

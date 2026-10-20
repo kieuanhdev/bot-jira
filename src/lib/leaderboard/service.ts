@@ -35,16 +35,32 @@ export async function getLeaderboardData(
   // 2. Compute date range
   const period = computePeriodBounds(timeframe, year, month, quarter);
 
-  // 3. Query all users from DB to enrich profile information
-  const dbUsers = await prisma.user.findMany({
+  // 3. Query only users from DB who have logged in with a Jira token
+  const dbUsersRaw = await prisma.user.findMany({
+    where: {
+      jiraTokenEnc: { not: null },
+    },
     select: {
       id: true,
       displayName: true,
       jiraUsername: true,
+      jiraUserEnc: true,
+      jiraTokenEnc: true,
       email: true,
       role: true,
     },
   });
+
+  const dbUsers = dbUsersRaw
+    .filter((u) => Boolean(u.jiraTokenEnc && u.jiraTokenEnc.trim().length > 0))
+    .map((u) => ({
+      id: u.id,
+      displayName: u.displayName,
+      jiraUsername:
+        userJiraUsername(u) ?? u.jiraUsername ?? (u.email ? u.email.split("@")[0] : null),
+      email: u.email,
+      role: u.role,
+    }));
 
   // 4. Query all issues in scope with points
   const issues = await prisma.issueCache.findMany({
