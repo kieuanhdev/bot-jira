@@ -239,9 +239,9 @@ Năm trường hợp dễ gây lỗi nhất mà test theo từng task dễ bỏ 
 - Modify: `src/lib/notify/outbox.ts:116-117`
 - Test: `src/lib/utils.test.ts`
 
-- [ ] **Viết test trước:** khi stub `crypto.randomUUID` thành `undefined`, `safeRandomUUID()` vẫn khớp regex UUID v4 `/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/`, và `Math.random` không bị gọi (dùng `vi.spyOn`).
-- [ ] **Cài đặt:** nhánh dự phòng dùng `crypto.getRandomValues(new Uint8Array(16))`, rồi đặt bit version 4 và variant 10. Ở `outbox.ts`, thay đuôi `Math.random().toString(36).slice(2,7)` bằng `crypto.randomUUID()`.
-- [ ] Commit `fix: use crypto for UUID fallback and legacy outbox event keys`.
+- [x] **Viết test trước:** khi stub `crypto.randomUUID` thành `undefined`, `safeRandomUUID()` vẫn khớp regex UUID v4 `/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/`, và `Math.random` không bị gọi (dùng `vi.spyOn`).
+- [x] **Cài đặt:** nhánh dự phòng dùng `crypto.getRandomValues(new Uint8Array(16))`, rồi đặt bit version 4 và variant 10. Ở `outbox.ts`, thay đuôi `Math.random().toString(36).slice(2,7)` bằng `crypto.randomUUID()`.
+- [x] Commit `fix: use crypto for UUID fallback and legacy outbox event keys`.
 
 #### Task 1.5: Gộp 4 bản che secret về một
 

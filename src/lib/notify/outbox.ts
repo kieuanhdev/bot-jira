@@ -114,7 +114,7 @@ export async function deliverNotification(
   const source = resolveSource(data);
   const eventKey = rawEventKey && rawEventKey.trim() !== ""
     ? rawEventKey.trim()
-    : `legacy:${userId}:${data.type}:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`;
+    : `legacy:${userId}:${data.type}:${Date.now()}:${crypto.randomUUID()}`;
 
   // In-app Notification is the single source of truth. Dedupe by (userId, type, eventKey).
   let notification = await prisma.notification.findUnique({

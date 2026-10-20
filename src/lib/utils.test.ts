@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { getJiraIssueUrl, getBitbucketBranchUrl, timeAgo, formatDateTime } from "./utils";
+import { describe, it, expect, vi } from "vitest";
+import { getJiraIssueUrl, getBitbucketBranchUrl, timeAgo, formatDateTime, safeRandomUUID } from "./utils";
 
 describe("getJiraIssueUrl", () => {
   it("returns null if baseUrl or key is missing", () => {
@@ -47,17 +47,30 @@ describe("getBitbucketBranchUrl", () => {
 });
 
 describe("safeRandomUUID", () => {
-  it("generates a valid UUID v4 format string", async () => {
-    const { safeRandomUUID } = await import("./utils");
+  it("generates a valid UUID v4 format string", () => {
     const uuid = safeRandomUUID();
     expect(uuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
   });
 
-  it("generates unique values on subsequent calls", async () => {
-    const { safeRandomUUID } = await import("./utils");
+  it("generates unique values on subsequent calls", () => {
     const u1 = safeRandomUUID();
     const u2 = safeRandomUUID();
     expect(u1).not.toBe(u2);
+  });
+
+  it("falls back to crypto.getRandomValues when crypto.randomUUID is undefined without calling Math.random", () => {
+    const originalRandomUUID = crypto.randomUUID;
+    const mathRandomSpy = vi.spyOn(Math, "random");
+    try {
+      // @ts-expect-error stubbing randomUUID to simulate insecure contexts
+      crypto.randomUUID = undefined;
+      const uuid = safeRandomUUID();
+      expect(uuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+      expect(mathRandomSpy).not.toHaveBeenCalled();
+    } finally {
+      crypto.randomUUID = originalRandomUUID;
+      mathRandomSpy.mockRestore();
+    }
   });
 });
 
