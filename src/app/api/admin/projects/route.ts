@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { AdminProjectSyncBodySchema } from "@/lib/api/schemas";
 import { getSession, isAdmin } from "@/lib/session";
 import {
   listAdminProjectSync,
@@ -30,12 +32,9 @@ export async function PATCH(req: Request) {
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!isAdmin(session)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const body = (await req.json().catch(() => ({}))) as {
-    syncEnabled?: unknown;
-    keys?: unknown;
-    preset?: unknown;
-    features?: unknown;
-  };
+  const parsedBody = await readJsonBody(req, AdminProjectSyncBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
 
   const actor = {
     id: session.user.id,

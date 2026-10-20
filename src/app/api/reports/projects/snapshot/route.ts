@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { ReportSnapshotBodySchema } from "@/lib/api/schemas";
 import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { captureProjectReportSnapshots } from "@/lib/reports/snapshot-service";
@@ -20,12 +22,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: { projectKey?: string; targetDate?: string; timezone?: string } = {};
-  try {
-    body = await req.json();
-  } catch {
-    // optional body
-  }
+  const parsedBody = await readJsonBody(req, ReportSnapshotBodySchema, { allowEmpty: true });
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
 
   try {
     const result = await captureProjectReportSnapshots({

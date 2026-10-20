@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { SentryRetryBodySchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession, isAdmin } from "@/lib/session";
 
@@ -11,7 +13,9 @@ export async function POST(req: Request) {
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!isAdmin(session)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const body = (await req.json().catch(() => ({}))) as { id?: string };
+  const parsedBody = await readJsonBody(req, SentryRetryBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   const row = await prisma.sentryIssueImported.findUnique({ where: { id: body.id } });

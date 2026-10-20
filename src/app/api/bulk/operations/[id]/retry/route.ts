@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { BulkRetryBodySchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { enqueueBulkOperation } from "@/lib/queue/boss";
@@ -55,7 +57,9 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     );
   }
 
-  const rawBody = (await _req.json().catch(() => ({}))) as { itemIds?: string[] };
+  const parsedBody = await readJsonBody(_req, BulkRetryBodySchema, { allowEmpty: true });
+  if (!parsedBody.ok) return parsedBody.response;
+  const rawBody = parsedBody.data;
 
   let retriedCount = 0;
   if (op.type === "create-issues") {

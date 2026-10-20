@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { BulkRetryBranchBodySchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { enqueueBulkOperation } from "@/lib/queue/boss";
@@ -46,7 +48,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     );
   }
 
-  const body = (await req.json().catch(() => ({}))) as { clientRef?: string };
+  const parsedBody = await readJsonBody(req, BulkRetryBranchBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   if (!body.clientRef || typeof body.clientRef !== "string") {
     return NextResponse.json({ error: "clientRef is required" }, { status: 400 });
   }

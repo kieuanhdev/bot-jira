@@ -1,5 +1,7 @@
 import type { SentryIssueImported } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { SentryBulkCreateBodySchema } from "@/lib/api/schemas";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { userJiraAuth } from "@/lib/user-creds";
@@ -34,11 +36,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const rawBody = (await req.json().catch(() => ({}))) as {
-    ids?: unknown;
-    confirm?: boolean;
-    operationId?: string;
-  };
+  const parsedBody = await readJsonBody(req, SentryBulkCreateBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const rawBody = parsedBody.data;
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },

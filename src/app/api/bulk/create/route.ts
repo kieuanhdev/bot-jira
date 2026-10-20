@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { BulkCreateEnvelopeSchema } from "@/lib/api/schemas";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { userJiraAuth } from "@/lib/user-creds";
@@ -19,11 +21,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const rawBody = (await req.json().catch(() => ({}))) as {
-    confirm?: boolean;
-    operationId?: string;
-    source?: unknown;
-  };
+  const parsedBody = await readJsonBody(req, BulkCreateEnvelopeSchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const rawBody = parsedBody.data;
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },

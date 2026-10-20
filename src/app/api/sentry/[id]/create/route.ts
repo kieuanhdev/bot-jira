@@ -1,5 +1,7 @@
 import type { SentryIssueImported } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { SentryCreateBodySchema } from "@/lib/api/schemas";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { userJiraAuth } from "@/lib/user-creds";
@@ -41,11 +43,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Không tìm thấy lỗi Sentry" }, { status: 404 });
   }
 
-  const rawBody = (await req.json().catch(() => ({}))) as {
-    row?: unknown;
-    confirm?: boolean;
-    operationId?: string;
-  };
+  const parsedBody = await readJsonBody(req, SentryCreateBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const rawBody = parsedBody.data;
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },

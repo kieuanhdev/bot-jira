@@ -37,6 +37,18 @@ describe("POST /api/reports/projects/snapshot", () => {
     expect(res.status).toBe(401);
   });
 
+  it("accepts an empty body", async () => {
+    mocks.captureProjectReportSnapshots.mockResolvedValueOnce({ captured: 1, skipped: 0 });
+    const req = new NextRequest("http://localhost/api/reports/projects/snapshot", { method: "POST" });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(mocks.captureProjectReportSnapshots).toHaveBeenCalledWith({
+      projectKey: undefined,
+      targetDate: undefined,
+      timezone: undefined,
+    });
+  });
+
   it("returns 403 when user lacks report.configure permission", async () => {
     mocks.can.mockReturnValue(false);
     const req = new NextRequest("http://localhost/api/reports/projects/snapshot", { method: "POST" });

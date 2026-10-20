@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { AdminProjectSyncBodySchema } from "@/lib/api/schemas";
 import { getSession, isAdmin } from "@/lib/session";
 import { isValidProjectKeyFormat, normalizeProjectKey } from "@/lib/jira/project-catalog";
 import { toggleProjectSync, updateProjectSyncFeatures } from "@/lib/admin/project-sync";
@@ -21,11 +23,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ key: string }
     return NextResponse.json({ error: "invalid_project_key" }, { status: 400 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as {
-    syncEnabled?: unknown;
-    features?: unknown;
-    preset?: unknown;
-  };
+  const parsedBody = await readJsonBody(req, AdminProjectSyncBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
 
   const hasSyncEnabled = typeof body.syncEnabled === "boolean";
   const hasFeatures = body.features !== undefined;

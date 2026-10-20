@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import type { ImportState } from "@prisma/client";
+import { readJsonBody } from "@/lib/api/json-body";
+import { SentryReviewBodySchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { audit } from "@/lib/audit";
@@ -20,16 +22,11 @@ export async function POST(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  let body: { ids?: unknown; decision?: unknown };
-  try {
-    body = (await req.json()) as typeof body;
-  } catch {
-    return NextResponse.json({ error: "invalid json" }, { status: 400 });
-  }
+  const parsedBody = await readJsonBody(req, SentryReviewBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
 
-  const ids = Array.isArray(body.ids)
-    ? body.ids.filter((id): id is string => typeof id === "string" && id.length > 0).slice(0, 100)
-    : [];
+  const ids = body.ids;
   const decision = body.decision as Decision;
 
   if (ids.length === 0) return NextResponse.json({ error: "ids required" }, { status: 400 });

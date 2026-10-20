@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { OutboxRetryBodySchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession, isAdmin } from "@/lib/session";
 import { enqueueNotificationDelivery } from "@/lib/queue/enqueue";
@@ -14,14 +16,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  let body: { ids?: string[] } = {};
-  try {
-    body = (await req.json()) as { ids?: string[] };
-  } catch {
-    // Body is optional
-  }
+  const parsedBody = await readJsonBody(req, OutboxRetryBodySchema, { allowEmpty: true });
+  if (!parsedBody.ok) return parsedBody.response;
 
-  const ids = Array.isArray(body.ids) ? body.ids.filter(Boolean) : undefined;
+  const ids = parsedBody.data.ids?.filter(Boolean);
 
   let targetIds: string[] = [];
   if (ids && ids.length > 0) {
