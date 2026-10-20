@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { getErrorMessage } from "@/lib/api-client";
 import { useBranchLink, useBranchPicker } from "@/hooks/use-branches";
 import { cn, timeAgo } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type TaskBranchLinkDialogProps = {
   jiraKey: string;
@@ -115,12 +116,11 @@ export function TaskBranchLinkDialog({
                         : "border-border hover:bg-muted/50"
                     )}
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selected.has(item.id)}
-                      onChange={() => toggle(item.id)}
+                      onCheckedChange={() => toggle(item.id)}
                       disabled={linkMutation.isPending}
-                      className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-primary"
+                      className="mt-0.5 shrink-0"
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
@@ -147,12 +147,11 @@ export function TaskBranchLinkDialog({
           )}
 
           <label className="flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={syncPr}
-              onChange={(e) => setSyncPr(e.target.checked)}
+              onCheckedChange={(c) => setSyncPr(c === true)}
               disabled={linkMutation.isPending}
-              className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-primary"
+              className="mt-0.5"
             />
             <span>
               Cập nhật PR trên Bitbucket để Jira nhận (thêm <code className="font-mono">Jira: {jiraKey}</code> vào mô

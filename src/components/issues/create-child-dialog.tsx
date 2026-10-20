@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, getErrorMessage } from "@/lib/api-client";
 import { issuesKeys } from "@/lib/query-keys";
@@ -104,17 +105,16 @@ export function CreateChildDialog({ jiraKey, open, onOpenChange, onCreated }: Cr
             <>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="child-type" className="text-xs">Loại task</Label>
-                <select
-                  id="child-type"
-                  value={selectedType}
-                  disabled={creating}
-                  onChange={(e) => setTypeId(e.target.value)}
-                  className="h-9 cursor-pointer rounded-md border border-input bg-background px-2 text-sm outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {types.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
+                <Select value={selectedType} disabled={creating} onValueChange={setTypeId}>
+                    <SelectTrigger id="child-type" className="h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {types.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                </Select>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="child-summary" className="text-xs">Tiêu đề</Label>

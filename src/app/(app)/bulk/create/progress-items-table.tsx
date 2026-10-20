@@ -14,6 +14,7 @@ import {
   RefreshCw,
   GitBranch,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export interface ProgressCreateItem {
   id: string;
@@ -142,11 +143,9 @@ export const ProgressItemRow = React.memo(function ProgressItemRow({
             {(item.retryable || isFailed) && isFinished && (
               <div>
                 <label className="inline-flex items-center gap-1.5 cursor-pointer text-2xs text-muted-foreground hover:text-foreground">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={isSelectedRetry}
-                    onChange={() => onToggleRetry(item.id)}
-                    className="rounded border-border"
+                    onCheckedChange={() => onToggleRetry(item.id)}
                   />
                   Chọn để thử lại
                 </label>

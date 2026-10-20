@@ -23,6 +23,7 @@ import {
   type PrPlanItem,
 } from "@/hooks/use-branches";
 import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type TaskPrCreateDialogProps = {
   jiraKey: string;
@@ -223,13 +224,12 @@ export function TaskPrCreateDialog({ jiraKey, summary, open, onOpenChange, onSuc
                       !isReady && "opacity-70"
                     )}
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       aria-label={`Tạo PR cho ${item.repo} ${item.branch}`}
                       checked={checked}
                       disabled={!isReady || createMutation.isPending}
-                      onChange={() => toggle(item.branchId)}
-                      className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-primary disabled:cursor-not-allowed"
+                      onCheckedChange={() => toggle(item.branchId)}
+                      className="shrink-0"
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-1.5">

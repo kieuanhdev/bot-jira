@@ -14,6 +14,7 @@ import {
 import { getErrorMessage } from "@/lib/api-client";
 import type { BulkCreateProjectMetadata } from "@/lib/bulk/create-types";
 import type { BulkCreateTemplateDetailResponse } from "@/lib/contracts/bulk-create-template";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export interface TemplatePreviewProps {
   selectedKey: string;
@@ -115,11 +116,10 @@ export function TemplatePreview({
               {template.parentKey && (
                 <div className="pt-1.5 border-t border-primary/20">
                   <label className="flex items-start gap-2.5 cursor-pointer text-xs select-none">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={includeParentRow}
-                      onChange={(e) => onIncludeParentRowChange(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                      onCheckedChange={(c) => onIncludeParentRowChange(c === true)}
+                      className="mt-0.5"
                     />
                     <div className="space-y-0.5">
                       <span className="font-semibold text-foreground">

@@ -842,10 +842,10 @@ Cả hai áp dụng `MAX_LABEL_LENGTH`, `MAX_LABELS_COUNT`, so trùng không ph�
   - `bulk/create/progress-items-table.tsx:145`, `csv-import-excel-preview.tsx:125`, `csv-import-csv-preview.tsx:110`, `template-preview.tsx:118`
 - Select: `src/components/issues/link-issue-dialog.tsx:129`, `src/components/issues/create-child-dialog.tsx:107`
 
-- [ ] Đổi `onChange={(e) => f(e.target.checked)}` thành `onCheckedChange={(c) => f(c === true)}`. Checkbox "chọn tất cả" (`unlinked-branch-view.tsx:43`, `release-add-tasks-dialog.tsx:141`) truyền `"indeterminate"` khi mới chọn một phần.
-- [ ] Mỗi `<label>` bọc checkbox vẫn bấm được: dùng `ui/label` với `htmlFor` + `id`, hoặc giữ thẻ `label` bao ngoài.
-- [ ] Radio giữ nguyên (ngoài phạm vi).
-- [ ] Commit `refactor(ui): replace native checkboxes and selects with ui components`.
+- [x] Đổi `onChange={(e) => f(e.target.checked)}` thành `onCheckedChange={(c) => f(c === true)}`. Checkbox "chọn tất cả" (`unlinked-branch-view.tsx:43`, `release-add-tasks-dialog.tsx:141`) truyền `"indeterminate"` khi mới chọn một phần.
+- [x] Mỗi `<label>` bọc checkbox vẫn bấm được: dùng `ui/label` với `htmlFor` + `id`, hoặc giữ thẻ `label` bao ngoài.
+- [x] Radio giữ nguyên (ngoài phạm vi).
+- [x] Commit `refactor(ui): replace native checkboxes and selects with ui components`.
 
 #### Task 5.10: Tab báo cáo dùng `ui/tabs`
 

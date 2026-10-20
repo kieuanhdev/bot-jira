@@ -18,6 +18,7 @@ import { getErrorMessage } from "@/lib/api-client";
 import { useBranchLink, useIssueSearch } from "@/hooks/use-branches";
 import { getBitbucketBranchUrl } from "@/lib/utils";
 import type { BranchRowItem } from "./branch-types";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type BranchLinkDialogProps = {
   branch: BranchRowItem | null;
@@ -192,12 +193,11 @@ export function BranchLinkDialog({
 
           {branch.jiraKey && !isBulk && (
             <label className="flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={replace}
-                onChange={(e) => setReplace(e.target.checked)}
+                onCheckedChange={(c) => setReplace(c === true)}
                 disabled={linkMutation.isPending}
-                className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-primary"
+                className="mt-0.5"
               />
               <span>
                 Thay thế liên kết hiện tại ({branch.jiraKey}). Bỏ chọn để gắn <strong>thêm</strong> task này và giữ{" "}
@@ -207,12 +207,11 @@ export function BranchLinkDialog({
           )}
 
           <label className="flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={syncPr}
-              onChange={(e) => setSyncPr(e.target.checked)}
+              onCheckedChange={(c) => setSyncPr(c === true)}
               disabled={linkMutation.isPending}
-              className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-primary"
+              className="mt-0.5"
             />
             <span>
               Cập nhật PR trên Bitbucket để Jira nhận (thêm <code className="font-mono">Jira: {jiraKeyInput.trim().toUpperCase() || "KEY"}</code> vào mô

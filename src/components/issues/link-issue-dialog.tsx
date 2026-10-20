@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api-client";
 import { issuesKeys } from "@/lib/query-keys";
@@ -126,19 +127,18 @@ export function LinkIssueDialog({
                 Jira không trả về loại liên kết nào dùng được.
               </p>
             ) : (
-              <select
-                id="link-type"
-                value={selectedValue}
-                disabled={linking}
-                onChange={(e) => setChoiceValue(e.target.value)}
-                className="h-9 cursor-pointer rounded-md border border-input bg-background px-2 text-sm outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {choices.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {jiraKey} {c.label}…
-                  </option>
-                ))}
-              </select>
+              <Select value={selectedValue} disabled={linking} onValueChange={setChoiceValue}>
+                  <SelectTrigger id="link-type" className="h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {choices.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {jiraKey} {c.label}…
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+              </Select>
             )}
           </div>
 

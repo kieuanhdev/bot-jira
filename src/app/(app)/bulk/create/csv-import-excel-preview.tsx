@@ -6,6 +6,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { MAX_BULK_CREATE_ITEMS, type BulkCreateRowInput } from "@/lib/bulk/create-types";
 import type { ExcelImportResponse } from "./lib/csv-import-types";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface CsvImportExcelPreviewProps {
   excelResult: ExcelImportResponse;
@@ -122,11 +123,9 @@ export function CsvImportExcelPreview({
             </div>
           </div>
           <label className="flex items-center gap-2 pt-1 cursor-pointer font-medium text-2xs">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={confirmTruncation}
-              onChange={(e) => onConfirmTruncationChange(e.target.checked)}
-              className="rounded border-warning/50 text-warning focus:ring-warning"
+              onCheckedChange={(c) => onConfirmTruncationChange(c === true)}
             />
             <span>Tôi hiểu và đồng ý chỉ nhập {remainingCapacity} task đầu tiên.</span>
           </label>

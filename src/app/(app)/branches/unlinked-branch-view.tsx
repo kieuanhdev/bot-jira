@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { timeAgo, getBitbucketBranchUrl } from "@/lib/utils";
 import type { UnlinkedBranchItem } from "@/lib/bitbucket/task-delivery-query";
 import { GitBranch, Link as LinkIcon, ExternalLink, Clock } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type UnlinkedBranchViewProps = {
   items: UnlinkedBranchItem[];
@@ -40,11 +41,9 @@ export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink, onLinkMany
 
       <div className="flex items-center justify-between gap-2 px-1 text-xs">
         <label className="flex cursor-pointer items-center gap-2 text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={allSelected}
-            onChange={() => setSelected(allSelected ? new Set() : new Set(items.map((i) => i.id)))}
-            className="h-3.5 w-3.5 cursor-pointer accent-primary"
+          <Checkbox
+            checked={allSelected ? true : selectedItems.length > 0 ? "indeterminate" : false}
+            onCheckedChange={() => setSelected(allSelected ? new Set() : new Set(items.map((i) => i.id)))}
           />
           Chọn tất cả ({items.length})
         </label>
@@ -67,12 +66,11 @@ export function UnlinkedBranchView({ items, bitbucketBaseUrl, onLink, onLinkMany
             key={item.id}
             className="p-3.5 rounded-xl border border-border bg-card hover:border-border/80 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
           >
-            <input
-              type="checkbox"
+            <Checkbox
               checked={selected.has(item.id)}
-              onChange={() => toggle(item.id)}
+              onCheckedChange={() => toggle(item.id)}
               aria-label={`Chọn nhánh ${item.branch}`}
-              className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-primary"
+              className="shrink-0"
             />
             <div className="space-y-1 min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
