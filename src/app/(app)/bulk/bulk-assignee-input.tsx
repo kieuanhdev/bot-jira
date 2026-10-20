@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { Command, CommandItem, CommandList } from "@/components/ui/command";
+import { filterLocalOptions } from "@/components/task-fields/lib/filter-options";
 
 export function AssigneeInput({
   value,
@@ -16,9 +18,11 @@ export function AssigneeInput({
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [highlight, setHighlight] = useState(0);
-  const q = value.trim().toLowerCase();
-  const matches = (q ? options.filter((o) => o.toLowerCase().includes(q)) : options).slice(0, 8);
+  const [highlight, setHighlight] = useState("");
+  const listId = useId();
+  const matches = filterLocalOptions(options, value, 8);
+  const activeValue = matches.includes(highlight) ? highlight : (matches[0] ?? "");
+  const showList = open && matches.length > 0;
 
   function pick(opt: string) {
     onChange(opt);
@@ -26,61 +30,52 @@ export function AssigneeInput({
   }
 
   return (
-    <div className="relative">
-      <Input
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded={open}
-        aria-controls="bulk-assignee-options"
-        value={value}
-        disabled={disabled}
-        placeholder="jira username"
-        onChange={(e) => {
-          onChange(e.target.value);
-          setOpen(true);
-          setHighlight(0);
-        }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
-        onKeyDown={(e) => {
-          if (!open || matches.length === 0) return;
-          if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setHighlight((h) => (h + 1) % matches.length);
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setHighlight((h) => (h - 1 + matches.length) % matches.length);
-          } else if (e.key === "Enter") {
-            e.preventDefault();
-            pick(matches[highlight]);
-          } else if (e.key === "Escape") {
-            setOpen(false);
-          }
-        }}
-      />
-      {open && matches.length > 0 && (
-        <ul id="bulk-assignee-options" role="listbox" className="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded-md border bg-popover shadow-md">
-          {matches.map((opt, i) => (
-            <li key={opt}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={i === highlight}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  pick(opt);
-                }}
-                className={cn(
-                  "w-full cursor-pointer px-3 py-1.5 text-left text-sm",
-                  i === highlight ? "bg-accent text-accent-foreground" : "hover:bg-accent/60"
-                )}
-              >
+    <Popover open={showList} onOpenChange={setOpen}>
+      <Command
+        shouldFilter={false}
+        value={activeValue}
+        onValueChange={setHighlight}
+        className="h-auto overflow-visible bg-transparent"
+      >
+        <PopoverAnchor asChild>
+          <div>
+            <Input
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={showList}
+              aria-controls={listId}
+              value={value}
+              disabled={disabled}
+              placeholder="jira username"
+              onChange={(e) => {
+                onChange(e.target.value);
+                setOpen(true);
+              }}
+              onFocus={() => setOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setOpen(false);
+              }}
+            />
+          </div>
+        </PopoverAnchor>
+        <PopoverContent
+          className="w-[var(--radix-popover-trigger-width)] p-0"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          onMouseDown={(e) => e.preventDefault()}
+          onInteractOutside={(e) => {
+            if ((e.target as HTMLElement | null)?.getAttribute("role") === "combobox") e.preventDefault();
+          }}
+        >
+          <CommandList id={listId} className="max-h-52 p-1">
+            {matches.map((opt) => (
+              <CommandItem key={opt} value={opt} onSelect={() => pick(opt)}>
                 {opt}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+              </CommandItem>
+            ))}
+          </CommandList>
+        </PopoverContent>
+      </Command>
+    </Popover>
   );
 }

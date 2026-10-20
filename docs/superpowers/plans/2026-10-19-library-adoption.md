@@ -740,14 +740,14 @@ QA tay của mọi task trong phase này: `npm run dev`, kiểm tra cả light v
 - Props export của cả hai component **giữ nguyên**, không file import nào phải sửa.
 - Produces: `filterLocalOptions(options: string[], query: string, limit: number): string[]` (không phân biệt hoa thường, giữ thứ tự).
 
-- [ ] **Viết test trước:** `filterLocalOptions(["anh","Bình","an"], "an", 8)` === `["anh","an"]`; với limit 1 thì === `["anh"]`.
-- [ ] `AssigneeCombobox` dùng `Popover` + `PopoverAnchor` bọc ô Input, kèm `Command shouldFilter={false}`.
+- [x] **Viết test trước:** `filterLocalOptions(["anh","Bình","an"], "an", 8)` === `["anh","an"]`; với limit 1 thì === `["anh"]`.
+- [x] `AssigneeCombobox` dùng `Popover` + `PopoverAnchor` bọc ô Input, kèm `Command shouldFilter={false}`.
   - Thêm `useDebouncedValue(query, 250)` vào query key. Đây là thay đổi có chủ đích: trước đây không có debounce.
   - Bỏ mẹo `onBlur` + `setTimeout(200)`.
   - Giữ hành vi: Esc khi popup đã đóng mà đang có giá trị thì xoá giá trị.
-- [ ] `AssigneeInput`: ô nhập tự do làm anchor. `PopoverContent onOpenAutoFocus={(e) => e.preventDefault()}` để focus ở lại ô input. Bỏ id cứng, dùng `useId()`.
-- [ ] QA tay: assignee trong form tạo task (nằm trong sheet), trong dialog default của bulk, và trong hàng bảng bulk. Danh sách không bị cắt bởi bảng. Esc chỉ đóng popup, không đóng sheet.
-- [ ] Commit `refactor(task-fields): assignee pickers on Popover + cmdk`.
+- [x] `AssigneeInput`: ô nhập tự do làm anchor. `PopoverContent onOpenAutoFocus={(e) => e.preventDefault()}` để focus ở lại ô input. Bỏ id cứng, dùng `useId()`.
+- [x] QA tay: assignee trong form tạo task (nằm trong sheet), trong dialog default của bulk, và trong hàng bảng bulk. Danh sách không bị cắt bởi bảng. Esc chỉ đóng popup, không đóng sheet.
+- [x] Commit `refactor(task-fields): assignee pickers on Popover + cmdk`.
 
 #### Task 5.4: Parent — `ParentCombobox` và `EpicInput`
 
