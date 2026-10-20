@@ -1,7 +1,7 @@
 import type { ReportPeriod, HistoryDataPoint } from "./types";
 import { normalizeStatusToGroup, isDoneGroup } from "./status";
-import { resolveCompletionDate, isDateInPeriod } from "./completion-date";
-import { addDays, countDays } from "./period";
+import { resolveCompletionDate } from "./completion-date";
+import { addDays, countDays, formatDateInTimezone } from "./period";
 
 export interface HistoryIssueInput {
   jiraKey: string;
@@ -57,12 +57,21 @@ export function calculateHistoryMetrics(
     });
     return {
       jiraKey: issue.jiraKey,
-      createdAt: issue.createdAt,
-      completedDate: resolved.date,
+      // Bucket keys are computed once per issue; formatting dates in a timezone
+      // inside the per-bucket loop made this O(buckets x issues).
+      createdKey: issue.createdAt
+        ? formatDateInTimezone(issue.createdAt, period.timezone)
+        : null,
+      completedKey: resolved.date
+        ? formatDateInTimezone(resolved.date, period.timezone)
+        : null,
       isDone,
       points: issue.points ?? 0,
     };
   });
+
+  const doneCount = resolvedIssues.filter((i) => i.isDone).length;
+  const openCount = resolvedIssues.length - doneCount;
 
   for (let idx = 0; idx < dates.length; idx++) {
     const dateStr = dates[idx];
@@ -74,15 +83,13 @@ export function calculateHistoryMetrics(
     let throughput = 0;
 
     for (const item of resolvedIssues) {
-      if (
-        item.createdAt &&
-        isDateInPeriod(item.createdAt, dateStr, windowEndStr, period.timezone)
-      ) {
+      if (item.createdKey && item.createdKey >= dateStr && item.createdKey <= windowEndStr) {
         createdCount++;
       }
       if (
-        item.completedDate &&
-        isDateInPeriod(item.completedDate, dateStr, windowEndStr, period.timezone)
+        item.completedKey &&
+        item.completedKey >= dateStr &&
+        item.completedKey <= windowEndStr
       ) {
         completedCount++;
         throughput++;
@@ -96,8 +103,8 @@ export function calculateHistoryMetrics(
       createdCount,
       completedCount,
       netBacklog,
-      openCount: Math.max(0, resolvedIssues.filter((i) => !i.isDone).length),
-      doneCount: Math.max(0, resolvedIssues.filter((i) => i.isDone).length),
+      openCount,
+      doneCount,
       throughput,
     });
   }

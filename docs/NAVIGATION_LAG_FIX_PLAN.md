@@ -219,6 +219,21 @@ Kết quả đo (production build, Chrome headless, script `nav.mjs`: click side
 - Lần 1 của nhiều trang cũng "không có RSC" vì đã được prefetch bởi `<Link>` (bị loại khỏi bộ lọc), nên con số lần 1 không dùng để so sánh với baseline. Baseline RSC điều hướng ở mục 8 vẫn chưa có số đáng tin (xem trên).
 - Chưa kiểm tra: mutation có hiển thị dữ liệu cũ tối đa 30s trên trang server-prefetch (client query vẫn revalidate theo `staleTime`).
 
+### Phase 3 đã triển khai một phần (2026-10-20)
+
+Đo bằng script cục bộ (không commit), DB thật, period `last_30_days`.
+
+- `getProjectHistory`: nguyên nhân là `isDateInPeriod` gọi `formatDateInTimezone` trong vòng lặp (số bucket × số issue × 2) và `openCount`/`doneCount` được lọc lại ở mỗi bucket. Đã tính khoá ngày một lần cho mỗi issue và đưa hai bộ đếm ra ngoài vòng lặp ([history-metrics.ts](../src/lib/reports/history-metrics.ts)).
+
+| Hàm | Trước (ms) | Sau (ms) |
+|---|---|---|
+| `getProjectHistory` EPM | ~4.800 | ~1.010 |
+| `getProjectHistory` MHRM | ~1.400 | ~160 |
+
+- Số liệu hiện tại: tasks EPM ~940, members EPM ~620, leaderboard ~100-140 ms. Leaderboard đã nhẹ nên 3.1 chưa cần thiết.
+- **3.2 (bỏ `raw`) không làm được nếu không có migration.** Đọc `raw` EPM tốn ~500-800ms so với ~70ms khi bỏ cột. Thử trích hai trường bằng SQL (`raw->'fields'->'customfield_10706'`, `resolutiondate`) vẫn ~500ms vì Postgres phải giải nén toàn bộ jsonb (TOAST). Chỉ cột riêng `resolvedAt`/`doneAt` (Phase 4.1, cần duyệt migration) mới loại được chi phí này.
+- Chưa làm: 3.4 (branches), 3.5, 3.6.
+
 ## 9. Thứ tự triển khai đề xuất
 
 1. Phase 0 (đo).
