@@ -1,26 +1,20 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { readJsonBody } from "./json-body";
 
-type SamplePayload = {
-  name: string;
-  count: number;
-};
-
-function isSamplePayload(v: unknown): v is SamplePayload {
-  if (typeof v !== "object" || v === null) return false;
-  const obj = v as Record<string, unknown>;
-  return typeof obj.name === "string" && typeof obj.count === "number";
-}
+const SampleSchema = z.object({ name: z.string(), count: z.number() });
+const RoleSchema = z.object({ role: z.enum(["admin", "member"]) });
+const OptionalSchema = z.object({ note: z.string().optional() });
 
 describe("readJsonBody", () => {
-  it("parses valid JSON matching type guard", async () => {
+  it("parses valid JSON matching schema", async () => {
     const req = new Request("http://localhost/api/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: "hello", count: 42 }),
     });
 
-    const result = await readJsonBody(req, isSamplePayload);
+    const result = await readJsonBody(req, SampleSchema);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data).toEqual({ name: "hello", count: 42 });
@@ -34,7 +28,7 @@ describe("readJsonBody", () => {
       body: "",
     });
 
-    const result = await readJsonBody(req, isSamplePayload);
+    const result = await readJsonBody(req, SampleSchema);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.response.status).toBe(400);
@@ -49,7 +43,7 @@ describe("readJsonBody", () => {
       body: "{ not valid json",
     });
 
-    const result = await readJsonBody(req, isSamplePayload);
+    const result = await readJsonBody(req, SampleSchema);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.response.status).toBe(400);
@@ -57,18 +51,64 @@ describe("readJsonBody", () => {
     }
   });
 
-  it("returns 400 invalid_body when JSON does not match guard", async () => {
+  it("returns 400 invalid_body with issues when JSON does not match schema", async () => {
     const req = new Request("http://localhost/api/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "hello", count: "not-a-number" }),
+      body: JSON.stringify({ role: "superadmin" }),
     });
 
-    const result = await readJsonBody(req, isSamplePayload);
+    const result = await readJsonBody(req, RoleSchema);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.response.status).toBe(400);
-      await expect(result.response.json()).resolves.toEqual({ error: "invalid_body" });
+      await expect(result.response.json()).resolves.toEqual({
+        error: "invalid_body",
+        issues: [{ path: "role", message: expect.any(String) }],
+      });
+    }
+  });
+
+  it("joins nested issue paths with dots", async () => {
+    const req = new Request("http://localhost/api/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ outer: { inner: 1 } }),
+    });
+
+    const result = await readJsonBody(req, z.object({ outer: z.object({ inner: z.string() }) }));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const json = await result.response.json();
+      expect(json.issues).toEqual([{ path: "outer.inner", message: expect.any(String) }]);
+    }
+  });
+
+  it("parses an empty body as {} when allowEmpty is set", async () => {
+    const req = new Request("http://localhost/api/test", { method: "POST", body: "" });
+
+    const result = await readJsonBody(req, OptionalSchema, { allowEmpty: true });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toEqual({});
+    }
+  });
+
+  it("parses a body-less request as {} when allowEmpty is set", async () => {
+    const req = new Request("http://localhost/api/test", { method: "POST" });
+
+    const result = await readJsonBody(req, OptionalSchema, { allowEmpty: true });
+    expect(result).toEqual({ ok: true, data: {} });
+  });
+
+  it("returns invalid_json on empty body without allowEmpty even when {} would parse", async () => {
+    const req = new Request("http://localhost/api/test", { method: "POST", body: "" });
+
+    const result = await readJsonBody(req, OptionalSchema);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.response.status).toBe(400);
+      await expect(result.response.json()).resolves.toEqual({ error: "invalid_json" });
     }
   });
 
@@ -82,7 +122,7 @@ describe("readJsonBody", () => {
       body: JSON.stringify({ name: "hello", count: 1 }),
     });
 
-    const result = await readJsonBody(req, isSamplePayload, { maxBytes: 100 });
+    const result = await readJsonBody(req, SampleSchema, { maxBytes: 100 });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.response.status).toBe(400);
@@ -108,7 +148,7 @@ describe("readJsonBody", () => {
       duplex: "half",
     } as unknown as RequestInit);
 
-    const result = await readJsonBody(req, isSamplePayload, { maxBytes: 100 });
+    const result = await readJsonBody(req, SampleSchema, { maxBytes: 100 });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.response.status).toBe(400);

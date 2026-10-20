@@ -479,13 +479,13 @@ export type BodyIssue = { path: string; message: string };
 
 Các lỗi `payload_too_large` (400) và `invalid_json` (400) giữ nguyên.
 
-- [ ] **Test được đổi có chủ đích:** test "guard mismatch" đổi thành "schema mismatch". Kỳ vọng `{ error: "invalid_body", issues: [{ path: "role", message: expect.any(String) }] }`. 5 test còn lại không đổi.
-- [ ] **Test mới:**
+- [x] **Test được đổi có chủ đích:** test "guard mismatch" đổi thành "schema mismatch". Kỳ vọng `{ error: "invalid_body", issues: [{ path: "role", message: expect.any(String) }] }`. 5 test còn lại không đổi.
+- [x] **Test mới:**
   - `allowEmpty: true` với body rỗng → `ok: true`, `data` là kết quả parse `{}`.
   - Không có `allowEmpty` thì body rỗng vẫn trả `invalid_json`.
-- [ ] Viết schema cho 5 route vào `src/lib/api/schemas/<domain>.ts`, test trong `<domain>.test.ts`. Mỗi schema có ít nhất 1 case nhận và 1 case từ chối.
+- [x] Viết schema cho 5 route vào `src/lib/api/schemas/<domain>.ts`, test trong `<domain>.test.ts`. Mỗi schema có ít nhất 1 case nhận và 1 case từ chối.
   - Push dùng `PushSubscriptionSchema`: `endpoint` là `z.url()` bắt đầu bằng `https://`, `keys.p256dh` và `keys.auth` là chuỗi không rỗng. Thay `isPushPayload`/`isValidPushSubscription`. Giữ thông báo lỗi `"subscription required"` của route.
-- [ ] Commit `feat(api): zod-backed readJsonBody with allowEmpty and issue list`.
+- [x] Commit `feat(api): zod-backed readJsonBody with allowEmpty and issue list`.
 
 #### Task 3.2 – 3.5: Chuyển các route sang `readJsonBody` + schema
 

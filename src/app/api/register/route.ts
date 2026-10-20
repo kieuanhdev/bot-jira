@@ -4,11 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { hasJiraConfig } from "@/lib/env";
 import { readJsonBody } from "@/lib/api/json-body";
+import { RegisterBodySchema } from "@/lib/api/schemas";
 import { checkAuthRateLimit } from "@/lib/rate-limit";
-
-function isRegisterPayload(v: unknown): v is { displayName?: unknown; email?: unknown; password?: unknown } {
-  return typeof v === "object" && v !== null;
-}
 
 /**
  * Self-service registration.
@@ -33,14 +30,14 @@ export async function POST(req: Request) {
     }
   }
 
-  const bodyResult = await readJsonBody(req, isRegisterPayload);
+  const bodyResult = await readJsonBody(req, RegisterBodySchema);
   if (!bodyResult.ok) return bodyResult.response;
 
   const { displayName, email, password } = bodyResult.data;
 
-  const name = (typeof displayName === "string" ? displayName : "").trim();
-  const mail = (typeof email === "string" ? email : "").trim().toLowerCase();
-  const pass = typeof password === "string" ? password : "";
+  const name = (displayName ?? "").trim();
+  const mail = (email ?? "").trim().toLowerCase();
+  const pass = password ?? "";
   if (!name || !mail || !pass) {
     return NextResponse.json(
       { error: "displayName, email and password are required" },

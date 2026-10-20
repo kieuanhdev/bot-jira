@@ -3,33 +3,14 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/api/guards";
 import { readJsonBody } from "@/lib/api/json-body";
-
-type PushPayload = {
-  subscription?: unknown;
-  unsubscribe?: boolean;
-};
-
-function isPushPayload(v: unknown): v is PushPayload {
-  return typeof v === "object" && v !== null;
-}
-
-function isValidPushSubscription(sub: unknown): sub is { endpoint: string; keys: { p256dh: string; auth: string } } {
-  if (typeof sub !== "object" || sub === null) return false;
-  const s = sub as { endpoint?: unknown; keys?: unknown };
-  if (typeof s.endpoint !== "string" || !s.endpoint.startsWith("https://")) return false;
-  if (typeof s.keys !== "object" || s.keys === null) return false;
-  const k = s.keys as { p256dh?: unknown; auth?: unknown };
-  if (typeof k.p256dh !== "string" || !k.p256dh) return false;
-  if (typeof k.auth !== "string" || !k.auth) return false;
-  return true;
-}
+import { PushSubscribeBodySchema, PushSubscriptionSchema } from "@/lib/api/schemas";
 
 export async function POST(req: Request) {
   const guard = await requireSession();
   if (!guard.ok) return guard.response;
   const session = guard.session;
 
-  const bodyResult = await readJsonBody(req, isPushPayload, { maxBytes: 4 * 1024 });
+  const bodyResult = await readJsonBody(req, PushSubscribeBodySchema, { maxBytes: 4 * 1024 });
   if (!bodyResult.ok) return bodyResult.response;
 
   const sub = bodyResult.data;
@@ -41,10 +22,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  if (!sub.subscription || !isValidPushSubscription(sub.subscription)) {
+  if (!PushSubscriptionSchema.safeParse(sub.subscription).success) {
     return NextResponse.json({ error: "subscription required" }, { status: 400 });
   }
 
+  // Store the raw browser object (e.g. expirationTime) rather than the parsed subset.
   await prisma.user.update({
     where: { id: session.user.id },
     data: { pushSubscription: sub.subscription as object },

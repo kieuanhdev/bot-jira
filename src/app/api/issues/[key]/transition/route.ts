@@ -6,10 +6,7 @@ import { userJiraAuth } from "@/lib/user-creds";
 import { refreshJiraIssueCache } from "@/lib/issues/cache";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 import { readJsonBody } from "@/lib/api/json-body";
-
-function isTransitionPayload(v: unknown): v is { transitionId?: unknown } {
-  return typeof v === "object" && v !== null;
-}
+import { IssueTransitionBodySchema } from "@/lib/api/schemas";
 
 export async function POST(
   req: Request,
@@ -20,10 +17,10 @@ export async function POST(
   const session = guard.session;
   const { key } = await ctx.params;
 
-  const bodyResult = await readJsonBody(req, isTransitionPayload);
+  const bodyResult = await readJsonBody(req, IssueTransitionBodySchema);
   if (!bodyResult.ok) return bodyResult.response;
 
-  const transitionId = typeof bodyResult.data.transitionId === "string" ? bodyResult.data.transitionId.trim() : "";
+  const transitionId = bodyResult.data.transitionId?.trim() ?? "";
   if (!transitionId) return NextResponse.json({ error: "transitionId required" }, { status: 400 });
 
   const user = await prisma.user.findUnique({

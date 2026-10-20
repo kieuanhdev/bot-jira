@@ -4,16 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/api/guards";
 import { ROLES, type Role } from "@/lib/permissions";
 import { readJsonBody } from "@/lib/api/json-body";
+import { UserRoleBodySchema } from "@/lib/api/schemas";
 import { audit } from "@/lib/audit";
 
 class LastAdminError extends Error {
   constructor() {
     super("last_admin");
   }
-}
-
-function isRolePayload(v: unknown): v is { role?: unknown } {
-  return typeof v === "object" && v !== null;
 }
 
 export async function PATCH(
@@ -25,11 +22,11 @@ export async function PATCH(
 
   const { id } = await ctx.params;
 
-  const bodyResult = await readJsonBody(req, isRolePayload);
+  const bodyResult = await readJsonBody(req, UserRoleBodySchema);
   if (!bodyResult.ok) return bodyResult.response;
 
   const { role } = bodyResult.data;
-  if (typeof role !== "string" || !ROLES.includes(role as (typeof ROLES)[number])) {
+  if (!ROLES.includes(role as (typeof ROLES)[number])) {
     return NextResponse.json({ error: "invalid role" }, { status: 400 });
   }
 
