@@ -10,6 +10,7 @@ import dynamic from "next/dynamic";
 // Trends tab pulls in recharts; load it only when opened.
 const TrendsTab = dynamic(() => import("./trends-tab").then((m) => m.TrendsTab), { ssr: false });
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -334,31 +335,25 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
       </div>
 
       {/* Tabs Navigation */}
-      <div className="border-b border-border">
-        <nav className="flex space-x-4" aria-label="Tabs">
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <TabsList aria-label="Tabs" className="h-auto w-full justify-start gap-1 overflow-x-auto">
           {tabs.map((tab) => {
             const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
             return (
-              <button
+              <TabsTrigger
                 key={tab.id}
-                type="button"
-                onClick={() => handleTabChange(tab.id)}
+                value={tab.id}
                 onMouseEnter={() => handleTabPrefetch(tab.id)}
                 onFocus={() => handleTabPrefetch(tab.id)}
-                className={`inline-flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium cursor-pointer transition-colors ${
-                  isActive
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
-                }`}
+                className="gap-2"
               >
                 <Icon className="h-4 w-4" aria-hidden="true" />
                 {tab.label}
-              </button>
+              </TabsTrigger>
             );
           })}
-        </nav>
-      </div>
+        </TabsList>
+      </Tabs>
 
 
       {/* Loading state */}

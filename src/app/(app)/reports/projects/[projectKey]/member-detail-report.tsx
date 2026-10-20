@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BarChart3, PieChart as PieChartIcon, Radar as RadarIcon, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { MemberReportItem } from "@/lib/reports/types";
 import {
   buildIndividualMemberAnalysis,
@@ -110,27 +111,19 @@ export function MemberDetailReport({
             </div>
 
             {/* View Mode Segmented Controls */}
-            <div className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
-              {chartTabs.map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium cursor-pointer transition-all duration-150 ${
-                      isActive
-                        ? "bg-card text-foreground shadow-2xs font-semibold"
-                        : "text-muted-foreground hover:text-foreground hover:bg-card/40"
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChartViewTab)}>
+              <TabsList className="h-auto flex-wrap justify-start gap-1 border border-border bg-muted/40">
+                {chartTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <TabsTrigger key={tab.id} value={tab.id} className="gap-1.5 px-2.5 py-1 text-xs">
+                      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>{tab.label}</span>
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+            </Tabs>
           </div>
         </CardHeader>
 

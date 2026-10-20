@@ -853,9 +853,9 @@ Cả hai áp dụng `MAX_LABEL_LENGTH`, `MAX_LABELS_COUNT`, so trùng không ph�
 - `src/app/(app)/reports/projects/[projectKey]/project-report-client.tsx:336-359,390+`
 - `src/app/(app)/reports/projects/[projectKey]/member-detail-report.tsx:44,112-136`
 
-- [ ] Project report: `<Tabs value={activeTab} onValueChange={handleTabChange}>`. Giữ prefetch ở `onMouseEnter`/`onFocus` của `TabsTrigger`. Nội dung vẫn render có điều kiện như hiện tại (không đổi sang `TabsContent`), để `TrendsTab` vẫn chỉ được tải khi mở tab.
-- [ ] Member detail: Tabs có điều khiển với `chartTab`. Listener Esc trên `window` (dòng 54-62) giữ nguyên. QA: dùng mũi tên trái/phải trên tab không kích hoạt `onBack`.
-- [ ] Commit `refactor(reports): report tabs on Radix Tabs`.
+- [x] Project report: `<Tabs value={activeTab} onValueChange={handleTabChange}>`. Giữ prefetch ở `onMouseEnter`/`onFocus` của `TabsTrigger`. Nội dung vẫn render có điều kiện như hiện tại (không đổi sang `TabsContent`), để `TrendsTab` vẫn chỉ được tải khi mở tab.
+- [x] Member detail: Tabs có điều khiển với `chartTab`. Listener Esc trên `window` (dòng 54-62) giữ nguyên. QA: dùng mũi tên trái/phải trên tab không kích hoạt `onBack`.
+- [x] Commit `refactor(reports): report tabs on Radix Tabs`.
 
 #### Task 5.11: Menu mobile dùng `ui/sheet`
 
