@@ -65,8 +65,9 @@ export function ImageLightbox({
       tabIndex={-1}
       role="dialog"
       aria-modal="true"
+      data-image-lightbox
       aria-label={current.alt}
-      className="fixed inset-0 z-[60] flex flex-col bg-black/85 outline-none motion-safe:animate-in motion-safe:fade-in"
+      className="pointer-events-auto fixed inset-0 z-[60] flex flex-col bg-black/85 outline-none motion-safe:animate-in motion-safe:fade-in"
       onMouseDown={(e) => {
         e.stopPropagation();
         if (e.target === e.currentTarget) onClose();

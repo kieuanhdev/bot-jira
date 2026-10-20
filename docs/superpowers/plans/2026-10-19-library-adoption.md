@@ -821,14 +821,14 @@ Cả hai áp dụng `MAX_LABEL_LENGTH`, `MAX_LABELS_COUNT`, so trùng không ph�
 - `ImageLightbox` thêm `data-image-lightbox` và class `pointer-events-auto` vào phần tử gốc. Lý do: Radix Dialog ở chế độ modal đặt `pointer-events: none` lên `body`, còn lightbox được portal thẳng vào `body`, nên thiếu class này thì các nút trong lightbox không bấm được. Ngoài ra không đổi gì.
 - `onPointerDownOutside` / `onInteractOutside` của Sheet gọi `e.preventDefault()` khi target nằm trong `[data-image-lightbox]`, để bấm vào lightbox không đóng panel. Thêm prop này vào `ui/sheet` theo cùng kiểu với `onEscapeKeyDown`.
 
-- [ ] Phím tắt "c" của board vẫn bị chặn khi panel mở (Radix Content có `role="dialog"`).
-- [ ] QA tay:
+- [x] Phím tắt "c" của board vẫn bị chặn khi panel mở (Radix Content có `role="dialog"`).
+- [x] QA tay:
   - Esc trong ô sửa summary chỉ huỷ việc sửa.
   - Esc khi lightbox đang mở chỉ đóng lightbox.
   - Esc lần nữa thì đóng panel.
   - Bấm ra nền ngoài thì đóng panel.
   - Mở lightbox từ QuickPanel và bấm **từng nút**: trước, sau, tải xuống, đóng. Tất cả phải hoạt động, và panel không bị đóng.
-- [ ] Commit `refactor(board): QuickPanel on Sheet, remove useFocusTrap`.
+- [x] Commit `refactor(board): QuickPanel on Sheet, remove useFocusTrap`.
 
 #### Task 5.9: Checkbox và select gốc → component ui
 

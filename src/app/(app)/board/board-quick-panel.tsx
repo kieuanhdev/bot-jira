@@ -1,7 +1,5 @@
 "use client";
 
-import { useRef } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { IssueItem } from "@/hooks/use-issues";
@@ -16,7 +14,7 @@ import { IssueRelations } from "@/components/issues/issue-relations";
 import { AiSplitButton } from "@/components/task-create/ai-split-button";
 import { IssueAttachments } from "@/components/issues/issue-attachments";
 import { useFlashMessage } from "@/hooks/use-flash-message";
-import { useFocusTrap } from "@/hooks/use-focus-trap";
+import { Sheet } from "@/components/ui/sheet";
 import { useQuickPanelQueries } from "./quick-panel/hooks/use-quick-panel-queries";
 import { useQuickPanelBranch } from "./quick-panel/hooks/use-quick-panel-branch";
 import { useQuickPanelWorklog } from "./quick-panel/hooks/use-quick-panel-worklog";
@@ -40,12 +38,9 @@ export function QuickPanel({
 }) {
   const router = useRouter();
   const qc = useQueryClient();
-  const panelRef = useRef<HTMLDivElement | null>(null);
 
   const { message: copied, show: setCopied } = useFlashMessage<boolean>(1500);
   const { message: actionMsg, show: flashActionMsg } = useFlashMessage<QuickPanelActionMessage>(6000);
-
-  useFocusTrap(panelRef, { onEscape: onClose });
 
   const {
     me,
@@ -152,22 +147,28 @@ export function QuickPanel({
   const dotClass = statusCat === "done" ? "bg-success" : statusCat === "indeterminate" ? "bg-primary" : "bg-info";
   const transitionList = transitions?.transitions ?? [];
 
-  if (typeof document === "undefined") return null;
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${issue.jiraKey} quick panel`}
-      onMouseDown={onClose}
+  return (
+    <Sheet
+      open
+      onOpenChange={(o) => !o && onClose()}
+      side="right"
+      className="sm:w-1/2 sm:min-w-[34.5rem]"
+      onEscapeKeyDown={(e) => {
+        // Inline editors cancel their own edit, and the lightbox closes itself.
+        const target = e.target as HTMLElement | null;
+        if (target?.closest?.("[data-escape-local]") || document.querySelector("[data-image-lightbox]")) {
+          e.preventDefault();
+        }
+      }}
+      onPointerDownOutside={(e) => {
+        if ((e.target as HTMLElement | null)?.closest?.("[data-image-lightbox]")) e.preventDefault();
+      }}
+      onInteractOutside={(e) => {
+        if ((e.target as HTMLElement | null)?.closest?.("[data-image-lightbox]")) e.preventDefault();
+      }}
     >
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        className="flex h-full w-full flex-col sm:w-1/2 sm:min-w-[34.5rem] overflow-hidden border-l border-border bg-card shadow-2xl outline-none motion-safe:animate-[panelIn_180ms_ease-out]"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      {/* Cancel the Sheet body padding: the panel brings its own header, scrolling body and footer. */}
+      <div className="-mx-5 -my-4 flex h-[calc(100%+2rem)] min-h-0 flex-col overflow-hidden border-l border-border bg-card" aria-label={`${issue.jiraKey} quick panel`}>
         <QuickPanelHeader
           jiraKey={issue.jiraKey}
           status={status}
@@ -281,7 +282,6 @@ export function QuickPanel({
           onOpenFull={() => router.push(`/issue/${issue.jiraKey}`)}
         />
       </div>
-    </div>,
-    document.body
+    </Sheet>
   );
 }

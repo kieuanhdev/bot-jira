@@ -19,6 +19,10 @@ interface SheetProps {
   side?: "right" | "left";
   /** Called before Esc closes the sheet; call `preventDefault()` to keep it open. */
   onEscapeKeyDown?: (e: KeyboardEvent) => void;
+  /** Called before a pointer-down outside the sheet closes it; call `preventDefault()` to keep it open. */
+  onPointerDownOutside?: (e: CustomEvent<{ originalEvent: PointerEvent }>) => void;
+  /** Called before any interaction (pointer or focus) outside the sheet closes it. */
+  onInteractOutside?: (e: CustomEvent<{ originalEvent: PointerEvent | FocusEvent }>) => void;
 }
 
 export function Sheet({
@@ -32,6 +36,8 @@ export function Sheet({
   className,
   side = "right",
   onEscapeKeyDown,
+  onPointerDownOutside,
+  onInteractOutside,
 }: SheetProps) {
   const hasHeader = Boolean(title || description);
 
@@ -42,6 +48,8 @@ export function Sheet({
         <DialogPrimitive.Content
           {...(description ? {} : { "aria-describedby": undefined })}
           onEscapeKeyDown={onEscapeKeyDown}
+          onPointerDownOutside={onPointerDownOutside}
+          onInteractOutside={onInteractOutside}
           className={cn(
             "fixed inset-y-0 z-50 flex h-full w-full max-w-md flex-col bg-background shadow-[var(--shadow-pop)] duration-200 ease-out focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out motion-reduce:animate-none",
             side === "right"
