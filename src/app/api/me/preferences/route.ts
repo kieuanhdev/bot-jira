@@ -10,6 +10,7 @@ import {
 } from "@/lib/jira/project-catalog";
 import { userJiraAuth } from "@/lib/user-creds";
 import { jiraWith } from "@/lib/jira/client";
+import { getMePreferences } from "@/lib/me/preferences";
 
 /** Current user's board preference: which project keys they want to see. */
 export async function GET() {
@@ -17,31 +18,14 @@ export async function GET() {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const [user, activeCatalog] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { boardProjects: true },
-    }),
-    listActiveProjects(),
-  ]);
-
-  const activeKeys = new Set(activeCatalog.map((p) => p.key));
-  const userProjects = (user?.boardProjects ?? [])
-    .map(normalizeProjectKey)
-    .filter((k) => activeKeys.has(k));
+  const body = await getMePreferences(session.user.id);
 
   const dur = Date.now() - reqStart;
-  return NextResponse.json(
-    {
-      projects: userProjects,
-      available: activeCatalog.map((p) => p.key),
+  return NextResponse.json(body, {
+    headers: {
+      "Server-Timing": `total;dur=${dur}`,
     },
-    {
-      headers: {
-        "Server-Timing": `total;dur=${dur}`,
-      },
-    }
-  );
+  });
 }
 
 /** Save the set of project keys the user wants on their board. */

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, RefreshCw } from "lucide-react";
 import { api, getErrorMessage } from "@/lib/api-client";
 import { adminKeys } from "@/lib/query-keys";
@@ -84,6 +84,8 @@ const WORKER_STATUS: Record<
 export function AdminOverviewClient() {
   const [errorSheetType, setErrorSheetType] = useState<"sentry" | "outbox" | null>(null);
 
+  const queryClient = useQueryClient();
+
   const health = useQuery({
     queryKey: adminKeys.health,
     queryFn: () => api<Health>("/api/health"),
@@ -120,7 +122,8 @@ export function AdminOverviewClient() {
   const lastUpdated = health.dataUpdatedAt || null;
 
   const handleRefresh = async () => {
-    await Promise.all([health.refetch(), metrics.refetch()]);
+    const [freshHealth] = await Promise.all([api<Health>("/api/health?fresh=1"), metrics.refetch()]);
+    queryClient.setQueryData(adminKeys.health, freshHealth);
   };
 
   const scrollToSection = (id: string) => {

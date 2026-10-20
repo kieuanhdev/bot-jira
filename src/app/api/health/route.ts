@@ -8,6 +8,10 @@ import { env, hasBitbucketConfig, hasSentryConfig, hasOpenAiConfig } from "@/lib
 import { getWorkerHealth, isJiraFresh } from "@/lib/health/worker-health";
 import { getJobSchedules } from "@/lib/queue/schedules";
 import { withTimeout } from "@/lib/async/with-timeout";
+import { cachedProbe } from "@/lib/health/ping-cache";
+
+// External probes can take seconds (timeouts up to 5s), so they are served stale-while-revalidate.
+const EXTERNAL_PROBE_TTL_MS = 20_000;
 
 export type PingResult = {
   ok: boolean;
@@ -43,13 +47,17 @@ async function ping(name: string, fn: () => Promise<unknown>, timeoutMs: number 
   }
 }
 
-export async function GET() {
+export async function GET(req?: Request) {
   // Read-only infrastructure status. Worker lifecycle belongs to the separate
   // worker process and this endpoint intentionally has no startup side effect.
   const session = await getSession();
   if (!isAdmin(session)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+
+  const fresh = req ? new URL(req.url).searchParams.get("fresh") === "1" : false;
+  const probe = <T,>(key: string, fn: () => Promise<T>) =>
+    cachedProbe(key, fn, { ttlMs: EXTERNAL_PROBE_TTL_MS, fresh });
 
   const pingDb = async (): Promise<PingResult> => {
     return ping("db", async () => prisma.$queryRaw`SELECT 1`);
@@ -100,10 +108,10 @@ export async function GET() {
   ] = await Promise.allSettled([
     pingDb(),
     getWorkerHealth(),
-    pingJira(),
-    pingBitbucket(),
-    pingSentry(),
-    pingOpenai(),
+    probe("jira", pingJira),
+    probe("bitbucket", pingBitbucket),
+    probe("sentry", pingSentry),
+    probe("openai", pingOpenai),
   ]);
 
   const db: PingResult =

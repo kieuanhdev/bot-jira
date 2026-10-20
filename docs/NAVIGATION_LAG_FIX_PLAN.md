@@ -256,6 +256,12 @@ Kết quả đo (production build, Chrome headless, script `nav.mjs`: click side
 - 3.6: list `/api/issues` không còn select `reasoning`, `risks`, `missingInformation`, `similarTasks` của `aiScore`; không component board nào đọc các trường này (chỉ trang chi tiết, dùng `live.ts` riêng). Chưa đo kích thước payload.
 - 3.5: **bỏ qua.** `listActiveProjects` ~2,2 ms và một lần đọc user ~1,5 ms mỗi lần gọi, không đáng để thêm cache TTL (kèm rủi ro dữ liệu catalog cũ ở 29 chỗ gọi).
 
+### Trang quản trị và Sentry (2026-10-20)
+
+- Quản trị: `/api/health` đợi ping Jira/Bitbucket/Sentry/OpenAI, mỗi ping tối đa 5s. Trên máy đo, OpenAI không kết nối được nên mỗi lần gọi (mỗi 30s) chờ ~5s; Jira ~0,9s. Đã bọc các ping ngoài bằng stale-while-revalidate TTL 20s ([ping-cache.ts](../src/lib/health/ping-cache.ts)): lần đầu vẫn chờ, các lần sau trả ngay dữ liệu cũ và làm mới nền. Nút "Làm mới" gọi `?fresh=1` để bỏ qua cache. DB ping và worker health không cache. Settings cũng dùng endpoint này nên hưởng lợi.
+- Sentry: truy vấn server đã nhanh (vài ms) nhưng DB đo không có dòng Sentry nào, nên chưa đo được với dữ liệu thật. Sửa được là waterfall phía client: `me/status` và `me/preferences` (thanh dự án, quyền admin) trước chỉ fetch sau hydrate, nay prefetch trên server cùng danh sách. Logic preferences tách ra [preferences.ts](../src/lib/me/preferences.ts).
+- Chưa tối ưu: `getAdminMetrics` lần đầu ~570-970 ms do khởi động pg-boss trong process web (các lần sau ~37 ms).
+
 ## 9. Thứ tự triển khai đề xuất
 
 1. Phase 0 (đo).

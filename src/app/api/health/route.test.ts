@@ -61,10 +61,12 @@ vi.mock("@/lib/queue/schedules", () => ({
 }));
 
 import { GET } from "./route";
+import { clearProbeCache } from "@/lib/health/ping-cache";
 
 describe("GET /api/health", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearProbeCache();
     mocks.session.mockResolvedValue({ user: { id: "admin-1", role: "admin" } });
     mocks.isAdmin.mockReturnValue(true);
     mocks.prismaQueryRaw.mockResolvedValue([{ 1: 1 }]);
