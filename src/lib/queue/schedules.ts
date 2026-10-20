@@ -1,4 +1,5 @@
 import type { PgBoss, ScheduleOptions } from "pg-boss";
+import { APP_TIMEZONE } from "@/lib/date";
 import type { JobName } from "./job-names";
 
 export type ScheduleDefinition = {
@@ -25,11 +26,12 @@ export function buildScheduleDefinitions(pollIntervalMs: number): ScheduleDefini
     { name: "stale-detect", cron: "*/30 * * * *", options: { singletonSeconds: 1740, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 } },
     { name: "deliver-notifications", cron: "* * * * *", options: { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 3, retryDelay: 15, retryBackoff: true } },
     { name: "health-alert", cron: "* * * * *", options: { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 2, retryDelay: 10 } },
-    { name: "capture-project-report-snapshots", cron: "15 0 * * *", options: { singletonSeconds: 3600, expireInSeconds: 1800, retryLimit: 2, retryDelay: 60 } },
-    { name: "detect-people-fields", cron: "30 1 * * *", options: { singletonSeconds: 3600, expireInSeconds: 1800, retryLimit: 2, retryDelay: 60 } },
+    // Daily jobs run on Vietnam time so the "Hằng ngày HH:MM" labels hold.
+    { name: "capture-project-report-snapshots", cron: "15 0 * * *", options: { tz: APP_TIMEZONE, singletonSeconds: 3600, expireInSeconds: 1800, retryLimit: 2, retryDelay: 60 } },
+    { name: "detect-people-fields", cron: "30 1 * * *", options: { tz: APP_TIMEZONE, singletonSeconds: 3600, expireInSeconds: 1800, retryLimit: 2, retryDelay: 60 } },
     { name: "reconcile-deleted-issues", cron: "*/20 * * * *", options: { singletonSeconds: 1140, expireInSeconds: 900, retryLimit: 1, retryDelay: 60 } },
     // 17:20 Vietnam time: remind assignees of Done tasks whose PR is still unmerged.
-    { name: "notify-unmerged-prs", cron: "20 17 * * *", options: { tz: "Asia/Ho_Chi_Minh", singletonSeconds: 3600, expireInSeconds: 300, retryLimit: 2, retryDelay: 60 } },
+    { name: "notify-unmerged-prs", cron: "20 17 * * *", options: { tz: APP_TIMEZONE, singletonSeconds: 3600, expireInSeconds: 300, retryLimit: 2, retryDelay: 60 } },
   ];
 }
 

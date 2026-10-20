@@ -435,10 +435,10 @@ Tham số `tz` mặc định là `APP_TIMEZONE`.
 - `src/lib/queue/schedules.ts:29-32`
 - Test: `src/lib/queue/registry-schedules.test.ts:37-54`
 
-- [ ] Thêm `tz: APP_TIMEZONE` vào `capture-project-report-snapshots` (`15 0 * * *`) và `detect-people-fields` (`30 1 * * *`). Đổi literal của `notify-unmerged-prs` thành `APP_TIMEZONE`.
-- [ ] **Test được đổi có chủ đích:** ở `registry-schedules.test.ts:37-54`, hai entry trên thêm `tz: "Asia/Ho_Chi_Minh"` trong `options`. Các entry khác giữ nguyên.
-- [ ] Ghi chú vào commit: `detect-people-fields` chuyển từ 08:30 VN về 01:30 VN cho đúng nhãn.
-- [ ] Commit `fix(queue): run daily snapshot and people-field jobs in Vietnam time`.
+- [x] Thêm `tz: APP_TIMEZONE` vào `capture-project-report-snapshots` (`15 0 * * *`) và `detect-people-fields` (`30 1 * * *`). Đổi literal của `notify-unmerged-prs` thành `APP_TIMEZONE`.
+- [x] **Test được đổi có chủ đích:** ở `registry-schedules.test.ts:37-54`, hai entry trên thêm `tz: "Asia/Ho_Chi_Minh"` trong `options`. Các entry khác giữ nguyên.
+- [x] Ghi chú vào commit: `detect-people-fields` chuyển từ 08:30 VN về 01:30 VN cho đúng nhãn.
+- [x] Commit `fix(queue): run daily snapshot and people-field jobs in Vietnam time`.
 
 #### Task 2.8: Gộp các hàm kiểm tra ISO date
 
