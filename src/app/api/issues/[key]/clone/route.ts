@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { IssueCloneBodySchema } from "@/lib/api/schemas";
 import { jiraPointsFromFields, jiraWith } from "@/lib/jira/client";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -38,7 +40,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ key: string }>
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { key } = await ctx.params;
-  const body = (await req.json().catch(() => ({}))) as { summary?: string };
+  const parsedBody = await readJsonBody(req, IssueCloneBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   const requestedSummary = body.summary?.trim();
   if (requestedSummary && requestedSummary.length > MAX_SUMMARY_LENGTH) {
     return NextResponse.json(

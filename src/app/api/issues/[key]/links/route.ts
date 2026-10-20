@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { IssueLinkBodySchema } from "@/lib/api/schemas";
 import { jiraWith } from "@/lib/jira/client";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -62,11 +64,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ key: string }>
   const { key: rawKey } = await ctx.params;
   const key = rawKey?.trim().toUpperCase() ?? "";
 
-  const body = (await req.json().catch(() => ({}))) as {
-    typeName?: string;
-    direction?: string;
-    targetKey?: string;
-  };
+  const parsedBody = await readJsonBody(req, IssueLinkBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   const typeName = body.typeName?.trim();
   const direction = body.direction === "inward" ? "inward" : "outward";
   const targetKey = body.targetKey?.trim().toUpperCase() ?? "";

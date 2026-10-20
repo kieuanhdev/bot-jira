@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { BulkConfirmEnvelopeSchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { userBitbucketCreds, userJiraAuth, userJiraUsername } from "@/lib/user-creds";
@@ -31,7 +33,10 @@ export async function POST(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const rawBody = (await req.json().catch(() => ({}))) as BulkOperationRequest;
+  const parsedBody = await readJsonBody(req, BulkConfirmEnvelopeSchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  // The raw body goes down: the schema only vets the confirm envelope.
+  const rawBody = parsedBody.data as BulkOperationRequest;
 
   if (rawBody.confirm && rawBody.operationId) {
     // Confirm path: the immutable preview is already stored; we only re-check

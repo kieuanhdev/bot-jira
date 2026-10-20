@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { BranchParamsBodySchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { userJiraAuth, userBitbucketCreds } from "@/lib/user-creds";
@@ -117,7 +119,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ key: string }>
     );
   }
 
-  const body = (await req.json().catch(() => ({}))) as BranchParams;
+  const parsedBody = await readJsonBody(req, BranchParamsBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body: BranchParams = parsedBody.data;
   const jira = jiraWith(auth);
   const result = await createBranchForIssue(jira, key, body, bbCreds);
   if (result.error) {

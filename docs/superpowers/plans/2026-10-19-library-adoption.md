@@ -514,6 +514,9 @@ Mỗi task gồm các bước:
 - [ ] Kiểm tra `grep -rn "req.json()\|request.json()" <các thư mục của task>` không còn kết quả.
 - [ ] Commit `refactor(api): validate <domain> request bodies with zod`.
 
+Tiến độ (các checkbox trên dùng chung, tick theo từng task):
+- [x] Task 3.2 (issues): đủ các bước, trừ `npm test` toàn bộ do runner chạy.
+
 Task 3.5 xong thì `grep -rn "\.json()" src/app/api src/lib/*/route-service.ts src/lib/*/*-route-service.ts | grep -i "req\|request"` không còn kết quả, ngoài chính `json-body.ts`.
 
 #### Task 3.6: Worklog validation bằng zod

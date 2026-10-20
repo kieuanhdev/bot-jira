@@ -11,6 +11,8 @@ import { markIssuesDeleted } from "@/lib/issues/deleted";
 import { getProjectPeopleFields } from "@/lib/jira/people-fields";
 import { logSwallowed } from "@/lib/logger";
 import { isDateKey } from "@/lib/date";
+import { readJsonBody } from "@/lib/api/json-body";
+import { IssuePatchBodySchema } from "@/lib/api/schemas";
 
 export async function handleIssueDetailRequest(req: Request, ctx: { params: Promise<{ key: string }> }) {
   const session = await getSession();
@@ -41,26 +43,9 @@ export async function handleIssueUpdateRequest(
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { key } = await ctx.params;
-  const patch = (await req.json()) as {
-    summary?: string;
-    description?: string;
-    assignee?: string | null;
-    labels?: string[];
-    priority?: string;
-    points?: number | null;
-    fixVersions?: string[];
-    addFixVersion?: string;
-    removeFixVersion?: string;
-    addLabel?: string;
-    removeLabel?: string;
-    issueType?: string;
-    /** YYYY-MM-DD or null to clear. */
-    dueDate?: string | null;
-    epic?: string | null;
-    reporter?: string | null;
-    approver?: string | null;
-    tester?: string | null;
-  };
+  const patchResult = await readJsonBody(req, IssuePatchBodySchema, { maxBytes: 512 * 1024 });
+  if (!patchResult.ok) return patchResult.response;
+  const patch = patchResult.data;
 
   // Act as the current user if they linked their own Jira token.
   const user = await prisma.user.findUnique({

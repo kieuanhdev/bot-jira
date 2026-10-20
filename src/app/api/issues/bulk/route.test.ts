@@ -49,6 +49,7 @@ vi.mock("@/lib/bulk/ops", async (importOriginal) => {
 });
 
 import { POST } from "./route";
+import * as bulkOps from "@/lib/bulk/ops";
 
 describe("POST /api/issues/bulk", () => {
   beforeEach(() => {
@@ -65,6 +66,29 @@ describe("POST /api/issues/bulk", () => {
       body: JSON.stringify({ keys: ["EPM-1"], action: { kind: "assign", value: "alice" } }),
     }));
     expect(res.status).toBe(401);
+  });
+
+  it("passes the raw body including selector and action to validateBulkRequest", async () => {
+    const spy = vi.spyOn(bulkOps, "validateBulkRequest");
+    mocks.previewBulk.mockResolvedValue({ operationId: "op-1", type: "assign", total: 1, items: [], actionable: 1, skipped: 0 });
+    const res = await POST(new Request("http://localhost/api/issues/bulk", {
+      method: "POST",
+      body: JSON.stringify({
+        selector: { mode: "keys", keys: ["EPM-1"] },
+        action: { kind: "assign", value: "alice" },
+        confirm: false,
+        operationId: "op-x",
+      }),
+    }));
+    expect(res.status).toBe(200);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: { mode: "keys", keys: ["EPM-1"] },
+        action: { kind: "assign", value: "alice" },
+      }),
+      undefined
+    );
+    spy.mockRestore();
   });
 
   it("rejects multi-field updates that mix tasks from different projects", async () => {

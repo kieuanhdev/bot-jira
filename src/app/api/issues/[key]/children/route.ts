@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { IssueChildBodySchema } from "@/lib/api/schemas";
 import { jiraWith } from "@/lib/jira/client";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -81,7 +83,9 @@ export async function POST(req: Request, ctx: RouteContext) {
   if ("error" in loaded && loaded.error) return loaded.error;
   const { key, session, client, projectKey, mode, types } = loaded as Exclude<typeof loaded, { error: unknown }>;
 
-  const body = (await req.json().catch(() => ({}))) as { summary?: string; issueTypeId?: string };
+  const parsedBody = await readJsonBody(req, IssueChildBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   const summary = body.summary?.trim() ?? "";
   if (!summary) return NextResponse.json({ error: "Chưa nhập tiêu đề." }, { status: 400 });
   if (summary.length > MAX_SUMMARY_LENGTH) {

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { EstimateDecisionBodySchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { userJiraAuth } from "@/lib/user-creds";
-import { recordEstimateDecision, type EstimateDecision } from "@/lib/ai/decision";
+import { recordEstimateDecision } from "@/lib/ai/decision";
 
 /**
  * M7-03 — Human review of an AI estimate. Body: { decision, points? }.
@@ -16,12 +18,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ key: string }>
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { key } = await ctx.params;
 
-  const body = (await req.json().catch(() => ({}))) as {
-    decision?: EstimateDecision;
-    points?: number | null;
-  };
+  const parsedBody = await readJsonBody(req, EstimateDecisionBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
 
-  if (!body.decision || !["accepted", "edited", "rejected"].includes(body.decision)) {
+  if (!body.decision) {
     return NextResponse.json(
       { error: "decision must be one of accepted | edited | rejected" },
       { status: 400 }
