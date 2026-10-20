@@ -476,6 +476,22 @@ describe("Reports Query Primitives", () => {
         },
       ]);
     });
+
+    it("formats release startDate using Vietnam calendar day", async () => {
+      mocks.releaseFindMany.mockResolvedValue([
+        {
+          id: "rel-1",
+          jiraVersionId: "v101",
+          version: "1.0.0",
+          releaseDate: new Date("2026-10-20T00:00:00Z"),
+          status: "released",
+          createdAt: new Date("2026-10-09T18:00:00Z"),
+        },
+      ]);
+
+      const versions = await fetchAvailableProjectVersions("TEST");
+      expect(versions[0]?.startDate).toBe("2026-10-10");
+    });
   });
 
   describe("fetchReferenceRelease", () => {

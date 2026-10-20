@@ -4,10 +4,12 @@ import { getWorkerHealth } from "@/lib/health/worker-health";
 import type { WorkerLog } from "../guard";
 import { enqueueJiraRecoveries } from "../jira-recovery";
 import { logger, logSwallowed } from "@/lib/logger";
+import { toDateKey } from "@/lib/date";
 
 const ALERT_KEY = "worker";
 export type HealthAlertOptions = {
   enqueueJiraRecovery?: (projectKey: string) => Promise<string | null>;
+  now?: Date;
 };
 
 
@@ -30,7 +32,7 @@ export type HealthAlertOptions = {
  */
 export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<WorkerLog> {
   const health = await getWorkerHealth();
-  const now = new Date();
+  const now = options.now ?? new Date();
 
   // The watchdog is also a repair loop: stale and failed projects get an
   // elevated-priority, deduped reconciliation job while the worker is alive.
@@ -136,7 +138,7 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
         title: c.title,
         body: c.body,
         severity: "warning",
-        eventKey: `health:${c.key}:${now.toISOString().slice(0, 10)}:alert`,
+        eventKey: `health:${c.key}:${toDateKey(now)}:alert`,
       }).catch((err) => {
         logSwallowed("health_alert_notify_alert", err, { key: c.key });
         return null;
@@ -156,7 +158,7 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
         title: `Đồng bộ Jira đã phục hồi: ${projectKey}`,
         body: `Dự án ${projectKey} đã đồng bộ thành công trở lại.`,
         severity: "success",
-        eventKey: `health:${key}:${now.toISOString().slice(0, 10)}:recovered`,
+        eventKey: `health:${key}:${toDateKey(now)}:recovered`,
       }).catch((err) => {
         logSwallowed("health_alert_notify_recovery", err, { key });
         return null;
@@ -169,7 +171,7 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
         title: `Đồng bộ Jira đã phục hồi: ${projectKey}`,
         body: `Dự án ${projectKey} đã đồng bộ thành công và không còn lỗi.`,
         severity: "success",
-        eventKey: `health:${key}:${now.toISOString().slice(0, 10)}:recovered`,
+        eventKey: `health:${key}:${toDateKey(now)}:recovered`,
       }).catch((err) => {
         logSwallowed("health_alert_notify_recovery", err, { key });
         return null;
@@ -181,7 +183,7 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
         title: "Worker đã hoạt động trở lại",
         body: "Tiến trình worker nền đã ghi nhận liveness heartbeat.",
         severity: "success",
-        eventKey: `health:worker-down:${now.toISOString().slice(0, 10)}:recovered`,
+        eventKey: `health:worker-down:${toDateKey(now)}:recovered`,
       }).catch((err) => {
         logSwallowed("health_alert_notify_recovery", err, { key });
         return null;
@@ -198,7 +200,7 @@ export async function runHealthAlert(options: HealthAlertOptions = {}): Promise<
       title: "Hệ thống hoạt động bình thường (đã phục hồi)",
       body: "Worker nền và đồng bộ Jira đã phục hồi.",
       severity: "success",
-      eventKey: `health:system:${now.toISOString().slice(0, 10)}:recovered`,
+      eventKey: `health:system:${toDateKey(now)}:recovered`,
     }).catch((err) => {
       logSwallowed("health_alert_notify_system_recovery", err);
       return null;

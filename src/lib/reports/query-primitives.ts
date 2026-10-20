@@ -4,6 +4,7 @@ import { normalizeProjectKey } from "@/lib/jira/project-catalog";
 import type { ReportIssueInput } from "./metrics";
 import { normalizeStatusToGroup, isDoneGroup } from "./status";
 import { resolveCompletionDate } from "./completion-date";
+import { toDateKey } from "@/lib/date";
 
 /**
  * Standard Prisma select fields for Report issues across all report queries.
@@ -406,7 +407,7 @@ export async function fetchAvailableProjectVersions(
     name: r.version,
     released: r.status === "released",
     releaseDate: r.releaseDate ? r.releaseDate.toISOString().split("T")[0] : null,
-    startDate: r.createdAt ? r.createdAt.toISOString().split("T")[0] : null,
+    startDate: r.createdAt ? toDateKey(r.createdAt) : null,
   }));
 }
 

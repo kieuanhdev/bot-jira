@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import type { ReportPeriodPreset, ReportPeriod } from "@/lib/reports/types";
 import { getAdjacentPeriod, getPeriodDisplayLabel, resolveReportPeriod } from "@/lib/reports/period";
+import { toDateKey } from "@/lib/date";
 
 interface ReportPeriodFilterProps {
   period: ReportPeriod;
@@ -57,7 +58,7 @@ export function ReportPeriodFilter({
     });
   };
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = toDateKey(new Date());
   const isFutureDisabled = Boolean(
     period.preset === "this_week" ||
     period.preset === "this_month" ||

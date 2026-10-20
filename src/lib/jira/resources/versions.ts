@@ -1,5 +1,6 @@
 import type { JiraVersion } from "../types";
 import type { JiraRequest } from "./types";
+import { toDateKey } from "@/lib/date";
 
 export function createVersionResource(request: JiraRequest) {
   return {
@@ -39,7 +40,7 @@ export function createVersionResource(request: JiraRequest) {
         method: "PUT",
         body: JSON.stringify({
           released: true,
-          releaseDate: new Date().toISOString().slice(0, 10),
+          releaseDate: toDateKey(new Date()),
         }),
       }),
   };

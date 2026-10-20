@@ -422,12 +422,12 @@ Tham số `tz` mặc định là `APP_TIMEZONE`.
 - `src/lib/reports/query-primitives.ts:409`
 - `src/app/(app)/reports/report-period-filter.tsx:60`
 
-- [ ] **Viết test trước:**
+- [x] **Viết test trước:**
   - health-alert với `now = 2026-10-09T18:00:00Z` sinh `eventKey` chứa `2026-10-10`.
   - versions: phát hành lúc `2026-10-09T18:00Z` thì gửi Jira `releaseDate: "2026-10-10"`.
-- [ ] **Cài đặt:** cả 4 chỗ đổi `now.toISOString().slice(0,10)` / `createdAt…` thành `toDateKey(...)`.
-- [ ] Ghi chú vào commit: ngày deploy có thể phát sinh **một** cảnh báo health trùng do khoá dedupe đổi định dạng ngày. Không cần xử lý thêm.
-- [ ] Commit `fix(dates): use Vietnam day for alert dedupe, release date and period filter`.
+- [x] **Cài đặt:** cả 4 chỗ đổi `now.toISOString().slice(0,10)` / `createdAt…` thành `toDateKey(...)`.
+- [x] Ghi chú vào commit: ngày deploy có thể phát sinh **một** cảnh báo health trùng do khoá dedupe đổi định dạng ngày. Không cần xử lý thêm.
+- [x] Commit `fix(dates): use Vietnam day for alert dedupe, release date and period filter`.
 
 #### Task 2.7: Cron hằng ngày chạy theo giờ VN
 

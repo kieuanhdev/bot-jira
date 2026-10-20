@@ -138,4 +138,32 @@ describe("runHealthAlert watchdog & self-healing", () => {
       })
     );
   });
+
+  it("generates eventKey with Vietnam calendar date (2026-10-10 when now is 2026-10-09T18:00:00Z)", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-09T18:00:00Z"));
+    try {
+      mocks.getWorkerHealth.mockResolvedValueOnce({
+        status: "down",
+        workerAgeMs: 150_000,
+        jiraSyncAgeMs: null,
+        hasErrors: true,
+        staleProjects: [],
+        failingProjects: [],
+        jobs: [],
+        checkedAt: new Date().toISOString(),
+      });
+      mocks.cursorFindUnique.mockResolvedValueOnce(null);
+
+      await runHealthAlert();
+
+      expect(mocks.notifyAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventKey: "health:worker-down:2026-10-10:alert",
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
