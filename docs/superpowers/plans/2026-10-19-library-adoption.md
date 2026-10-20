@@ -548,14 +548,14 @@ Task 3.5 xong thì `grep -rn "\.json()" src/app/api src/lib/*/route-service.ts s
   - `csvList(name: string, opts?: { upper?: boolean; lower?: boolean; dedupe?: boolean }): string[]`
   - `kvMap<V>(name: string, parseValue: (raw: string) => V | null): Record<string, V>`: thay 3 hàm parse `projectColumns`, `projectBoardIds`, `boardBacklogColumns`.
 
-- [ ] **Viết test trước** (thêm vào `env.test.ts`, dùng `vi.resetModules()` + `await import("./env")` sau khi đặt `process.env`):
+- [x] **Viết test trước** (thêm vào `env.test.ts`, dùng `vi.resetModules()` + `await import("./env")` sau khi đặt `process.env`):
   - `JIRA_BOARD_MEMBERSHIP_MODE="bogus"` → `env.jiraBoardMembershipMode === "snapshot"`.
   - `JIRA_POLL_CONCURRENCY="9"` → 4.
   - `JIRA_SYNC_MAX_PAGES="3"` → 50.
   - `JIRA_PROJECT_BOARD_IDS="abc:12, def:x"` → `{ ABC: 12 }`.
   - `JIRA_PROJECT_KEYS="a, b ,A"` → `["A","B"]`.
-- [ ] Cài đặt. Sau đó `npm test` toàn bộ phải xanh: 54 file mock không phải sửa.
-- [ ] Commit `refactor(env): parse environment with zod, keep shape and fallbacks`.
+- [x] Cài đặt (trừ `npm test` toàn bộ do runner chạy). Sau đó `npm test` toàn bộ phải xanh: 54 file mock không phải sửa.
+- [x] Commit `refactor(env): parse environment with zod, keep shape and fallbacks`.
 
 #### Task 3.8 (tuỳ chọn, làm sau cùng): `bulk/validation.ts` bằng zod
 

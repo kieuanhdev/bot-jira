@@ -1,21 +1,73 @@
 // Central, typed access to environment variables.
 // Read process.env once at module load; consumers import these helpers.
 
-function str(name: string, fallback = ""): string {
+import { z } from "zod";
+
+const warned = new Set<string>();
+
+function warnInvalid(name: string, fallback: unknown): void {
+  if (warned.has(name)) return;
+  warned.add(name);
+  console.warn(`[env] Invalid value for ${name}; using default ${JSON.stringify(fallback)}.`);
+}
+
+/** Read `name`, validate with `schema`; unset/empty or invalid values give `fallback` (invalid also warns once). */
+function parseVar<T>(name: string, schema: z.ZodType<T, string>, fallback: T): T {
   const v = process.env[name];
-  return v === undefined || v === "" ? fallback : v;
+  if (v === undefined || v === "") return fallback;
+  return schema.catch(() => {
+    warnInvalid(name, fallback);
+    return fallback;
+  }).parse(v);
+}
+
+const intSchema = z.coerce.number() as unknown as z.ZodType<number, string>;
+const membershipModeSchema = z
+  .string()
+  .transform((s) => s.toLowerCase())
+  .pipe(z.enum(["sync", "shadow", "snapshot"]));
+
+function str(name: string, fallback = ""): string {
+  return parseVar(name, z.string(), fallback);
 }
 
 function int(name: string, fallback: number): number {
-  const v = process.env[name];
-  const n = v === undefined || v === "" ? Number.NaN : Number(v);
-  return Number.isFinite(n) ? n : fallback;
+  return parseVar(name, intSchema, fallback);
 }
 
 function bool(name: string, fallback = false): boolean {
-  const v = process.env[name];
-  if (v === undefined || v === "") return fallback;
-  return ["1", "true", "yes", "on"].includes(v.toLowerCase());
+  const schema = z.string().transform((s) => ["1", "true", "yes", "on"].includes(s.toLowerCase()));
+  return parseVar(name, schema, fallback);
+}
+
+/** Comma-separated list from `name` (trimmed, empties dropped). */
+function csvList(
+  name: string,
+  opts: { upper?: boolean; lower?: boolean; dedupe?: boolean } = {},
+  fallback = ""
+): string[] {
+  let items = str(name, fallback)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (opts.upper) items = items.map((s) => s.toUpperCase());
+  if (opts.lower) items = items.map((s) => s.toLowerCase());
+  return opts.dedupe ? Array.from(new Set(items)) : items;
+}
+
+/** "KEY:value,KEY2:value2" map; keys are upper-cased, entries whose value `parseValue` rejects (null) are skipped. */
+function kvMap<V>(name: string, parseValue: (raw: string) => V | null): Record<string, V> {
+  const out: Record<string, V> = {};
+  for (const part of str(name).split(",")) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const idx = trimmed.indexOf(":");
+    if (idx === -1) continue;
+    const key = trimmed.slice(0, idx).trim().toUpperCase();
+    const value = parseValue(trimmed.slice(idx + 1).trim());
+    if (key && value !== null) out[key] = value;
+  }
+  return out;
 }
 
 /**
@@ -96,7 +148,7 @@ export const env = {
   // Format: "101:Product Queue,102:Backlog,EPM:Product Backlog"
   jiraBoardBacklogColumns: str("JIRA_BOARD_BACKLOG_COLUMNS"),
   // Board Membership Performance and Cache Policy
-  jiraBoardMembershipMode: (str("JIRA_BOARD_MEMBERSHIP_MODE", "snapshot").toLowerCase() as "sync" | "shadow" | "snapshot"),
+  jiraBoardMembershipMode: parseVar("JIRA_BOARD_MEMBERSHIP_MODE", membershipModeSchema, "snapshot"),
   jiraBoardMembershipFreshTtlSeconds: int("JIRA_BOARD_MEMBERSHIP_FRESH_TTL_SECONDS", 300),
   jiraBoardMembershipStaleTtlSeconds: int("JIRA_BOARD_MEMBERSHIP_STALE_TTL_SECONDS", 1800),
   jiraBoardMembershipMaxIssues: int("JIRA_BOARD_MEMBERSHIP_MAX_ISSUES", 5000),
@@ -240,19 +292,13 @@ export const defaultPoint: number =
     ? pointScale[Math.floor((pointScale.length - 1) / 2)]
     : 3;
 
-export const bitbucketRepoList: string[] = env.bitbucketRepos
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+export const bitbucketRepoList: string[] = csvList("BITBUCKET_REPOS");
 
 /** Jira project keys (mobile projects) to sync + show, in display order. */
-export const jiraProjectList: string[] = Array.from(
-  new Set(
-    env.jiraProjectKeys
-      .split(",")
-      .map((s) => s.trim().toUpperCase())
-      .filter(Boolean)
-  )
+export const jiraProjectList: string[] = csvList(
+  "JIRA_PROJECT_KEYS",
+  { upper: true, dedupe: true },
+  "CICM,EDM,EMA,EPM,ETM,MHRM,MR"
 );
 
 /**
@@ -260,63 +306,31 @@ export const jiraProjectList: string[] = Array.from(
  * board), parsed from JIRA_PROJECT_COLUMNS. A project absent from this map has
  * no manual columns and the board falls back to auto-deriving them.
  */
-export const projectColumns: Record<string, string[]> = (() => {
-  const out: Record<string, string[]> = {};
-  for (const part of env.jiraProjectColumns.split(",")) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const idx = trimmed.indexOf(":");
-    if (idx === -1) continue;
-    const key = trimmed.slice(0, idx).trim().toUpperCase();
-    const cols = trimmed
-      .slice(idx + 1)
-      .split("|")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (key && cols.length > 0) out[key] = cols;
-  }
-  return out;
-})();
+export const projectColumns: Record<string, string[]> = kvMap("JIRA_PROJECT_COLUMNS", (raw) => {
+  const cols = raw
+    .split("|")
+    .map((c) => c.trim())
+    .filter(Boolean);
+  return cols.length > 0 ? cols : null;
+});
 
 /**
  * Explicit projectKey -> boardId mapping parsed from JIRA_PROJECT_BOARD_IDS.
  * Format: "EPM:101,ETM:102,ECM:103"
  */
-export const projectBoardIds: Record<string, number> = (() => {
-  const out: Record<string, number> = {};
-  for (const part of env.jiraProjectBoardIds.split(",")) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const idx = trimmed.indexOf(":");
-    if (idx === -1) continue;
-    const key = trimmed.slice(0, idx).trim().toUpperCase();
-    const idNum = Number.parseInt(trimmed.slice(idx + 1).trim(), 10);
-    if (key && Number.isInteger(idNum) && idNum > 0) {
-      out[key] = idNum;
-    }
-  }
-  return out;
-})();
+export const projectBoardIds: Record<string, number> = kvMap("JIRA_PROJECT_BOARD_IDS", (raw) => {
+  const id = Number.parseInt(raw, 10);
+  return Number.isInteger(id) && id > 0 ? id : null;
+});
 
 /**
  * Board ID or project key -> Backlog column name override parsed from JIRA_BOARD_BACKLOG_COLUMNS.
  * Format: "101:Product Queue,102:Backlog,EPM:Product Backlog"
  */
-export const boardBacklogColumns: Record<string, string> = (() => {
-  const out: Record<string, string> = {};
-  for (const part of env.jiraBoardBacklogColumns.split(",")) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const idx = trimmed.indexOf(":");
-    if (idx === -1) continue;
-    const key = trimmed.slice(0, idx).trim().toUpperCase();
-    const colName = trimmed.slice(idx + 1).trim();
-    if (key && colName) {
-      out[key] = colName;
-    }
-  }
-  return out;
-})();
+export const boardBacklogColumns: Record<string, string> = kvMap(
+  "JIRA_BOARD_BACKLOG_COLUMNS",
+  (raw) => raw || null
+);
 
 /**
  * @deprecated Use `isCatalogProject` from `@/lib/jira/project-catalog` or format validation instead.
@@ -344,28 +358,20 @@ export function hasSentryWebhookConfig(): boolean {
 }
 
 /** Jira status category keys that count as "done" for release gates. */
-export const releaseDoneCategories: string[] = env.releaseDoneCategories
-  .split(",")
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
+export const releaseDoneCategories: string[] = csvList("RELEASE_DONE_CATEGORIES", { lower: true }, "done");
 
 /** Jira priority names that block a release (case-insensitive comparison). */
-export const releaseBlockingPriorities: string[] = env.releaseBlockingPriorities
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+export const releaseBlockingPriorities: string[] = csvList(
+  "RELEASE_BLOCKING_PRIORITIES",
+  {},
+  "Blocker,Critical"
+);
 
 /** Sentry levels that block a release (case-insensitive comparison). */
-export const sentryBlockingLevels: string[] = env.sentryBlockingLevels
-  .split(",")
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
+export const sentryBlockingLevels: string[] = csvList("SENTRY_BLOCKING_LEVELS", { lower: true }, "fatal");
 
 /** REL-03 — required approval types (empty => manual approval gate is vacuous). */
-export const releaseRequiredApprovals: string[] = env.releaseRequiredApprovals
-  .split(",")
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
+export const releaseRequiredApprovals: string[] = csvList("RELEASE_REQUIRED_APPROVALS", { lower: true });
 
 export function hasOpenAiConfig(): boolean {
   return Boolean(env.openaiBaseUrl && env.openaiApiKey && env.openaiModel);
