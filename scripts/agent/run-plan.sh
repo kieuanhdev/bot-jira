@@ -12,7 +12,8 @@
 #   --watch      open agy's interactive CLI instead (you must exit it with Ctrl+C twice after each task)
 # Without --watch the agent runs unattended and its steps are still shown live.
 # Env: AGY_MODEL (agy --model), REVIEW_MODEL (claude --model; default = your Claude Code default),
-#      AGY_TIMEOUT (default 90m), FIX_ROUNDS (default 1)
+#      AGY_TIMEOUT (default 90m), FIX_ROUNDS (review re-prompts, default 1),
+#      CHECK_FIX_ROUNDS (re-prompts when the full check suite fails, default 2)
 
 set -euo pipefail
 
@@ -28,7 +29,8 @@ BLOCKED="$RUN_DIR/BLOCKED.md"
 CURRENT_FILE="$RUN_DIR/current"   # "<task id> <base sha>" while a task is in progress
 BRANCH="refactor/library-adoption"
 AGY_TIMEOUT="${AGY_TIMEOUT:-90m}"
-FIX_ROUNDS="${FIX_ROUNDS:-1}"
+FIX_ROUNDS="${FIX_ROUNDS:-1}"             # re-prompts after a FAIL review
+CHECK_FIX_ROUNDS="${CHECK_FIX_ROUNDS:-2}" # re-prompts after the full check suite fails
 
 # id|flags  (flags: build = also run npm run build, qa = pause for manual QA, optional = may be skipped)
 TASKS=(
@@ -96,7 +98,10 @@ TASK: Task $id of $PLAN
 $( [[ "$id" =~ ^3\.[2-5]$ ]] && echo "  Tasks 3.2–3.5 share one section: do only the table row for $id plus the shared rules above the table." )
 - Read $HANDOFF for notes from earlier tasks.
 - Do exactly Task $id. Do not start any other task. Follow its steps in order (test first where the plan says so).
-- Run the verification commands the task names, then: npm run typecheck && npm run lint && npm test.
+- CHECKS (to save time): run only the tests of the files you touched or that the task names (npx vitest run <paths>),
+  npm run typecheck, and npx eslint --max-warnings=0 <files you changed>.
+  Do NOT run npm test, npm run lint, npm run build or npm run test:tz, even where a plan step says so:
+  the runner runs the full suite once after your commit and sends any failure back to you.
 - Tick this task's checkboxes in the plan file, then make the commit(s) the task specifies.
   Every commit message for this task ends with the line: Plan-Task: $id
 - Manual QA steps ("QA tay") cannot be done by you: skip them and list them under "Manual QA" in $HANDOFF.
@@ -114,15 +119,17 @@ EOF
 }
 
 fix_prompt() {
-  local id="$1" review_file="$2"
+  local id="$1" reason_file="$2" what="$3"
   cat <<EOF
-You are the implementation worker for Task $id of $PLAN in $ROOT. A reviewer rejected your commits.
-Read the review below, fix every listed issue, run npm run typecheck && npm run lint && npm test,
-and commit the fix with a message ending in 'Plan-Task: $id'. Same hard limits and stop rules as before
-(see the plan's Global Constraints; if you cannot fix it, write the reason to $BLOCKED and do not commit).
+You are the implementation worker for Task $id of $PLAN in $ROOT. $what
+Read the report below and the plan section for Task $id, fix the cause (do not weaken or skip tests,
+do not change test assertions the plan does not list), re-run only the failing/related tests, npm run typecheck
+and npx eslint --max-warnings=0 on the files you changed, then commit the fix with a message ending in 'Plan-Task: $id'.
+Same hard limits and stop rules as the plan's Global Constraints: if the fix needs something outside the plan,
+write the reason to $BLOCKED and do not commit.
 
---- REVIEW ---
-$(cat "$review_file")
+--- REPORT ---
+$(cat "$reason_file")
 EOF
 }
 
@@ -180,8 +187,9 @@ When the task is finished (committed) or blocked, end with the line: XONG - tho�
   fi
 }
 
-verify() {
-  local id="$1" flags="$2" base="$3" log="$4"
+# Structural checks on the worker's commits; any failure here is not something a re-prompt should paper over.
+check_commits() {
+  local id="$1" base="$2" log="$3"
   [[ ! -s "$BLOCKED" ]] || { cat "$BLOCKED"; fail "Task $id blocked by the worker (see $BLOCKED)"; }
   [[ "$(git rev-parse HEAD)" != "$base" ]] || fail "Task $id produced no commit (log: $log)"
   [[ -z "$(git status --porcelain)" ]] || { git status --short; fail "Task $id left uncommitted changes"; }
@@ -189,15 +197,41 @@ verify() {
   local changed; changed="$(git diff --name-only "$base" HEAD)"
   if grep -E "$FORBIDDEN_RE" <<<"$changed"; then fail "Task $id touched forbidden files"; fi
   if [[ "$id" != "0.1" ]] && grep -E "$DEPS_RE" <<<"$changed"; then fail "Task $id changed dependency manifests"; fi
+}
 
-  say "Verifying Task $id"
-  { npm run typecheck && npm run lint && npm test; } >>"$log" 2>&1 || fail "checks failed after Task $id (log: $log)"
-  if [[ "$(major "$id")" -ge 3 || "$id" == "2.8" ]]; then
-    npm run test:tz >>"$log" 2>&1 || fail "test:tz failed after Task $id (log: $log)"
-  fi
-  if has_flag build "$flags"; then
-    npm run build >>"$log" 2>&1 || fail "build failed after Task $id (log: $log)"
-  fi
+# Full suite, run once per attempt. On failure writes the failing command and its output tail to $report.
+run_checks() {
+  local id="$1" flags="$2" log="$3" report="$4"
+  local cmds=("npm run typecheck" "npm run lint" "npm test")
+  if [[ "$(major "$id")" -ge 3 || "$id" == "2.8" ]]; then cmds+=("npm run test:tz"); fi
+  if has_flag build "$flags"; then cmds+=("npm run build"); fi
+
+  say "Verifying Task $id (${cmds[*]})"
+  local cmd out="$RUN_DIR/check-output.txt"
+  for cmd in "${cmds[@]}"; do
+    if ! $cmd >"$out" 2>&1; then
+      cat "$out" >>"$log"
+      { echo "FAILED: $cmd"; echo; tail -n 200 "$out"; } >"$report"
+      printf '\033[1;33m  ✗ %s failed\033[0m\n' "$cmd"
+      return 1
+    fi
+    cat "$out" >>"$log"
+  done
+}
+
+verify() {
+  local id="$1" flags="$2" base="$3" log="$4"
+  check_commits "$id" "$base" "$log"
+  local round=0 report="$LOG_DIR/checks-$id.txt"
+  until run_checks "$id" "$flags" "$log" "$report"; do
+    (( round < CHECK_FIX_ROUNDS )) || fail "checks still failing after $round fix round(s) for Task $id (see $report)"
+    round=$((round + 1))
+    say "Check fix round $round for Task $id"
+    local before_fix; before_fix="$(git rev-parse HEAD)"
+    : > "$BLOCKED"
+    run_agy "$(fix_prompt "$id" "$report" "The runner's full check suite failed after your commit.")" "$log"
+    check_commits "$id" "$before_fix" "$log"
+  done
 }
 
 review() {
@@ -254,7 +288,8 @@ run_task() {
       round=$((round + 1))
       say "Fix round $round for Task $id"
       local before_fix; before_fix="$(git rev-parse HEAD)"
-      run_agy "$(fix_prompt "$id" "$review_file")" "$log"
+      : > "$BLOCKED"
+      run_agy "$(fix_prompt "$id" "$review_file" "A reviewer rejected your commits.")" "$log"
       verify "$id" "$flags" "$before_fix" "$log"
     done
   fi
