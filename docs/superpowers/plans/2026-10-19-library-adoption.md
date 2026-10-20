@@ -778,13 +778,13 @@ QA tay của mọi task trong phase này: `npm run dev`, kiểm tra cả light v
 
 Cả hai áp dụng `MAX_LABEL_LENGTH`, `MAX_LABELS_COUNT`, so trùng không phân biệt hoa thường, và bỏ khoảng trắng hai đầu.
 
-- [ ] **Viết test trước:**
+- [x] **Viết test trước:**
   - `buildLabelOptions("New", ["new-ui"], [])[0]` === `{ value: "New", isNew: true }`.
   - `buildLabelOptions("new-ui", ["new-ui"], [])` không có option `isNew`.
   - `addLabel(["A"], "a")` === `["A"]`.
   - Khi đã đủ `MAX_LABELS_COUNT` thì `addLabel` không đổi mảng.
-- [ ] Giữ chip và Backspace để xoá label cuối, Enter hoặc `,` để thêm. Danh sách gợi ý chuyển vào `PopoverContent` + `Command`.
-- [ ] Commit `refactor(task-fields): label combobox on Popover + cmdk`.
+- [x] Giữ chip và Backspace để xoá label cuối, Enter hoặc `,` để thêm. Danh sách gợi ý chuyển vào `PopoverContent` + `Command`.
+- [x] Commit `refactor(task-fields): label combobox on Popover + cmdk`.
 
 #### Task 5.6: `ComponentsCombobox`
 
