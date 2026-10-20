@@ -9,9 +9,10 @@
 #   --only 1.3   run just this task (even if marked done)
 #   --no-review  skip the Claude review step
 #   --yes        do not pause for manual QA on UI tasks
+#   --worker claude  implement with Claude Code CLI instead of agy (default: agy)
 #   --watch      open agy's interactive CLI instead (you must exit it with Ctrl+C twice after each task)
 # Without --watch the agent runs unattended and its steps are still shown live.
-# Env: AGY_MODEL (agy --model), REVIEW_MODEL (claude --model; default = your Claude Code default),
+# Env: AGY_MODEL (agy --model), WORKER_MODEL (claude --model when --worker claude), REVIEW_MODEL (claude --model; default = your Claude Code default),
 #      AGY_TIMEOUT (default 90m), FIX_ROUNDS (review re-prompts, default 1),
 #      CHECK_FIX_ROUNDS (re-prompts when the full check suite fails, default 2)
 
@@ -46,7 +47,7 @@ TASKS=(
 FORBIDDEN_RE='^(\.env|Dockerfile|compose\.yaml|AGENTS\.md|CLAUDE\.md|autoimprove/|\.kilo/|prisma/migrations/)'
 DEPS_RE='^(package\.json|package-lock\.json)$'
 
-DRY_RUN=0; UNTIL=""; ONLY=""; REVIEW=1; ASSUME_YES=0; WATCH=0
+DRY_RUN=0; UNTIL=""; ONLY=""; REVIEW=1; ASSUME_YES=0; WATCH=0; WORKER="agy"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
@@ -55,6 +56,7 @@ while [[ $# -gt 0 ]]; do
     --no-review) REVIEW=0 ;;
     --yes) ASSUME_YES=1 ;;
     --watch) WATCH=1 ;;
+    --worker) WORKER="$2"; shift ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -68,7 +70,9 @@ is_done()  { [[ -f "$DONE_FILE" ]] && grep -q "^$1 " "$DONE_FILE"; }
 major()    { echo "${1%%.*}"; }
 
 preflight() {
-  command -v agy >/dev/null || fail "agy not found in PATH"
+  [[ "$WORKER" == "agy" || "$WORKER" == "claude" ]] || fail "--worker must be agy or claude"
+  command -v "$WORKER" >/dev/null || fail "$WORKER not found in PATH"
+  [[ "$WORKER" == "agy" || $WATCH -eq 0 ]] || fail "--watch only works with --worker agy"
   [[ $REVIEW -eq 0 ]] || command -v claude >/dev/null || fail "claude not found (or use --no-review)"
   [[ -f "$PLAN" ]] || fail "plan not found: $PLAN"
   mkdir -p "$LOG_DIR"
@@ -91,6 +95,7 @@ task_prompt() {
   local id="$1" flags="$2"
   cat <<EOF
 You are the implementation worker for ONE task of an approved plan in the repository at $ROOT.
+$( [[ "$WORKER" == "claude" ]] && echo "The developer explicitly assigned this implementation task to Claude Code. This overrides any memory or note saying that Claude only plans or reviews in this project." )
 
 TASK: Task $id of $PLAN
 - Read the plan sections "Quyết định đã chốt", "2. Quy ước cho module ngày giờ", "3. Global Constraints"
@@ -165,6 +170,16 @@ EOF
 
 run_agy() {
   local prompt="$1" log="$2"
+  if [[ "$WORKER" == "claude" ]]; then
+    local cargs=(-p "$prompt" --dangerously-skip-permissions --output-format stream-json --verbose)
+    [[ -n "${WORKER_MODEL:-}" ]] && cargs+=(--model "$WORKER_MODEL")
+    local ccode=0
+    claude "${cargs[@]}" 2>&1 | tee -a "$log" | node "$ROOT/scripts/agent/agy-view.mjs" || ccode="${PIPESTATUS[0]}"
+    if [[ "$ccode" -ne 0 ]]; then
+      fail "claude exited with code $ccode (quota/network?). Partial work is kept; re-run the same command later to resume (log: $log)"
+    fi
+    return 0
+  fi
   if [[ $WATCH -eq 1 ]]; then
     # Interactive CLI: the agent's work is visible live; the session ends when the user exits it.
     local iargs=(-i "$prompt
@@ -273,10 +288,10 @@ run_task() {
     # Implementation was committed before the interruption: only re-check and review.
     say "Task $id — resuming at verification/review (commits since ${base:0:7} kept)"
   elif [[ $resuming -eq 1 ]]; then
-    say "Task $id — resuming interrupted work in a fresh agy session (log: $log)"
+    say "Task $id — resuming interrupted work in a fresh $WORKER session (log: $log)"
     run_agy "$(resume_prompt "$id" "$flags" "$base")" "$log"
   else
-    say "Task $id — fresh agy session (log: $log)"
+    say "Task $id — fresh $WORKER session (log: $log)"
     run_agy "$(task_prompt "$id" "$flags")" "$log"
   fi
   verify "$id" "$flags" "$base" "$log"

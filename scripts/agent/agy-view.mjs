@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Renders `agy --output-format stream-json` events as a readable live transcript.
+// Renders `agy --output-format stream-json` or `claude -p --output-format stream-json --verbose`
+// events as a readable live transcript.
 // Usage: agy -p "..." --output-format stream-json | node scripts/agent/agy-view.mjs
 import { createInterface } from "node:readline";
 
@@ -17,7 +18,40 @@ const clip = (s) => {
 };
 
 // Prefer the parameter that best describes the call; fall back to the first string value.
-const PREFERRED = ["CommandLine", "AbsolutePath", "Path", "TargetFile", "File", "Query", "SearchPath", "DirectoryPath", "Url"];
+const PREFERRED = [
+  "CommandLine", "AbsolutePath", "Path", "TargetFile", "File", "Query", "SearchPath", "DirectoryPath", "Url",
+  "command", "file_path", "pattern", "path", "url", "description",
+];
+
+// Claude Code stream-json: {type: "system" | "assistant" | "user" | "result", ...}
+function onClaudeEvent(ev) {
+  if (ev.type === "system" && ev.subtype === "init") {
+    console.log(dim(`claude session ${ev.session_id ?? ""} · ${ev.model ?? ""}`));
+    return;
+  }
+  if (ev.type === "assistant") {
+    for (const block of ev.message?.content ?? []) {
+      if (block.type === "text" && block.text?.trim()) process.stdout.write(`\n${block.text.replace(/\n?$/, "\n")}`);
+      if (block.type === "tool_use") console.log(`${cyan("●")} ${block.name} ${dim(clip(summarize(block.input)))}`);
+    }
+    return;
+  }
+  if (ev.type === "user") {
+    for (const block of ev.message?.content ?? []) {
+      if (block.type === "tool_result" && block.is_error) {
+        const text = Array.isArray(block.content) ? block.content.map((c) => c.text ?? "").join(" ") : String(block.content ?? "");
+        console.log(red(`  ✗ ${clip(text)}`));
+      }
+    }
+    return;
+  }
+  if (ev.type === "result") {
+    const ok = !ev.is_error;
+    const secs = Math.round((ev.duration_ms ?? 0) / 1000);
+    const cost = typeof ev.total_cost_usd === "number" ? ` · $${ev.total_cost_usd.toFixed(2)}` : "";
+    console.log((ok ? green : red)(`\n■ ${ev.subtype ?? (ok ? "success" : "error")} · ${secs}s · ${ev.num_turns ?? "?"} turns${cost}`));
+  }
+}
 function summarize(params = {}) {
   for (const key of PREFERRED) if (typeof params[key] === "string") return params[key];
   const first = Object.values(params).find((v) => typeof v === "string");
@@ -25,6 +59,10 @@ function summarize(params = {}) {
 }
 
 function onEvent(ev) {
+  if (typeof ev.type === "string" && !ev.event) {
+    onClaudeEvent(ev);
+    return;
+  }
   if (ev.event === "init") {
     console.log(dim(`agy session ${ev.conversation_id}`));
     return;
