@@ -206,7 +206,18 @@ Chưa kiểm chứng được: refetch issues khi SSE reconnect (không giả l�
 - `next.config.ts`: thêm `experimental.staleTimes: { dynamic: 30 }`.
 - Thêm `src/app/(app)/watch/loading.tsx` (skeleton tức thì).
 - `router.refresh()` chỉ còn ở các trang auth (login/register/setup-jira), nơi cần làm mới cache router nên không bị ảnh hưởng.
-- Chưa đo lại số liệu "Sau Phase 2" (cần production build + đo RSC khi quay lại trang trong 30s).
+
+Kết quả đo (production build, Chrome headless, script `nav.mjs`: click sidebar vào trang, quay về `/board`, rồi vào lại trang đó; mỗi lượt cách nhau khoảng 5s, trong cửa sổ 30s). Bộ lọc chỉ đếm request `_rsc` không phải prefetch.
+
+| Trang | Lần 1 | Lần 2 (vào lại) |
+|---|---|---|
+| stale, release, branches, sentry, reports, notifications, board | không có RSC | không có RSC |
+| leaderboard | 202 ms | không có RSC |
+| watch | 43 ms | không có RSC |
+
+- Lần vào lại: 9/9 trang không phát sinh request RSC chờ server, đạt tiêu chí Phase 2.
+- Lần 1 của nhiều trang cũng "không có RSC" vì đã được prefetch bởi `<Link>` (bị loại khỏi bộ lọc), nên con số lần 1 không dùng để so sánh với baseline. Baseline RSC điều hướng ở mục 8 vẫn chưa có số đáng tin (xem trên).
+- Chưa kiểm tra: mutation có hiển thị dữ liệu cũ tối đa 30s trên trang server-prefetch (client query vẫn revalidate theo `staleTime`).
 
 ## 9. Thứ tự triển khai đề xuất
 
