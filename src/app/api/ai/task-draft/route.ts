@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { TaskDraftBodySchema } from "@/lib/api/schemas";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { hasOpenAiConfig } from "@/lib/env";
@@ -20,12 +22,6 @@ import {
 import { logger } from "@/lib/logger";
 
 const AI_UNAVAILABLE_MESSAGE = "AI không phản hồi, thử lại";
-
-type TaskDraftBody = {
-  projectKey?: unknown;
-  idea?: unknown;
-  current?: { summary?: unknown; description?: unknown } | null;
-};
 
 function optionalText(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
@@ -66,8 +62,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Chưa cấu hình AI trên máy chủ." }, { status: 503 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as TaskDraftBody;
-  const idea = typeof body.idea === "string" ? body.idea.trim() : "";
+  const parsedBody = await readJsonBody(req, TaskDraftBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
+  const idea = body.idea?.trim() ?? "";
   if (!idea) {
     return NextResponse.json({ error: "Nhập mô tả ngắn công việc." }, { status: 400 });
   }
@@ -77,7 +75,7 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const projectKey = typeof body.projectKey === "string" ? body.projectKey.trim().toUpperCase() : "";
+  const projectKey = body.projectKey?.trim().toUpperCase() ?? "";
   if (!projectKey) {
     return NextResponse.json({ error: "Thiếu dự án." }, { status: 400 });
   }

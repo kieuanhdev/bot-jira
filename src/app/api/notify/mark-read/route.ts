@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { NotifyMarkReadBodySchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
@@ -8,12 +10,9 @@ export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const body = (await req.json().catch(() => ({}))) as {
-    ids?: string[];
-    all?: boolean;
-    before?: string;
-    unread?: boolean;
-  };
+  const parsedBody = await readJsonBody(req, NotifyMarkReadBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
 
   const now = new Date();
 
@@ -37,7 +36,7 @@ export async function POST(req: Request) {
         readAt: now,
       },
     });
-  } else if (Array.isArray(body.ids) && body.ids.length > 0) {
+  } else if (body.ids && body.ids.length > 0) {
     const ids = body.ids.slice(0, MAX_IDS);
     const markAsUnread = Boolean(body.unread);
 

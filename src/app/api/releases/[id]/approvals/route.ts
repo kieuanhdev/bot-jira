@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { ReleaseApprovalBodySchema } from "@/lib/api/schemas";
 import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
@@ -13,14 +15,16 @@ import {
 // "release_manager", others => "qa") unless the caller explicitly passes one.
 // DELETE revokes by approval id.
 
-export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!can(session, "release.approve")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const { id } = await ctx.params;
-  const body = (await _req.json().catch(() => ({}))) as { type?: string; note?: string };
+  const parsedBody = await readJsonBody(req, ReleaseApprovalBodySchema, { allowEmpty: true });
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
 
   const release = await findReleaseById(id);
   if (!release) return NextResponse.json({ error: "not found" }, { status: 404 });

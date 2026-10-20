@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { NotifyDeleteBodySchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { encodeCursor, decodeCursor, listNotifications } from "@/lib/notify/list";
@@ -33,11 +35,9 @@ export async function DELETE(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const body = (await req.json().catch(() => ({}))) as {
-    ids?: string[];
-    allRead?: boolean;
-    all?: boolean;
-  };
+  const parsedBody = await readJsonBody(req, NotifyDeleteBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
 
   if (body.allRead) {
     await prisma.notification.deleteMany({
@@ -52,7 +52,7 @@ export async function DELETE(req: Request) {
         userId: session.user.id,
       },
     });
-  } else if (Array.isArray(body.ids) && body.ids.length > 0) {
+  } else if (body.ids && body.ids.length > 0) {
     await prisma.notification.deleteMany({
       where: {
         userId: session.user.id,

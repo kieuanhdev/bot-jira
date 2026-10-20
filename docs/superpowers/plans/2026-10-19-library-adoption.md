@@ -518,6 +518,7 @@ Tiến độ (các checkbox trên dùng chung, tick theo từng task):
 - [x] Task 3.2 (issues): đủ các bước, trừ `npm test` toàn bộ do runner chạy.
 - [x] Task 3.3 (projects, me, board, sync): đủ các bước, trừ `npm test` toàn bộ do runner chạy.
 - [x] Task 3.4 (bulk, sentry, admin, reports): đủ các bước, trừ `npm test` toàn bộ do runner chạy.
+- [x] Task 3.5 (còn lại): đủ các bước, trừ `npm test` toàn bộ do runner chạy.
 
 Task 3.5 xong thì `grep -rn "\.json()" src/app/api src/lib/*/route-service.ts src/lib/*/*-route-service.ts | grep -i "req\|request"` không còn kết quả, ngoài chính `json-body.ts`.
 

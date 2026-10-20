@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { BranchLinkBodySchema } from "@/lib/api/schemas";
 import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
@@ -36,17 +38,19 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { id } = await ctx.params;
-  const body = await req.json().catch(() => ({}));
-  const action = typeof body.action === "string" ? body.action.toLowerCase() : null;
-  const rawJiraKey = body.jiraKey !== undefined ? body.jiraKey : undefined;
-  const reason = typeof body.reason === "string" ? body.reason : undefined;
+  const parsedBody = await readJsonBody(req, BranchLinkBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
+  const action = body.action?.toLowerCase() ?? null;
+  const rawJiraKey = body.jiraKey;
+  const reason = body.reason;
 
   // Determine intent
   if (action === "link_many") {
     if (!can(session, "branch.manage")) {
       return NextResponse.json({ error: "forbidden: requires branch.manage" }, { status: 403 });
     }
-    const ids: string[] = Array.isArray(body.ids) ? body.ids : [];
+    const ids = body.ids ?? [];
     if (typeof rawJiraKey !== "string" || !rawJiraKey.trim()) {
       return NextResponse.json({ error: "Thiếu mã Jira" }, { status: 400 });
     }
@@ -92,7 +96,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (!can(session, "branch.manage")) {
       return NextResponse.json({ error: "forbidden: requires branch.manage" }, { status: 403 });
     }
-    const unlinkKey = typeof body.unlinkJiraKey === "string" ? body.unlinkJiraKey : undefined;
+    const unlinkKey = body.unlinkJiraKey;
     const res = await manualUnlinkBranch(id, session.user.id, session.user.email ?? undefined, reason, unlinkKey);
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
     return NextResponse.json({ ok: true, branch: res.branch });

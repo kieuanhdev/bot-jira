@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { invalidBodyPaths, readJsonBody } from "@/lib/api/json-body";
+import { NotifyPreferencesBodySchema } from "@/lib/api/schemas";
 import {
   DEFAULT_DISABLED_NOTIFICATION_TYPES,
   isAllNotificationsRequired,
@@ -65,58 +67,49 @@ export async function PATCH(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const body = (await req.json().catch(() => ({}))) as {
-    disabledTypes?: unknown;
-    broadcastEnabled?: unknown;
-    pushEnabled?: unknown;
-    pushDisabledTypes?: unknown;
-    deliveryMode?: unknown;
-    digestHour?: unknown;
-  };
+  const parsedBody = await readJsonBody(req, NotifyPreferencesBodySchema);
+  if (!parsedBody.ok) {
+    const paths = await invalidBodyPaths(parsedBody.response);
+    if (paths.some((p) => p === "disabledTypes" || p.startsWith("disabledTypes."))) {
+      return NextResponse.json({ error: "disabledTypes must be an array" }, { status: 400 });
+    }
+    if (paths.some((p) => p === "pushDisabledTypes" || p.startsWith("pushDisabledTypes."))) {
+      return NextResponse.json({ error: "pushDisabledTypes must be an array" }, { status: 400 });
+    }
+    return parsedBody.response;
+  }
+  const body = parsedBody.data;
 
   // Validate disabledTypes if provided
   let disabledTypes: string[] | undefined;
   if (body.disabledTypes !== undefined) {
-    if (!Array.isArray(body.disabledTypes)) {
-      return NextResponse.json({ error: "disabledTypes must be an array" }, { status: 400 });
-    }
-    const invalid = body.disabledTypes.filter((t) => typeof t !== "string" || !isKnownType(t));
+    const invalid = body.disabledTypes.filter((t) => !isKnownType(t));
     if (invalid.length > 0) {
       return NextResponse.json(
         { error: `Unknown notification type: ${invalid.join(", ")}` },
         { status: 400 }
       );
     }
-    disabledTypes = [...new Set(body.disabledTypes as string[])];
+    disabledTypes = [...new Set(body.disabledTypes)];
   }
 
-  // Validate pushEnabled if provided
-  const pushEnabled = typeof body.pushEnabled === "boolean" ? body.pushEnabled : undefined;
-  const broadcastEnabled =
-    typeof body.broadcastEnabled === "boolean" ? body.broadcastEnabled : undefined;
+  const { pushEnabled, broadcastEnabled, deliveryMode } = body;
 
   // Validate pushDisabledTypes if provided
   let pushDisabledTypes: string[] | undefined;
   if (body.pushDisabledTypes !== undefined) {
-    if (!Array.isArray(body.pushDisabledTypes)) {
-      return NextResponse.json({ error: "pushDisabledTypes must be an array" }, { status: 400 });
-    }
-    const invalid = body.pushDisabledTypes.filter((t) => typeof t !== "string" || !isKnownType(t));
+    const invalid = body.pushDisabledTypes.filter((t) => !isKnownType(t));
     if (invalid.length > 0) {
       return NextResponse.json(
         { error: `Unknown push notification type: ${invalid.join(", ")}` },
         { status: 400 }
       );
     }
-    pushDisabledTypes = [...new Set(body.pushDisabledTypes as string[])];
+    pushDisabledTypes = [...new Set(body.pushDisabledTypes)];
   }
 
-  const deliveryMode =
-    body.deliveryMode === "digest" || body.deliveryMode === "instant"
-      ? (body.deliveryMode as string)
-      : undefined;
   const digestHour =
-    typeof body.digestHour === "number" && Number.isFinite(body.digestHour)
+    body.digestHour !== undefined
       ? Math.max(0, Math.min(23, Math.floor(body.digestHour)))
       : undefined;
 

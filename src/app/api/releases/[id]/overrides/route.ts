@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { ReleaseOverrideBodySchema } from "@/lib/api/schemas";
 import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
@@ -21,11 +23,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const { id } = await ctx.params;
-  const body = (await req.json().catch(() => ({}))) as {
-    gate?: string;
-    reason?: string;
-    expiresAt?: string;
-  };
+  const parsedBody = await readJsonBody(req, ReleaseOverrideBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
 
   if (!body.gate || !body.gate.trim()) {
     return NextResponse.json({ error: "gate required" }, { status: 400 });

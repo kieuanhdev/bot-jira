@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { SubtaskSplitBodySchema } from "@/lib/api/schemas";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { hasOpenAiConfig } from "@/lib/env";
@@ -21,8 +23,6 @@ import { logger } from "@/lib/logger";
 const AI_UNAVAILABLE_MESSAGE = "AI không phản hồi, thử lại";
 const ISSUE_KEY_PATTERN = /^[A-Z][A-Z0-9_]*-\d+$/;
 
-type SubtaskSplitBody = { projectKey?: unknown; parentKey?: unknown };
-
 /**
  * Split an existing Jira task into suggested sub-task rows for the bulk create
  * screen. The parent's summary, description and issue type are read from Jira
@@ -38,9 +38,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Chưa cấu hình AI trên máy chủ." }, { status: 503 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as SubtaskSplitBody;
-  const projectKey = typeof body.projectKey === "string" ? body.projectKey.trim().toUpperCase() : "";
-  const parentKey = typeof body.parentKey === "string" ? body.parentKey.trim().toUpperCase() : "";
+  const parsedBody = await readJsonBody(req, SubtaskSplitBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
+  const projectKey = body.projectKey?.trim().toUpperCase() ?? "";
+  const parentKey = body.parentKey?.trim().toUpperCase() ?? "";
   if (!projectKey) {
     return NextResponse.json({ error: "Thiếu dự án." }, { status: 400 });
   }

@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { invalidBodyPaths, readJsonBody } from "@/lib/api/json-body";
+import { DiscordIntegrationBodySchema } from "@/lib/api/schemas";
 import {
   getDiscordIntegration,
   removeDiscordIntegration,
   saveDiscordIntegration,
-  type DiscordDestinationType,
 } from "@/lib/chat/discord-integration";
 
 export async function GET() {
@@ -17,14 +18,14 @@ export async function PUT(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const body = (await req.json().catch(() => ({}))) as {
-    destinationType?: DiscordDestinationType;
-    discordUserId?: string;
-    webhookUrl?: string;
-  };
-  if (body.destinationType !== "webhook" && body.destinationType !== "user_id") {
-    return NextResponse.json({ error: "destinationType must be webhook or user_id" }, { status: 400 });
+  const parsedBody = await readJsonBody(req, DiscordIntegrationBodySchema);
+  if (!parsedBody.ok) {
+    if ((await invalidBodyPaths(parsedBody.response)).includes("destinationType")) {
+      return NextResponse.json({ error: "destinationType must be webhook or user_id" }, { status: 400 });
+    }
+    return parsedBody.response;
   }
+  const body = parsedBody.data;
 
   try {
     await saveDiscordIntegration({

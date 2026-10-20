@@ -10,7 +10,9 @@ import {
 import { computeReleaseSummary } from "@/lib/releases/release-summary";
 import { env } from "@/lib/env";
 import { getUserScopedProjects } from "@/lib/project-scope";
-import { createReleaseWithJira, type CreateReleaseInput } from "@/lib/releases/jira-mutation";
+import { readJsonBody } from "@/lib/api/json-body";
+import { CreateReleaseBodySchema } from "@/lib/api/schemas";
+import { createReleaseWithJira } from "@/lib/releases/jira-mutation";
 
 const RELEASE_SELECT = {
   id: true,
@@ -276,8 +278,9 @@ export async function handleCreateReleaseRequest(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const body = (await req.json()) as CreateReleaseInput;
-  const result = await createReleaseWithJira(body, {
+  const parsedBody = await readJsonBody(req, CreateReleaseBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const result = await createReleaseWithJira(parsedBody.data, {
     id: session.user.id,
     email: session.user.email ?? null,
   });

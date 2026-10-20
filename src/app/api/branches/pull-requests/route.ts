@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { BranchPullRequestsBodySchema } from "@/lib/api/schemas";
 import { getSession } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
@@ -24,8 +26,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "forbidden: requires branch.manage" }, { status: 403 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-  const jiraKey = typeof body.jiraKey === "string" ? body.jiraKey.trim().toUpperCase() : "";
+  const parsedBody = await readJsonBody(req, BranchPullRequestsBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
+  const jiraKey = body.jiraKey?.trim().toUpperCase() ?? "";
   if (!/^[A-Z][A-Z0-9_]*-\d+$/.test(jiraKey)) {
     return NextResponse.json({ error: "Thiếu hoặc sai mã Jira" }, { status: 400 });
   }
@@ -34,8 +38,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Tối đa ${MAX_BRANCHES} nhánh mỗi lần` }, { status: 400 });
   }
   const targets: Record<string, string> = {};
-  if (body.targets && typeof body.targets === "object") {
-    for (const [id, v] of Object.entries(body.targets as Record<string, unknown>)) {
+  if (body.targets) {
+    for (const [id, v] of Object.entries(body.targets)) {
       if (typeof v === "string" && v.trim()) targets[id] = v.trim();
     }
   }
