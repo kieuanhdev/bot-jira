@@ -1,28 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { projectBoardIds } from "@/lib/env";
+import { createBoardCachePolicy } from "./board-cache-policy";
 import { JiraRequestError, type JiraClient } from "./client";
 import type { BoardOptionsResponse, BoardSelectionSource, JiraBoardOption } from "./types";
 
-type OptionsCacheEntry = {
-  data: BoardOptionsResponse;
-  expiresAt: number;
-  staleUntil: number;
-};
-
-const optionsCache = new Map<string, OptionsCacheEntry>();
-const inFlightOptions = new Map<string, Promise<BoardOptionsResponse>>();
-
-const FRESH_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const STALE_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+const optionsCache = createBoardCachePolicy<BoardOptionsResponse>({
+  freshForMs: 5 * 60_000,
+  staleForMs: 30 * 60_000,
+  now: () => Date.now(),
+});
 
 export function clearBoardOptionsCache(userId?: string, projectKey?: string): void {
   if (userId && projectKey) {
-    const key = `board-options:${userId}:${projectKey.trim().toUpperCase()}`;
-    optionsCache.delete(key);
-    inFlightOptions.delete(key);
+    optionsCache.delete(`board-options:${userId}:${projectKey.trim().toUpperCase()}`);
   } else {
     optionsCache.clear();
-    inFlightOptions.clear();
   }
 }
 
@@ -40,40 +32,28 @@ export async function getBoardOptions(
   }
 
   const cacheKey = `board-options:${userId}:${cleanKey}`;
-  const now = Date.now();
-
-  const cached = optionsCache.get(cacheKey);
-  if (cached && now < cached.expiresAt) {
-    return cached.data;
-  }
+  const cached = optionsCache.read(cacheKey);
+  if (cached.state === "fresh") return cached.entry.data;
 
   // Stale-while-revalidate
-  if (cached && now < cached.staleUntil) {
-    if (!inFlightOptions.has(cacheKey)) {
+  if (cached.state === "stale") {
+    if (!optionsCache.hasInFlight(cacheKey)) {
       const bgPromise = (async () => {
         try {
-          const fresh = await runFetch();
-          optionsCache.set(cacheKey, {
-            data: fresh,
-            expiresAt: Date.now() + FRESH_TTL_MS,
-            staleUntil: Date.now() + STALE_WINDOW_MS,
-          });
+          optionsCache.write(cacheKey, await runFetch());
         } catch (err: unknown) {
           if (err instanceof JiraRequestError && (err.status === 401 || err.status === 403)) {
             optionsCache.delete(cacheKey);
           }
-        } finally {
-          inFlightOptions.delete(cacheKey);
         }
       })();
-      inFlightOptions.set(cacheKey, bgPromise as unknown as Promise<BoardOptionsResponse>);
+      optionsCache.trackBackground(cacheKey, bgPromise);
     }
-    return cached.data;
+    return cached.entry.data;
   }
 
-  if (inFlightOptions.has(cacheKey)) {
-    return inFlightOptions.get(cacheKey)!;
-  }
+  const inFlight = optionsCache.getInFlight(cacheKey);
+  if (inFlight) return inFlight;
 
   async function runFetch(): Promise<BoardOptionsResponse> {
     const rawBoards = await client.getBoardsForProject(cleanKey);
@@ -164,11 +144,7 @@ export async function getBoardOptions(
   const fetchPromise = (async (): Promise<BoardOptionsResponse> => {
     try {
       const result = await runFetch();
-      optionsCache.set(cacheKey, {
-        data: result,
-        expiresAt: Date.now() + FRESH_TTL_MS,
-        staleUntil: Date.now() + STALE_WINDOW_MS,
-      });
+      optionsCache.write(cacheKey, result);
       return result;
     } catch (err: unknown) {
       if (err instanceof JiraRequestError && (err.status === 401 || err.status === 403)) {
@@ -178,10 +154,6 @@ export async function getBoardOptions(
     }
   })();
 
-  inFlightOptions.set(cacheKey, fetchPromise);
-  try {
-    return await fetchPromise;
-  } finally {
-    inFlightOptions.delete(cacheKey);
-  }
+  optionsCache.track(cacheKey, fetchPromise);
+  return fetchPromise;
 }

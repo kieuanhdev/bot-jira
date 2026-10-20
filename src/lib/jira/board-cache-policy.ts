@@ -1,3 +1,5 @@
+import { LRUCache } from "lru-cache";
+
 export type BoardCacheEntry<T> = {
   data: T;
   expiresAt: number;
@@ -18,6 +20,8 @@ type BoardCachePolicyOptions = {
   freshForMs: number;
   staleForMs: number;
   now?: () => number;
+  /** Upper bound on cached keys; least recently used entries are evicted. */
+  maxEntries?: number;
 };
 
 /**
@@ -29,9 +33,12 @@ export function createBoardCachePolicy<T>({
   freshForMs,
   staleForMs,
   now = Date.now,
+  maxEntries = 1000,
 }: BoardCachePolicyOptions) {
-  const entries = new Map<string, BoardCacheEntry<T>>();
-  const inFlight = new Map<string, Promise<T> | Promise<void>>();
+  // No `ttl`: fresh/stale/expired is computed from the injected clock.
+  const entries = new LRUCache<string, BoardCacheEntry<T>>({ max: maxEntries });
+  const inFlight = new Map<string, Promise<T>>();
+  const background = new Map<string, Promise<unknown>>();
 
   function read(key: string, at = now()): BoardCacheRead<T> {
     const entry = entries.get(key);
@@ -53,21 +60,31 @@ export function createBoardCachePolicy<T>({
   }
 
   function getInFlight(key: string): Promise<T> | undefined {
-    // Background membership refreshes currently resolve void. Keep the shared
-    // registry behavior until F-005 is handled in its dedicated bug batch.
-    return inFlight.get(key) as Promise<T> | undefined;
+    return inFlight.get(key);
   }
 
-  function track(key: string, request: Promise<T> | Promise<void>): void {
+  function release(map: Map<string, Promise<unknown>>, key: string, request: Promise<unknown>) {
+    void request
+      .finally(() => {
+        if (map.get(key) === request) map.delete(key);
+      })
+      .catch(() => undefined);
+  }
+
+  function track(key: string, request: Promise<T>): void {
     inFlight.set(key, request);
-    void request.finally(() => {
-      inFlight.delete(key);
-    }).catch(() => undefined);
+    release(inFlight, key, request);
+  }
+
+  function trackBackground(key: string, request: Promise<unknown>): void {
+    background.set(key, request);
+    release(background, key, request);
   }
 
   function clear(): void {
     entries.clear();
     inFlight.clear();
+    background.clear();
   }
 
   return {
@@ -75,8 +92,9 @@ export function createBoardCachePolicy<T>({
     write,
     delete: (key: string) => entries.delete(key),
     clear,
-    hasInFlight: (key: string) => inFlight.has(key),
+    hasInFlight: (key: string) => inFlight.has(key) || background.has(key),
     getInFlight,
     track,
+    trackBackground,
   };
 }

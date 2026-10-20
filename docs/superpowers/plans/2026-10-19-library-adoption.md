@@ -626,15 +626,15 @@ Task 3.5 xong thì `grep -rn "\.json()" src/app/api src/lib/*/route-service.ts s
 - `board-options.ts` dùng `createBoardCachePolicy<BoardOptionsResponse>({ freshForMs: 5 * 60_000, staleForMs: 30 * 60_000 })`.
   - Giữ nguyên key `board-options:${userId}:${KEY}`, cách xoá entry khi gặp 401/403, và hành vi `clearBoardOptionsCache(userId?, projectKey?)`.
 
-- [ ] **Viết test trước:**
+- [x] **Viết test trước:**
   - `board-cache-policy`: `maxEntries: 2`, ghi 3 key thì key đầu bị loại. Trong khi đang refresh nền, `getInFlight(key)` trả `undefined` và `hasInFlight(key)` trả `true`.
   - `board-options.test.ts`:
     - Dữ liệu còn fresh thì trả cache.
     - Dữ liệu stale thì trả dữ liệu cũ và chỉ gọi refresh 1 lần.
     - Gặp 403 thì xoá entry.
     - `clearBoardOptionsCache(u, p)` chỉ xoá đúng 1 key.
-- [ ] Các test hiện có của `board-cache-policy`, `board-config`, `board-membership` và `api/board/options/route.test.ts` phải xanh mà không sửa test.
-- [ ] Commit `refactor(jira): bounded LRU board cache policy, reuse it for board options`.
+- [x] Các test hiện có của `board-cache-policy`, `board-config`, `board-membership` và `api/board/options/route.test.ts` phải xanh mà không sửa test.
+- [x] Commit `refactor(jira): bounded LRU board cache policy, reuse it for board options`.
 
 #### Task 4.4: Cache avatar bằng lru-cache
 

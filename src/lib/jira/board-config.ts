@@ -591,7 +591,7 @@ export async function resolveProjectBoardConfig(
         return cacheRead.entry.data;
       }
     })();
-    boardConfigCache.track(cacheKey, bgPromise);
+    boardConfigCache.trackBackground(cacheKey, bgPromise);
     return { ...cacheRead.entry.data, stale: true };
   }
 

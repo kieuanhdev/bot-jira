@@ -264,7 +264,7 @@ export async function getBoardMembership(
           }
         }
       })();
-      membershipCache.track(cacheKey, bgPromise);
+      membershipCache.trackBackground(cacheKey, bgPromise);
     }
     return { ...cacheRead.entry.data, stale: true };
   }

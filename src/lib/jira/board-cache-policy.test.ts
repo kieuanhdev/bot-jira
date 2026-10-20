@@ -83,4 +83,29 @@ describe("board-cache-policy", () => {
     expect(cache.hasInFlight("board")).toBe(false);
     request.resolve("ignored");
   });
+
+  it("evicts the least recently used key beyond maxEntries", () => {
+    const cache = createBoardCachePolicy<string>({ freshForMs: 100, staleForMs: 500, maxEntries: 2 });
+    cache.write("a", "1");
+    cache.write("b", "2");
+    cache.write("c", "3");
+
+    expect(cache.read("a").state).toBe("missing");
+    expect(cache.read("b").state).toBe("fresh");
+    expect(cache.read("c").state).toBe("fresh");
+  });
+
+  it("counts background refreshes as in flight without exposing them as the main request", async () => {
+    const cache = createBoardCachePolicy<string>({ freshForMs: 100, staleForMs: 500 });
+    const refresh = deferred<void>();
+    cache.trackBackground("board", refresh.promise);
+
+    expect(cache.getInFlight("board")).toBeUndefined();
+    expect(cache.hasInFlight("board")).toBe(true);
+
+    refresh.resolve();
+    await refresh.promise;
+    await Promise.resolve();
+    expect(cache.hasInFlight("board")).toBe(false);
+  });
 });
