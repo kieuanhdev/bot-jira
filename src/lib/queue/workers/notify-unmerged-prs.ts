@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { APP_TIMEZONE, toDateKey } from "@/lib/date";
+import { APP_TIMEZONE, isDateKey, toDateKey } from "@/lib/date";
 import { confirmedBranchLinkFilter } from "@/lib/bitbucket/branch-links";
 import { deliverToChat } from "@/lib/notify/chat-delivery";
 import { jiraUsernameAliases } from "@/lib/user-creds";
@@ -17,7 +17,11 @@ export type UnmergedPrTask = {
 /** Calendar day in the team's timezone, used so each day's reminder is sent once. */
 export function localDateKey(now: Date, timeZone = UNMERGED_PR_TIMEZONE): string {
   try {
-    return toDateKey(now, timeZone);
+    const key = toDateKey(now, timeZone);
+    if (!isDateKey(key)) {
+      throw new Error(`Invalid formatted date: ${key}`);
+    }
+    return key;
   } catch {
     return now.toISOString().split("T")[0];
   }

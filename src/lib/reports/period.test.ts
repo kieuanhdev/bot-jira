@@ -5,6 +5,8 @@ import {
   getPeriodDisplayLabel,
   getAdjacentPeriod,
   parseDateString,
+  formatDateInTimezone,
+  getWeekBounds,
 } from "./period";
 
 describe("period utilities", () => {
@@ -123,5 +125,18 @@ describe("period utilities", () => {
 
   it("rejects invalid calendar dates like 2026-02-30 in parseDateString", () => {
     expect(parseDateString("2026-02-30")).toBeNull();
+  });
+
+  it("falls back to UTC date when timezone is invalid in formatDateInTimezone", () => {
+    // 2026-10-20T20:00:00Z is 2026-10-21 in Asia/Ho_Chi_Minh (+07:00), but 2026-10-20 in UTC
+    const lateDate = new Date("2026-10-20T20:00:00Z");
+    expect(formatDateInTimezone(lateDate, "Asia/Ho_Chi_Minh")).toBe("2026-10-21");
+    expect(formatDateInTimezone(lateDate, "Bad/Zone")).toBe("2026-10-20");
+  });
+
+  it("falls back to UTC week bounds when timezone is invalid in getWeekBounds", () => {
+    const bounds = getWeekBounds(refDate, 0, "Bad/Zone");
+    const utcBounds = getWeekBounds(refDate, 0, "UTC");
+    expect(bounds).toEqual(utcBounds);
   });
 });

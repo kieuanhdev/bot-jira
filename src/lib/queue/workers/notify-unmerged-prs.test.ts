@@ -7,6 +7,10 @@ describe("notify-unmerged-prs", () => {
     expect(localDateKey(new Date("2026-10-12T18:00:00Z"))).toBe("2026-10-13");
   });
 
+  it("falls back to UTC date when timezone is invalid in localDateKey", () => {
+    expect(localDateKey(new Date("2026-10-12T18:00:00Z"), "Bad/Zone")).toBe("2026-10-12");
+  });
+
   it("lists tasks with PR links and truncates long lists", () => {
     const tasks = Array.from({ length: 17 }, (_, i) => ({
       jiraKey: `ABC-${i + 1}`,

@@ -45,6 +45,10 @@ describe.each(["UTC", "Asia/Ho_Chi_Minh", "America/New_York"])("date helpers und
     it("respects explicit tz parameter", () => {
       expect(toDateKey(new Date("2026-10-01T17:30:00Z"), "UTC")).toBe("2026-10-01");
     });
+
+    it("throws RangeError on invalid timezone", () => {
+      expect(() => toDateKey(new Date(), "Bad/Zone")).toThrow(RangeError);
+    });
   });
 
   describe("isDateKey", () => {
@@ -82,11 +86,19 @@ describe.each(["UTC", "Asia/Ho_Chi_Minh", "America/New_York"])("date helpers und
     it("returns instant corresponding to 00:00 in specified/default tz", () => {
       expect(zonedMidnight(2026, 10, 1).toISOString()).toBe("2026-09-30T17:00:00.000Z");
     });
+
+    it("throws RangeError on invalid timezone", () => {
+      expect(() => zonedMidnight(2026, 10, 1, "Bad/Zone")).toThrow(RangeError);
+    });
   });
 
   describe("startOfDayInTz", () => {
     it("returns instant corresponding to local 00:00 for the instant's day in tz", () => {
       expect(startOfDayInTz(new Date("2026-10-02T03:00:00Z")).toISOString()).toBe("2026-10-01T17:00:00.000Z");
+    });
+
+    it("throws RangeError on invalid timezone", () => {
+      expect(() => startOfDayInTz(new Date(), "Bad/Zone")).toThrow(RangeError);
     });
   });
 
@@ -105,12 +117,20 @@ describe.each(["UTC", "Asia/Ho_Chi_Minh", "America/New_York"])("date helpers und
         weekday: 0,
       });
     });
+
+    it("throws RangeError on invalid timezone", () => {
+      expect(() => zonedParts(new Date(), "Bad/Zone")).toThrow(RangeError);
+    });
   });
 
   describe("startOfIsoWeekKey", () => {
     it("returns Monday DateKey for instant in tz", () => {
       expect(startOfIsoWeekKey(new Date("2026-10-04T18:00:00Z"))).toBe("2026-10-05");
       expect(startOfIsoWeekKey(new Date("2026-10-04T16:00:00Z"))).toBe("2026-09-28");
+    });
+
+    it("throws RangeError on invalid timezone", () => {
+      expect(() => startOfIsoWeekKey(new Date(), "Bad/Zone")).toThrow(RangeError);
     });
   });
 

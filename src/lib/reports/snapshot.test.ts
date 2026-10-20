@@ -17,6 +17,10 @@ describe("Snapshot service", () => {
       const midnight = getMidnightDate(date, "Asia/Ho_Chi_Minh");
       expect(midnight.toISOString()).toBe("2026-10-04T00:00:00.000Z");
     });
+
+    it("throws RangeError on invalid timezone", () => {
+      expect(() => getMidnightDate(new Date(), "Bad/Zone")).toThrow(RangeError);
+    });
   });
 
   describe("calculateSnapshotMetrics", () => {

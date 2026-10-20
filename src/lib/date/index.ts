@@ -56,6 +56,9 @@ export function zonedParts(
   tz: string = APP_TIMEZONE,
 ): { year: number; month: number; day: number; weekday: number } {
   const tzd = new TZDate(instant, tz);
+  if (Number.isNaN(tzd.getTime())) {
+    throw new RangeError(`Invalid time zone or date: "${tz}"`);
+  }
   return {
     year: tzd.getFullYear(),
     month: tzd.getMonth() + 1,
@@ -107,6 +110,9 @@ export function zonedMidnight(
   tz: string = APP_TIMEZONE,
 ): Date {
   const tzd = new TZDate(year, month1 - 1, day, tz);
+  if (Number.isNaN(tzd.getTime())) {
+    throw new RangeError(`Invalid time zone or date: "${tz}"`);
+  }
   return new Date(tzd.getTime());
 }
 
@@ -118,6 +124,9 @@ export function startOfDayInTz(
   tz: string = APP_TIMEZONE,
 ): Date {
   const tzd = new TZDate(instant, tz);
+  if (Number.isNaN(tzd.getTime())) {
+    throw new RangeError(`Invalid time zone or date: "${tz}"`);
+  }
   const sod = startOfDay(tzd);
   return new Date(sod.getTime());
 }
@@ -130,6 +139,9 @@ export function startOfIsoWeekKey(
   tz: string = APP_TIMEZONE,
 ): DateKey {
   const tzd = new TZDate(instant, tz);
+  if (Number.isNaN(tzd.getTime())) {
+    throw new RangeError(`Invalid time zone or date: "${tz}"`);
+  }
   const start = startOfISOWeek(tzd);
   return toDateKey(start, tz);
 }

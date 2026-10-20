@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveCompletionDate } from "./completion-date";
+import { resolveCompletionDate, isDateInPeriod } from "./completion-date";
 
 describe("resolveCompletionDate", () => {
   it("prioritizes customfield_10706 Done At when raw is a direct fields object", () => {
@@ -93,5 +93,14 @@ describe("resolveCompletionDate", () => {
     expect(res.source).toBe("none");
     expect(res.confidence).toBe("none");
     expect(res.date).toBeNull();
+  });
+
+  describe("isDateInPeriod", () => {
+    it("falls back to UTC date when timezone is invalid", () => {
+      // 2026-10-01 17:30 UTC is 2026-10-02 in Asia/Ho_Chi_Minh and 2026-10-01 in UTC
+      const edgeDate = new Date("2026-10-01T17:30:00.000Z");
+      expect(isDateInPeriod(edgeDate, "2026-10-01", "2026-10-01", "Bad/Zone")).toBe(true);
+      expect(isDateInPeriod(edgeDate, "2026-10-02", "2026-10-02", "Bad/Zone")).toBe(false);
+    });
   });
 });

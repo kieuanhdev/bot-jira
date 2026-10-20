@@ -36,7 +36,11 @@ export const DEFAULT_REPORT_TIMEZONE = APP_TIMEZONE;
  */
 export function formatDateInTimezone(date: Date, timezone: string = DEFAULT_REPORT_TIMEZONE): string {
   try {
-    return toDateKey(date, timezone);
+    const key = toDateKey(date, timezone);
+    if (!isDateKey(key)) {
+      throw new Error(`Invalid formatted date: ${key}`);
+    }
+    return key;
   } catch {
     // Fallback if timezone is invalid
     return date.toISOString().split("T")[0];
@@ -78,6 +82,9 @@ export function getWeekBounds(
   let mondayKey: string;
   try {
     mondayKey = startOfIsoWeekKey(refDate, timezone);
+    if (!isDateKey(mondayKey)) {
+      throw new Error(`Invalid startOfIsoWeekKey: ${mondayKey}`);
+    }
   } catch {
     mondayKey = startOfIsoWeekKey(refDate, "UTC");
   }
