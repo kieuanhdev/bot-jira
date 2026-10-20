@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { JiraSyncBodySchema } from "@/lib/api/schemas";
 import { getSession } from "@/lib/session";
 import {
   normalizeProjectKey,
@@ -11,7 +13,9 @@ export async function POST(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const body = (await req.json().catch(() => ({}))) as { projectKey?: string; full?: boolean };
+  const parsedBody = await readJsonBody(req, JiraSyncBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   const requestedAt = new Date().toISOString();
   const isAdmin = session.user.role === "admin";
   const full = Boolean(body.full && isAdmin);

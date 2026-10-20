@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { invalidBodyPaths, readJsonBody } from "@/lib/api/json-body";
+import { BoardMembershipRefreshBodySchema } from "@/lib/api/schemas";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { userJiraAuth } from "@/lib/user-creds";
@@ -30,19 +32,19 @@ export async function POST(req: Request) {
     return jiraCredentialsRequired();
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
+  const parsedBody = await readJsonBody(req, BoardMembershipRefreshBodySchema);
+  if (!parsedBody.ok) {
+    const paths = await invalidBodyPaths(parsedBody.response);
+    if (paths.length === 1 && paths[0] === "boardId") {
+      return NextResponse.json(
+        { error: "Board ID phải là số nguyên dương.", code: "invalid_board" },
+        { status: 400 }
+      );
+    }
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
-  const { projectKey, boardId, reason, force } = (body as {
-    projectKey?: string;
-    boardId?: number;
-    reason?: string;
-    force?: boolean;
-  }) ?? {};
+  const { projectKey, boardId, reason, force } = parsedBody.data;
 
   const cleanKey = (projectKey ?? "").trim().toUpperCase();
   const parsedBoardId = Number(boardId);

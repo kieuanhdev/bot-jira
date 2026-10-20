@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { ProjectPeopleFieldsBodySchema } from "@/lib/api/schemas";
 import type { PeopleRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -34,7 +36,9 @@ export async function PUT(req: Request, ctx: { params: Promise<{ key: string }> 
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!isAdminRole(session)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const projectKey = await keyFrom(ctx);
-  const body = await req.json().catch(() => ({})) as { fields?: Partial<Record<PeopleRole, string | null>> };
+  const parsedBody = await readJsonBody(req, ProjectPeopleFieldsBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data as { fields?: Partial<Record<PeopleRole, string | null>> };
   if (!body.fields || typeof body.fields !== "object") {
     return NextResponse.json({ error: "fields is required" }, { status: 400 });
   }

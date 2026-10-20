@@ -126,3 +126,16 @@ export async function readJsonBody<S extends z.ZodType>(
     data: result.data,
   };
 }
+
+/**
+ * Paths of the failing fields in an `invalid_body` response from `readJsonBody`.
+ * Lets a route with its own error shape pick the message that matches the field.
+ */
+export async function invalidBodyPaths(response: Response): Promise<string[]> {
+  try {
+    const data = (await response.clone().json()) as { issues?: BodyIssue[] };
+    return (data.issues ?? []).map((i) => i.path);
+  } catch {
+    return [];
+  }
+}

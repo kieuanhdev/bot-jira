@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { invalidBodyPaths, readJsonBody } from "@/lib/api/json-body";
+import { BoardPreferenceBodySchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { jiraWith, JiraRequestError } from "@/lib/jira/client";
@@ -56,17 +58,20 @@ export async function PUT(req: Request) {
     return jiraCredentialsRequired();
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
+  const parsedBody = await readJsonBody(req, BoardPreferenceBodySchema);
+  if (!parsedBody.ok) {
+    const paths = await invalidBodyPaths(parsedBody.response);
+    const boardOnly = paths.length > 0 && paths.every((p) => p === "boardId");
     return NextResponse.json(
-      { error: "Payload JSON không hợp lệ.", code: "invalid_project" },
+      {
+        error: boardOnly ? "Board ID phải là số nguyên dương." : "Payload JSON không hợp lệ.",
+        code: "invalid_project",
+      },
       { status: 400 }
     );
   }
 
-  const { projectKey, boardId } = (body as { projectKey?: string; boardId?: number }) ?? {};
+  const { projectKey, boardId } = parsedBody.data;
   const cleanKey = (projectKey ?? "").trim().toUpperCase();
   const parsedBoardId = Number(boardId);
 

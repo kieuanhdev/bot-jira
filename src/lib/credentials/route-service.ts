@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { CredentialsBodySchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { encrypt } from "@/lib/crypto";
@@ -16,24 +18,6 @@ function cleanError(msg: string): string {
   if (m) return `Dịch vụ trả về ${m[1]} — hãy kiểm tra token và quyền truy cập`;
   return msg.slice(0, 160);
 }
-
-type Body = {
-  jiraUser?: string | null;
-  jiraToken?: string | null;
-  jiraAuth?: "Bearer" | "basic" | null;
-  bitbucketUser?: string | null;
-  bitbucketToken?: string | null;
-  /** When true, remove the stored Jira token (disconnect). */
-  disconnectJira?: boolean;
-  /** When true, remove the stored Bitbucket token (disconnect). */
-  disconnectBitbucket?: boolean;
-  sentryOrg?: string | null;
-  /** "sentry-slug:JIRAKEY,..." — same format as SENTRY_PROJECT_MAPPINGS. */
-  sentryMappings?: string | null;
-  sentryToken?: string | null;
-  /** When true, remove the stored Sentry config (disconnect). */
-  disconnectSentry?: boolean;
-};
 
 /**
  * Validate a user's Sentry config before it is persisted: every mapped Jira key
@@ -90,7 +74,9 @@ export async function handleCredentialsUpdateRequest(req: Request) {
   if (!exists) {
     return NextResponse.json({ error: "session_invalid" }, { status: 401 });
   }
-  const body = (await req.json()) as Body;
+  const parsedBody = await readJsonBody(req, CredentialsBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
 
   const jiraToken = (body.jiraToken ?? "").trim();
   const jiraUser = (body.jiraUser ?? "").trim();

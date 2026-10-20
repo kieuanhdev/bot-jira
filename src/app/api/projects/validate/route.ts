@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { ProjectKeyBodySchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { getSystemJiraAuth, jiraWith } from "@/lib/jira/client";
@@ -10,7 +12,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as { key?: string };
+  const parsedBody = await readJsonBody(req, ProjectKeyBodySchema);
+  if (!parsedBody.ok) {
+    return NextResponse.json({ ok: false, error: "Payload JSON không hợp lệ." }, { status: 400 });
+  }
+  const body = parsedBody.data;
   const rawKey = (body.key ?? "").trim().toUpperCase();
 
   if (!rawKey) {

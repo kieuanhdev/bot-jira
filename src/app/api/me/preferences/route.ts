@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { BoardProjectsBodySchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { enqueueJiraProjectSync } from "@/lib/queue/boss";
@@ -47,7 +49,9 @@ export async function PUT(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { projects } = (await req.json().catch(() => ({}))) as { projects?: string[] };
+  const parsedBody = await readJsonBody(req, BoardProjectsBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const { projects } = parsedBody.data;
 
   const [user, activeCatalog] = await Promise.all([
     prisma.user.findUnique({

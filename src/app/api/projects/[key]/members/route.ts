@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/api/json-body";
+import { ProjectLeadersBodySchema } from "@/lib/api/schemas";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { normalizeProjectKey, isValidProjectKeyFormat } from "@/lib/jira/project-catalog";
@@ -65,9 +67,9 @@ export async function PUT(
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as {
-    leaderUserIds?: unknown;
-  };
+  const parsedBody = await readJsonBody(req, ProjectLeadersBodySchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
 
   if (!Array.isArray(body.leaderUserIds)) {
     return NextResponse.json(
