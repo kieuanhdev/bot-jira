@@ -347,14 +347,18 @@ export function SentryClient() {
         filter={filter}
         view={view}
         sort={sort}
-        onSelectReview={() => changeFilter("review")}
         onSelectCritical={() => {
-          changeFilter("review");
+          setPage(1);
+          setSelected(new Set());
           setView("actionable");
+          updateUrl("review", selectedProject, q, "triage");
         }}
         onSelectHot={() => {
-          changeFilter("review");
-          changeSort("hot");
+          setPage(1);
+          setSelected(new Set());
+          // Toggle: clicking the active card goes back to the default order.
+          const active = filter === "review" && sort === "hot";
+          updateUrl("review", selectedProject, q, active ? "triage" : "hot");
         }}
       />
 

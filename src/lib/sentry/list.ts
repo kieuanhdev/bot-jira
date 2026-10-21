@@ -108,6 +108,7 @@ export async function listSentryImports(
       eventCount: r.eventCount,
       countBaseline: r.countBaseline,
       countBaselineAt: r.countBaselineAt,
+      firstSeen: r.firstSeen,
     });
     return {
       id: r.id,

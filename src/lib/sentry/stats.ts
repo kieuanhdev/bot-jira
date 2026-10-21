@@ -90,6 +90,7 @@ export async function getSentryStats(
         eventCount: true,
         countBaseline: true,
         countBaselineAt: true,
+        firstSeen: true,
       },
     }),
     prisma.sentryIssueImported.count({
@@ -109,7 +110,7 @@ export async function getSentryStats(
     if (tier === "critical") criticalCount++;
     else if (tier === "noise") noiseCount++;
 
-    const spike = spikeOf(item);
+    const spike = spikeOf(item, now);
     if (spike.hot) hotCount++;
   }
 

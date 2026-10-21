@@ -2,30 +2,20 @@ import { describe, expect, it } from "vitest";
 import { spikeOf, SPIKE_DELTA_MIN, SPIKE_PERCENT_MIN } from "./spike";
 
 describe("spikeOf", () => {
-  it("treats null or undefined baseline as new issue: hot if eventCount >= 50", () => {
-    expect(spikeOf({ eventCount: 50, countBaseline: null })).toEqual({
-      delta: 50,
-      hot: true,
-    });
-    expect(spikeOf({ eventCount: 49, countBaseline: null })).toEqual({
-      delta: 49,
-      hot: false,
-    });
-    expect(spikeOf({ eventCount: 120, countBaseline: undefined })).toEqual({
-      delta: 120,
-      hot: true,
-    });
+  const now = new Date("2026-10-21T12:00:00Z");
+  const recent = new Date("2026-10-21T06:00:00Z");
+  const old = new Date("2026-10-01T00:00:00Z");
+
+  it("flags a new issue (no baseline, firstSeen within 24h) when eventCount >= 50", () => {
+    expect(spikeOf({ eventCount: 50, countBaseline: null, firstSeen: recent }, now)).toEqual({ delta: 50, hot: true });
+    expect(spikeOf({ eventCount: 49, countBaseline: undefined, firstSeen: recent }, now)).toEqual({ delta: 49, hot: false });
+    expect(spikeOf({ eventCount: 50, countBaseline: 0, firstSeen: recent }, now)).toEqual({ delta: 50, hot: true });
   });
 
-  it("treats baseline = 0 as new issue: hot if eventCount >= 50", () => {
-    expect(spikeOf({ eventCount: 50, countBaseline: 0 })).toEqual({
-      delta: 50,
-      hot: true,
-    });
-    expect(spikeOf({ eventCount: 30, countBaseline: 0 })).toEqual({
-      delta: 30,
-      hot: false,
-    });
+  it("never flags an old issue that has no baseline yet", () => {
+    expect(spikeOf({ eventCount: 5000, countBaseline: null, firstSeen: old }, now)).toEqual({ delta: 0, hot: false });
+    expect(spikeOf({ eventCount: 5000, countBaseline: 0, firstSeen: old }, now)).toEqual({ delta: 0, hot: false });
+    expect(spikeOf({ eventCount: 5000, countBaseline: null }, now)).toEqual({ delta: 0, hot: false });
   });
 
   it("handles null or negative eventCount safely", () => {
@@ -37,7 +27,7 @@ describe("spikeOf", () => {
       delta: 0,
       hot: false,
     });
-    expect(spikeOf({ eventCount: -5, countBaseline: 0 })).toEqual({
+    expect(spikeOf({ eventCount: -5, countBaseline: 0, firstSeen: recent }, now)).toEqual({
       delta: 0,
       hot: false,
     });

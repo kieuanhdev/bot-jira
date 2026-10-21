@@ -1,6 +1,6 @@
 "use client";
 
-import { Flame, Inbox, Siren, Sparkles, TrendingUp } from "lucide-react";
+import { Flame, Siren, Sparkles, TrendingUp } from "lucide-react";
 import { MetricCard } from "@/components/shared/metric-card";
 import { MetricGrid } from "@/components/shared/metric-grid";
 import { Sparkline } from "@/app/(app)/admin/overview/sparkline";
@@ -13,7 +13,6 @@ export interface SentryStatsProps {
   filter?: SentryFilter;
   view?: "actionable" | "noise" | "all";
   sort?: string;
-  onSelectReview?: () => void;
   onSelectCritical?: () => void;
   onSelectHot?: () => void;
 }
@@ -24,7 +23,6 @@ export function SentryStats({
   filter,
   view,
   sort,
-  onSelectReview,
   onSelectCritical,
   onSelectHot,
 }: SentryStatsProps) {
@@ -37,20 +35,9 @@ export function SentryStats({
 
   const isCriticalSelected = filter === "review" && view === "actionable" && sort !== "hot";
   const isHotSelected = sort === "hot";
-  const isReviewSelected = filter === "review" && view !== "actionable" && sort !== "hot";
 
   return (
-    <MetricGrid columns={5}>
-      <MetricCard
-        label="Chờ duyệt"
-        value={stats?.pendingReview ?? 0}
-        icon={Inbox}
-        tone="warning"
-        description="Trong hàng đợi xử lý"
-        loading={isLoading}
-        onClick={onSelectReview}
-        selected={isReviewSelected}
-      />
+    <MetricGrid columns={4}>
       <MetricCard
         label="Nghiêm trọng"
         value={stats?.criticalPending ?? 0}
