@@ -64,8 +64,18 @@ describe("query-keys factory", () => {
     expect(bulkKeys.createMetadata("EPM")).toEqual(["bulk-create-metadata", "EPM"]);
 
     expect(sentryKeys.all).toEqual(["sentry"]);
-    expect(sentryKeys.list("review", "all")).toEqual(["sentry", "list", "review", "all"]);
+    expect(sentryKeys.list("review", "all")).toEqual(["sentry", "list", "review", "all", "", ""]);
+    expect(sentryKeys.list("review", "all", "crash", "events")).toEqual([
+      "sentry",
+      "list",
+      "review",
+      "all",
+      "crash",
+      "events",
+    ]);
     expect(sentryKeys.lists()).toEqual(["sentry", "list"]);
+    expect(sentryKeys.stats()).toEqual(["sentry", "stats", "all"]);
+    expect(sentryKeys.stats("EPM")).toEqual(["sentry", "stats", "EPM"]);
     expect(adminKeys.overviewErrors("sentry")).toEqual(["admin", "overview", "errors", "sentry"]);
 
     expect(chatKeys.identity).toEqual(["chat", "identity"]);
@@ -102,6 +112,7 @@ describe("query-keys factory", () => {
     // sentry prefix matches sentry lists and all
     expect(partialMatchKey(sentryKeys.list("review", "EPM"), sentryKeys.lists())).toBe(true);
     expect(partialMatchKey(sentryKeys.list("review", "EPM"), sentryKeys.all)).toBe(true);
+    expect(partialMatchKey(sentryKeys.stats("EPM"), sentryKeys.all)).toBe(true);
 
     // Integration test with QueryClient
     const qc = new QueryClient();

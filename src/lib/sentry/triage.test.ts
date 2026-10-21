@@ -31,4 +31,24 @@ describe("compareTriage", () => {
     const c = { level: "fatal", title: "z", eventCount: 50 };
     expect([a, b, c].sort(compareTriage)).toEqual([c, b, a]);
   });
+
+  it("pushes hot issues to the top within the same tier (critical)", () => {
+    const normalCrit = { level: "fatal", title: "Fatal 1", eventCount: 100, hot: false };
+    const hotCrit = { level: "fatal", title: "Fatal 2", eventCount: 60, hot: true };
+    // Even though normalCrit has higher eventCount, hotCrit comes first
+    expect([normalCrit, hotCrit].sort(compareTriage)).toEqual([hotCrit, normalCrit]);
+  });
+
+  it("pushes hot issues to the top within the same tier (normal)", () => {
+    const normalWarn = { level: "warning", title: "Slow query", eventCount: 100, hot: false };
+    const hotWarn = { level: "warning", title: "Network lag", eventCount: 60, isHot: true };
+    expect([normalWarn, hotWarn].sort(compareTriage)).toEqual([hotWarn, normalWarn]);
+  });
+
+  it("does not elevate noise issues above critical/normal even if hot", () => {
+    const hotNoise = { level: "info", title: "Telemetry burst", eventCount: 500, hot: true };
+    const normalCrit = { level: "fatal", title: "Null check", eventCount: 10, hot: false };
+    expect([hotNoise, normalCrit].sort(compareTriage)).toEqual([normalCrit, hotNoise]);
+  });
 });
+

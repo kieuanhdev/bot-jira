@@ -7,6 +7,7 @@ import { meKeys, sentryKeys } from "@/lib/query-keys";
 import { getMeStatus } from "@/app/api/me/status/route";
 import { getMePreferences } from "@/lib/me/preferences";
 import { listSentryImports } from "@/lib/sentry/list";
+import { getSentryStats } from "@/lib/sentry/stats";
 import { sentryScopeFor } from "@/lib/sentry/scope";
 import { getSession } from "@/lib/session";
 import { logSwallowed } from "@/lib/logger";
@@ -29,6 +30,10 @@ export default async function SentryPage() {
       queryClient.prefetchQuery({
         queryKey: sentryKeys.list("review", "all"),
         queryFn: () => listSentryImports("review", scope),
+      }),
+      queryClient.prefetchQuery({
+        queryKey: sentryKeys.stats("all"),
+        queryFn: () => getSentryStats(scope),
       }),
       queryClient.prefetchQuery({
         queryKey: meKeys.status,

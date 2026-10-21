@@ -1,15 +1,25 @@
 import type { ImportState, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { env, jiraProjectList, parseSentryMappings } from "@/lib/env";
+import { env } from "@/lib/env";
 import { getJiraIssueUrl } from "@/lib/jira/urls";
 import { type SentryScope, resolveRowTargetProject } from "./scope";
+import { buildProjectCondition } from "./project-condition";
+import { spikeOf } from "./spike";
+
+export { buildProjectCondition };
 
 const STATES: ImportState[] = ["review", "pending", "approved", "created", "rejected", "failed", "ignored"];
+
+export type ListSentryOpts = {
+  q?: string;
+  sort?: "recent" | "events" | "first" | "hot";
+};
 
 export async function listSentryImports(
   stateParam?: string,
   scope: SentryScope = { all: true },
-  projectKey?: string
+  projectKey?: string,
+  opts?: ListSentryOpts
 ) {
   const requested = (stateParam ?? "")
     .split(",")
@@ -20,46 +30,15 @@ export async function listSentryImports(
   // Non-admins cannot see ignored state
   const effectiveRequested = scope.all ? requested : requested.filter((s) => s !== "ignored");
 
-  // Determine allowed projects filter
-  let targetProjects: string[] | null = null;
-  const normalizedKey = projectKey?.trim().toUpperCase();
-
-  if (normalizedKey && normalizedKey !== "ALL") {
-    if (!scope.all && !scope.projects.includes(normalizedKey)) {
-      // Requested project is outside user's scope
-      return {
-        counts: {},
-        requireApproval: env.sentryImportRequireApproval,
-        items: [],
-      };
-    }
-    targetProjects = [normalizedKey];
-  } else if (!scope.all) {
-    targetProjects = scope.projects;
-  }
-
-  // Construct project where condition (handling rows with targetProject = null)
-  let projectCondition: Prisma.SentryIssueImportedWhereInput | undefined = undefined;
-  if (targetProjects !== null) {
-    const mappings = parseSentryMappings(env.sentryProjectMappings);
-    const fallback = jiraProjectList[0] ?? null;
-    const mappedSlugs = mappings
-      .filter((m) => targetProjects!.includes(m.jiraProject))
-      .map((m) => m.sentryProject);
-    const fallbackMatches = Boolean(fallback && targetProjects.includes(fallback));
-
-    const nullTargetCondition: Prisma.SentryIssueImportedWhereInput | null = mappings.length > 0
-      ? (mappedSlugs.length > 0 ? { targetProject: null, sentryProject: { in: mappedSlugs } } : null)
-      : (fallbackMatches ? { targetProject: null } : null);
-
-    projectCondition = nullTargetCondition
-      ? {
-          OR: [
-            { targetProject: { in: targetProjects } },
-            nullTargetCondition,
-          ],
-        }
-      : { targetProject: { in: targetProjects } };
+  // Determine allowed projects filter & where condition
+  const projectCondition = buildProjectCondition(scope, projectKey);
+  if (projectCondition === null) {
+    // Requested project is outside user's scope
+    return {
+      counts: {},
+      requireApproval: env.sentryImportRequireApproval,
+      items: [],
+    };
   }
 
   const stateCondition: Prisma.SentryIssueImportedWhereInput | undefined = effectiveRequested.length > 0
@@ -68,20 +47,47 @@ export async function listSentryImports(
       ? undefined
       : { state: { not: "ignored" } };
 
-  const whereClause: Prisma.SentryIssueImportedWhereInput | undefined = projectCondition && stateCondition
-    ? { AND: [stateCondition, projectCondition] }
-    : stateCondition ?? projectCondition;
+  const qClean = opts?.q?.trim();
+  const searchCondition: Prisma.SentryIssueImportedWhereInput | undefined = qClean
+    ? {
+        OR: [
+          { title: { contains: qClean, mode: "insensitive" } },
+          { shortId: { contains: qClean, mode: "insensitive" } },
+        ],
+      }
+    : undefined;
+
+  const conditions: Prisma.SentryIssueImportedWhereInput[] = [];
+  if (stateCondition) conditions.push(stateCondition);
+  if (projectCondition) conditions.push(projectCondition);
+  if (searchCondition) conditions.push(searchCondition);
+
+  const whereClause: Prisma.SentryIssueImportedWhereInput | undefined =
+    conditions.length === 0
+      ? undefined
+      : conditions.length === 1
+        ? conditions[0]
+        : { AND: conditions };
 
   // GroupBy counts must also respect the scope & project filter
   const groupWhere = projectCondition;
+
+  const orderBy: Prisma.SentryIssueImportedOrderByWithRelationInput[] =
+    opts?.sort === "events"
+      ? [{ eventCount: "desc" }, { createdAt: "desc" }]
+      : opts?.sort === "first"
+        ? [{ firstSeen: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }]
+        : opts?.sort === "hot"
+          ? [{ eventCount: "desc" }, { lastSeen: { sort: "desc", nulls: "last" } }]
+          : [{ lastSeen: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }];
 
   const [items, grouped] = await Promise.all([
     effectiveRequested.length === 0 && requested.length > 0
       ? Promise.resolve([])
       : prisma.sentryIssueImported.findMany({
           where: whereClause,
-          orderBy: [{ lastSeen: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
-          take: 200,
+          orderBy,
+          take: qClean || opts?.sort === "hot" ? 500 : 200,
         }),
     prisma.sentryIssueImported.groupBy({
       by: ["state"],
@@ -97,10 +103,13 @@ export async function listSentryImports(
     counts[key] = (counts[key] ?? 0) + g._count._all;
   }
 
-  const result = {
-    counts,
-    requireApproval: env.sentryImportRequireApproval,
-    items: items.map((r) => ({
+  const mappedItems = items.map((r) => {
+    const spike = spikeOf({
+      eventCount: r.eventCount,
+      countBaseline: r.countBaseline,
+      countBaselineAt: r.countBaselineAt,
+    });
+    return {
       id: r.id,
       sentryProject: r.sentryProject,
       sentryIssueId: r.sentryIssueId,
@@ -109,6 +118,10 @@ export async function listSentryImports(
       level: r.level,
       permalinkUrl: r.permalinkUrl,
       eventCount: r.eventCount,
+      countBaseline: r.countBaseline,
+      countBaselineAt: r.countBaselineAt,
+      countDelta24h: spike.delta,
+      isHot: spike.hot,
       firstSeen: r.firstSeen,
       lastSeen: r.lastSeen,
       targetProject: r.targetProject ?? resolveRowTargetProject(r),
@@ -124,7 +137,24 @@ export async function listSentryImports(
       reviewedBy: r.reviewedBy,
       reviewedAt: r.reviewedAt,
       createdAt: r.createdAt,
-    })),
+    };
+  });
+
+  if (opts?.sort === "hot") {
+    mappedItems.sort((a, b) => {
+      const hotA = Boolean(a.isHot);
+      const hotB = Boolean(b.isHot);
+      if (hotA !== hotB) return hotA ? -1 : 1;
+      const deltaDiff = (b.countDelta24h ?? 0) - (a.countDelta24h ?? 0);
+      if (deltaDiff !== 0) return deltaDiff;
+      return (b.eventCount ?? 0) - (a.eventCount ?? 0);
+    });
+  }
+
+  const result = {
+    counts,
+    requireApproval: env.sentryImportRequireApproval,
+    items: mappedItems,
   };
 
   return JSON.parse(JSON.stringify(result));

@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ExternalLink, Lightbulb, Loader2, RefreshCw, RotateCcw, XCircle } from "lucide-react";
+import { CheckCircle2, ExternalLink, Flame, Lightbulb, Loader2, RefreshCw, RotateCcw, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,6 +19,10 @@ export type SentryRowItem = {
   level: string | null;
   permalinkUrl: string | null;
   eventCount: number | null;
+  countBaseline?: number | null;
+  countBaselineAt?: string | null;
+  countDelta24h?: number;
+  isHot?: boolean;
   firstSeen: string | null;
   lastSeen: string | null;
   targetProject: string | null;
@@ -138,6 +142,16 @@ export function SentryRow({
             <Badge variant={levelVariant(row.level)} className="uppercase">
               {row.level ?? "?"}
             </Badge>
+            {row.isHot && (
+              <Badge
+                variant="danger"
+                className="gap-1 cursor-help font-medium"
+                title={`Tăng nóng: +${formatNumber(row.countDelta24h ?? 0)} sự kiện trong ~24h qua (tăng ≥ 50 sự kiện và ≥ 50% baseline)`}
+              >
+                <Flame className="h-3 w-3" aria-hidden="true" />
+                +{formatNumber(row.countDelta24h ?? 0)}/24h
+              </Badge>
+            )}
             <span
               className={cn(
                 "line-clamp-2 text-sm font-medium",

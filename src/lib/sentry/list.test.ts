@@ -187,4 +187,181 @@ describe("src/lib/sentry/list", () => {
       take: 200,
     });
   });
+
+  it("applies q search condition matching title or shortId and increases take to 500", async () => {
+    prismaMock.sentryIssueImported.findMany.mockResolvedValueOnce([]);
+    prismaMock.sentryIssueImported.groupBy.mockResolvedValueOnce([]);
+
+    await listSentryImports("review", { all: true }, undefined, { q: "NetworkError" });
+
+    expect(prismaMock.sentryIssueImported.findMany).toHaveBeenCalledWith({
+      where: {
+        AND: [
+          { state: { in: ["review", "pending"] } },
+          {
+            OR: [
+              { title: { contains: "NetworkError", mode: "insensitive" } },
+              { shortId: { contains: "NetworkError", mode: "insensitive" } },
+            ],
+          },
+        ],
+      },
+      orderBy: [{ lastSeen: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      take: 500,
+    });
+  });
+
+  it("preserves non-admin scope when searching with q", async () => {
+    prismaMock.sentryIssueImported.findMany.mockResolvedValueOnce([]);
+    prismaMock.sentryIssueImported.groupBy.mockResolvedValueOnce([]);
+
+    await listSentryImports("review", { all: false, projects: ["EPM"] }, undefined, { q: "MOB-1" });
+
+    expect(prismaMock.sentryIssueImported.findMany).toHaveBeenCalledWith({
+      where: {
+        AND: [
+          { state: { in: ["review", "pending"] } },
+          {
+            OR: [
+              { targetProject: { in: ["EPM"] } },
+              { targetProject: null, sentryProject: { in: ["mobile"] } },
+            ],
+          },
+          {
+            OR: [
+              { title: { contains: "MOB-1", mode: "insensitive" } },
+              { shortId: { contains: "MOB-1", mode: "insensitive" } },
+            ],
+          },
+        ],
+      },
+      orderBy: [{ lastSeen: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      take: 500,
+    });
+  });
+
+  it("supports sort: 'events'", async () => {
+    prismaMock.sentryIssueImported.findMany.mockResolvedValueOnce([]);
+    prismaMock.sentryIssueImported.groupBy.mockResolvedValueOnce([]);
+
+    await listSentryImports("review", { all: true }, undefined, { sort: "events" });
+
+    expect(prismaMock.sentryIssueImported.findMany).toHaveBeenCalledWith({
+      where: { state: { in: ["review", "pending"] } },
+      orderBy: [{ eventCount: "desc" }, { createdAt: "desc" }],
+      take: 200,
+    });
+  });
+
+  it("supports sort: 'first'", async () => {
+    prismaMock.sentryIssueImported.findMany.mockResolvedValueOnce([]);
+    prismaMock.sentryIssueImported.groupBy.mockResolvedValueOnce([]);
+
+    await listSentryImports("review", { all: true }, undefined, { sort: "first" });
+
+    expect(prismaMock.sentryIssueImported.findMany).toHaveBeenCalledWith({
+      where: { state: { in: ["review", "pending"] } },
+      orderBy: [{ firstSeen: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      take: 200,
+    });
+  });
+
+  it("supports sort: 'recent' as default", async () => {
+    prismaMock.sentryIssueImported.findMany.mockResolvedValueOnce([]);
+    prismaMock.sentryIssueImported.groupBy.mockResolvedValueOnce([]);
+
+    await listSentryImports("review", { all: true }, undefined, { sort: "recent" });
+
+    expect(prismaMock.sentryIssueImported.findMany).toHaveBeenCalledWith({
+      where: { state: { in: ["review", "pending"] } },
+      orderBy: [{ lastSeen: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      take: 200,
+    });
+  });
+
+  it("calculates countDelta24h and isHot for each item", async () => {
+    prismaMock.sentryIssueImported.findMany.mockResolvedValueOnce([
+      {
+        id: "hot-1",
+        sentryProject: "mobile",
+        sentryIssueId: "10",
+        eventCount: 150,
+        countBaseline: 50,
+        countBaselineAt: testDate,
+        state: "pending",
+        createdAt: testDate,
+      },
+      {
+        id: "normal-1",
+        sentryProject: "mobile",
+        sentryIssueId: "11",
+        eventCount: 30,
+        countBaseline: 25,
+        countBaselineAt: testDate,
+        state: "pending",
+        createdAt: testDate,
+      },
+    ]);
+    prismaMock.sentryIssueImported.groupBy.mockResolvedValueOnce([]);
+
+    const result = await listSentryImports("review", { all: true });
+
+    expect(result.items[0]).toMatchObject({
+      id: "hot-1",
+      countDelta24h: 100,
+      isHot: true,
+    });
+    expect(result.items[1]).toMatchObject({
+      id: "normal-1",
+      countDelta24h: 5,
+      isHot: false,
+    });
+  });
+
+  it("supports sort: 'hot' and sorts items in memory by isHot then delta desc", async () => {
+    prismaMock.sentryIssueImported.findMany.mockResolvedValueOnce([
+      {
+        id: "item-normal",
+        eventCount: 30,
+        countBaseline: 25,
+        sentryProject: "mobile",
+        sentryIssueId: "1",
+        state: "pending",
+        createdAt: testDate,
+      },
+      {
+        id: "item-hot-smaller",
+        eventCount: 100,
+        countBaseline: 50,
+        sentryProject: "mobile",
+        sentryIssueId: "2",
+        state: "pending",
+        createdAt: testDate,
+      },
+      {
+        id: "item-hot-bigger",
+        eventCount: 200,
+        countBaseline: 50,
+        sentryProject: "mobile",
+        sentryIssueId: "3",
+        state: "pending",
+        createdAt: testDate,
+      },
+    ]);
+    prismaMock.sentryIssueImported.groupBy.mockResolvedValueOnce([]);
+
+    const result = await listSentryImports("review", { all: true }, undefined, { sort: "hot" });
+
+    expect(prismaMock.sentryIssueImported.findMany).toHaveBeenCalledWith({
+      where: { state: { in: ["review", "pending"] } },
+      orderBy: [{ eventCount: "desc" }, { lastSeen: { sort: "desc", nulls: "last" } }],
+      take: 500,
+    });
+
+    expect(result.items.map((i: { id: string }) => i.id)).toEqual([
+      "item-hot-bigger", // hot, delta=150
+      "item-hot-smaller", // hot, delta=50
+      "item-normal", // not hot, delta=5
+    ]);
+  });
 });

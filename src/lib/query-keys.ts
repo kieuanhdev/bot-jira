@@ -261,8 +261,13 @@ export function reportsTouchingProjects(projects: string[]) {
 
 export const sentryKeys = {
   all: ["sentry"] as const,
-  list: (state: string = "review", project: string = "all") =>
-    ["sentry", "list", state, project] as const,
+  list: (
+    state: string = "review",
+    project: string = "all",
+    q: string = "",
+    sort: string = ""
+  ) => ["sentry", "list", state, project, q, sort] as const,
+  stats: (project: string = "all") => ["sentry", "stats", project || "all"] as const,
   lists: () => ["sentry", "list"] as const,
 };
 

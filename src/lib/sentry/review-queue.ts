@@ -57,7 +57,8 @@ export function sentrySnapshot(issue: SentryIssueLike) {
 export async function seedSentryIssue(
   issue: SentryIssueLike,
   /** Per-user polling: the polled slug and the user's own Jira target. */
-  override?: { projectSlug: string; targetProject: string }
+  override?: { projectSlug: string; targetProject: string },
+  now: Date = new Date()
 ): Promise<void> {
   const sentryIssueId = sentryIdKey(issue);
   if (!sentryIssueId) return;
@@ -66,16 +67,46 @@ export async function seedSentryIssue(
     override?.targetProject ?? resolveJiraProject(sentryProject, mappings, fallbackProject);
   const snapshot = sentrySnapshot(issue);
 
+  const existing = await prisma.sentryIssueImported.findUnique({
+    where: { sentryProject_sentryIssueId: { sentryProject, sentryIssueId } },
+    select: { eventCount: true, countBaseline: true, countBaselineAt: true },
+  });
+
+  const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+  let baselineUpdates: { countBaseline?: number; countBaselineAt?: Date } = {};
+
+  if (!existing) {
+    baselineUpdates = {
+      countBaseline: 0,
+      countBaselineAt: now,
+    };
+  } else {
+    const isBaselineOlderThan24h =
+      existing.countBaselineAt === null ||
+      now.getTime() - existing.countBaselineAt.getTime() >= TWENTY_FOUR_HOURS_MS;
+
+    if (isBaselineOlderThan24h) {
+      baselineUpdates = {
+        countBaseline: existing.eventCount ?? 0,
+        countBaselineAt: now,
+      };
+    }
+  }
+
   await prisma.sentryIssueImported.upsert({
     where: { sentryProject_sentryIssueId: { sentryProject, sentryIssueId } },
     create: {
       sentryProject,
       sentryIssueId,
       ...snapshot,
+      ...baselineUpdates,
       targetProject,
       state: !targetProject ? "ignored" : env.sentryImportRequireApproval ? "review" : "approved",
       lastError: targetProject ? null : `no Jira project mapping for Sentry project "${sentryProject}"`,
     },
-    update: snapshot,
+    update: {
+      ...snapshot,
+      ...baselineUpdates,
+    },
   });
 }

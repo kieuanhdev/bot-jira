@@ -43,6 +43,46 @@ describe("GET /api/sentry", () => {
     const res = await GET(new Request("http://localhost/api/sentry?state=review&project=EPM"));
     expect(res.status).toBe(200);
     expect(mocks.sentryScopeFor).toHaveBeenCalledWith({ user: { id: "u-1", role: "member" } });
-    expect(mocks.listSentryImports).toHaveBeenCalledWith("review", { all: false, projects: ["EPM"] }, "EPM");
+    expect(mocks.listSentryImports).toHaveBeenCalledWith(
+      "review",
+      { all: false, projects: ["EPM"] },
+      "EPM",
+      { q: undefined, sort: undefined }
+    );
+  });
+
+  it("passes validated q and sort to listSentryImports", async () => {
+    mocks.session.mockResolvedValueOnce({ user: { id: "u-1", role: "admin" } });
+    mocks.sentryScopeFor.mockResolvedValueOnce({ all: true });
+    mocks.listSentryImports.mockResolvedValueOnce({ counts: {}, requireApproval: true, items: [] });
+
+    const res = await GET(
+      new Request("http://localhost/api/sentry?state=review&q=%20NullPointer%20&sort=events")
+    );
+    expect(res.status).toBe(200);
+    expect(mocks.listSentryImports).toHaveBeenCalledWith(
+      "review",
+      { all: true },
+      undefined,
+      { q: "NullPointer", sort: "events" }
+    );
+  });
+
+  it("ignores invalid sort and overlong q", async () => {
+    mocks.session.mockResolvedValueOnce({ user: { id: "u-1", role: "admin" } });
+    mocks.sentryScopeFor.mockResolvedValueOnce({ all: true });
+    mocks.listSentryImports.mockResolvedValueOnce({ counts: {}, requireApproval: true, items: [] });
+
+    const longQ = "a".repeat(105);
+    const res = await GET(
+      new Request(`http://localhost/api/sentry?q=${longQ}&sort=malicious_sort`)
+    );
+    expect(res.status).toBe(200);
+    expect(mocks.listSentryImports).toHaveBeenCalledWith(
+      undefined,
+      { all: true },
+      undefined,
+      { q: undefined, sort: undefined }
+    );
   });
 });

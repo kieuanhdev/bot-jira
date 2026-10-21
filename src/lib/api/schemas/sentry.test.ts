@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   SentryBulkCreateBodySchema,
   SentryCreateBodySchema,
+  SentryQuerySchema,
   SentryRetryBodySchema,
   SentryReviewBodySchema,
 } from "./sentry";
@@ -49,3 +50,40 @@ describe("SentryBulkCreateBodySchema", () => {
     expect(SentryBulkCreateBodySchema.safeParse({ confirm: 1 }).success).toBe(false);
   });
 });
+
+describe("SentryQuerySchema", () => {
+  it("accepts valid q and sort", () => {
+    const r = SentryQuerySchema.safeParse({ q: "  crash error  ", sort: "events" });
+    expect(r.success).toBe(true);
+    expect(r.data).toEqual({ q: "crash error", sort: "events" });
+
+    const rHot = SentryQuerySchema.safeParse({ sort: "hot" });
+    expect(rHot.success).toBe(true);
+    expect(rHot.data).toEqual({ q: undefined, sort: "hot" });
+  });
+
+  it("normalizes empty or whitespace q to undefined", () => {
+    const r = SentryQuerySchema.safeParse({ q: "   ", sort: "recent" });
+    expect(r.success).toBe(true);
+    expect(r.data).toEqual({ q: undefined, sort: "recent" });
+  });
+
+  it("ignores q when over 100 characters", () => {
+    const r = SentryQuerySchema.safeParse({ q: "a".repeat(101), sort: "first" });
+    expect(r.success).toBe(true);
+    expect(r.data).toEqual({ q: undefined, sort: "first" });
+  });
+
+  it("ignores invalid sort and falls back to undefined", () => {
+    const r = SentryQuerySchema.safeParse({ q: "test", sort: "invalid" });
+    expect(r.success).toBe(true);
+    expect(r.data).toEqual({ q: "test", sort: undefined });
+  });
+
+  it("handles empty object", () => {
+    const r = SentryQuerySchema.safeParse({});
+    expect(r.success).toBe(true);
+    expect(r.data).toEqual({ q: undefined, sort: undefined });
+  });
+});
+

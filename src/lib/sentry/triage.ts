@@ -32,9 +32,24 @@ export function triageIssue({ level, title }: Input): Triage {
 
 const TIER_ORDER: Record<TriageTier, number> = { critical: 0, normal: 1, noise: 2 };
 
-/** Real problems first, then by volume, keeping the incoming (recency) order on ties. */
-export function compareTriage(a: Input & { eventCount: number | null }, b: Input & { eventCount: number | null }) {
-  const byTier = TIER_ORDER[triageIssue(a).tier] - TIER_ORDER[triageIssue(b).tier];
+/** Real problems first, then by hot spike within critical/normal, then by volume, keeping the incoming (recency) order on ties. */
+export function compareTriage(
+  a: Input & { eventCount: number | null; hot?: boolean; isHot?: boolean },
+  b: Input & { eventCount: number | null; hot?: boolean; isHot?: boolean }
+) {
+  const tierA = triageIssue(a).tier;
+  const tierB = triageIssue(b).tier;
+  const byTier = TIER_ORDER[tierA] - TIER_ORDER[tierB];
   if (byTier !== 0) return byTier;
+
+  // Hot issues go first within critical or normal tiers
+  if (tierA !== "noise") {
+    const hotA = Boolean(a.isHot ?? a.hot);
+    const hotB = Boolean(b.isHot ?? b.hot);
+    if (hotA !== hotB) {
+      return hotA ? -1 : 1;
+    }
+  }
+
   return (b.eventCount ?? 0) - (a.eventCount ?? 0);
 }

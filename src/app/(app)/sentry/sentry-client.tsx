@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { replaceUrlState } from "@/lib/url-state";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bug, CheckCircle2, Inbox, RefreshCw, Siren, Sparkles } from "lucide-react";
+import { Bug, CheckCircle2, Inbox, RefreshCw, Search, Siren, Sparkles } from "lucide-react";
 import { api, getErrorMessage } from "@/lib/api-client";
 import { meKeys, sentryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
@@ -30,9 +30,12 @@ import {
 } from "./sentry-row";
 import { SentryFilterTabs } from "./sentry-filter-tabs";
 import { SentryProjectTabs } from "./sentry-project-tabs";
+import { SentryStats } from "./sentry-stats";
+import { SentryToolbar, type SentrySort } from "./sentry-toolbar";
 import { SentryBulkBar } from "./sentry-bulk-bar";
 import { SentryCreateDialog } from "./sentry-create-dialog";
 import { SentryBulkCreateDialog } from "./sentry-bulk-create-dialog";
+import type { SentryStats as SentryStatsData } from "@/lib/sentry/stats";
 
 export type { SentryRowItem, SentryFilter, RowState };
 
@@ -64,6 +67,15 @@ export function SentryClient() {
   const rawProject = searchParams.get("project")?.trim().toUpperCase() || "";
   const selectedProject = rawProject;
 
+  const rawQ = searchParams.get("q")?.trim() || "";
+  const rawSort = searchParams.get("sort")?.trim() || "";
+  const defaultSort: SentrySort = filter === "review" ? "triage" : "recent";
+  const sort: SentrySort =
+    rawSort === "events" || rawSort === "first" || rawSort === "recent" || rawSort === "triage" || rawSort === "hot"
+      ? (rawSort as SentrySort)
+      : defaultSort;
+  const q = rawQ;
+
   const [page, setPage] = useState(1);
   const [view, setView] = useState<TriageView>("actionable");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -78,17 +90,42 @@ export function SentryClient() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tone: FeedbackTone; text: string } | null>(null);
 
-  const queryUrl = `/api/sentry?state=${FILTER_STATES[filter]}${
-    selectedProject ? `&project=${encodeURIComponent(selectedProject)}` : ""
-  }`;
+  const backendSort =
+    sort === "events" || sort === "first" || sort === "recent" || sort === "hot" ? sort : "recent";
+  const queryUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("state", FILTER_STATES[filter]);
+    if (selectedProject) params.set("project", selectedProject);
+    if (q) params.set("q", q);
+    if (backendSort !== "recent") params.set("sort", backendSort);
+    return `/api/sentry?${params.toString()}`;
+  }, [filter, selectedProject, q, backendSort]);
 
   const query = useQuery({
-    queryKey: sentryKeys.list(filter, selectedProject || "all"),
+    queryKey: sentryKeys.list(
+      filter,
+      selectedProject || "all",
+      q,
+      backendSort !== "recent" ? backendSort : ""
+    ),
     queryFn: () =>
       api<{ counts: Partial<Record<RowState, number>>; requireApproval: boolean; items: SentryRowItem[] }>(
         queryUrl
       ),
     refetchInterval: (q) => ((q.state.data?.counts.approved ?? 0) > 0 ? 5_000 : 30_000),
+  });
+
+  const statsQueryUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (selectedProject) params.set("project", selectedProject);
+    const qs = params.toString();
+    return `/api/sentry/stats${qs ? `?${qs}` : ""}`;
+  }, [selectedProject]);
+
+  const statsQuery = useQuery({
+    queryKey: sentryKeys.stats(selectedProject || "all"),
+    queryFn: () => api<SentryStatsData>(statsQueryUrl),
+    refetchInterval: 30_000,
   });
 
   const counts = query.data?.counts ?? {};
@@ -105,8 +142,21 @@ export function SentryClient() {
         : view === "noise"
           ? noiseItems
           : allItems.filter((r) => triageIssue(r).tier !== "noise");
+    if (sort === "recent" || sort === "events" || sort === "first") {
+      return pool;
+    }
+    if (sort === "hot") {
+      return [...pool].sort((a, b) => {
+        const hotA = Boolean(a.isHot);
+        const hotB = Boolean(b.isHot);
+        if (hotA !== hotB) return hotA ? -1 : 1;
+        const deltaDiff = (b.countDelta24h ?? 0) - (a.countDelta24h ?? 0);
+        if (deltaDiff !== 0) return deltaDiff;
+        return (b.eventCount ?? 0) - (a.eventCount ?? 0);
+      });
+    }
     return [...pool].sort(compareTriage);
-  }, [allItems, noiseItems, triaged, view]);
+  }, [allItems, noiseItems, triaged, view, sort]);
 
   const visibleSelected = useMemo(() => items.filter((r) => selected.has(r.id)), [items, selected]);
   const selectable = filter === "review" || filter === "rejected";
@@ -115,10 +165,21 @@ export function SentryClient() {
   const paginatedItems = useMemo(() => items.slice((page - 1) * 50, page * 50), [items, page]);
   const allPageSelected = paginatedItems.length > 0 && paginatedItems.every((r) => selected.has(r.id));
 
-  const updateUrl = (nextFilter: SentryFilter, nextProject: string) => {
+  const updateUrl = (
+    nextFilter: SentryFilter,
+    nextProject: string,
+    nextQ: string = q,
+    nextSort: SentrySort = sort
+  ) => {
     const params = new URLSearchParams();
     if (nextFilter !== "review") params.set("filter", nextFilter);
     if (nextProject) params.set("project", nextProject);
+    const qClean = nextQ.trim();
+    if (qClean) params.set("q", qClean);
+    const defaultForNext: SentrySort = nextFilter === "review" ? "triage" : "recent";
+    if (nextSort && nextSort !== defaultForNext) {
+      params.set("sort", nextSort);
+    }
     const qs = params.toString();
     replaceUrlState(qs ? `/sentry?${qs}` : "/sentry");
   };
@@ -138,13 +199,25 @@ export function SentryClient() {
   const changeFilter = (next: SentryFilter) => {
     setPage(1);
     setSelected(new Set());
-    updateUrl(next, selectedProject);
+    updateUrl(next, selectedProject, q, sort);
   };
 
   const changeProject = (nextProject: string) => {
     setPage(1);
     setSelected(new Set());
-    updateUrl(filter, nextProject);
+    updateUrl(filter, nextProject, q, sort);
+  };
+
+  const changeQ = (nextQ: string) => {
+    setPage(1);
+    setSelected(new Set());
+    updateUrl(filter, selectedProject, nextQ, sort);
+  };
+
+  const changeSort = (nextSort: SentrySort) => {
+    setPage(1);
+    setSelected(new Set());
+    updateUrl(filter, selectedProject, q, nextSort);
   };
 
   const refresh = () => {
@@ -247,10 +320,16 @@ export function SentryClient() {
             variant="outline"
             size="sm"
             className="cursor-pointer gap-1.5"
-            disabled={query.isFetching}
-            onClick={() => query.refetch()}
+            disabled={query.isFetching || statsQuery.isFetching}
+            onClick={() => {
+              query.refetch();
+              statsQuery.refetch();
+            }}
           >
-            <RefreshCw className={cn("h-4 w-4", query.isFetching && "animate-spin")} aria-hidden="true" />
+            <RefreshCw
+              className={cn("h-4 w-4", (query.isFetching || statsQuery.isFetching) && "animate-spin")}
+              aria-hidden="true"
+            />
             Làm mới
           </Button>
         }
@@ -262,12 +341,38 @@ export function SentryClient() {
         isAdmin={isAdmin}
       />
 
+      <SentryStats
+        stats={statsQuery.data}
+        isLoading={statsQuery.isLoading}
+        filter={filter}
+        view={view}
+        sort={sort}
+        onSelectReview={() => changeFilter("review")}
+        onSelectCritical={() => {
+          changeFilter("review");
+          setView("actionable");
+        }}
+        onSelectHot={() => {
+          changeFilter("review");
+          changeSort("hot");
+        }}
+      />
+
       <SentryFilterTabs
         filter={filter}
         onChange={changeFilter}
         counts={counts}
         isLoading={query.isLoading}
         isAdmin={isAdmin}
+      />
+
+      <SentryToolbar
+        q={q}
+        onSearchChange={changeQ}
+        sort={sort}
+        onSortChange={changeSort}
+        isReviewTab={filter === "review"}
+        disabled={query.isLoading}
       />
 
       {feedback && (
@@ -346,15 +451,33 @@ export function SentryClient() {
           <ErrorState message={getErrorMessage(query.error)} onRetry={() => query.refetch()} />
         }
         emptyFallback={
-          <EmptyState
-            icon={filter === "problem" ? CheckCircle2 : Inbox}
-            {...(triaged && allItems.length > 0
-              ? {
-                  title: "Không có issue trong nhóm này",
-                  hint: "Chuyển sang nhóm khác để xem các issue còn lại.",
-                }
-              : EMPTY[filter])}
-          />
+          q ? (
+            <EmptyState
+              icon={Search}
+              title={`Không có kết quả cho "${q}"`}
+              hint="Thử tìm kiếm bằng từ khóa khác hoặc xóa ô tìm kiếm."
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="cursor-pointer"
+                  onClick={() => changeQ("")}
+                >
+                  Xóa tìm kiếm
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={filter === "problem" ? CheckCircle2 : Inbox}
+              {...(triaged && allItems.length > 0
+                ? {
+                    title: "Không có issue trong nhóm này",
+                    hint: "Chuyển sang nhóm khác để xem các issue còn lại.",
+                  }
+                : EMPTY[filter])}
+            />
+          )
         }
       >
         <Card className="overflow-hidden">
@@ -376,7 +499,7 @@ export function SentryClient() {
                   aria-label="Chọn tất cả issue đang hiển thị trên trang này"
                 />
               )}
-              <span>Issue Sentry{triaged ? " · lỗi nghiêm trọng xếp trước" : ""}</span>
+              <span>Issue Sentry{triaged && sort === "triage" ? " · lỗi nghiêm trọng xếp trước" : ""}</span>
             </div>
             <span>Thao tác</span>
           </div>

@@ -399,6 +399,8 @@ function row(overrides: Partial<Row> = {}): Row {
     level: null,
     permalinkUrl: null,
     eventCount: null,
+    countBaseline: null,
+    countBaselineAt: null,
     firstSeen: null,
     lastSeen: null,
     targetProject: null,

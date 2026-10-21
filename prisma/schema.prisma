@@ -497,6 +497,8 @@ model SentryIssueImported {
   level         String?
   permalinkUrl  String?
   eventCount    Int?
+  countBaseline   Int?
+  countBaselineAt DateTime?
   firstSeen     DateTime?
   lastSeen      DateTime?
   targetProject String?
