@@ -52,6 +52,10 @@ vi.mock("@/lib/issues/cache", () => ({
   upsertJiraIssue: vi.fn(),
 }));
 
+vi.mock("@/lib/sentry/enrich", () => ({
+  enrichSentryRows: vi.fn().mockResolvedValue({ enriched: 0, skipped: 0 }),
+}));
+
 vi.mock("@/lib/sentry/review-queue", () => ({
   seedSentryIssue: vi.fn(),
 }));
@@ -401,6 +405,11 @@ function row(overrides: Partial<Row> = {}): Row {
     eventCount: null,
     countBaseline: null,
     countBaselineAt: null,
+    culprit: null,
+    userCount: null,
+    release: null,
+    environment: null,
+    enrichedAt: null,
     firstSeen: null,
     lastSeen: null,
     targetProject: null,

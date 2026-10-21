@@ -15,6 +15,8 @@ export type SentryIssueLike = {
   permalinkUrl?: string;
   level?: string;
   count?: number | string;
+  culprit?: string;
+  userCount?: number | string;
   firstSeen?: string;
   lastSeen?: string;
   project?: { slug?: string };
@@ -43,6 +45,8 @@ export function sentrySnapshot(issue: SentryIssueLike) {
     ...(issue.level ? { level: issue.level.toLowerCase() } : {}),
     ...(issue.permalinkUrl ? { permalinkUrl: issue.permalinkUrl } : {}),
     ...(toCount(issue.count) !== null ? { eventCount: toCount(issue.count) } : {}),
+    ...(issue.culprit ? { culprit: issue.culprit.slice(0, 300) } : {}),
+    ...(toCount(issue.userCount) !== null ? { userCount: toCount(issue.userCount) } : {}),
     ...(toDate(issue.firstSeen) ? { firstSeen: toDate(issue.firstSeen) } : {}),
     ...(toDate(issue.lastSeen) ? { lastSeen: toDate(issue.lastSeen) } : {}),
   };

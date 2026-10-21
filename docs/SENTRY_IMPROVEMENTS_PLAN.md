@@ -102,14 +102,30 @@ Sau deploy, các dòng cũ chưa có baseline nên chưa có cờ nào trong 24h
 
 ---
 
-## 4. Quy trình thực thi
+## Phase 4: Ngăn chi tiết issue (đã triển khai)
+
+- `GET /api/sentry/[id]/detail` đọc event mới nhất (`getLatestEvent`) và rút gọn bằng `digestSentryEvent` (đã lọc bí mật và dữ liệu cá nhân). Không lưu DB, kiểm tra scope bằng `assertSentryRowAccess`.
+- `sentry-detail-sheet.tsx`: drawer gồm exception, vị trí gây lỗi, stack trace trong app, thẻ (release, môi trường, OS, trình duyệt), request URL, nút Tạo task / Bỏ qua / Mở trên Sentry. Có trạng thái loading, thiếu token, lỗi và thử lại.
+- Dòng issue có nút "Chi tiết".
+
+## Phase 5: Thông tin trên dòng + bộ lọc (đã triển khai)
+
+- Schema: `culprit`, `userCount`, `release`, `environment`, `enrichedAt` (+ index `release`). Migration `20261021120000_sentry_issue_context`.
+- `culprit`/`userCount` lấy từ issue list khi poll. `release`/`environment` lấy từ event mới nhất bởi bước enrich cuối job `sentry-import` (`src/lib/sentry/enrich.ts`): tối đa 15 dòng review mỗi lần, timeout 5s, lỗi hoặc thiếu token thì đánh dấu `enrichedAt` và thử lại sau 6 giờ.
+- `GET /api/sentry` nhận thêm `release`, `env`, `level`, `since` (1h/24h/7d) và trả `facets` (danh sách release/môi trường kèm số lượng, không bị ảnh hưởng bởi chính bộ lọc đang chọn).
+- UI: hàng bộ lọc (phiên bản, môi trường, mức độ, thời điểm) đồng bộ lên URL; dòng hiển thị chip release/môi trường, số người dùng, culprit; thời gian "lần cuối" dùng tiếng Việt.
+- Lưu ý: dòng cũ được điền release/môi trường dần (khoảng 15 dòng mỗi 5 phút).
+
+---
+
+## Quy trình thực thi
 
 - Claude lập kế hoạch và review; phần code giao agy worker, mỗi phase một worker.
 - Sau mỗi phase chạy lint, typecheck và test của dự án; chỉ merge khi tất cả pass.
 - Không push, không deploy, không áp migration lên DB nếu chưa được developer duyệt.
 - Chỉ commit khi developer yêu cầu.
 
-## 5. Câu hỏi cần chốt
+## Câu hỏi cần chốt
 
 1. Ngưỡng tăng nóng (≥ 50 event và ≥ 50% trong 24h) có hợp lý với lưu lượng thực tế không?
 2. Làm Phase 1 riêng hay gộp 1+2 trong một PR?

@@ -1,11 +1,23 @@
 "use client";
 
-import { CheckCircle2, ExternalLink, Flame, Lightbulb, Loader2, RefreshCw, RotateCcw, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  ExternalLink,
+  Eye,
+  Flame,
+  Lightbulb,
+  Loader2,
+  RefreshCw,
+  RotateCcw,
+  Tag,
+  Users,
+  XCircle,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { maskSecrets } from "@/lib/admin/mask-secrets";
-import { cn, timeAgo, formatNumber } from "@/lib/utils";
+import { cn, formatNumber, formatRelative } from "@/lib/utils";
 import { triageIssue, type TriageTier } from "@/lib/sentry/triage";
 
 export type RowState = "review" | "approved" | "created" | "rejected" | "failed" | "ignored";
@@ -19,6 +31,10 @@ export type SentryRowItem = {
   level: string | null;
   permalinkUrl: string | null;
   eventCount: number | null;
+  culprit?: string | null;
+  userCount?: number | null;
+  release?: string | null;
+  environment?: string | null;
   countBaseline?: number | null;
   countBaselineAt?: string | null;
   countDelta24h?: number;
@@ -94,6 +110,7 @@ export interface SentryRowProps {
   isDecidingApprove?: boolean;
   isAdmin?: boolean;
   onToggleSelect: (checked: boolean) => void;
+  onOpenDetail?: () => void;
   onApprove: () => void;
   onReject: () => void;
   onReopen: () => void;
@@ -109,6 +126,7 @@ export function SentryRow({
   isDecidingApprove = false,
   isAdmin = false,
   onToggleSelect,
+  onOpenDetail,
   onApprove,
   onReject,
   onReopen,
@@ -190,13 +208,36 @@ export function SentryRow({
             {row.eventCount !== null && (
               <span className="font-semibold text-foreground">{formatNumber(row.eventCount)} lần xảy ra</span>
             )}
-            <span>lần cuối {timeAgo(row.lastSeen ?? row.createdAt)}</span>
+            <span>lần cuối {formatRelative(row.lastSeen ?? row.createdAt, { locale: "vi" }).toLowerCase()}</span>
             {row.reviewedBy && row.reviewedAt && (
               <span>
-                · {row.reviewedBy} quyết định {timeAgo(row.reviewedAt)}
+                · {row.reviewedBy} quyết định {formatRelative(row.reviewedAt, { locale: "vi" }).toLowerCase()}
               </span>
             )}
           </div>
+
+          {(row.release || row.environment || (row.userCount ?? 0) > 0 || row.culprit) && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              {row.release && (
+                <Badge variant="secondary" className="gap-1 font-mono" title="Phiên bản phát hành">
+                  <Tag className="h-3 w-3" aria-hidden="true" />
+                  {row.release}
+                </Badge>
+              )}
+              {row.environment && <Badge variant="secondary">{row.environment}</Badge>}
+              {(row.userCount ?? 0) > 0 && (
+                <span className="inline-flex items-center gap-1" title="Người dùng bị ảnh hưởng">
+                  <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                  {formatNumber(row.userCount ?? 0)} người dùng
+                </span>
+              )}
+              {row.culprit && (
+                <span className="max-w-full truncate font-mono" title={row.culprit}>
+                  {row.culprit}
+                </span>
+              )}
+            </div>
+          )}
 
           {error && (row.state === "failed" || row.state === "ignored" || row.state === "approved") && (
             <pre className="mt-1 max-h-24 overflow-x-auto whitespace-pre-wrap rounded bg-destructive/10 p-2 font-mono text-2xs text-destructive">
@@ -207,6 +248,18 @@ export function SentryRow({
       </div>
 
       <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+        {onOpenDetail && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="cursor-pointer gap-1.5 text-muted-foreground"
+            onClick={onOpenDetail}
+            aria-label={`Xem chi tiết issue ${row.shortId ?? row.sentryIssueId}`}
+          >
+            <Eye className="h-4 w-4" aria-hidden="true" />
+            Chi tiết
+          </Button>
+        )}
         {row.state === "review" && (
           <>
             <Button

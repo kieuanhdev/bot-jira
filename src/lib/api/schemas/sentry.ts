@@ -32,7 +32,23 @@ export const SentryBulkCreateBodySchema = z.looseObject({
 export const SENTRY_SORT_OPTIONS = ["recent", "events", "first", "hot"] as const;
 export type SentrySortOption = (typeof SENTRY_SORT_OPTIONS)[number];
 
+export const SENTRY_LEVEL_OPTIONS = ["fatal", "error", "warning", "info"] as const;
+export const SENTRY_SINCE_OPTIONS = ["1h", "24h", "7d"] as const;
+
+const optionalTrimmed = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .transform((v) => v.trim())
+    .transform((v) => (v.length > 0 ? v : undefined))
+    .optional()
+    .catch(undefined);
+
 export const SentryQuerySchema = z.object({
+  release: optionalTrimmed(120),
+  environment: optionalTrimmed(60),
+  level: z.enum(SENTRY_LEVEL_OPTIONS).optional().catch(undefined),
+  since: z.enum(SENTRY_SINCE_OPTIONS).optional().catch(undefined),
   q: z
     .string()
     .max(100)

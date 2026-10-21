@@ -56,6 +56,7 @@ vi.mock("@/lib/prisma", () => ({
       upsert: vi.fn().mockResolvedValue({}),
     },
     sentryIssueImported: {
+      findUnique: vi.fn().mockResolvedValue(null),
       upsert: vi.fn().mockResolvedValue({}),
     },
     ciBuildStatus: {

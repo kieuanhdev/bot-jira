@@ -32,6 +32,16 @@ import { SentryFilterTabs } from "./sentry-filter-tabs";
 import { SentryProjectTabs } from "./sentry-project-tabs";
 import { SentryStats } from "./sentry-stats";
 import { SentryToolbar, type SentrySort } from "./sentry-toolbar";
+import {
+  SentryFilters,
+  LEVEL_OPTIONS,
+  SINCE_OPTIONS,
+  NO_FILTERS,
+  countActiveFilters,
+  type SentryContextFilters,
+  type SentryFacets,
+} from "./sentry-filters";
+import { SentryDetailSheet } from "./sentry-detail-sheet";
 import { SentryBulkBar } from "./sentry-bulk-bar";
 import { SentryCreateDialog } from "./sentry-create-dialog";
 import { SentryBulkCreateDialog } from "./sentry-bulk-create-dialog";
@@ -76,6 +86,17 @@ export function SentryClient() {
       : defaultSort;
   const q = rawQ;
 
+  const rawLevel = searchParams.get("level")?.trim() || "";
+  const rawSince = searchParams.get("since")?.trim() || "";
+  const filters: SentryContextFilters = {
+    release: searchParams.get("release")?.trim() || "",
+    env: searchParams.get("env")?.trim() || "",
+    level: LEVEL_OPTIONS.some((o) => o.value === rawLevel) ? rawLevel : "",
+    since: SINCE_OPTIONS.some((o) => o.value === rawSince) ? rawSince : "",
+  };
+  const activeFilterCount = countActiveFilters(filters);
+  const filtersKey = activeFilterCount > 0 ? [filters.release, filters.env, filters.level, filters.since].join("|") : "";
+
   const [page, setPage] = useState(1);
   const [view, setView] = useState<TriageView>("actionable");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -86,6 +107,9 @@ export function SentryClient() {
 
   // Bulk create dialog (for multiple rows)
   const [bulkRows, setBulkRows] = useState<SentryRowItem[] | null>(null);
+
+  // Detail drawer
+  const [detailRow, setDetailRow] = useState<SentryRowItem | null>(null);
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tone: FeedbackTone; text: string } | null>(null);
@@ -98,18 +122,29 @@ export function SentryClient() {
     if (selectedProject) params.set("project", selectedProject);
     if (q) params.set("q", q);
     if (backendSort !== "recent") params.set("sort", backendSort);
+    if (filters.release) params.set("release", filters.release);
+    if (filters.env) params.set("env", filters.env);
+    if (filters.level) params.set("level", filters.level);
+    if (filters.since) params.set("since", filters.since);
     return `/api/sentry?${params.toString()}`;
-  }, [filter, selectedProject, q, backendSort]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, selectedProject, q, backendSort, filtersKey]);
 
   const query = useQuery({
     queryKey: sentryKeys.list(
       filter,
       selectedProject || "all",
       q,
-      backendSort !== "recent" ? backendSort : ""
+      backendSort !== "recent" ? backendSort : "",
+      filtersKey
     ),
     queryFn: () =>
-      api<{ counts: Partial<Record<RowState, number>>; requireApproval: boolean; items: SentryRowItem[] }>(
+      api<{
+        counts: Partial<Record<RowState, number>>;
+        requireApproval: boolean;
+        items: SentryRowItem[];
+        facets?: SentryFacets;
+      }>(
         queryUrl
       ),
     refetchInterval: (q) => ((q.state.data?.counts.approved ?? 0) > 0 ? 5_000 : 30_000),
@@ -169,7 +204,8 @@ export function SentryClient() {
     nextFilter: SentryFilter,
     nextProject: string,
     nextQ: string = q,
-    nextSort: SentrySort = sort
+    nextSort: SentrySort = sort,
+    nextFilters: SentryContextFilters = filters
   ) => {
     const params = new URLSearchParams();
     if (nextFilter !== "review") params.set("filter", nextFilter);
@@ -180,6 +216,10 @@ export function SentryClient() {
     if (nextSort && nextSort !== defaultForNext) {
       params.set("sort", nextSort);
     }
+    if (nextFilters.release) params.set("release", nextFilters.release);
+    if (nextFilters.env) params.set("env", nextFilters.env);
+    if (nextFilters.level) params.set("level", nextFilters.level);
+    if (nextFilters.since) params.set("since", nextFilters.since);
     const qs = params.toString();
     replaceUrlState(qs ? `/sentry?${qs}` : "/sentry");
   };
@@ -218,6 +258,18 @@ export function SentryClient() {
     setPage(1);
     setSelected(new Set());
     updateUrl(filter, selectedProject, q, nextSort);
+  };
+
+  const changeContextFilter = (key: keyof SentryContextFilters, value: string) => {
+    setPage(1);
+    setSelected(new Set());
+    updateUrl(filter, selectedProject, q, sort, { ...filters, [key]: value });
+  };
+
+  const clearContextFilters = () => {
+    setPage(1);
+    setSelected(new Set());
+    updateUrl(filter, selectedProject, q, sort, NO_FILTERS);
   };
 
   const refresh = () => {
@@ -379,6 +431,14 @@ export function SentryClient() {
         disabled={query.isLoading}
       />
 
+      <SentryFilters
+        filters={filters}
+        facets={query.data?.facets}
+        onChange={changeContextFilter}
+        onClear={clearContextFilters}
+        disabled={query.isLoading}
+      />
+
       {feedback && (
         <FeedbackBanner tone={feedback.tone}>
           <div className="flex flex-col gap-1">
@@ -455,19 +515,19 @@ export function SentryClient() {
           <ErrorState message={getErrorMessage(query.error)} onRetry={() => query.refetch()} />
         }
         emptyFallback={
-          q ? (
+          q || activeFilterCount > 0 ? (
             <EmptyState
               icon={Search}
-              title={`Không có kết quả cho "${q}"`}
-              hint="Thử tìm kiếm bằng từ khóa khác hoặc xóa ô tìm kiếm."
+              title={q ? `Không có kết quả cho "${q}"` : "Không có issue khớp bộ lọc"}
+              hint="Thử từ khóa khác hoặc nới lỏng bộ lọc."
               action={
                 <Button
                   variant="outline"
                   size="sm"
                   className="cursor-pointer"
-                  onClick={() => changeQ("")}
+                  onClick={() => updateUrl(filter, selectedProject, "", sort, NO_FILTERS)}
                 >
-                  Xóa tìm kiếm
+                  Xóa tìm kiếm và bộ lọc
                 </Button>
               }
             />
@@ -519,6 +579,7 @@ export function SentryClient() {
                 isBusy={busyId === row.id}
                 isAdmin={isAdmin}
                 onToggleSelect={(checked) => toggleSelectOne(row.id, checked)}
+                onOpenDetail={() => setDetailRow(row)}
                 onApprove={() => startCreate([row])}
                 onReject={() => decide.mutate({ ids: [row.id], decision: "reject" })}
                 onReopen={() => decide.mutate({ ids: [row.id], decision: "reopen" })}
@@ -538,6 +599,23 @@ export function SentryClient() {
           </div>
         </Card>
       </AsyncState>
+
+      <SentryDetailSheet
+        row={detailRow}
+        open={detailRow !== null}
+        onOpenChange={(open) => {
+          if (!open) setDetailRow(null);
+        }}
+        isBusy={busy}
+        onApprove={(row) => {
+          setDetailRow(null);
+          startCreate([row]);
+        }}
+        onReject={(row) => {
+          setDetailRow(null);
+          decide.mutate({ ids: [row.id], decision: "reject" });
+        }}
+      />
 
       {formRow && (
         <SentryCreateDialog

@@ -10,6 +10,7 @@ import type { WorkerLog } from "../guard";
 import type { JiraIssue } from "@/lib/jira/types";
 import { seedSentryIssue } from "@/lib/sentry/review-queue";
 import { hasInflightSentryOp } from "@/lib/sentry/create-from-form";
+import { enrichSentryRows } from "@/lib/sentry/enrich";
 
 import { sentryLabel, isBackoffElapsed } from "@/lib/sentry/idempotency";
 
@@ -301,6 +302,9 @@ export async function runSentryImport(): Promise<WorkerLog> {
       errors.push(`${row.shortId ?? row.sentryIssueId}: ${message}`);
     }
   }
+
+  // 3. Enrich: release/environment for review rows. Last, so it can never delay filing.
+  await enrichSentryRows().catch(() => undefined);
 
   return {
     ok: discoverError === null,

@@ -9,7 +9,7 @@ export { listSentryImports };
 /**
  * View of the Sentry import queue, scoped to the projects the authenticated
  * user is allowed to access (or all projects for admins).
- * Accepts `?state=a,b`, optional `?project=KEY`, `?q=TERM`, and `?sort=MODE`.
+ * Accepts `?state=a,b`, optional `?project=KEY`, `?q=TERM`, `?sort=MODE`, and the filters `?release=`, `?env=`, `?level=`, `?since=1h|24h|7d`.
  */
 export async function GET(req: Request) {
   const session = await getSession();
@@ -24,7 +24,14 @@ export async function GET(req: Request) {
 
   const rawQ = url.searchParams.get("q") ?? undefined;
   const rawSort = url.searchParams.get("sort") ?? undefined;
-  const parsed = SentryQuerySchema.safeParse({ q: rawQ, sort: rawSort });
+  const parsed = SentryQuerySchema.safeParse({
+    q: rawQ,
+    sort: rawSort,
+    release: url.searchParams.get("release") ?? undefined,
+    environment: url.searchParams.get("env") ?? undefined,
+    level: url.searchParams.get("level") ?? undefined,
+    since: url.searchParams.get("since") ?? undefined,
+  });
   const opts = parsed.success ? parsed.data : undefined;
 
   const data = await listSentryImports(stateParam, scope, projectParam, opts);

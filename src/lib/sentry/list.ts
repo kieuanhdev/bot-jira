@@ -10,10 +10,27 @@ export { buildProjectCondition };
 
 const STATES: ImportState[] = ["review", "pending", "approved", "created", "rejected", "failed", "ignored"];
 
+export const SENTRY_SINCE_WINDOWS_MS = {
+  "1h": 60 * 60 * 1000,
+  "24h": 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+} as const;
+
 export type ListSentryOpts = {
   q?: string;
   sort?: "recent" | "events" | "first" | "hot";
+  release?: string;
+  environment?: string;
+  level?: string;
+  /** Only issues last seen within this window. */
+  since?: keyof typeof SENTRY_SINCE_WINDOWS_MS;
 };
+
+const EMPTY_FACETS = { releases: [], environments: [] } as {
+  releases: { value: string; count: number }[];
+  environments: { value: string; count: number }[];
+};
+const MAX_FACET_OPTIONS = 30;
 
 export async function listSentryImports(
   stateParam?: string,
@@ -38,6 +55,7 @@ export async function listSentryImports(
       counts: {},
       requireApproval: env.sentryImportRequireApproval,
       items: [],
+      facets: EMPTY_FACETS,
     };
   }
 
@@ -57,11 +75,26 @@ export async function listSentryImports(
       }
     : undefined;
 
+  const filterConditions: Prisma.SentryIssueImportedWhereInput[] = [];
+  if (opts?.release) filterConditions.push({ release: opts.release });
+  if (opts?.environment) filterConditions.push({ environment: opts.environment });
+  if (opts?.level) filterConditions.push({ level: opts.level });
+  if (opts?.since && SENTRY_SINCE_WINDOWS_MS[opts.since]) {
+    filterConditions.push({ lastSeen: { gte: new Date(Date.now() - SENTRY_SINCE_WINDOWS_MS[opts.since]) } });
+  }
+
   const conditions: Prisma.SentryIssueImportedWhereInput[] = [];
   if (stateCondition) conditions.push(stateCondition);
   if (projectCondition) conditions.push(projectCondition);
   if (searchCondition) conditions.push(searchCondition);
+  conditions.push(...filterConditions);
 
+  // Facet options reflect the visible tab and project, not the other filters,
+  // so picking a release never hides the other releases.
+  const facetConditions = [stateCondition, projectCondition].filter(
+    (c): c is Prisma.SentryIssueImportedWhereInput => Boolean(c)
+  );
+  const facetWhere: Prisma.SentryIssueImportedWhereInput = facetConditions.length > 0 ? { AND: facetConditions } : {};
   const whereClause: Prisma.SentryIssueImportedWhereInput | undefined =
     conditions.length === 0
       ? undefined
@@ -81,7 +114,7 @@ export async function listSentryImports(
           ? [{ eventCount: "desc" }, { lastSeen: { sort: "desc", nulls: "last" } }]
           : [{ lastSeen: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }];
 
-  const [items, grouped] = await Promise.all([
+  const [items, grouped, releaseGroups, environmentGroups] = await Promise.all([
     effectiveRequested.length === 0 && requested.length > 0
       ? Promise.resolve([])
       : prisma.sentryIssueImported.findMany({
@@ -94,7 +127,30 @@ export async function listSentryImports(
       where: groupWhere,
       _count: { _all: true },
     }),
+    prisma.sentryIssueImported.groupBy({
+      by: ["release"],
+      where: { AND: [facetWhere, { release: { not: null } }] },
+      _count: { _all: true },
+      orderBy: { _count: { release: "desc" } },
+      take: MAX_FACET_OPTIONS,
+    }),
+    prisma.sentryIssueImported.groupBy({
+      by: ["environment"],
+      where: { AND: [facetWhere, { environment: { not: null } }] },
+      _count: { _all: true },
+      orderBy: { _count: { environment: "desc" } },
+      take: MAX_FACET_OPTIONS,
+    }),
   ]);
+
+  const facets = {
+    releases: (releaseGroups ?? [])
+      .filter((g) => typeof g.release === "string" && g.release)
+      .map((g) => ({ value: g.release as string, count: g._count._all })),
+    environments: (environmentGroups ?? [])
+      .filter((g) => typeof g.environment === "string" && g.environment)
+      .map((g) => ({ value: g.environment as string, count: g._count._all })),
+  };
 
   const counts: Record<string, number> = {};
   for (const g of grouped) {
@@ -119,6 +175,10 @@ export async function listSentryImports(
       level: r.level,
       permalinkUrl: r.permalinkUrl,
       eventCount: r.eventCount,
+      culprit: r.culprit,
+      userCount: r.userCount,
+      release: r.release,
+      environment: r.environment,
       countBaseline: r.countBaseline,
       countBaselineAt: r.countBaselineAt,
       countDelta24h: spike.delta,
@@ -156,6 +216,7 @@ export async function listSentryImports(
     counts,
     requireApproval: env.sentryImportRequireApproval,
     items: mappedItems,
+    facets,
   };
 
   return JSON.parse(JSON.stringify(result));

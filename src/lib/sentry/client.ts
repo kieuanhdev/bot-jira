@@ -16,6 +16,9 @@ export type SentryIssue = {
   // Sentry's issue list returns the event count as a string.
   count?: number | string;
   userReportCount?: number;
+  culprit?: string;
+  // Distinct users affected; the issue list returns it as a number.
+  userCount?: number | string;
   project?: { id?: number; slug?: string; name?: string };
 };
 

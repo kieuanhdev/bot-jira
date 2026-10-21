@@ -64,7 +64,7 @@ describe("query-keys factory", () => {
     expect(bulkKeys.createMetadata("EPM")).toEqual(["bulk-create-metadata", "EPM"]);
 
     expect(sentryKeys.all).toEqual(["sentry"]);
-    expect(sentryKeys.list("review", "all")).toEqual(["sentry", "list", "review", "all", "", ""]);
+    expect(sentryKeys.list("review", "all")).toEqual(["sentry", "list", "review", "all", "", "", ""]);
     expect(sentryKeys.list("review", "all", "crash", "events")).toEqual([
       "sentry",
       "list",
@@ -72,8 +72,19 @@ describe("query-keys factory", () => {
       "all",
       "crash",
       "events",
+      "",
+    ]);
+    expect(sentryKeys.list("review", "all", "", "", "release=1.2")).toEqual([
+      "sentry",
+      "list",
+      "review",
+      "all",
+      "",
+      "",
+      "release=1.2",
     ]);
     expect(sentryKeys.lists()).toEqual(["sentry", "list"]);
+    expect(sentryKeys.detail("abc")).toEqual(["sentry", "detail", "abc"]);
     expect(sentryKeys.stats()).toEqual(["sentry", "stats", "all"]);
     expect(sentryKeys.stats("EPM")).toEqual(["sentry", "stats", "EPM"]);
     expect(adminKeys.overviewErrors("sentry")).toEqual(["admin", "overview", "errors", "sentry"]);

@@ -265,10 +265,12 @@ export const sentryKeys = {
     state: string = "review",
     project: string = "all",
     q: string = "",
-    sort: string = ""
-  ) => ["sentry", "list", state, project, q, sort] as const,
+    sort: string = "",
+    filters: string = ""
+  ) => ["sentry", "list", state, project, q, sort, filters] as const,
   stats: (project: string = "all") => ["sentry", "stats", project || "all"] as const,
   lists: () => ["sentry", "list"] as const,
+  detail: (id: string) => ["sentry", "detail", id] as const,
 };
 
 export const adminKeys = {

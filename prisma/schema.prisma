@@ -499,6 +499,14 @@ model SentryIssueImported {
   eventCount    Int?
   countBaseline   Int?
   countBaselineAt DateTime?
+  // Context shown on the review row and used by filters. `culprit`/`userCount`
+  // come from the issue list; `release`/`environment` from the latest event
+  // (filled by the enrich step, `enrichedAt` marks the last attempt).
+  culprit         String?
+  userCount       Int?
+  release         String?
+  environment     String?
+  enrichedAt      DateTime?
   firstSeen     DateTime?
   lastSeen      DateTime?
   targetProject String?
@@ -512,6 +520,7 @@ model SentryIssueImported {
 
   @@unique([sentryProject, sentryIssueId])
   @@index([state, lastAttemptAt])
+  @@index([release])
 }
 
 model Notification {

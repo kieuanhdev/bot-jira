@@ -87,3 +87,21 @@ describe("SentryQuerySchema", () => {
   });
 });
 
+
+describe("SentryQuerySchema filters", () => {
+  it("accepts release, environment, level and since", () => {
+    const r = SentryQuerySchema.safeParse({
+      release: " app@2.3.1 ",
+      environment: "production",
+      level: "fatal",
+      since: "24h",
+    });
+    expect(r.data).toMatchObject({ release: "app@2.3.1", environment: "production", level: "fatal", since: "24h" });
+  });
+
+  it("drops invalid level/since and blank strings instead of failing", () => {
+    const r = SentryQuerySchema.safeParse({ release: "  ", environment: "x".repeat(61), level: "boom", since: "1y" });
+    expect(r.success).toBe(true);
+    expect(r.data).toMatchObject({ release: undefined, environment: undefined, level: undefined, since: undefined });
+  });
+});

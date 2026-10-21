@@ -364,4 +364,87 @@ describe("src/lib/sentry/list", () => {
       "item-normal", // not hot, delta=5
     ]);
   });
+
+  describe("context filters and facets", () => {
+    const baseRow = {
+      id: "r1",
+      sentryProject: "mobile",
+      sentryIssueId: "1",
+      shortId: "MOB-1",
+      title: "Crash",
+      level: "fatal",
+      permalinkUrl: null,
+      eventCount: 10,
+      firstSeen: testDate,
+      lastSeen: testDate,
+      targetProject: "EPM",
+      state: "review",
+      attemptCount: 0,
+      createdAt: testDate,
+      culprit: "lib/main.dart in run",
+      userCount: 7,
+      release: "app@2.3.1",
+      environment: "production",
+    };
+
+    it("passes release/environment/level/since to the where clause", async () => {
+      prismaMock.sentryIssueImported.findMany.mockResolvedValueOnce([]);
+      prismaMock.sentryIssueImported.groupBy.mockResolvedValue([]);
+
+      await listSentryImports("review", { all: true }, undefined, {
+        release: "app@2.3.1",
+        environment: "production",
+        level: "fatal",
+        since: "24h",
+      });
+
+      const where = prismaMock.sentryIssueImported.findMany.mock.calls[0][0].where;
+      const flat = JSON.stringify(where);
+      expect(flat).toContain('"release":"app@2.3.1"');
+      expect(flat).toContain('"environment":"production"');
+      expect(flat).toContain('"level":"fatal"');
+      expect(where.AND.some((c: { lastSeen?: { gte: Date } }) => c.lastSeen?.gte instanceof Date)).toBe(true);
+    });
+
+    it("returns context fields on items and facets from groupBy, ignoring null groups", async () => {
+      prismaMock.sentryIssueImported.findMany.mockResolvedValueOnce([baseRow]);
+      prismaMock.sentryIssueImported.groupBy.mockImplementation(async ({ by }: { by: string[] }) => {
+        if (by[0] === "release") return [{ release: "app@2.3.1", _count: { _all: 4 } }, { release: null, _count: { _all: 2 } }];
+        if (by[0] === "environment") return [{ environment: "production", _count: { _all: 5 } }];
+        return [{ state: "review", _count: { _all: 5 } }];
+      });
+
+      const result = await listSentryImports("review", { all: true });
+
+      expect(result.items[0]).toMatchObject({
+        culprit: "lib/main.dart in run",
+        userCount: 7,
+        release: "app@2.3.1",
+        environment: "production",
+      });
+      expect(result.facets).toEqual({
+        releases: [{ value: "app@2.3.1", count: 4 }],
+        environments: [{ value: "production", count: 5 }],
+      });
+      expect(result.counts).toEqual({ review: 5 });
+    });
+
+    it("facet options ignore the active release filter so other releases stay selectable", async () => {
+      prismaMock.sentryIssueImported.findMany.mockResolvedValueOnce([]);
+      prismaMock.sentryIssueImported.groupBy.mockResolvedValue([]);
+
+      await listSentryImports("review", { all: true }, undefined, { release: "app@2.3.1" });
+
+      const releaseCall = prismaMock.sentryIssueImported.groupBy.mock.calls.find(
+        (call: unknown[]) => (call[0] as { by: string[] }).by[0] === "release"
+      );
+      expect(JSON.stringify(releaseCall?.[0].where)).not.toContain('"release":"app@2.3.1"');
+    });
+
+    it("returns empty facets when the requested project is outside the user's scope", async () => {
+      const result = await listSentryImports("review", { all: false, projects: ["EPM"] }, "CICM");
+      expect(result.facets).toEqual({ releases: [], environments: [] });
+      expect(result.items).toEqual([]);
+    });
+  });
 });
