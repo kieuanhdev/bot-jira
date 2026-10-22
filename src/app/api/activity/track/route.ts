@@ -4,9 +4,9 @@ import { recordActivity, type ActivityEventType } from "@/lib/activity/service";
 
 export async function POST(req: NextRequest) {
   try {
-    let body: any = {};
+    let body: Record<string, unknown> = {};
     try {
-      body = await req.json();
+      body = (await req.json()) as Record<string, unknown>;
     } catch {
       // Body empty or malformed
     }

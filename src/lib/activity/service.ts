@@ -181,8 +181,9 @@ export async function getActivityMetrics(): Promise<ActivityMetrics> {
       totalViewsToday,
       totalActionsToday,
     };
-  } catch (err: any) {
-    if (err?.code === "P2021" || err?.message?.includes("does not exist")) {
+  } catch (err) {
+    const e = err as { code?: string; message?: string };
+    if (e?.code === "P2021" || e?.message?.includes("does not exist")) {
       logger.warn({ message: "UserActivity table does not exist in the current database yet." });
       return {
         onlineCount: 0,
@@ -270,8 +271,9 @@ export async function listUserActivities(options: ActivityFilterOptions = {}) {
         totalPages: Math.ceil(total / limit) || 1,
       },
     };
-  } catch (err: any) {
-    if (err?.code === "P2021" || err?.message?.includes("does not exist")) {
+  } catch (err) {
+    const e = err as { code?: string; message?: string };
+    if (e?.code === "P2021" || e?.message?.includes("does not exist")) {
       logger.warn({ message: "UserActivity table does not exist in the current database yet." });
       return {
         items: [],

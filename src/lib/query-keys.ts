@@ -284,3 +284,23 @@ export const adminKeys = {
   activity: (filters?: Record<string, unknown>) => ["admin", "activity", filters ?? {}] as const,
 };
 
+export const myWorkKeys = {
+  all: ["my-work"] as const,
+  summary: () => ["my-work", "summary"] as const,
+  tasks: (role: string, status: string, search: string, page: number) =>
+    ["my-work", "tasks", role, status, search, page] as const,
+  analytics: (weeks: number) => ["my-work", "analytics", weeks] as const,
+  timeline: (days: number) => ["my-work", "timeline", days] as const,
+  activity: (page: number) => ["my-work", "activity", page] as const,
+};
+
+export const agileAnalyticsKeys = {
+  all: ["agile-analytics"] as const,
+  burndown: (projectKey: string, releaseId?: string) =>
+    ["agile-analytics", "burndown", projectKey, releaseId ?? "latest"] as const,
+  cfd: (projectKey: string, days: number) =>
+    ["agile-analytics", "cfd", projectKey, days] as const,
+  releases: (projectKey: string) =>
+    ["agile-analytics", "releases", projectKey] as const,
+};
+

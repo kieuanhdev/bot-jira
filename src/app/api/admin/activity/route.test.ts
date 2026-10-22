@@ -29,9 +29,9 @@ describe("GET /api/admin/activity", () => {
   });
 
   it("returns 403 if user is not admin", async () => {
-    (getSession as any).mockResolvedValueOnce({
+    vi.mocked(getSession).mockResolvedValueOnce({
       user: { id: "user_normal", role: "member" },
-    });
+    } as unknown as Awaited<ReturnType<typeof getSession>>);
 
     const req = new NextRequest("http://localhost:3000/api/admin/activity");
     const res = await GET(req);
@@ -42,9 +42,9 @@ describe("GET /api/admin/activity", () => {
   });
 
   it("returns metrics, activities, and user list for admin", async () => {
-    (getSession as any).mockResolvedValueOnce({
+    vi.mocked(getSession).mockResolvedValueOnce({
       user: { id: "user_admin", role: "admin" },
-    });
+    } as unknown as Awaited<ReturnType<typeof getSession>>);
 
     const mockMetrics = {
       onlineCount: 3,
@@ -52,7 +52,7 @@ describe("GET /api/admin/activity", () => {
       totalViewsToday: 150,
       totalActionsToday: 45,
     };
-    (getActivityMetrics as any).mockResolvedValueOnce(mockMetrics);
+    vi.mocked(getActivityMetrics).mockResolvedValueOnce(mockMetrics);
 
     const mockActivities = {
       items: [
@@ -66,11 +66,11 @@ describe("GET /api/admin/activity", () => {
       ],
       pagination: { page: 1, limit: 25, total: 1, totalPages: 1 },
     };
-    (listUserActivities as any).mockResolvedValueOnce(mockActivities);
+    vi.mocked(listUserActivities).mockResolvedValueOnce(mockActivities);
 
-    (prisma.user.findMany as any).mockResolvedValueOnce([
+    vi.mocked(prisma.user.findMany).mockResolvedValueOnce([
       { id: "u1", displayName: "Dev A", email: "a@test.com", jiraUsername: "deva" },
-    ]);
+    ] as unknown as Awaited<ReturnType<typeof prisma.user.findMany>>);
 
     const req = new NextRequest("http://localhost:3000/api/admin/activity?range=today&page=1");
     const res = await GET(req);

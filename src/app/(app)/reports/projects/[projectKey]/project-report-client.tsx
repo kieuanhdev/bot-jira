@@ -7,8 +7,9 @@ import { TasksTab } from "./tasks-tab";
 import { MembersTab } from "./members-tab";
 import dynamic from "next/dynamic";
 
-// Trends tab pulls in recharts; load it only when opened.
+// Trends and Agile tabs pull in recharts; load on demand.
 const TrendsTab = dynamic(() => import("./trends-tab").then((m) => m.TrendsTab), { ssr: false });
+const AgileTab = dynamic(() => import("./agile-tab").then((m) => m.AgileTab), { ssr: false });
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -27,6 +28,7 @@ import {
   CheckSquare,
   Users,
   TrendingUp,
+  Rocket,
 } from "lucide-react";
 import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -114,6 +116,7 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
     { id: "tasks", label: "Công việc", icon: CheckSquare },
     { id: "members", label: "Thành viên", icon: Users },
     { id: "trends", label: "Xu hướng", icon: TrendingUp },
+    { id: "agile", label: "Agile & Burndown", icon: Rocket },
   ];
 
   const queryClient = useQueryClient();
@@ -440,6 +443,13 @@ export function ProjectReportClient({ projectKey }: ProjectReportClientProps) {
             <TrendsTab
               projectKey={projectKey}
               period={period}
+              versionId={versionId}
+            />
+          )}
+
+          {activeTab === "agile" && (
+            <AgileTab
+              projectKey={projectKey}
               versionId={versionId}
             />
           )}

@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Bug,
   Palette,
+  CheckSquare,
 } from "lucide-react";
 import { UnreadBadge } from "./unread-badge";
 import { FreshnessBanner } from "./freshness-banner";
@@ -46,6 +47,7 @@ const navGroups: NavGroupDef[] = [
   {
     title: "Công việc",
     items: [
+      { href: "/my-work", label: "Việc của tôi", icon: CheckSquare },
       { href: "/board", label: "Bảng công việc", icon: LayoutGrid },
       { href: "/stale", label: "Task cần xử lý", icon: BarChart3 },
       { href: "/watch", label: "Task theo dõi", icon: Eye },

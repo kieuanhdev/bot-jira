@@ -56,7 +56,7 @@ describe("activity service", () => {
 
   describe("recordActivity", () => {
     it("creates userActivity record in prisma", async () => {
-      (prisma.userActivity.create as any).mockResolvedValueOnce({ id: "act_123" });
+      vi.mocked(prisma.userActivity.create).mockResolvedValueOnce({ id: "act_123" } as unknown as Awaited<ReturnType<typeof prisma.userActivity.create>>);
 
       const res = await recordActivity({
         userId: "u1",
@@ -87,7 +87,7 @@ describe("activity service", () => {
     });
 
     it("swallows errors and returns null when db fails", async () => {
-      (prisma.userActivity.create as any).mockRejectedValueOnce(new Error("DB Down"));
+      vi.mocked(prisma.userActivity.create).mockRejectedValueOnce(new Error("DB Down"));
 
       const res = await recordActivity({
         eventType: "action",

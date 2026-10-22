@@ -18,10 +18,10 @@ describe("POST /api/activity/track", () => {
   });
 
   it("extracts session and request data and records activity", async () => {
-    (getSession as any).mockResolvedValueOnce({
+    vi.mocked(getSession).mockResolvedValueOnce({
       user: { id: "user_1", name: "Nguyễn Văn A", email: "a@example.com" },
-    });
-    (recordActivity as any).mockResolvedValueOnce("act_1");
+    } as unknown as Awaited<ReturnType<typeof getSession>>);
+    vi.mocked(recordActivity).mockResolvedValueOnce("act_1");
 
     const req = new NextRequest("http://localhost:3000/api/activity/track", {
       method: "POST",
@@ -58,8 +58,8 @@ describe("POST /api/activity/track", () => {
   });
 
   it("handles unauthenticated requests gracefully", async () => {
-    (getSession as any).mockResolvedValueOnce(null);
-    (recordActivity as any).mockResolvedValueOnce("act_2");
+    vi.mocked(getSession).mockResolvedValueOnce(null);
+    vi.mocked(recordActivity).mockResolvedValueOnce("act_2");
 
     const req = new NextRequest("http://localhost:3000/api/activity/track", {
       method: "POST",

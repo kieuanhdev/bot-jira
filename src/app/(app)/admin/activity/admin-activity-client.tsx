@@ -272,7 +272,7 @@ export function AdminActivityClient() {
             <span className="text-xs font-medium text-muted-foreground">Thời gian:</span>
             <select
               value={selectedRange}
-              onChange={(e) => handleFilterRangeChange(e.target.value as any)}
+              onChange={(e) => handleFilterRangeChange(e.target.value as "today" | "7d" | "30d" | "all")}
               aria-label="Lọc theo thời gian"
               className="h-9 cursor-pointer rounded-lg border border-input bg-background px-3 py-1 text-xs font-medium shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
