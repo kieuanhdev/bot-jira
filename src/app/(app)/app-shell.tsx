@@ -25,7 +25,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import type { AppSession } from "@/lib/session";
-import { isRealAdmin, isImpersonating } from "@/lib/session";
+import { isRealAdmin, isImpersonating } from "@/lib/session-helpers";
 import { ImpersonationBanner } from "@/components/impersonation/impersonation-banner";
 import { UserSwitcherDialog } from "@/components/impersonation/user-switcher-dialog";
 import { UnreadBadge } from "./unread-badge";

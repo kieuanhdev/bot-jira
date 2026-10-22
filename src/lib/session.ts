@@ -66,19 +66,4 @@ export const getSession = cache(async (): Promise<AppSession> => {
   }
 });
 
-export function isAdmin(session?: { user?: { role?: string } } | null): boolean {
-  return session?.user?.role === "admin";
-}
-
-export function isRealAdmin(session?: { user?: { role?: string }; impersonator?: { role?: string } } | null): boolean {
-  return session?.impersonator?.role === "admin" || session?.user?.role === "admin";
-}
-
-export function isImpersonating(session?: unknown): boolean {
-  return Boolean(
-    session &&
-      typeof session === "object" &&
-      "impersonator" in session &&
-      (session as { impersonator?: unknown }).impersonator
-  );
-}
+export { isAdmin, isRealAdmin, isImpersonating } from "./session-helpers";
