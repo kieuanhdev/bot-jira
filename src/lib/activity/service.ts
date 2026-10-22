@@ -84,6 +84,10 @@ export function sanitizePath(rawPath: string): string {
  * Always fail-safe: failures are logged but never throw.
  */
 export async function recordActivity(input: RecordActivityInput): Promise<string | null> {
+  if (!prisma.userActivity) {
+    logger.warn({ message: "prisma.userActivity is not available on current client" });
+    return null;
+  }
   try {
     const safePath = sanitizePath(input.path);
     const row = await prisma.userActivity.create({
@@ -116,6 +120,16 @@ export async function recordActivity(input: RecordActivityInput): Promise<string
  * Returns summary metrics for the admin activity dashboard.
  */
 export async function getActivityMetrics(): Promise<ActivityMetrics> {
+  if (!prisma.userActivity) {
+    logger.warn({ message: "prisma.userActivity is not available on current client" });
+    return {
+      onlineCount: 0,
+      activeUsersToday: 0,
+      totalViewsToday: 0,
+      totalActionsToday: 0,
+    };
+  }
+
   const now = new Date();
   const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -175,6 +189,19 @@ export async function listUserActivities(options: ActivityFilterOptions = {}) {
   const page = Math.max(1, options.page ?? 1);
   const limit = Math.max(1, Math.min(100, options.limit ?? 25));
   const skip = (page - 1) * limit;
+
+  if (!prisma.userActivity) {
+    logger.warn({ message: "prisma.userActivity is not available on current client" });
+    return {
+      items: [],
+      pagination: {
+        page,
+        limit,
+        total: 0,
+        totalPages: 1,
+      },
+    };
+  }
 
   const where: Prisma.UserActivityWhereInput = {};
 
