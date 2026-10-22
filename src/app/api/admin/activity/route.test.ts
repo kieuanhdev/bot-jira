@@ -66,7 +66,9 @@ describe("GET /api/admin/activity", () => {
       ],
       pagination: { page: 1, limit: 25, total: 1, totalPages: 1 },
     };
-    vi.mocked(listUserActivities).mockResolvedValueOnce(mockActivities);
+    vi.mocked(listUserActivities).mockResolvedValueOnce(
+      mockActivities as unknown as Awaited<ReturnType<typeof listUserActivities>>
+    );
 
     vi.mocked(prisma.user.findMany).mockResolvedValueOnce([
       { id: "u1", displayName: "Dev A", email: "a@test.com", jiraUsername: "deva" },

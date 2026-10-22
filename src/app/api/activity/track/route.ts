@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { recordActivity, type ActivityEventType } from "@/lib/activity/service";
+import type { Prisma } from "@prisma/client";
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
       path,
       userAgent,
       ipAddress,
-      metadata: body.metadata,
+      metadata: (body.metadata as Prisma.InputJsonValue) ?? undefined,
     });
 
     return NextResponse.json({ ok: true });
