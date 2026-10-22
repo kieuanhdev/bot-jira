@@ -282,6 +282,7 @@ export const adminKeys = {
   health: ["admin", "overview", "health"] as const,
   overviewErrors: (type: "sentry" | "outbox") => ["admin", "overview", "errors", type] as const,
   activity: (filters?: Record<string, unknown>) => ["admin", "activity", filters ?? {}] as const,
+  impersonateUsers: ["admin", "impersonate", "users"] as const,
 };
 
 export const myWorkKeys = {

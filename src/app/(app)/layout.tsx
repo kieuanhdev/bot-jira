@@ -25,18 +25,24 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     redirect("/login");
   }
 
-  if (!userJiraAuth(user) || !user.jiraVerifiedAt || !user.onboarded) {
+  // If the admin is impersonating a user who hasn't completed Jira onboarding, do not redirect
+  // so the admin does not get stuck in a redirect loop while inspecting that user's state.
+  if (!session.impersonator && (!userJiraAuth(user) || !user.jiraVerifiedAt || !user.onboarded)) {
     redirect("/setup-jira");
   }
 
   const defaultCollapsed = cookieStore.get("sidebar_collapsed")?.value === "true";
 
   return (
-    <SessionHydrator session={session}>
+    <SessionHydrator session={session as any}>
       <Suspense fallback={null}>
         <UserActivityTracker />
       </Suspense>
-      <AppShell isAdmin={isAdmin(session)} defaultCollapsed={defaultCollapsed}>
+      <AppShell
+        isAdmin={isAdmin(session)}
+        defaultCollapsed={defaultCollapsed}
+        session={session}
+      >
         {children}
       </AppShell>
     </SessionHydrator>

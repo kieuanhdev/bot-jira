@@ -22,7 +22,12 @@ import {
   Bug,
   Palette,
   CheckSquare,
+  UserCheck,
 } from "lucide-react";
+import type { AppSession } from "@/lib/session";
+import { isRealAdmin, isImpersonating } from "@/lib/session";
+import { ImpersonationBanner } from "@/components/impersonation/impersonation-banner";
+import { UserSwitcherDialog } from "@/components/impersonation/user-switcher-dialog";
 import { UnreadBadge } from "./unread-badge";
 import { FreshnessBanner } from "./freshness-banner";
 import { ReconnectBanner } from "./reconnect-banner";
@@ -86,13 +91,19 @@ export function AppShell({
   children,
   isAdmin = false,
   defaultCollapsed = false,
+  session,
 }: {
   children: React.ReactNode;
   isAdmin?: boolean;
   defaultCollapsed?: boolean;
+  session?: AppSession;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  const canImpersonate = isRealAdmin(session);
+  const impersonating = isImpersonating(session);
 
   // Close the mobile menu when the route changes (adjust state during render).
   const [menuPathname, setMenuPathname] = useState(pathname);
@@ -151,15 +162,35 @@ export function AppShell({
   }, [toggleSidebar]);
 
   return (
-    <div className="flex min-h-screen">
-      {/* Desktop Sidebar: Sticky h-screen with collapsible state */}
-      <aside
-        className={cn(
-          "sticky top-0 z-50 hidden h-screen shrink-0 flex-col border-r bg-card transition-all duration-200 ease-in-out md:flex",
-          collapsed ? "w-16" : "w-60"
-        )}
-        aria-label="Thanh điều hướng chính"
-      >
+    <div className="flex min-h-screen flex-col">
+      {/* Impersonation Warning Banner (Sticky at the very top of viewport) */}
+      {impersonating && session?.impersonator && session?.user && (
+        <ImpersonationBanner
+          user={session.user}
+          impersonator={session.impersonator}
+          onOpenSwitcher={() => setSwitcherOpen(true)}
+        />
+      )}
+
+      {/* User Switcher Dialog for Admins */}
+      {canImpersonate && (
+        <UserSwitcherDialog
+          open={switcherOpen}
+          onOpenChange={setSwitcherOpen}
+          currentUserId={session?.user?.id}
+          isImpersonating={impersonating}
+        />
+      )}
+
+      <div className="flex min-h-screen flex-1">
+        {/* Desktop Sidebar: Sticky h-screen with collapsible state */}
+        <aside
+          className={cn(
+            "sticky top-0 z-40 hidden h-screen shrink-0 flex-col border-r bg-card transition-all duration-200 ease-in-out md:flex",
+            collapsed ? "w-16" : "w-60"
+          )}
+          aria-label="Thanh điều hướng chính"
+        >
         {/* Header */}
         <div
           className={cn(
@@ -322,6 +353,37 @@ export function AppShell({
             )}
           </Link>
 
+          {canImpersonate && (
+            !collapsed ? (
+              <button
+                type="button"
+                onClick={() => setSwitcherOpen(true)}
+                className="flex h-10 w-full items-center justify-between rounded-md px-3 text-sm text-foreground/80 hover:bg-accent/40 cursor-pointer transition-colors"
+                title="Đổi tài khoản người dùng để xem và kiểm tra bug"
+              >
+                <div className="flex items-center gap-3 overflow-hidden select-none">
+                  <UserCheck className="h-[18px] w-[18px] shrink-0 text-warning" aria-hidden="true" />
+                  <span className="truncate">
+                    {impersonating ? "Đang đóng vai" : "Đổi tài khoản"}
+                  </span>
+                </div>
+                <span className="text-2xs font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
+                  Admin
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSwitcherOpen(true)}
+                className="flex h-10 w-10 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors my-1"
+                title="Đổi tài khoản người dùng"
+                aria-label="Đổi tài khoản người dùng"
+              >
+                <UserCheck className="h-[18px] w-[18px] text-warning" aria-hidden="true" />
+              </button>
+            )
+          )}
+
           {!collapsed ? (
             <div className="flex h-10 w-full items-center justify-between rounded-md px-3 text-sm text-foreground/80 hover:bg-accent/40 transition-colors">
               <div className="flex items-center gap-3 overflow-hidden select-none">
@@ -369,6 +431,17 @@ export function AppShell({
             <span className="font-bold tracking-tight text-base text-foreground">Team Task Web</span>
           </div>
           <div className="flex items-center gap-1.5">
+            {canImpersonate && (
+              <button
+                type="button"
+                onClick={() => setSwitcherOpen(true)}
+                className="flex h-9 w-9 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
+                title="Đổi tài khoản người dùng"
+                aria-label="Đổi tài khoản người dùng"
+              >
+                <UserCheck className="h-5 w-5 text-warning" aria-hidden="true" />
+              </button>
+            )}
             <Link
               href="/notifications"
               className="relative flex h-9 w-9 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
@@ -457,6 +530,26 @@ export function AppShell({
                   <span className="truncate">{settingsNavItem.label}</span>
                 </div>
               </Link>
+              {canImpersonate && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileOpen(false);
+                    setSwitcherOpen(true);
+                  }}
+                  className="flex h-10 w-full items-center justify-between rounded-md px-3 text-sm text-foreground/80 hover:bg-accent/40 cursor-pointer transition-colors text-left"
+                >
+                  <div className="flex items-center gap-3 select-none">
+                    <UserCheck className="h-[18px] w-[18px] shrink-0 text-warning" aria-hidden="true" />
+                    <span className="truncate">
+                      {impersonating ? "Đang đóng vai" : "Đổi tài khoản"}
+                    </span>
+                  </div>
+                  <span className="text-2xs font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
+                    Admin
+                  </span>
+                </button>
+              )}
               <div className="flex h-10 w-full items-center justify-between rounded-md px-3 text-sm text-foreground/80 hover:bg-accent/40 transition-colors">
                 <div className="flex items-center gap-3 select-none">
                   <Palette className="h-[18px] w-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -477,6 +570,7 @@ export function AppShell({
         </main>
         <GlobalSyncIndicator />
       </div>
+    </div>
     </div>
   );
 }

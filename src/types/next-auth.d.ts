@@ -16,6 +16,13 @@ declare module "next-auth" {
       email?: string | null;
       image?: string | null;
     };
+    impersonator?: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+      role: Role | string;
+      jiraUsername?: string | null;
+    };
   }
 }
 
