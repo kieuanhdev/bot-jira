@@ -130,56 +130,69 @@ export async function getActivityMetrics(): Promise<ActivityMetrics> {
     };
   }
 
-  const now = new Date();
-  const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  try {
+    const now = new Date();
+    const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  // 1. Online count: unique users with activity in last 15 minutes
-  const recentActivities = await prisma.userActivity.findMany({
-    where: { createdAt: { gte: fifteenMinutesAgo } },
-    select: { userId: true, userEmail: true, ipAddress: true },
-  });
+    // 1. Online count: unique users with activity in last 15 minutes
+    const recentActivities = await prisma.userActivity.findMany({
+      where: { createdAt: { gte: fifteenMinutesAgo } },
+      select: { userId: true, userEmail: true, ipAddress: true },
+    });
 
-  const onlineUserKeys = new Set<string>();
-  for (const act of recentActivities) {
-    const key = act.userId || act.userEmail || act.ipAddress || "unknown";
-    onlineUserKeys.add(key);
+    const onlineUserKeys = new Set<string>();
+    for (const act of recentActivities) {
+      const key = act.userId || act.userEmail || act.ipAddress || "unknown";
+      onlineUserKeys.add(key);
+    }
+
+    // 2. Active users today: distinct users with activity since start of today
+    const todayActivities = await prisma.userActivity.findMany({
+      where: { createdAt: { gte: startOfToday } },
+      select: { userId: true, userEmail: true },
+    });
+
+    const activeTodayKeys = new Set<string>();
+    for (const act of todayActivities) {
+      const key = act.userId || act.userEmail;
+      if (key) activeTodayKeys.add(key);
+    }
+
+    // 3. Total page views today
+    const totalViewsToday = await prisma.userActivity.count({
+      where: {
+        createdAt: { gte: startOfToday },
+        eventType: "page_view",
+      },
+    });
+
+    // 4. Total actions today
+    const totalActionsToday = await prisma.userActivity.count({
+      where: {
+        createdAt: { gte: startOfToday },
+        eventType: "action",
+      },
+    });
+
+    return {
+      onlineCount: onlineUserKeys.size,
+      activeUsersToday: activeTodayKeys.size,
+      totalViewsToday,
+      totalActionsToday,
+    };
+  } catch (err: any) {
+    if (err?.code === "P2021" || err?.message?.includes("does not exist")) {
+      logger.warn({ message: "UserActivity table does not exist in the current database yet." });
+      return {
+        onlineCount: 0,
+        activeUsersToday: 0,
+        totalViewsToday: 0,
+        totalActionsToday: 0,
+      };
+    }
+    throw err;
   }
-
-  // 2. Active users today: distinct users with activity since start of today
-  const todayActivities = await prisma.userActivity.findMany({
-    where: { createdAt: { gte: startOfToday } },
-    select: { userId: true, userEmail: true },
-  });
-
-  const activeTodayKeys = new Set<string>();
-  for (const act of todayActivities) {
-    const key = act.userId || act.userEmail;
-    if (key) activeTodayKeys.add(key);
-  }
-
-  // 3. Total page views today
-  const totalViewsToday = await prisma.userActivity.count({
-    where: {
-      createdAt: { gte: startOfToday },
-      eventType: "page_view",
-    },
-  });
-
-  // 4. Total actions today
-  const totalActionsToday = await prisma.userActivity.count({
-    where: {
-      createdAt: { gte: startOfToday },
-      eventType: "action",
-    },
-  });
-
-  return {
-    onlineCount: onlineUserKeys.size,
-    activeUsersToday: activeTodayKeys.size,
-    totalViewsToday,
-    totalActionsToday,
-  };
 }
 
 /**
@@ -234,26 +247,42 @@ export async function listUserActivities(options: ActivityFilterOptions = {}) {
     ];
   }
 
-  const [total, items] = await Promise.all([
-    prisma.userActivity.count({ where }),
-    prisma.userActivity.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: limit,
-    }),
-  ]);
+  try {
+    const [total, items] = await Promise.all([
+      prisma.userActivity.count({ where }),
+      prisma.userActivity.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+    ]);
 
-  return {
-    items: items.map((i) => ({
-      ...i,
-      createdAt: i.createdAt.toISOString(),
-    })),
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit) || 1,
-    },
-  };
+    return {
+      items: items.map((i) => ({
+        ...i,
+        createdAt: i.createdAt.toISOString(),
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    };
+  } catch (err: any) {
+    if (err?.code === "P2021" || err?.message?.includes("does not exist")) {
+      logger.warn({ message: "UserActivity table does not exist in the current database yet." });
+      return {
+        items: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 1,
+        },
+      };
+    }
+    throw err;
+  }
 }
