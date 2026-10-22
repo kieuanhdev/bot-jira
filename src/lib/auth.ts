@@ -46,6 +46,17 @@ const providers: NextAuthOptions["providers"] = [
         cleanUsername
       );
 
+      const { recordActivity } = await import("@/lib/activity/service");
+      void recordActivity({
+        userId: resolved.user.id,
+        userName: resolved.user.displayName,
+        userEmail: resolved.user.email,
+        eventType: "auth",
+        action: "auth.login",
+        description: "Đăng nhập thành công qua Jira Token",
+        path: "/login",
+      });
+
       // Return minimal session profile. Never return Jira token!
       return {
         id: resolved.user.id,

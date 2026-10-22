@@ -281,5 +281,6 @@ export const adminKeys = {
   audit: ["admin", "overview", "audit"] as const,
   health: ["admin", "overview", "health"] as const,
   overviewErrors: (type: "sentry" | "outbox") => ["admin", "overview", "errors", type] as const,
+  activity: (filters?: Record<string, unknown>) => ["admin", "activity", filters ?? {}] as const,
 };
 

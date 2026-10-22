@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, RefreshCcw } from "lucide-react";
+import { Activity, RefreshCcw, Users } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { adminKeys } from "@/lib/query-keys";
 import type { AdminProjectSyncRow } from "@/lib/admin/project-sync";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 const items = [
   { href: "/admin", label: "Tổng quan", icon: Activity, exact: true },
   { href: "/admin/sync", label: "Đồng bộ dự án", icon: RefreshCcw, exact: false },
+  { href: "/admin/activity", label: "Truy cập & Hoạt động", icon: Users, exact: false },
 ];
 
 export function AdminNav() {

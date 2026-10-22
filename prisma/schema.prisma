@@ -366,6 +366,27 @@ model AuditLog {
   @@index([correlationId])
 }
 
+// User Activity Tracking — records user presence, page navigation, and key actions
+model UserActivity {
+  id          String   @id @default(cuid())
+  userId      String?
+  userName    String?
+  userEmail   String?
+  eventType   String   // "page_view" | "action" | "auth"
+  action      String   // e.g. "page.view", "issue.transition", "auth.login"
+  description String?  // Human-readable description
+  path        String   // Route path: e.g. "/board?project=PAY"
+  userAgent   String?  // Browser & OS info
+  ipAddress   String?  // Client IP address
+  metadata    Json?    // Optional extra context
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([eventType, createdAt(sort: Desc)])
+  @@index([path])
+}
+
 // M7 — AI estimation. One row per issue; `scoredAt` marks the latest estimate.
 // `confidence` (0..1), `missingInformation` and `similarTasks` make the
 // suggestion explainable. `promptVersion` + `model` allow tracking which
