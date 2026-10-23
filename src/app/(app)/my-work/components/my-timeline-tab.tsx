@@ -96,9 +96,10 @@ export function MyTimelineTab() {
               {/* Tasks list */}
               <div className="space-y-2.5">
                 {group.tasks.map((task) => (
-                  <div
+                  <Link
                     key={task.jiraKey}
-                    className={`p-3.5 rounded-lg border bg-card transition-all duration-150 hover:shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                    href={`/issue/${task.jiraKey}`}
+                    className={`group block p-3.5 rounded-lg border bg-card transition-all duration-150 hover:shadow-xs cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                       isOverdue
                         ? "border-destructive/30 hover:border-destructive"
                         : isToday
@@ -108,13 +109,10 @@ export function MyTimelineTab() {
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Link
-                          href={`/board?search=${task.jiraKey}`}
-                          className="font-mono text-xs font-bold text-primary hover:underline flex items-center gap-1"
-                        >
+                        <span className="font-mono text-xs font-bold text-primary group-hover:underline flex items-center gap-1">
                           <span>{task.jiraKey}</span>
-                          <ExternalLink className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
-                        </Link>
+                          <ExternalLink className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors" aria-hidden="true" />
+                        </span>
 
                         {task.type && (
                           <span className="text-2xs text-muted-foreground font-medium">
@@ -142,7 +140,7 @@ export function MyTimelineTab() {
                         </Badge>
                       </div>
 
-                      <h4 className="text-xs font-medium text-foreground">
+                      <h4 className="text-xs font-medium text-foreground group-hover:text-primary transition-colors">
                         {task.summary}
                       </h4>
                     </div>
@@ -172,7 +170,7 @@ export function MyTimelineTab() {
                         </span>
                       )}
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>

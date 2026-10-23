@@ -207,5 +207,11 @@ describe("issue-filters unit tests", () => {
       expect(parsed.assigneeScope.roster).toEqual([]);
       expect(parsed.assigneeScope.view).toBe("all-selected");
     });
+
+    it("handles search query param alias", () => {
+      const params = new URLSearchParams("search=payment");
+      const parsed = parseIssueFilters(params, DEFAULT_BOARD_FILTERS);
+      expect(parsed.query).toBe("payment");
+    });
   });
 });

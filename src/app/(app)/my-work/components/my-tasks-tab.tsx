@@ -160,26 +160,24 @@ export function MyTasksTab({ initialRole = "assigned", onRoleChange }: MyTasksTa
           {data.items.map((task) => {
             const isDone = task.statusCategory?.toLowerCase() === "done";
             return (
-              <div
+              <Link
                 key={task.jiraKey}
-                className={`p-3.5 sm:p-4 rounded-lg border transition-all duration-150 hover:shadow-xs bg-card ${
+                href={`/issue/${task.jiraKey}`}
+                className={`group block p-3.5 sm:p-4 rounded-lg border transition-all duration-150 hover:shadow-xs bg-card cursor-pointer ${
                   task.isOverdue
-                    ? "border-destructive/30 bg-destructive/5"
+                    ? "border-destructive/30 bg-destructive/5 hover:border-destructive/60"
                     : task.isDueToday
-                    ? "border-warning/30 bg-warning/5"
+                    ? "border-warning/30 bg-warning/5 hover:border-warning/60"
                     : "border-border hover:border-primary/40"
                 }`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   {/* Left: Key & Project & Badges */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Link
-                      href={`/board?search=${task.jiraKey}`}
-                      className="font-mono text-xs font-semibold text-primary hover:underline flex items-center gap-1"
-                    >
+                    <span className="font-mono text-xs font-semibold text-primary group-hover:underline flex items-center gap-1">
                       <span>{task.jiraKey}</span>
-                      <ExternalLink className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
-                    </Link>
+                      <ExternalLink className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors" aria-hidden="true" />
+                    </span>
 
                     {task.type && (
                       <Badge variant="outline" className="text-2xs font-normal">
@@ -230,7 +228,7 @@ export function MyTasksTab({ initialRole = "assigned", onRoleChange }: MyTasksTa
                 </div>
 
                 {/* Summary */}
-                <h4 className="font-medium text-sm text-foreground mt-1.5 leading-snug">
+                <h4 className="font-medium text-sm text-foreground mt-1.5 leading-snug group-hover:text-primary transition-colors">
                   {task.summary}
                 </h4>
 
@@ -279,7 +277,7 @@ export function MyTasksTab({ initialRole = "assigned", onRoleChange }: MyTasksTa
                     ) : null}
                   </div>
                 </div>
-              </div>
+              </Link>
             );
           })}
 

@@ -293,7 +293,7 @@ export function parseIssueFilters(
   myUsername?: string | null
 ): IssueFilters {
   const project = params.get("project")?.trim().toUpperCase() || defaults.project;
-  const query = params.get("q") ?? params.get("query") ?? defaults.query;
+  const query = params.get("q") ?? params.get("query") ?? params.get("search") ?? defaults.query;
 
   // Assignee
   const rawAssignees = params.get("assignee") ?? params.get("assignees");
