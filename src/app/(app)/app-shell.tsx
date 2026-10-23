@@ -23,6 +23,7 @@ import {
   Palette,
   CheckSquare,
   UserCheck,
+  BookOpen,
 } from "lucide-react";
 import type { AppSession } from "@/lib/session";
 import { isRealAdmin, isImpersonating } from "@/lib/session-helpers";
@@ -73,6 +74,12 @@ const navGroups: NavGroupDef[] = [
     items: [
       { href: "/reports/projects", label: "Báo cáo dự án", icon: ChartNoAxesCombined },
       { href: "/leaderboard", label: "Xếp hạng", icon: Trophy },
+    ],
+  },
+  {
+    title: "Tài liệu",
+    items: [
+      { href: "/docs", label: "Tài liệu & Guide", icon: BookOpen },
     ],
   },
 ];

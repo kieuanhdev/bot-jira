@@ -12,9 +12,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { FeedbackBanner } from "@/components/shared/feedback-banner";
-import { Unplug } from "lucide-react";
+import { Unplug, BookOpen } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { meKeys, releasesKeys } from "@/lib/query-keys";
 import { api, getErrorMessage } from "@/lib/api-client";
@@ -290,7 +291,18 @@ export function MyIntegrations() {
         {/* Sentry */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <Label className="text-sm font-semibold">Sentry (tùy chọn)</Label>
+            <div className="flex items-center gap-2">
+              <Label className="text-sm font-semibold">Sentry (tùy chọn)</Label>
+              <Link
+                href="/sentry-config-guide.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline cursor-pointer font-medium"
+              >
+                <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Hướng dẫn cấu hình</span>
+              </Link>
+            </div>
             <div className="flex items-center gap-2">
               <Badge variant={data?.sentry?.linked ? "success" : "secondary"}>
                 {data?.sentry?.linked ? "đã liên kết" : "chưa kết nối"}

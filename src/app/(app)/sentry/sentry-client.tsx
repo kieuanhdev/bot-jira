@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { replaceUrlState } from "@/lib/url-state";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bug, CheckCircle2, Inbox, RefreshCw, Search, Siren, Sparkles } from "lucide-react";
+import { Bug, CheckCircle2, Inbox, RefreshCw, Search, Siren, Sparkles, BookOpen } from "lucide-react";
 import { api, getErrorMessage } from "@/lib/api-client";
 import { meKeys, sentryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
@@ -368,22 +368,30 @@ export function SentryClient() {
         title="Lỗi Sentry"
         description="Theo dõi và chuyển lỗi từ Sentry thành task Jira theo từng dự án. Task được tạo bằng tài khoản cá nhân của bạn."
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            className="cursor-pointer gap-1.5"
-            disabled={query.isFetching || statsQuery.isFetching}
-            onClick={() => {
-              query.refetch();
-              statsQuery.refetch();
-            }}
-          >
-            <RefreshCw
-              className={cn("h-4 w-4", (query.isFetching || statsQuery.isFetching) && "animate-spin")}
-              aria-hidden="true"
-            />
-            Làm mới
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild className="cursor-pointer gap-1.5">
+              <Link href="/sentry-config-guide.html" target="_blank" rel="noopener noreferrer">
+                <BookOpen className="h-4 w-4" aria-hidden="true" />
+                <span>Hướng dẫn cấu hình</span>
+              </Link>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="cursor-pointer gap-1.5"
+              disabled={query.isFetching || statsQuery.isFetching}
+              onClick={() => {
+                query.refetch();
+                statsQuery.refetch();
+              }}
+            >
+              <RefreshCw
+                className={cn("h-4 w-4", (query.isFetching || statsQuery.isFetching) && "animate-spin")}
+                aria-hidden="true"
+              />
+              Làm mới
+            </Button>
+          </div>
         }
       />
 
