@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SentryAnalysisSection } from "./sentry-analysis-section";
 import { levelVariant, type SentryRowItem } from "./sentry-row";
 
 const TAG_LABELS: Record<string, string> = {
@@ -132,6 +133,8 @@ export function SentryDetailSheet({ row, open, onOpenChange, isBusy = false, onA
               value={row.lastSeen ? `${formatDateTime(row.lastSeen)} (${formatRelative(row.lastSeen, { locale: "vi" })})` : "—"}
             />
           </dl>
+
+          <SentryAnalysisSection rowId={row.id} open={open} />
 
           {detail.isLoading ? (
             <div className="flex flex-col gap-3" aria-busy="true">

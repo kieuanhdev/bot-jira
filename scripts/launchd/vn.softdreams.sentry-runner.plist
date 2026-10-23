@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Runs scripts/sentry-runner.mjs in the background (starts at login, restarts on crash).
+     Install:   cp scripts/launchd/vn.softdreams.sentry-runner.plist ~/Library/LaunchAgents/
+                launchctl load ~/Library/LaunchAgents/vn.softdreams.sentry-runner.plist
+     Stop:      launchctl unload ~/Library/LaunchAgents/vn.softdreams.sentry-runner.plist
+     Logs:      tail -f /tmp/sentry-runner.log
+     Settings (token, repos, RUNNER_CLI, RUNNER_AUTO_TOP...) are read from the repo's .env. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>vn.softdreams.sentry-runner</string>
+  <key>WorkingDirectory</key><string>/Users/softdreams/dev-anhnk/bot-jira</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>--env-file=.env</string>
+    <string>scripts/sentry-runner.mjs</string>
+  </array>
+  <!-- launchd has no shell PATH: git and agy must be listed here. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/Users/softdreams/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key><string>/Users/softdreams</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>StandardOutPath</key><string>/tmp/sentry-runner.log</string>
+  <key>StandardErrorPath</key><string>/tmp/sentry-runner.log</string>
+</dict>
+</plist>

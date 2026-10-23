@@ -249,6 +249,8 @@ export const env = {
   // configured and the source mandates verification).
   jiraWebhookSecret: str("JIRA_WEBHOOK_SECRET"),
   sentryWebhookSecret: str("SENTRY_WEBHOOK_SECRET"),
+  // Bearer token the host-side Sentry analysis runner presents to /api/runner/sentry/*.
+  sentryRunnerToken: str("SENTRY_RUNNER_TOKEN"),
   bitbucketWebhookSecret: str("BITBUCKET_WEBHOOK_SECRET"),
   ciWebhookSecret: str("CI_WEBHOOK_SECRET"),
   // Cap on the raw payload stored in IntegrationEvent (bytes).

@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   confirmSentryCreate: vi.fn(),
   audit: vi.fn(),
   bulkOpFindUnique: vi.fn(),
+  getDoneAnalyses: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getSession: mocks.session }));
@@ -44,6 +45,7 @@ vi.mock("@/lib/sentry/create-from-form", async (importOriginal) => ({
   hasInflightSentryOp: mocks.hasInflight,
   confirmSentryCreate: mocks.confirmSentryCreate,
 }));
+vi.mock("@/lib/sentry/analysis-store", () => ({ getDoneAnalyses: mocks.getDoneAnalyses }));
 vi.mock("@/lib/audit", () => ({ audit: mocks.audit }));
 
 import { POST } from "./route";
@@ -60,6 +62,7 @@ describe("POST /api/sentry/bulk-create", () => {
     mocks.userJiraAuth.mockReturnValue({ user: "u", token: "tok" });
     mocks.probeJiraAuth.mockResolvedValue(true);
     mocks.hasInflight.mockResolvedValue(false);
+    mocks.getDoneAnalyses.mockResolvedValue(new Map());
   });
 
   describe("preview", () => {
@@ -91,6 +94,27 @@ describe("POST /api/sentry/bulk-create", () => {
       const request = mocks.previewBulkCreate.mock.calls[0][3];
       expect(request.items).toHaveLength(1);
       expect(request.source).toEqual({ type: "sentry", sentryImportIds: ["r1"] });
+    });
+
+    it("puts a finished analysis into the task description and reports the count", async () => {
+      mocks.assertAccess.mockResolvedValueOnce({
+        id: "r1",
+        state: "review",
+        targetProject: "EPM",
+        sentryIssueId: "1",
+        title: "Error 1",
+      });
+      mocks.getDoneAnalyses.mockResolvedValueOnce(
+        new Map([["r1", { rootCause: "null reader", files: ["Camera.java:620"], suggestedFix: "guard null", confidence: "medium" }]])
+      );
+      mocks.previewBulkCreate.mockResolvedValueOnce({ operationId: "op-1", total: 1, actionable: 1, blocked: 0 });
+
+      const res = await post({ ids: ["r1"] });
+      expect(res.status).toBe(200);
+      expect((await res.json()).analysisIncluded).toBe(1);
+      const description = mocks.previewBulkCreate.mock.calls[0][3].items[0].description as string;
+      expect(description).toContain("Nguyên nhân & hướng sửa (AI)");
+      expect(description).toContain("guard null");
     });
 
     it("returns 404 if any id is outside scope", async () => {

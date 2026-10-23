@@ -538,6 +538,7 @@ model SentryIssueImported {
   draftDescription String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
+  analysis      SentryAnalysis?
 
   @@unique([sentryProject, sentryIssueId])
   @@index([state, lastAttemptAt])
@@ -1021,4 +1022,36 @@ model ProjectMember {
   @@id([projectKey, userId])
   @@index([projectKey, role])
   @@index([userId])
+}
+
+enum SentryAnalysisState {
+  pending
+  running
+  done
+  failed
+}
+
+// Root-cause analysis of one Sentry issue, produced by the host-side runner
+// (scripts/sentry-runner.mjs) that reads the repo at the release's git tag.
+model SentryAnalysis {
+  id          String              @id @default(cuid())
+  importId    String              @unique
+  state       SentryAnalysisState @default(pending)
+  // { rootCause, files[], suggestedFix, confidence } — see lib/sentry/analysis.ts
+  result      Json?
+  error       String?
+  release     String?
+  gitRef      String?
+  requestedBy String?
+  requestedAt DateTime            @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  // Claim lease: a `running` row whose lease expired is handed out again.
+  leaseUntil  DateTime?
+  attempts    Int                 @default(0)
+  updatedAt   DateTime            @updatedAt
+
+  sentryIssue SentryIssueImported @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([state, requestedAt])
 }

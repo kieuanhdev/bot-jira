@@ -15,9 +15,11 @@ import type { BulkCreateProjectMetadata, BulkCreateRowInput, BulkCreateSource } 
 import { useAiEnabled } from "@/hooks/use-ai-enabled";
 import { bulkKeys } from "@/lib/query-keys";
 import { sentryLabel } from "@/lib/sentry/idempotency";
+import { withAnalysisSection } from "@/lib/sentry/analysis";
 import { buildSentryTaskDraft } from "@/lib/sentry/task-draft";
 import { formatNumber } from "@/lib/utils";
 import { levelVariant, type SentryRowItem } from "./sentry-row";
+import { useSentryAnalysis } from "./use-sentry-analysis";
 import {
   SentryAiSummaryButton,
   useSentryAiSummary,
@@ -54,13 +56,16 @@ function LatestRowSync({
 export function SentryCreateDialog({ row, open, onOpenChange, onCreated }: SentryCreateDialogProps) {
   const source = useMemo<BulkCreateSource>(() => ({ type: "sentry", sentryImportId: row.id }), [row.id]);
   const lockedLabels = useMemo(() => ["sentry", sentryLabel({ id: row.sentryIssueId })], [row.sentryIssueId]);
+  // Read-only here (no auto-request): the analysis queued by the detail drawer goes into the task.
+  const analysisResult = useSentryAnalysis(row.id, { enabled: open, autoRequest: false }).query.data?.result ?? null;
   const prefill = useMemo<TaskCreatePrefill>(() => {
     const draft = buildSentryTaskDraft(row);
+    const description = row.draftDescription ?? draft.description;
     return {
       summary: row.draftSummary ?? draft.summary,
-      description: row.draftDescription ?? draft.description,
+      description: analysisResult ? withAnalysisSection(description, analysisResult) : description,
     };
-  }, [row]);
+  }, [row, analysisResult]);
   const ref = row.shortId ?? row.sentryIssueId;
 
   // AI summary state lives here, above the sheet content, so it survives closing the form.

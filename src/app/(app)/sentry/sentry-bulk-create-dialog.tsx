@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
-import { AlertCircle, AlertTriangle, CheckCircle2, Info, Loader2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Info, Loader2, Sparkles } from "lucide-react";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { FeedbackBanner } from "@/components/shared/feedback-banner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +13,8 @@ import type { SentryRowItem } from "./sentry-row";
 
 interface BulkPreviewResponse {
   operationId: string;
+  /** How many of the tasks carry a root-cause analysis in their description. */
+  analysisIncluded?: number;
   total: number;
   actionable: number;
   blocked: number;
@@ -214,6 +216,12 @@ export function SentryBulkCreateDialog({
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               Dự án: <strong className="text-foreground">{targetProjects[0]}</strong> · Tạo {previewData.actionable} task.
+            </p>
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {previewData.analysisIncluded
+                ? `${previewData.analysisIncluded}/${previewData.total} task kèm phân tích nguyên nhân & hướng sửa.`
+                : "Chưa task nào có phân tích. Mở chi tiết từng lỗi để AI phân tích trước khi tạo."}
             </p>
           </>
         )}

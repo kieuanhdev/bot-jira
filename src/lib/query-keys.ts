@@ -271,6 +271,7 @@ export const sentryKeys = {
   stats: (project: string = "all") => ["sentry", "stats", project || "all"] as const,
   lists: () => ["sentry", "list"] as const,
   detail: (id: string) => ["sentry", "detail", id] as const,
+  analysis: (id: string) => ["sentry", "analysis", id] as const,
 };
 
 export const adminKeys = {

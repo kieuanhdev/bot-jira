@@ -9,6 +9,8 @@ import { buildSentrySummaryPrompt, parseSentrySummary } from "@/lib/ai/sentry-su
 import { getLatestEvent, sanitizeSentryErrorMessage } from "@/lib/sentry/client";
 import { sentryCredsForProject } from "@/lib/sentry/creds-for-project";
 import { digestSentryEvent, type SentryEventDigest } from "@/lib/sentry/event-digest";
+import { withAnalysisSection } from "@/lib/sentry/analysis";
+import { getAnalysis } from "@/lib/sentry/analysis-store";
 import { assertSentryRowAccess, sentryScopeFor } from "@/lib/sentry/scope";
 
 const EVENT_TIMEOUT_MS = 10_000;
@@ -57,7 +59,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const result = await generateJson(buildSentrySummaryPrompt(row, digest), (obj) =>
       parseSentrySummary(obj, row)
     );
-    return NextResponse.json({ ...result, usedEvent: digest !== null });
+    // Keep the root-cause analysis (when the runner finished one) in the rewritten task.
+    const analysis = await getAnalysis(row.id).catch(() => null);
+    const description = analysis?.result ? withAnalysisSection(result.description, analysis.result) : result.description;
+    return NextResponse.json({ ...result, description, usedEvent: digest !== null });
   } catch (err) {
     if (isAiUnavailable(err)) {
       return NextResponse.json({ error: "AI không phản hồi, thử lại" }, { status: 502 });

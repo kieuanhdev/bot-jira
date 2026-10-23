@@ -8,10 +8,12 @@ import { userJiraAuth } from "@/lib/user-creds";
 import { jiraWith, probeJiraAuth, JiraRequestError } from "@/lib/jira/client";
 import { enqueueBulkOperation } from "@/lib/queue/boss";
 import { previewBulkCreate, confirmBulkCreate } from "@/lib/bulk/create-ops";
-import type { BulkCreateRequest, BulkCreateRowInput } from "@/lib/bulk/create-types";
+import { MAX_DESCRIPTION_LENGTH, type BulkCreateRequest, type BulkCreateRowInput } from "@/lib/bulk/create-types";
 import { jiraCredentialsRequired } from "@/lib/jira/credentials-required";
 import { audit } from "@/lib/audit";
 import { logger } from "@/lib/logger";
+import { withAnalysisSection } from "@/lib/sentry/analysis";
+import { getDoneAnalyses } from "@/lib/sentry/analysis-store";
 import { buildSentryTaskDraft } from "@/lib/sentry/task-draft";
 import { sentryLabel } from "@/lib/sentry/idempotency";
 import {
@@ -182,12 +184,20 @@ export async function POST(req: Request) {
   }
   const projectKey = targetProjects[0]!;
 
+  // Finished root-cause analyses go into each task's description (skipped if it would not fit).
+  const analyses = await getDoneAnalyses(rows.map((r) => r.id)).catch(() => new Map());
+  let analysisIncluded = 0;
   const items: BulkCreateRowInput[] = rows.map((r) => {
     const draft = buildSentryTaskDraft(r);
+    const base = r.draftDescription || draft.description;
+    const analysis = analyses.get(r.id);
+    const withAnalysis = analysis ? withAnalysisSection(base, analysis) : base;
+    const fits = withAnalysis.length <= MAX_DESCRIPTION_LENGTH;
+    if (analysis && fits) analysisIncluded += 1;
     return {
       clientRef: `sentry-${r.id}`,
       summary: r.draftSummary || draft.summary,
-      description: r.draftDescription || draft.description,
+      description: fits ? withAnalysis : base,
       issueType: draft.issueType,
       labels: [...new Set(["sentry", sentryLabel({ id: r.sentryIssueId })])],
     };
@@ -202,7 +212,7 @@ export async function POST(req: Request) {
   const jira = jiraWith(auth);
   try {
     const preview = await previewBulkCreate(session.user.id, jira, auth, request);
-    return NextResponse.json(preview);
+    return NextResponse.json({ ...preview, analysisIncluded });
   } catch (err) {
     if (err instanceof JiraRequestError && err.status !== null && err.status < 500) {
       return NextResponse.json({ error: err.message }, { status: err.status });
