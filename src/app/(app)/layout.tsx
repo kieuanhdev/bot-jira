@@ -27,7 +27,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   // If the admin is impersonating a user who hasn't completed Jira onboarding, do not redirect
   // so the admin does not get stuck in a redirect loop while inspecting that user's state.
-  if (!session.impersonator && (!userJiraAuth(user) || !user.jiraVerifiedAt || !user.onboarded)) {
+  // Admins may also run the app without any Jira link (email/password login) to
+  // administer it; Jira-backed actions then fail with "credentials required".
+  const adminWithoutJira = isAdmin(session) && !userJiraAuth(user);
+  if (
+    !session.impersonator &&
+    !adminWithoutJira &&
+    (!userJiraAuth(user) || !user.jiraVerifiedAt || !user.onboarded)
+  ) {
     redirect("/setup-jira");
   }
 

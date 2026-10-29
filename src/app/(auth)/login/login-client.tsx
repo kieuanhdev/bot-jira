@@ -119,7 +119,7 @@ export function LoginClient() {
         return;
       }
 
-      router.push(getSafeCallbackUrl());
+      router.push(searchParams.get("callbackUrl") ? getSafeCallbackUrl() : "/admin");
       router.refresh();
     } catch {
       setLoading(false);
@@ -131,7 +131,7 @@ export function LoginClient() {
     return (
       <form onSubmit={onSubmitLegacy} className="flex flex-col gap-4">
         <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
-          Chế độ đăng nhập khẩn cấp (Emergency Break-glass).
+          Dành cho tài khoản quản trị. Chưa liên kết Jira thì vẫn xem và cài đặt được hệ thống, nhưng không chỉnh sửa được dữ liệu Jira.
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="email">Email</Label>
@@ -392,21 +392,19 @@ export function LoginClient() {
         </div>
       </div>
 
-      {/* Break-glass legacy trigger */}
-      {searchParams.get("legacy") === "1" && (
-        <div className="pt-1 text-center">
-          <button
-            type="button"
-            onClick={() => {
-              setLegacyMode(true);
-              setError(null);
-            }}
-            className="text-xs text-muted-foreground underline cursor-pointer hover:text-foreground transition-colors"
-          >
-            Đăng nhập quản trị khẩn cấp (Email / Mật khẩu)
-          </button>
-        </div>
-      )}
+      {/* Admin email/password login (works without a linked Jira account) */}
+      <div className="pt-1 text-center">
+        <button
+          type="button"
+          onClick={() => {
+            setLegacyMode(true);
+            setError(null);
+          }}
+          className="text-xs text-muted-foreground underline cursor-pointer hover:text-foreground transition-colors"
+        >
+          Đăng nhập quản trị (Email / Mật khẩu)
+        </button>
+      </div>
     </form>
   );
 }

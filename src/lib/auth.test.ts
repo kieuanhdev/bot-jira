@@ -100,3 +100,47 @@ describe("auth rate limiting", () => {
     ).rejects.toThrow("Quá nhiều yêu cầu đăng nhập. Vui lòng thử lại sau ít phút.");
   });
 });
+
+describe("email/password login without the legacy flag", () => {
+  const authorize = () =>
+    (
+      authOptions.providers.find(
+        (p) => (p as { options?: { id?: string } }).options?.id === "credentials"
+      ) as { options: { authorize: (creds: Record<string, string>, req: unknown) => Promise<unknown> } }
+    ).options.authorize;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    _resetRateLimits();
+    process.env.LEGACY_PASSWORD_LOGIN = "0";
+    vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+  });
+
+  it("lets an admin sign in", async () => {
+    prismaMock.prisma.user.findUnique.mockResolvedValue({
+      id: "u-admin",
+      email: "admin@team.local",
+      passwordHash: "hashed-pw",
+      displayName: "Admin",
+      role: "admin",
+      jiraUsername: null,
+    });
+
+    const res = await authorize()({ email: "admin@team.local", password: "pw" }, {});
+    expect(res).toMatchObject({ id: "u-admin", role: "admin" });
+  });
+
+  it("rejects a non-admin even with the right password", async () => {
+    prismaMock.prisma.user.findUnique.mockResolvedValue({
+      id: "u-member",
+      email: "member@team.local",
+      passwordHash: "hashed-pw",
+      displayName: "Member",
+      role: "member",
+      jiraUsername: null,
+    });
+
+    const res = await authorize()({ email: "member@team.local", password: "pw" }, {});
+    expect(res).toBeNull();
+  });
+});

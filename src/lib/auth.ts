@@ -70,43 +70,44 @@ const providers: NextAuthOptions["providers"] = [
   }),
 ];
 
-// Break-glass fallback: legacy email/password provider only when feature flag is set
-if (process.env.LEGACY_PASSWORD_LOGIN === "1") {
-  providers.push(
-    CredentialsProvider({
-      id: "credentials",
-      name: "Legacy Password",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
-        const email = credentials.email.toLowerCase().trim();
-        const identifier = email ? `legacy:${email}` : "legacy:unknown";
-        if (!checkAuthRateLimit(identifier)) {
-          console.warn(`[AUTH] Rate limited legacy login for: ${identifier}`);
-          throw new Error("Quá nhiều yêu cầu đăng nhập. Vui lòng thử lại sau ít phút.");
-        }
+// Email/password login. Admin accounts can always use it so the app can be
+// administered without a linked Jira account; every other account only when the
+// legacy break-glass flag is set.
+providers.push(
+  CredentialsProvider({
+    id: "credentials",
+    name: "Email Password",
+    credentials: {
+      email: { label: "Email", type: "email" },
+      password: { label: "Password", type: "password" },
+    },
+    async authorize(credentials) {
+      if (!credentials?.email || !credentials?.password) return null;
+      const email = credentials.email.toLowerCase().trim();
+      const identifier = email ? `legacy:${email}` : "legacy:unknown";
+      if (!checkAuthRateLimit(identifier)) {
+        console.warn(`[AUTH] Rate limited legacy login for: ${identifier}`);
+        throw new Error("Quá nhiều yêu cầu đăng nhập. Vui lòng thử lại sau ít phút.");
+      }
 
-        const user = await prisma.user.findUnique({
-          where: { email },
-        });
-        if (!user || !user.passwordHash) return null;
-        const ok = await bcrypt.compare(credentials.password, user.passwordHash);
-        if (!ok) return null;
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.displayName,
-          image: null,
-          role: user.role,
-          jiraUsername: user.jiraUsername ?? undefined,
-        };
-      },
-    })
-  );
-}
+      const user = await prisma.user.findUnique({
+        where: { email },
+      });
+      if (!user || !user.passwordHash) return null;
+      const ok = await bcrypt.compare(credentials.password, user.passwordHash);
+      if (!ok) return null;
+      if (process.env.LEGACY_PASSWORD_LOGIN !== "1" && user.role !== "admin") return null;
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.displayName,
+        image: null,
+        role: user.role,
+        jiraUsername: user.jiraUsername ?? undefined,
+      };
+    },
+  })
+);
 
 export const authOptions: NextAuthOptions = {
   // 30 days session
