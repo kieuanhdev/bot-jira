@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   output: "standalone",
   poweredByHeader: false,
+  // The user guides are read from disk at request time (the app layout is
+  // dynamic), so the Markdown sources must ship with the standalone output.
+  outputFileTracingIncludes: {
+    "/docs/huong-dan/*": ["./content/huong-dan/**/*.md"],
+  },
   experimental: {
     optimizePackageImports: ["lucide-react", "recharts"],
     // Reuse dynamic (server-prefetched) page payloads in the client router

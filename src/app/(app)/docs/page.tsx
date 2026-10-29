@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { USER_GUIDES, USER_GUIDE_BASE_PATH } from "@/lib/user-guides";
 
 export const metadata: Metadata = {
   title: "Tài liệu & Hướng dẫn — Team Task Web",
@@ -35,6 +36,38 @@ export default function DocsPage() {
           </div>
         }
       />
+
+      <section aria-labelledby="user-guides-heading" className="flex flex-col gap-3">
+        <div>
+          <h2 id="user-guides-heading" className="text-base font-semibold text-foreground">
+            Hướng dẫn sử dụng
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {USER_GUIDES.length} tài liệu theo từng màn hình, kèm ảnh chụp giao diện thực tế.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {USER_GUIDES.map((guide, index) => (
+            <Link
+              key={guide.slug}
+              href={`${USER_GUIDE_BASE_PATH}/${guide.slug}`}
+              className="group flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card p-4 transition-colors duration-150 hover:border-primary/60 hover:bg-accent"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground group-hover:bg-primary-soft group-hover:text-primary-soft-foreground">
+                <guide.icon className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-sm font-semibold text-foreground">
+                  <span className="text-muted-foreground tabular-nums">{index + 1}.</span> {guide.title}
+                </span>
+                <span className="text-xs leading-snug text-muted-foreground">{guide.description}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <h2 className="text-base font-semibold text-foreground">Tài liệu kỹ thuật</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Sentry Configuration Guide - Featured Card */}
