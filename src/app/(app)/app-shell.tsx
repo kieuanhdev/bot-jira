@@ -361,86 +361,40 @@ export function AppShell({
             )}
           </Link>
 
-          {canImpersonate && (
-            !collapsed ? (
+          <div className={cn("flex gap-1", collapsed ? "flex-col items-center" : "items-center justify-between")}>
+            {canImpersonate && (
               <button
                 type="button"
                 onClick={() => setSwitcherOpen(true)}
-                className="flex h-8 w-full items-center justify-between rounded-md px-3 text-sm text-foreground/80 hover:bg-accent/40 cursor-pointer transition-colors"
-                title="Đổi tài khoản người dùng để xem và kiểm tra bug"
-              >
-                <div className="flex items-center gap-3 overflow-hidden select-none">
-                  <UserCheck className="h-[18px] w-[18px] shrink-0 text-warning" aria-hidden="true" />
-                  <span className="truncate">
-                    {impersonating ? "Đang đóng vai" : "Đổi tài khoản"}
-                  </span>
-                </div>
-                <span className="text-2xs font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
-                  Admin
-                </span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setSwitcherOpen(true)}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
-                title="Đổi tài khoản người dùng"
+                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
+                title={impersonating ? "Đang đóng vai — đổi tài khoản" : "Đổi tài khoản người dùng để xem và kiểm tra bug"}
                 aria-label="Đổi tài khoản người dùng"
               >
                 <UserCheck className="h-[18px] w-[18px] text-warning" aria-hidden="true" />
               </button>
-            )
-          )}
-
-          {!collapsed ? (
-            <div className="flex h-8 w-full items-center justify-between rounded-md px-3 text-sm text-foreground/80 hover:bg-accent/40 transition-colors">
-              <div className="flex items-center gap-3 overflow-hidden select-none">
-                <Palette className="h-[18px] w-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
-                <span className="truncate">Giao diện</span>
-              </div>
-              <ThemeToggle />
-            </div>
-          ) : (
-            <ThemeToggle compact className="my-1" />
-          )}
-
-          <div className={cn("flex gap-1", collapsed ? "flex-col items-center" : "w-full")}>
-          <Link
-            href="/logout"
-            className={cn(
-              "flex cursor-pointer rounded-md font-medium text-foreground/80 transition-colors hover:bg-destructive/10 hover:text-destructive",
-              collapsed
-                ? "h-8 w-8 items-center justify-center"
-                : "h-8 flex-1 items-center justify-center gap-2 px-2 text-sm"
             )}
-            title="Đăng xuất"
-            aria-label="Đăng xuất"
-          >
-            <LogOut className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-            {!collapsed && <span className="truncate text-sm">Đăng xuất</span>}
-          </Link>
-
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            className={cn(
-              "flex cursor-pointer rounded-md font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-foreground",
-              collapsed
-                ? "h-8 w-8 items-center justify-center"
-                : "h-8 flex-1 items-center justify-center gap-2 px-2 text-sm"
-            )}
-            title={collapsed ? "Mở rộng menu (Ctrl+B)" : "Thu gọn menu (Ctrl+B)"}
-            aria-label={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="h-[18px] w-[18px]" aria-hidden="true" />
-            ) : (
-              <>
-                <PanelLeftClose className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-                <span className="truncate text-sm">Thu gọn</span>
-              </>
-            )}
-          </button>
+            <ThemeToggle compact className="h-8 w-8" />
+            <Link
+              href="/logout"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-foreground/80 transition-colors hover:bg-accent hover:text-foreground hover:bg-destructive/10 hover:text-destructive"
+              title="Đăng xuất"
+              aria-label="Đăng xuất"
+            >
+              <LogOut className="h-[18px] w-[18px]" aria-hidden="true" />
+            </Link>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
+              title={collapsed ? "Mở rộng menu (Ctrl+B)" : "Thu gọn menu (Ctrl+B)"}
+              aria-label={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="h-[18px] w-[18px]" aria-hidden="true" />
+              ) : (
+                <PanelLeftClose className="h-[18px] w-[18px]" aria-hidden="true" />
+              )}
+            </button>
           </div>
         </div>
       </aside>
