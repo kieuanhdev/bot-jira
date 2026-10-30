@@ -366,7 +366,7 @@ export function AppShell({
               <button
                 type="button"
                 onClick={() => setSwitcherOpen(true)}
-                className="flex h-10 w-full items-center justify-between rounded-md px-3 text-sm text-foreground/80 hover:bg-accent/40 cursor-pointer transition-colors"
+                className="flex h-8 w-full items-center justify-between rounded-md px-3 text-sm text-foreground/80 hover:bg-accent/40 cursor-pointer transition-colors"
                 title="Đổi tài khoản người dùng để xem và kiểm tra bug"
               >
                 <div className="flex items-center gap-3 overflow-hidden select-none">
@@ -383,7 +383,7 @@ export function AppShell({
               <button
                 type="button"
                 onClick={() => setSwitcherOpen(true)}
-                className="flex h-10 w-10 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors my-1"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
                 title="Đổi tài khoản người dùng"
                 aria-label="Đổi tài khoản người dùng"
               >
@@ -393,7 +393,7 @@ export function AppShell({
           )}
 
           {!collapsed ? (
-            <div className="flex h-10 w-full items-center justify-between rounded-md px-3 text-sm text-foreground/80 hover:bg-accent/40 transition-colors">
+            <div className="flex h-8 w-full items-center justify-between rounded-md px-3 text-sm text-foreground/80 hover:bg-accent/40 transition-colors">
               <div className="flex items-center gap-3 overflow-hidden select-none">
                 <Palette className="h-[18px] w-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
                 <span className="truncate">Giao diện</span>
@@ -404,13 +404,14 @@ export function AppShell({
             <ThemeToggle compact className="my-1" />
           )}
 
+          <div className={cn("flex gap-1", collapsed ? "flex-col items-center" : "w-full")}>
           <Link
             href="/logout"
             className={cn(
               "flex cursor-pointer rounded-md font-medium text-foreground/80 transition-colors hover:bg-destructive/10 hover:text-destructive",
               collapsed
-                ? "h-10 w-10 items-center justify-center"
-                : "h-10 w-full items-center gap-3 px-3 text-sm"
+                ? "h-8 w-8 items-center justify-center"
+                : "h-8 flex-1 items-center justify-center gap-2 px-2 text-sm"
             )}
             title="Đăng xuất"
             aria-label="Đăng xuất"
@@ -425,8 +426,8 @@ export function AppShell({
             className={cn(
               "flex cursor-pointer rounded-md font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-foreground",
               collapsed
-                ? "h-10 w-10 items-center justify-center"
-                : "h-10 w-full items-center gap-3 px-3 text-sm"
+                ? "h-8 w-8 items-center justify-center"
+                : "h-8 flex-1 items-center justify-center gap-2 px-2 text-sm"
             )}
             title={collapsed ? "Mở rộng menu (Ctrl+B)" : "Thu gọn menu (Ctrl+B)"}
             aria-label={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
@@ -436,10 +437,11 @@ export function AppShell({
             ) : (
               <>
                 <PanelLeftClose className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-                <span className="truncate text-sm">Thu gọn menu</span>
+                <span className="truncate text-sm">Thu gọn</span>
               </>
             )}
           </button>
+          </div>
         </div>
       </aside>
 
