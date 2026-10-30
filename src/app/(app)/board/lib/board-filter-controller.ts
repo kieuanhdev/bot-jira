@@ -130,6 +130,8 @@ export interface LoadInitialBoardFiltersOptions {
   selectedProject: string;
   myName: string | null;
   canUseTeamMode: boolean;
+  /** Admins always start on every assignee instead of just themselves. */
+  isAdmin?: boolean;
 }
 
 export interface InitialBoardFilters {
@@ -142,6 +144,7 @@ export function loadInitialBoardFilters({
   selectedProject,
   myName,
   canUseTeamMode,
+  isAdmin = false,
 }: LoadInitialBoardFiltersOptions): InitialBoardFilters {
   const urlProject = searchParams?.get("project")?.trim().toUpperCase();
   const searchParamsBelongToProject =
@@ -174,7 +177,12 @@ export function loadInitialBoardFilters({
     ...(selectedProject ? { project: selectedProject } : {}),
   };
 
-  if (storedTeamMode) {
+  if (isAdmin) {
+    baseFilters = {
+      ...baseFilters,
+      assigneeScope: { mode: "all", roster: [], view: "all-selected" },
+    };
+  } else if (storedTeamMode) {
     const { mode, roster } = baseFilters.assigneeScope;
     const onlyMe = mode === "roster" && roster.length === 1 && roster[0] === "me";
     if (onlyMe || mode === "all") {
@@ -201,6 +209,7 @@ interface BoardFilterControllerOptions {
   selectedProject: string;
   myName: string | null;
   canUseTeamMode: boolean;
+  isAdmin?: boolean;
   /** False while `selectedProject` is a fallback rather than the user's pick. */
   persistProject?: boolean;
   replaceUrl: (url: string) => void;
@@ -211,6 +220,7 @@ export function useBoardFilterController({
   selectedProject,
   myName,
   canUseTeamMode,
+  isAdmin = false,
   persistProject = true,
   replaceUrl,
 }: BoardFilterControllerOptions) {
@@ -221,6 +231,7 @@ export function useBoardFilterController({
     selectedProject: initialProject,
     myName,
     canUseTeamMode,
+    isAdmin,
   });
 
   const [filters, setFilters] = useState<IssueFilters>(() => initialSettings.filters);
@@ -243,7 +254,7 @@ export function useBoardFilterController({
     saveStoredTeamMode(selectedProject, next);
     setFilters((current) => ({
       ...current,
-      assigneeScope: next
+      assigneeScope: next || isAdmin
         ? { mode: "all", roster: [], view: "all-selected" }
         : { mode: "roster", roster: ["me"], view: "all-selected" },
     }));
@@ -257,6 +268,7 @@ export function useBoardFilterController({
       selectedProject: nextProject,
       myName,
       canUseTeamMode,
+      isAdmin,
     });
     setPrevProject(nextProject);
     setTeamModeState({ project: nextProject, enabled: nextInit.teamMode });
@@ -277,6 +289,7 @@ export function useBoardFilterController({
       selectedProject,
       myName,
       canUseTeamMode,
+      isAdmin,
     });
     setTeamModeState({ project: selectedProject, enabled: nextInit.teamMode });
     setFilters(nextInit.filters);

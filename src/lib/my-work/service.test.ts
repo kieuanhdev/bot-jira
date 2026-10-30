@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   issueCacheCount: vi.fn(),
   watchFindMany: vi.fn(),
   releaseFindFirst: vi.fn(),
+  projectMemberFindMany: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -22,6 +23,9 @@ vi.mock("@/lib/prisma", () => ({
     },
     release: {
       findFirst: mocks.releaseFindFirst,
+    },
+    projectMember: {
+      findMany: mocks.projectMemberFindMany,
     },
   },
 }));
@@ -134,9 +138,16 @@ describe("my-work service", () => {
           },
         ]);
 
+      mocks.userFindUnique.mockResolvedValueOnce({ boardProjects: ["proj"] });
+      mocks.projectMemberFindMany.mockResolvedValueOnce([]);
       mocks.releaseFindFirst.mockResolvedValueOnce(null);
 
       const summary = await getMyWorkSummary({ id: "u1", jiraUsername: "developer_a" });
+      expect(mocks.releaseFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ projectKey: { in: ["PROJ"] } }),
+        })
+      );
 
       expect(summary.assignedCount).toBe(2);
       expect(summary.inProgressCount).toBe(1);
@@ -145,6 +156,19 @@ describe("my-work service", () => {
       expect(summary.waitingActionCount).toBe(1);
       expect(summary.recentDoneCount).toBe(1);
       expect(summary.onTimeRate).toBe(100);
+    });
+  });
+
+  describe("getMyWorkSummary release scope", () => {
+    it("shows no release when the user belongs to no project", async () => {
+      mocks.issueCacheFindMany.mockResolvedValue([]);
+      mocks.userFindUnique.mockResolvedValueOnce({ boardProjects: [] });
+      mocks.projectMemberFindMany.mockResolvedValueOnce([]);
+
+      const summary = await getMyWorkSummary({ id: "admin", jiraUsername: "admin" });
+
+      expect(summary.activeRelease).toBeNull();
+      expect(mocks.releaseFindFirst).not.toHaveBeenCalled();
     });
   });
 

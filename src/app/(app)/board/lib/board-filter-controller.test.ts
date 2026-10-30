@@ -208,6 +208,24 @@ describe("board filter controller model", () => {
       expect(result.filters.assigneeScope.mode).toBe("roster");
       expect(result.filters.assigneeScope.roster).toEqual(["me"]);
     });
+
+    it("always starts admins on every assignee, even with stored 'me' filters", () => {
+      vi.spyOn(boardStorage, "loadStoredTeamMode").mockReturnValue(false);
+      vi.spyOn(boardStorage, "loadStoredFilters").mockReturnValue({
+        ...DEFAULT_BOARD_FILTERS,
+        project: "EPM",
+      });
+
+      const result = loadInitialBoardFilters({
+        searchParams: null,
+        selectedProject: "EPM",
+        myName: null,
+        canUseTeamMode: true,
+        isAdmin: true,
+      });
+
+      expect(result.filters.assigneeScope.mode).toBe("all");
+    });
   });
 });
 

@@ -27,6 +27,7 @@ export function useBoardUserContext(initialBootstrap?: BoardBootstrap | null) {
   const myName = meStatus?.jiraName ?? null;
   const jiraBaseUrl = meStatus?.jiraBaseUrl ?? "";
   const canUseTeamMode = Boolean(meStatus?.canBoardTeam);
+  const isAdmin = meStatus?.role === "admin";
 
   const {
     data: prefs,
@@ -46,6 +47,7 @@ export function useBoardUserContext(initialBootstrap?: BoardBootstrap | null) {
     myName,
     jiraBaseUrl,
     canUseTeamMode,
+    isAdmin,
     prefs,
     prefsError,
     refetchPrefs,

@@ -119,7 +119,7 @@ export function LoginClient() {
         return;
       }
 
-      router.push(searchParams.get("callbackUrl") ? getSafeCallbackUrl() : "/admin");
+      router.push(getSafeCallbackUrl());
       router.refresh();
     } catch {
       setLoading(false);

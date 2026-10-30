@@ -74,6 +74,7 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
     myName,
     jiraBaseUrl,
     canUseTeamMode,
+    isAdmin,
     prefs,
     prefsError,
     refetchPrefs,
@@ -103,6 +104,7 @@ export function BoardClient({ initialBootstrap }: { initialBootstrap?: BoardBoot
     selectedProject: picker.selectedProject,
     myName,
     canUseTeamMode,
+    isAdmin,
     persistProject: picker.selectedProject === picker.project,
     replaceUrl: replaceBoardUrl,
   });

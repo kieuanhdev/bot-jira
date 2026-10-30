@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { normalizeProjectKey } from "@/lib/jira/project-catalog";
 import type { Prisma } from "@prisma/client";
 
 export interface CurrentUserProfile {
@@ -241,10 +242,23 @@ export async function getMyWorkSummary(user: CurrentUserProfile): Promise<MyWork
     const onTimeRate =
       completedWithDue.length > 0 ? Math.round((onTimeCount / completedWithDue.length) * 100) : 100;
 
-    // 4. Active release widget info
+    // 4. Active release widget info, limited to projects the user actually belongs to
+    // (picked on the Board or assigned as a project member). No projects → no release.
     let activeRelease: MyWorkSummary["activeRelease"] = null;
-    const latestRelease = await prisma.release.findFirst({
+    const [profile, memberships] = await Promise.all([
+      prisma.user.findUnique({ where: { id: user.id }, select: { boardProjects: true } }),
+      prisma.projectMember.findMany({ where: { userId: user.id }, select: { projectKey: true } }),
+    ]);
+    const userProjects = Array.from(
+      new Set(
+        [...(profile?.boardProjects ?? []), ...memberships.map((m) => m.projectKey)].map(
+          normalizeProjectKey
+        )
+      )
+    );
+    const latestRelease = userProjects.length === 0 ? null : await prisma.release.findFirst({
       where: {
+        projectKey: { in: userProjects },
         archived: false,
         status: { in: ["draft", "checking", "ready"] },
       },
