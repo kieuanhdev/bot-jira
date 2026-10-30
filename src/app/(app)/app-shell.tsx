@@ -24,6 +24,7 @@ import {
   CheckSquare,
   UserCheck,
   BookOpen,
+  LogOut,
 } from "lucide-react";
 import type { AppSession } from "@/lib/session";
 import { isRealAdmin, isImpersonating } from "@/lib/session-helpers";
@@ -402,6 +403,21 @@ export function AppShell({
           ) : (
             <ThemeToggle compact className="my-1" />
           )}
+
+          <Link
+            href="/logout"
+            className={cn(
+              "flex cursor-pointer rounded-md font-medium text-foreground/80 transition-colors hover:bg-destructive/10 hover:text-destructive",
+              collapsed
+                ? "h-10 w-10 items-center justify-center"
+                : "h-10 w-full items-center gap-3 px-3 text-sm"
+            )}
+            title="Đăng xuất"
+            aria-label="Đăng xuất"
+          >
+            <LogOut className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+            {!collapsed && <span className="truncate text-sm">Đăng xuất</span>}
+          </Link>
 
           <button
             type="button"
