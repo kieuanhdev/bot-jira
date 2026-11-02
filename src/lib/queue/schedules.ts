@@ -23,7 +23,8 @@ export function buildScheduleDefinitions(pollIntervalMs: number): ScheduleDefini
     { name: "poll-pr-comments", cron: "*/15 * * * *", options: { singletonSeconds: 840, expireInSeconds: 900, retryLimit: 1, retryDelay: 30 } },
     { name: "ai-score", cron: "*/10 * * * *", options: { singletonSeconds: 540, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 } },
     { name: "sentry-import", cron: "*/5 * * * *", options: { singletonSeconds: 240, expireInSeconds: 120, retryLimit: 3, retryDelay: 30, retryBackoff: true } },
-    { name: "stale-detect", cron: "*/30 * * * *", options: { singletonSeconds: 1740, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 } },
+    // 08:30 Vietnam time (Mon-Fri): detect stale issues and notify SLA breaches at start of workday.
+    { name: "stale-detect", cron: "30 8 * * 1-5", options: { tz: APP_TIMEZONE, singletonSeconds: 3600, expireInSeconds: 1800, retryLimit: 2, retryDelay: 60 } },
     { name: "deliver-notifications", cron: "* * * * *", options: { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 3, retryDelay: 15, retryBackoff: true } },
     { name: "health-alert", cron: "* * * * *", options: { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 2, retryDelay: 10 } },
     // Daily jobs run on Vietnam time so the "Hằng ngày HH:MM" labels hold.
@@ -49,6 +50,12 @@ export function formatCronSchedule(cron: string): string {
     const min = dailyMatch[1].padStart(2, "0");
     const hour = dailyMatch[2].padStart(2, "0");
     return `Hằng ngày ${hour}:${min}`;
+  }
+  const weekdayMatch = trimmed.match(/^(\d+)\s+(\d+)\s+\*\s+\*\s+1-5$/);
+  if (weekdayMatch) {
+    const min = weekdayMatch[1].padStart(2, "0");
+    const hour = weekdayMatch[2].padStart(2, "0");
+    return `T2-T6 ${hour}:${min}`;
   }
   return trimmed;
 }

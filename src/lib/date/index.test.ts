@@ -12,6 +12,7 @@ import {
   zonedParts,
   startOfIsoWeekKey,
   businessDaysInclusive,
+  isWorkingHours,
 } from "./index";
 
 describe.each(["UTC", "Asia/Ho_Chi_Minh", "America/New_York"])("date helpers under TZ=%s", (tzEnv) => {
@@ -142,4 +143,30 @@ describe.each(["UTC", "Asia/Ho_Chi_Minh", "America/New_York"])("date helpers und
       expect(businessDaysInclusive("2026-10-05", "2026-10-02")).toBe(0);
     });
   });
+  describe("isWorkingHours", () => {
+    it("returns true during weekday working hours (08:30 - 18:00 VN time)", () => {
+      // 2026-11-02 is Monday. 01:30 UTC = 08:30 VN
+      expect(isWorkingHours(new Date("2026-11-02T01:30:00Z"))).toBe(true);
+      // 05:00 UTC = 12:00 VN
+      expect(isWorkingHours(new Date("2026-11-02T05:00:00Z"))).toBe(true);
+      // 11:00 UTC = 18:00 VN
+      expect(isWorkingHours(new Date("2026-11-02T11:00:00Z"))).toBe(true);
+    });
+
+    it("returns false outside working hours and on weekends", () => {
+      // 00:00 VN Monday (17:00 UTC Sunday)
+      expect(isWorkingHours(new Date("2026-11-01T17:00:00Z"))).toBe(false);
+      // 08:29 VN Monday (01:29 UTC Monday)
+      expect(isWorkingHours(new Date("2026-11-02T01:29:00Z"))).toBe(false);
+      // 18:01 VN Monday (11:01 UTC Monday)
+      expect(isWorkingHours(new Date("2026-11-02T11:01:00Z"))).toBe(false);
+      // 23:59 VN Monday (16:59 UTC Monday)
+      expect(isWorkingHours(new Date("2026-11-02T16:59:00Z"))).toBe(false);
+      // Saturday 10:00 VN (03:00 UTC Saturday)
+      expect(isWorkingHours(new Date("2026-11-07T03:00:00Z"))).toBe(false);
+      // Sunday 10:00 VN (03:00 UTC Sunday)
+      expect(isWorkingHours(new Date("2026-11-08T03:00:00Z"))).toBe(false);
+    });
+  });
 });
+

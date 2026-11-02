@@ -5,12 +5,22 @@ import type { WorkerLog } from "../guard";
 import { computeAges } from "@/lib/stale/age";
 import { classifyStale, STALE_REASON_LABELS } from "@/lib/stale/classify";
 import { slaForStatus, slaExceeded } from "@/lib/stale/sla";
+import { APP_TIMEZONE, isWorkingHours, startOfDayInTz } from "@/lib/date";
 
 const DONE_STATUSES = ["Done", "Closed", "Resolved", "Cancelled", "Done/In Review"];
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-export async function runStaleDetect(): Promise<WorkerLog> {
-  const now = new Date();
+export async function runStaleDetect(now: Date = new Date()): Promise<WorkerLog> {
+  // Quiet hours guard: only run and notify during business hours (Mon-Fri 08:30-18:00 VN time).
+  // Prevents SLA breach notifications from triggering at midnight (0h sáng) or on weekends.
+  if (!isWorkingHours(now, APP_TIMEZONE)) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "outside_working_hours",
+      stats: { detected: 0, notified: 0, scanned: 0, errors: 0 },
+    };
+  }
   // Use the most conservative SLA as the pre-filter cutoff so we don't miss
   // any task that might exceed its per-status threshold.
   const minSlaDays = Math.min(
@@ -70,11 +80,12 @@ export async function runStaleDetect(): Promise<WorkerLog> {
         ages,
       });
 
-      // Dedup: skip if a snapshot was created in the last 24 h for this issue.
+      // Dedup: skip if a snapshot was already created today in Vietnam timezone.
+      const todayStart = startOfDayInTz(now, APP_TIMEZONE);
       const recent = await prisma.staleSnapshot.findFirst({
         where: {
           jiraKey: issue.jiraKey,
-          detectedAt: { gte: new Date(now.getTime() - MS_PER_DAY) },
+          detectedAt: { gte: todayStart },
         },
       });
       if (recent) continue;

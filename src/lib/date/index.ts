@@ -9,6 +9,22 @@ import {
 export const APP_TIMEZONE = "Asia/Ho_Chi_Minh";
 const MS_PER_DAY = 86_400_000;
 
+/**
+ * Checks whether an instant falls within Vietnam working hours (Monday to Friday, 08:30 - 18:00).
+ * Used to prevent automated notifications from sending during quiet hours / night.
+ */
+export function isWorkingHours(
+  instant: Date = new Date(),
+  tz: string = APP_TIMEZONE,
+): boolean {
+  const tzd = new TZDate(instant, tz);
+  if (Number.isNaN(tzd.getTime())) return false;
+  const day = tzd.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
+  if (day === 0 || day === 6) return false;
+  const minutes = tzd.getHours() * 60 + tzd.getMinutes();
+  return minutes >= 8 * 60 + 30 && minutes <= 18 * 60;
+}
+
 export type DateKey = string; // YYYY-MM-DD
 
 /**

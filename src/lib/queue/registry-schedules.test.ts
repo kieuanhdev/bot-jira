@@ -43,7 +43,7 @@ describe("queue schedule contract", () => {
       { name: "poll-pr-comments", cron: "*/15 * * * *", options: { singletonSeconds: 840, expireInSeconds: 900, retryLimit: 1, retryDelay: 30 } },
       { name: "ai-score", cron: "*/10 * * * *", options: { singletonSeconds: 540, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 } },
       { name: "sentry-import", cron: "*/5 * * * *", options: { singletonSeconds: 240, expireInSeconds: 120, retryLimit: 3, retryDelay: 30, retryBackoff: true } },
-      { name: "stale-detect", cron: "*/30 * * * *", options: { singletonSeconds: 1740, expireInSeconds: 300, retryLimit: 2, retryDelay: 30 } },
+      { name: "stale-detect", cron: "30 8 * * 1-5", options: { tz: "Asia/Ho_Chi_Minh", singletonSeconds: 3600, expireInSeconds: 1800, retryLimit: 2, retryDelay: 60 } },
       { name: "deliver-notifications", cron: "* * * * *", options: { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 3, retryDelay: 15, retryBackoff: true } },
       { name: "health-alert", cron: "* * * * *", options: { singletonSeconds: 55, expireInSeconds: 60, retryLimit: 2, retryDelay: 10 } },
       { name: "capture-project-report-snapshots", cron: "15 0 * * *", options: { tz: "Asia/Ho_Chi_Minh", singletonSeconds: 3600, expireInSeconds: 1800, retryLimit: 2, retryDelay: 60 } },
@@ -85,7 +85,7 @@ describe("queue schedule contract", () => {
     expect(formatCronSchedule("15 0 * * *")).toBe("Hằng ngày 00:15");
     expect(formatCronSchedule("30 1 * * *")).toBe("Hằng ngày 01:30");
     expect(formatCronSchedule("20 17 * * *")).toBe("Hằng ngày 17:20");
-    expect(formatCronSchedule("0 12 * * 1-5")).toBe("0 12 * * 1-5");
+    expect(formatCronSchedule("30 8 * * 1-5")).toBe("T2-T6 08:30");
   });
 
   it("generates schedule map including event-based jobs", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildUnmergedPrMessage, localDateKey } from "./notify-unmerged-prs";
+import { buildUnmergedPrMessage, localDateKey, runNotifyUnmergedPrs } from "./notify-unmerged-prs";
 
 describe("notify-unmerged-prs", () => {
   it("uses the Vietnam calendar day for the dedupe key", () => {
@@ -22,5 +22,13 @@ describe("notify-unmerged-prs", () => {
     expect(msg.body).toContain("[PR #1](https://bb/pr/1)");
     expect(msg.body).toContain("và 2 task khác");
     expect(msg.body).not.toContain("ABC-16");
+  });
+
+  it("skips execution outside the afternoon reminder window (e.g. at 00:20 AM)", async () => {
+    // 00:20 VN time (17:20 UTC previous day)
+    const midnightRun = await runNotifyUnmergedPrs(new Date("2026-10-12T17:20:00Z"));
+    expect(midnightRun.ok).toBe(true);
+    expect(midnightRun.skipped).toBe(true);
+    expect(midnightRun.reason).toBe("outside_reminder_window");
   });
 });

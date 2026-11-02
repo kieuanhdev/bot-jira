@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { TZDate } from "@date-fns/tz";
 import { APP_TIMEZONE, isDateKey, toDateKey } from "@/lib/date";
 import { confirmedBranchLinkFilter } from "@/lib/bitbucket/branch-links";
 import { deliverToChat } from "@/lib/notify/chat-delivery";
@@ -47,6 +48,18 @@ export function buildUnmergedPrMessage(tasks: UnmergedPrTask[]): { title: string
  * assigned to them that are Done in Jira while a linked PR is still OPEN.
  */
 export async function runNotifyUnmergedPrs(now: Date = new Date()): Promise<WorkerLog> {
+  const tzd = new TZDate(now, UNMERGED_PR_TIMEZONE);
+  const hour = tzd.getHours();
+  // Guard against off-hours invocation (e.g. UTC server misinterpreting cron and triggering at 17:20 UTC = 00:20 VN time).
+  // Only send reminders in afternoon/evening hours (15:00 - 20:00 VN time).
+  if (hour < 15 || hour > 20) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "outside_reminder_window",
+      stats: { candidateTasks: 0, discordUsers: 0, notified: 0, skipped: 0 },
+    };
+  }
   const issues = await prisma.issueCache.findMany({
     where: {
       deletedAt: null,
