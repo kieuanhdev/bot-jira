@@ -27,11 +27,12 @@ vi.mock("@/lib/jira/project-catalog", () => ({
   normalizeProjectKey: (k: string) => k.trim().toUpperCase(),
 }));
 
-import { GET } from "./route";
+import { GET, _clearFiltersCache } from "./route";
 
 describe("GET /api/issues/filters", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _clearFiltersCache();
     mocks.session.mockResolvedValue({ user: { id: "user-1" } });
     mocks.user.mockResolvedValue({
       boardProjects: ["MR"],
@@ -44,6 +45,7 @@ describe("GET /api/issues/filters", () => {
       .mockResolvedValueOnce([{ assigneeJira: "alice" }, { assigneeJira: "bob" }])
       .mockResolvedValueOnce([{ status: "In Progress" }, { status: "Done" }])
       .mockResolvedValueOnce([{ priority: "High" }, { priority: "Medium" }])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
@@ -61,12 +63,44 @@ describe("GET /api/issues/filters", () => {
       labels: ["api", "backend"],
       priorities: ["High", "Medium"],
       epics: [],
+      epicTitles: {},
       types: [],
       fixVersions: [],
       reporters: [],
       approvers: [],
       testers: [],
       displayNames: {},
+    });
+  });
+
+  it("includes standalone epics without child tasks and sorts newest first", async () => {
+    mocks.findManyIssues
+      .mockResolvedValueOnce([]) // assignees
+      .mockResolvedValueOnce([]) // statuses
+      .mockResolvedValueOnce([]) // priorities
+      .mockResolvedValueOnce([]) // types
+      .mockResolvedValueOnce([]) // reporters
+      .mockResolvedValueOnce([]) // approvers
+      .mockResolvedValueOnce([]) // testers
+      .mockResolvedValueOnce([{ epicKey: "MR-10" }]) // referencedEpics from tasks
+      .mockResolvedValueOnce([ // epicIssues (standalone or direct epics)
+        { jiraKey: "MR-30", summary: "Newest Epic", updatedAt: new Date("2026-11-01T10:00:00Z"), createdAt: new Date("2026-11-01T09:00:00Z") },
+        { jiraKey: "MR-20", summary: "Older Epic", updatedAt: new Date("2026-10-15T10:00:00Z"), createdAt: new Date("2026-10-15T09:00:00Z") },
+      ])
+      .mockResolvedValueOnce([ // missingEpics lookup for MR-10
+        { jiraKey: "MR-10", summary: "Referenced Epic Title", updatedAt: new Date("2026-09-01T10:00:00Z"), createdAt: new Date("2026-09-01T09:00:00Z") },
+      ]);
+    mocks.raw.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+    const res = await GET(new Request("http://localhost/api/issues/filters?project=MR"));
+    expect(res.status).toBe(200);
+
+    const json = await res.json();
+    expect(json.epics).toEqual(["MR-30", "MR-20", "MR-10"]);
+    expect(json.epicTitles).toEqual({
+      "MR-30": "Newest Epic",
+      "MR-20": "Older Epic",
+      "MR-10": "Referenced Epic Title",
     });
   });
 

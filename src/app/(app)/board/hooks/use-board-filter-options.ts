@@ -19,6 +19,7 @@ export interface FilterOptionsData {
   approvers: string[];
   testers: string[];
   displayNames: Record<string, string>;
+  epicTitles?: Record<string, string>;
 }
 
 export interface PeopleFieldData {
@@ -39,7 +40,7 @@ export function useBoardFilterOptions(
     enabled: Boolean(selectedProject),
     queryFn: () =>
       api<FilterOptionsData>(`/api/issues/filters?project=${selectedProject}`),
-    staleTime: 5 * 60_000,
+    staleTime: 60_000,
     retry: 0,
   });
 
@@ -73,12 +74,19 @@ export function useBoardFilterOptions(
           ? `${optData.displayNames[value]} (${value})`
           : value,
       }));
+    const epicOpts = (values: string[] | undefined) =>
+      (values ?? []).map((value) => ({
+        value,
+        label: optData?.epicTitles?.[value]
+          ? `${value} — ${optData.epicTitles[value]}`
+          : value,
+      }));
     return {
       assignees: personOpts(optData?.assignees),
       labels: optData?.labels ?? [],
       priorities: optData?.priorities ?? ["Low", "Medium", "High", "Highest", "Blocker"],
       statuses: optData?.statuses ?? [],
-      epics: optData?.epics ?? [],
+      epics: epicOpts(optData?.epics),
       types: optData?.types ?? [],
       fixVersions: optData?.fixVersions ?? [],
       reporters: personOpts(optData?.reporters),

@@ -13,6 +13,10 @@ import {
 const FILTERS_TTL_MS = 30_000;
 const filtersCache = new Map<string, { at: number; body: unknown }>();
 
+export function _clearFiltersCache(): void {
+  filtersCache.clear();
+}
+
 /**
  * Distinct filter options (assignees, labels, priorities) for the current
  * project scope. Avoids loading the full issue list just to derive dropdown
@@ -74,8 +78,8 @@ export async function GET(req: Request) {
 
   if (projects.length === 0) {
     return NextResponse.json({
-      assignees: [], statuses: [], labels: [], priorities: [], epics: [], types: [],
-      fixVersions: [], reporters: [], approvers: [], testers: [],
+      assignees: [], statuses: [], labels: [], priorities: [], epics: [], epicTitles: {}, types: [],
+      fixVersions: [], reporters: [], approvers: [], testers: [], displayNames: {},
     });
   }
 
@@ -90,7 +94,7 @@ export async function GET(req: Request) {
     projectKey: { in: projects },
   };
 
-  const [assignees, statuses, priorities, types, reporters, approvers, testers, epics] = await prisma.$transaction([
+  const [assignees, statuses, priorities, types, reporters, approvers, testers, referencedEpics, epicIssues] = await prisma.$transaction([
     prisma.issueCache.findMany({
       where: { ...base, assigneeJira: { not: null } },
       select: { assigneeJira: true },
@@ -115,7 +119,12 @@ export async function GET(req: Request) {
     prisma.issueCache.findMany({ where: { ...base, reporterJira: { not: null } }, select: { reporterJira: true }, distinct: ["reporterJira"], orderBy: { reporterJira: "asc" } }),
     prisma.issueCache.findMany({ where: { ...base, approverJira: { not: null } }, select: { approverJira: true }, distinct: ["approverJira"], orderBy: { approverJira: "asc" } }),
     prisma.issueCache.findMany({ where: { ...base, testerJira: { not: null } }, select: { testerJira: true }, distinct: ["testerJira"], orderBy: { testerJira: "asc" } }),
-    prisma.issueCache.findMany({ where: { ...base, epicKey: { not: null } }, select: { epicKey: true }, distinct: ["epicKey"], orderBy: { epicKey: "asc" } }),
+    prisma.issueCache.findMany({ where: { ...base, epicKey: { not: null } }, select: { epicKey: true }, distinct: ["epicKey"] }),
+    prisma.issueCache.findMany({
+      where: { ...base, type: { equals: "Epic", mode: "insensitive" } },
+      select: { jiraKey: true, summary: true, updatedAt: true, createdAt: true },
+      orderBy: { updatedAt: "desc" },
+    }),
   ]);
 
   const assigneeSet = new Set<string>();
@@ -131,6 +140,59 @@ export async function GET(req: Request) {
   const prioritySet = new Set<string>();
   for (const row of priorities) {
     if (row.priority) prioritySet.add(row.priority);
+  }
+
+  // Combine direct epic issues and epics referenced by tasks
+  const epicMap = new Map<string, { summary: string; updatedAt: Date | null }>();
+
+  for (const ep of epicIssues ?? []) {
+    if (ep.jiraKey) {
+      epicMap.set(ep.jiraKey, {
+        summary: ep.summary || "",
+        updatedAt: ep.updatedAt || ep.createdAt || null,
+      });
+    }
+  }
+
+  const referencedKeys = (referencedEpics ?? []).flatMap((row) => (row.epicKey ? [row.epicKey] : []));
+  const missingKeys = referencedKeys.filter((k) => !epicMap.has(k));
+
+  if (missingKeys.length > 0) {
+    const missingEpics = await prisma.issueCache.findMany({
+      where: { jiraKey: { in: missingKeys } },
+      select: { jiraKey: true, summary: true, updatedAt: true, createdAt: true },
+    });
+    for (const ep of missingEpics ?? []) {
+      epicMap.set(ep.jiraKey, {
+        summary: ep.summary || "",
+        updatedAt: ep.updatedAt || ep.createdAt || null,
+      });
+    }
+    for (const k of missingKeys) {
+      if (!epicMap.has(k)) {
+        epicMap.set(k, { summary: "", updatedAt: null });
+      }
+    }
+  }
+
+  const sortedEpics = Array.from(epicMap.keys()).sort((a, b) => {
+    const timeA = epicMap.get(a)?.updatedAt?.getTime() ?? 0;
+    const timeB = epicMap.get(b)?.updatedAt?.getTime() ?? 0;
+    if (timeA !== timeB) return timeB - timeA;
+
+    const matchA = a.match(/^([A-Za-z]+)-(\d+)$/);
+    const matchB = b.match(/^([A-Za-z]+)-(\d+)$/);
+    if (matchA && matchB && matchA[1] === matchB[1]) {
+      return parseInt(matchB[2], 10) - parseInt(matchA[2], 10);
+    }
+    return b.localeCompare(a);
+  });
+
+  const epicTitles: Record<string, string> = {};
+  for (const [k, v] of epicMap.entries()) {
+    if (v.summary) {
+      epicTitles[k] = v.summary;
+    }
   }
 
   const projectSql = Prisma.join(projects.map((project) => Prisma.sql`${project}`));
@@ -163,7 +225,8 @@ export async function GET(req: Request) {
     statuses: [...statusSet].sort(),
     labels: labelRows.map((row) => row.value).filter(Boolean),
     priorities: [...prioritySet].sort(),
-    epics: epics.flatMap((row) => row.epicKey ? [row.epicKey] : []),
+    epics: sortedEpics,
+    epicTitles,
     types: types.map((row) => row.type),
     fixVersions: fixVersionRows.map((row) => row.value).filter(Boolean),
     reporters: reporters.flatMap((row) => row.reporterJira ? [row.reporterJira] : []),
