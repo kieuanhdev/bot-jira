@@ -3,13 +3,7 @@ import { Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { VersionPickerDropdown } from "@/components/shared/version-picker-dropdown";
 
 interface IssueDetailVersionsLabelsProps {
   fixVersions: string[];
@@ -74,18 +68,11 @@ export function IssueDetailVersionsLabels({
         {showAddVersion ? (
           <div className="flex items-center gap-1">
             {projectVersions.length > 0 ? (
-              <Select onValueChange={(val) => handleSaveVersion(val)}>
-                <SelectTrigger className="h-7 w-32 text-xs">
-                  <SelectValue placeholder="Chọn version…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {projectVersions.map((pv) => (
-                    <SelectItem key={pv.id} value={pv.name} className="text-xs">
-                      {pv.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <VersionPickerDropdown
+                versions={projectVersions}
+                onSelect={(val) => handleSaveVersion(val)}
+                triggerClassName="h-7 w-32"
+              />
             ) : (
               <Input
                 autoFocus

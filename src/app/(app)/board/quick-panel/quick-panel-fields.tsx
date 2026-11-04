@@ -4,19 +4,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DropdownSearchInput } from "@/components/shared/dropdown-search-input";
+import { VersionPickerDropdown } from "@/components/shared/version-picker-dropdown";
 import { cn, timeAgo, formatDateTime, getBitbucketBranchUrl } from "@/lib/utils";
 import { JiraAvatar } from "@/components/jira-avatar";
 import { PointStepGrid } from "@/components/point-step-grid";
@@ -97,14 +92,30 @@ function EditableSummary({ value, onSave }: { value: string; onSave: (summary: s
 function PersonPicker({
   value,
   people,
+  roleLabel,
   onChange,
 }: {
   value?: string | null;
   people: string[];
+  roleLabel?: string;
   onChange: (name: string | null) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const isSearchable = people.length > 5;
+  const query = search.trim().toLowerCase();
+  const filtered = query
+    ? people.filter((p) => p.toLowerCase().includes(query))
+    : people;
+
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setSearch("");
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <button className={EDIT_TRIGGER}>
           {value ? (
@@ -118,17 +129,208 @@ function PersonPicker({
           <Chevron />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52 max-h-64 overflow-y-auto">
-        <DropdownMenuItem onClick={() => onChange(null)} className="text-xs">
+      <DropdownMenuContent align="start" className="w-56 max-h-72 overflow-y-auto">
+        {isSearchable && (
+          <DropdownSearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder={roleLabel ? `Tìm ${roleLabel.toLowerCase()}…` : "Tìm người…"}
+          />
+        )}
+        <DropdownMenuItem
+          onClick={() => {
+            onChange(null);
+            setOpen(false);
+          }}
+          className="text-xs cursor-pointer"
+        >
           Bỏ trống
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        {people.map((a) => (
-          <DropdownMenuItem key={a} onClick={() => onChange(a)} className="text-xs">
-            {a}
-            {a === value && <span className="ml-auto text-primary">•</span>}
-          </DropdownMenuItem>
-        ))}
+        {filtered.length === 0 ? (
+          <div className="px-2 py-2 text-center text-xs text-muted-foreground">
+            Không tìm thấy &ldquo;{search}&rdquo;
+          </div>
+        ) : (
+          filtered.map((a) => (
+            <DropdownMenuItem
+              key={a}
+              onClick={() => {
+                onChange(a);
+                setOpen(false);
+              }}
+              className="text-xs cursor-pointer gap-2"
+            >
+              <JiraAvatar username={a} size="xs" />
+              <span className="truncate">{a}</span>
+              {a === value && <span className="ml-auto text-primary font-bold">•</span>}
+            </DropdownMenuItem>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function AssigneePicker({
+  value,
+  assignees,
+  meName,
+  onChange,
+}: {
+  value?: string | null;
+  assignees: string[];
+  meName?: string | null;
+  onChange: (assignee: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const isSearchable = assignees.length > 5;
+  const query = search.trim().toLowerCase();
+  const filtered = query
+    ? assignees.filter((a) => a.toLowerCase().includes(query))
+    : assignees;
+
+  return (
+    <DropdownMenu
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setSearch("");
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <button className={EDIT_TRIGGER}>
+          {value ? (
+            <>
+              <JiraAvatar username={value} size="sm" />
+              <span className="truncate">{value}</span>
+            </>
+          ) : (
+            <span className="truncate text-muted-foreground">Unassigned</span>
+          )}
+          <Chevron />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-56 max-h-72 overflow-y-auto">
+        {isSearchable && (
+          <DropdownSearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Tìm người thực hiện…"
+          />
+        )}
+        {!query && (
+          <>
+            {meName && (
+              <DropdownMenuItem
+                onClick={() => {
+                  onChange(meName);
+                  setOpen(false);
+                }}
+                className="text-xs font-medium text-primary cursor-pointer gap-2"
+              >
+                <JiraAvatar username={meName} size="xs" />
+                <span className="truncate">Gán cho tôi ({meName})</span>
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem
+              onClick={() => {
+                onChange(null);
+                setOpen(false);
+              }}
+              className="text-xs cursor-pointer"
+            >
+              Chưa gán
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {filtered.length === 0 ? (
+          <div className="px-2 py-2 text-center text-xs text-muted-foreground">
+            Không tìm thấy &ldquo;{search}&rdquo;
+          </div>
+        ) : (
+          filtered.map((a) => (
+            <DropdownMenuItem
+              key={a}
+              onClick={() => {
+                onChange(a);
+                setOpen(false);
+              }}
+              className="text-xs cursor-pointer gap-2"
+            >
+              <JiraAvatar username={a} size="xs" />
+              <span className="truncate">{a}</span>
+              {a === value && <span className="ml-auto text-primary font-bold">•</span>}
+            </DropdownMenuItem>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function StatusPicker({
+  status,
+  dotClass,
+  transitions,
+  onTransition,
+}: {
+  status: string;
+  dotClass: string;
+  transitions: { id: string; to?: { name?: string } | string }[];
+  onTransition: (transitionId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const isSearchable = transitions.length > 5;
+  const query = search.trim().toLowerCase();
+  const filtered = query
+    ? transitions.filter((t) => toName(t).toLowerCase().includes(query))
+    : transitions;
+
+  return (
+    <DropdownMenu
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setSearch("");
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <button className={EDIT_TRIGGER}>
+          <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dotClass)} />
+          <span className="truncate">{status}</span>
+          <Chevron />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52 max-h-64 overflow-y-auto">
+        {isSearchable && (
+          <DropdownSearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Tìm trạng thái…"
+          />
+        )}
+        {filtered.length === 0 ? (
+          <div className="px-2 py-2 text-center text-xs text-muted-foreground">
+            Không tìm thấy &ldquo;{search}&rdquo;
+          </div>
+        ) : (
+          filtered.map((t) => (
+            <DropdownMenuItem
+              key={t.id}
+              onClick={() => {
+                onTransition(t.id);
+                setOpen(false);
+              }}
+              className="text-xs cursor-pointer"
+            >
+              {toName(t)}
+            </DropdownMenuItem>
+          ))
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -289,26 +491,12 @@ export function QuickPanelFields({
 
       <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm xl:grid-cols-3">
         <Field label="Status">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className={EDIT_TRIGGER}>
-                <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dotClass)} />
-                <span className="truncate">{status}</span>
-                <Chevron />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              {transitions.map((t) => (
-                <DropdownMenuItem
-                  key={t.id}
-                  onClick={() => onTransition(t.id)}
-                  className="text-xs"
-                >
-                  {toName(t)}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <StatusPicker
+            status={status}
+            dotClass={dotClass}
+            transitions={transitions}
+            onTransition={onTransition}
+          />
         </Field>
 
         <Field label="Priority">
@@ -330,40 +518,12 @@ export function QuickPanelFields({
         </Field>
 
         <Field label="Assignee">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className={EDIT_TRIGGER}>
-                {assigneeJira ? (
-                  <>
-                    <JiraAvatar username={assigneeJira} size="sm" />
-                    <span className="truncate">{assigneeJira}</span>
-                  </>
-                ) : (
-                  <span className="truncate text-muted-foreground">Unassigned</span>
-                )}
-                <Chevron />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-52 max-h-64 overflow-y-auto">
-              {meName && (
-                <DropdownMenuItem
-                  onClick={() => onAssign(meName)}
-                  className="text-xs font-medium text-primary"
-                >
-                  Gán cho tôi ({meName})
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={() => onAssign(null)} className="text-xs">
-                Chưa gán
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {assignees.map((a) => (
-                <DropdownMenuItem key={a} onClick={() => onAssign(a)} className="text-xs">
-                  {a}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <AssigneePicker
+            value={assigneeJira}
+            assignees={assignees}
+            meName={meName}
+            onChange={onAssign}
+          />
         </Field>
 
         <Field label="Points">
@@ -390,7 +550,12 @@ export function QuickPanelFields({
           ["Tester", "tester", testerJira],
         ] as const).map(([label, role, value]) => (
           <Field key={role} label={label}>
-            <PersonPicker value={value} people={assignees} onChange={(name) => onSetPerson(role, name)} />
+            <PersonPicker
+              value={value}
+              people={assignees}
+              roleLabel={label}
+              onChange={(name) => onSetPerson(role, name)}
+            />
           </Field>
         ))}
         <Field label="Due date">
@@ -440,18 +605,10 @@ export function QuickPanelFields({
           {showAddVersion && (
             <div className="flex items-center gap-1.5">
               {projectVersions.length > 0 ? (
-                <Select onValueChange={(val) => handleSaveVersion(val)}>
-                  <SelectTrigger className="h-8 w-36 text-xs">
-                    <SelectValue placeholder="Chọn version…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projectVersions.map((pv) => (
-                      <SelectItem key={pv.id} value={pv.name} className="text-xs">
-                        {pv.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <VersionPickerDropdown
+                  versions={projectVersions}
+                  onSelect={(val) => handleSaveVersion(val)}
+                />
               ) : (
                 <Input
                   autoFocus

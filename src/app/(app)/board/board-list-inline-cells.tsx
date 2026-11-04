@@ -91,6 +91,8 @@ export function StatusCell({
   onTransition: (transitionId: string, toStatus: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const searchRef = useRef<HTMLInputElement | null>(null);
   const { data, isLoading, isError } = useQuery({
     queryKey: transitionsKeys.forIssue(jiraKey),
     queryFn: () =>
@@ -100,17 +102,28 @@ export function StatusCell({
     enabled: open,
     staleTime: 30_000,
   });
-  const items = data?.transitions ?? [];
+  const allItems = data?.transitions ?? [];
+  const searchable = allItems.length > 7;
+  const items = q ? allItems.filter((t) => norm(toName(t)).includes(norm(q))) : allItems;
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setQ("");
+      }}
+    >
       <CellTrigger label={`Đổi trạng thái ${jiraKey}`}>{status}</CellTrigger>
-      <DropdownMenuContent align="start" className="w-52">
+      <DropdownMenuContent align="start" className="w-52 max-h-64 overflow-y-auto">
+        {searchable && <MenuSearch value={q} onChange={setQ} inputRef={searchRef} />}
         {isLoading ? (
           <MenuLoading />
         ) : isError ? (
           <div className="px-2 py-1.5 text-xs text-destructive">Không tải được trạng thái</div>
         ) : items.length === 0 ? (
-          <div className="px-2 py-1.5 text-xs text-muted-foreground">Không có chuyển đổi khả dụng</div>
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">
+            {q ? "Không tìm thấy" : "Không có chuyển đổi khả dụng"}
+          </div>
         ) : (
           items.map((t) => (
             <DropdownMenuItem key={t.id} className="text-xs" onClick={() => onTransition(t.id, toName(t))}>

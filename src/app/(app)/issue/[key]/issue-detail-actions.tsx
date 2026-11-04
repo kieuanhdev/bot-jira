@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ChevronDown,
   Clock,
@@ -18,6 +19,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DropdownSearchInput } from "@/components/shared/dropdown-search-input";
+import { JiraAvatar } from "@/components/jira-avatar";
 import { formatJiraDuration } from "@/lib/worklogs/schema";
 import { PointStepGrid } from "@/components/point-step-grid";
 import { PRIORITIES } from "./lib/issue-detail-utils";
@@ -53,38 +56,85 @@ export function IssueDetailActions({
   creatingBranch,
   onCreateBranch,
 }: IssueDetailActionsProps) {
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
+  const [assigneeSearch, setAssigneeSearch] = useState("");
+  const isAssigneeSearchable = assignees.length > 5;
+  const assigneeQuery = assigneeSearch.trim().toLowerCase();
+  const filteredAssignees = assigneeQuery
+    ? assignees.filter((a) => a.toLowerCase().includes(assigneeQuery))
+    : assignees;
+
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-2.5 shadow-sm">
       {/* Assignee Dropdown */}
-      <DropdownMenu>
+      <DropdownMenu
+        open={assigneeOpen}
+        onOpenChange={(o) => {
+          setAssigneeOpen(o);
+          if (!o) setAssigneeSearch("");
+        }}
+      >
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs cursor-pointer">
             <User className="h-3.5 w-3.5 text-muted-foreground" />
             <span>{assigneeJira ? `Gán: ${assigneeJira}` : "Chưa gán ai"}</span>
             <ChevronDown className="h-3 w-3 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-56 max-h-64 overflow-y-auto">
+        <DropdownMenuContent align="start" className="w-56 max-h-72 overflow-y-auto">
           <DropdownMenuLabel className="text-xs">Gán người thực hiện</DropdownMenuLabel>
-          {meName && (
-            <DropdownMenuItem
-              onClick={() => onAssign(meName)}
-              className="gap-2 text-xs font-medium text-primary"
-            >
-              <UserCheck className="h-3.5 w-3.5" /> Gán cho tôi ({meName})
-            </DropdownMenuItem>
+          {isAssigneeSearchable && (
+            <DropdownSearchInput
+              value={assigneeSearch}
+              onChange={setAssigneeSearch}
+              placeholder="Tìm người thực hiện…"
+            />
           )}
-          <DropdownMenuItem onClick={() => onAssign(null)} className="gap-2 text-xs text-muted-foreground">
-            <User className="h-3.5 w-3.5" /> Hủy gán (Unassigned)
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {assignees.map((a) => (
-            <DropdownMenuItem key={a} onClick={() => onAssign(a)} className="gap-2 text-xs">
-              <User className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="truncate">{a}</span>
-              {a === assigneeJira && <span className="ml-auto text-primary font-bold">•</span>}
-            </DropdownMenuItem>
-          ))}
+          {!assigneeQuery && (
+            <>
+              {meName && (
+                <DropdownMenuItem
+                  onClick={() => {
+                    onAssign(meName);
+                    setAssigneeOpen(false);
+                  }}
+                  className="gap-2 text-xs font-medium text-primary cursor-pointer"
+                >
+                  <UserCheck className="h-3.5 w-3.5" /> Gán cho tôi ({meName})
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onClick={() => {
+                  onAssign(null);
+                  setAssigneeOpen(false);
+                }}
+                className="gap-2 text-xs text-muted-foreground cursor-pointer"
+              >
+                <User className="h-3.5 w-3.5" /> Hủy gán (Unassigned)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          {filteredAssignees.length === 0 ? (
+            <div className="px-2 py-2 text-center text-xs text-muted-foreground">
+              Không tìm thấy &ldquo;{assigneeSearch}&rdquo;
+            </div>
+          ) : (
+            filteredAssignees.map((a) => (
+              <DropdownMenuItem
+                key={a}
+                onClick={() => {
+                  onAssign(a);
+                  setAssigneeOpen(false);
+                }}
+                className="gap-2 text-xs cursor-pointer"
+              >
+                <JiraAvatar username={a} size="xs" />
+                <span className="truncate">{a}</span>
+                {a === assigneeJira && <span className="ml-auto text-primary font-bold">•</span>}
+              </DropdownMenuItem>
+            ))
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

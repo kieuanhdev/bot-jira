@@ -90,7 +90,7 @@ export function QuickPanelHeader({
         )}
         <button
           onClick={onCopyKey}
-          className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
           aria-label="Copy key"
           title="Copy key"
         >
@@ -98,7 +98,7 @@ export function QuickPanelHeader({
         </button>
         <button
           onClick={onClose}
-          className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
           aria-label="Close"
           title="Close (Esc)"
         >

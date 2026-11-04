@@ -152,6 +152,7 @@ export function QuickPanel({
       open
       onOpenChange={(o) => !o && onClose()}
       side="right"
+      hideClose
       className="w-full sm:w-1/2 max-w-none"
       onEscapeKeyDown={(e) => {
         // Inline editors cancel their own edit, and the lightbox closes itself.

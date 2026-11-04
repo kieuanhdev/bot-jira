@@ -17,6 +17,8 @@ interface SheetProps {
   footer?: ReactNode;
   className?: string;
   side?: "right" | "left";
+  /** When true, omits the built-in close (X) button (e.g. when children provide their own header/close button). */
+  hideClose?: boolean;
   /** Called before Esc closes the sheet; call `preventDefault()` to keep it open. */
   onEscapeKeyDown?: (e: KeyboardEvent) => void;
   /** Called before a pointer-down outside the sheet closes it; call `preventDefault()` to keep it open. */
@@ -35,6 +37,7 @@ export function Sheet({
   footer,
   className,
   side = "right",
+  hideClose = false,
   onEscapeKeyDown,
   onPointerDownOutside,
   onInteractOutside,
@@ -73,22 +76,26 @@ export function Sheet({
                 )}
                 {headerExtra && <div className="mt-2">{headerExtra}</div>}
               </div>
-              <DialogPrimitive.Close
-                className="cursor-pointer rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                aria-label="Đóng"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </DialogPrimitive.Close>
+              {!hideClose && (
+                <DialogPrimitive.Close
+                  className="cursor-pointer rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  aria-label="Đóng"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </DialogPrimitive.Close>
+              )}
             </div>
           ) : (
             <>
               <DialogPrimitive.Title className="sr-only">Panel</DialogPrimitive.Title>
-              <DialogPrimitive.Close
-                className="absolute top-3 right-3 cursor-pointer rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                aria-label="Đóng"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </DialogPrimitive.Close>
+              {!hideClose && (
+                <DialogPrimitive.Close
+                  className="absolute top-3 right-3 cursor-pointer rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  aria-label="Đóng"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </DialogPrimitive.Close>
+              )}
             </>
           )}
           <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
